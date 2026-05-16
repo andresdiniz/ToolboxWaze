@@ -150,11 +150,13 @@
     {# ── Coluna direita ── #}
     <div class="col-lg-5">
 
-        {# ═══════════════════════════════════════════════════════
-           CARD: LINK WAZE (inserir / editar inline)
-           ═══════════════════════════════════════════════════════ #}
-        {% if is_granted('IS_AUTHENTICATED_FULLY') %}
-        <div class="card mb-4 border-primary">
+        {# ══════════════════════════════════════════
+           CARD: EDITOR WAZE
+           Sempre visível para usuários logados.
+           Formulario aberto por padrão (sem link) ou recolhível (com link).
+        ══════════════════════════════════════════ #}
+        {% if app.user %}
+        <div class="card mb-4 border-primary" id="card-waze">
             <div class="card-header fw-semibold bg-primary text-white d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-signpost-2 me-2"></i>Editor Waze</span>
                 {% if wazeLink %}
@@ -166,36 +168,45 @@
             </div>
             <div class="card-body">
 
-                {# ── Estado atual (somente leitura) ── #}
+                {# ── Estado atual (somente leitura) quando já existe link ── #}
                 {% if wazeLink %}
-                <div class="mb-3 p-2 rounded" style="background:var(--bs-light)">
-                    <div class="detail-label">Hazard ID</div>
-                    <div class="fw-semibold text-primary fs-5">#{{ wazeLink.permanent_hazard_id }}</div>
+                <div class="mb-3 p-2 rounded bg-light border">
+                    <div class="detail-label">Hazard ID atual</div>
+                    <div class="fw-bold text-primary fs-5">#{{ wazeLink.permanent_hazard_id }}</div>
+
                     <div class="detail-label mt-2">Cadastrado por</div>
-                    <div class="small">{{ wazeLink.inserted_by_email }} em {{ wazeLink.inserted_at|date('d/m/Y H:i') }}</div>
+                    <div class="small">{{ wazeLink.inserted_by_email }}
+                        <span class="text-muted">— {{ wazeLink.inserted_at|date('d/m/Y H:i') }}</span>
+                    </div>
+
                     {% if wazeLink.updated_at %}
                     <div class="detail-label mt-2">Última edição</div>
-                    <div class="small text-warning">{{ wazeLink.updated_by_email }} em {{ wazeLink.updated_at|date('d/m/Y H:i') }}</div>
+                    <div class="small text-warning fw-semibold">{{ wazeLink.updated_by_email }}
+                        <span class="fw-normal">— {{ wazeLink.updated_at|date('d/m/Y H:i') }}</span>
+                    </div>
                     {% endif %}
+
                     {% if wazeLink.observacao %}
-                    <div class="detail-label mt-2">Observação</div>
+                    <div class="detail-label mt-2">Motivo última revisão</div>
                     <div class="small">{{ wazeLink.observacao }}</div>
                     {% endif %}
                 </div>
                 {% endif %}
 
-                {# ── Formulário (collapsível se já tem link) ── #}
+                {# ── Botão para recolher/expandir o formulário (só quando já tem link) ── #}
                 {% if wazeLink %}
-                <button class="btn btn-outline-primary btn-sm w-100 mb-2"
+                <button class="btn btn-outline-primary btn-sm w-100 mb-3"
                         type="button"
                         data-bs-toggle="collapse"
-                        data-bs-target="#waze-form-collapse"
-                        aria-expanded="false">
-                    <i class="bi bi-pencil me-1"></i>Editar link
+                        data-bs-target="#waze-form-wrap"
+                        aria-expanded="false"
+                        aria-controls="waze-form-wrap">
+                    <i class="bi bi-pencil me-1"></i>Alterar link / motivo
                 </button>
-                <div class="collapse" id="waze-form-collapse">
+                <div class="collapse" id="waze-form-wrap">
                 {% else %}
-                <div id="waze-form-collapse">
+                {# Sem link: formulário sempre expandido #}
+                <div id="waze-form-wrap">
                 {% endif %}
 
                     <form method="post"
@@ -207,11 +218,11 @@
                         {# Link do Waze #}
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">
-                                Link do Editor Waze
-                                <span class="text-danger">*</span>
+                                Link do Editor Waze <span class="text-danger">*</span>
                             </label>
                             <input type="url"
                                    name="waze_link"
+                                   id="waze-link-input"
                                    value="{{ wazeLink ? wazeLink.waze_link : wazeFormData.waze_link|default('') }}"
                                    class="form-control form-control-sm font-monospace {{ wazeErrors.waze_link is defined ? 'is-invalid' : '' }}"
                                    placeholder="https://waze.com/pt-BR/editor?…&permanentHazards=272464"
@@ -224,42 +235,42 @@
                         </div>
 
                         {# Preview do Hazard ID em tempo real #}
-                        <div id="waze-hazard-preview" class="alert alert-info alert-sm py-1 px-2 mb-3 d-none small">
-                            Hazard ID detectado: <strong id="waze-hazard-id"></strong>
+                        <div id="waze-hazard-preview" class="alert alert-info py-1 px-2 mb-3 d-none small">
+                            Hazard ID: <strong id="waze-hazard-id"></strong>
                         </div>
 
                         {# Motivo da revisão #}
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">
                                 Motivo da revisão
-                                {% if wazeLink %}<span class="text-danger">*</span>{% endif %}
+                                {% if wazeLink %}<span class="text-danger">*</span>{% else %}<span class="text-muted fw-normal">(opcional)</span>{% endif %}
                             </label>
                             <textarea name="motivo_revisao"
                                       class="form-control form-control-sm {{ wazeErrors.motivo_revisao is defined ? 'is-invalid' : '' }}"
                                       rows="2"
-                                      placeholder="Ex: atualização de posição, novo hazard, correção de velocidade…">{{ wazeFormData.motivo_revisao|default('') }}</textarea>
+                                      placeholder="Ex: atualização de posição, novo hazard, correção…">{{ wazeFormData.motivo_revisao|default('') }}</textarea>
                             {% if wazeErrors.motivo_revisao is defined %}
                                 <div class="invalid-feedback">{{ wazeErrors.motivo_revisao }}</div>
-                            {% else %}
-                                <div class="form-text">Obrigatório ao editar. Histórico de alterações é registrado automaticamente.</div>
                             {% endif %}
                         </div>
 
-                        {# Usuário e data — preenchidos automaticamente, só exibição #}
+                        {# Usuário e Data — preenchidos automaticamente, somente exibição #}
                         <div class="row g-2 mb-3">
                             <div class="col-7">
-                                <label class="form-label fw-semibold small">Usuário</label>
+                                <label class="form-label fw-semibold small">Usuário (auto)</label>
                                 <input type="text"
-                                       class="form-control form-control-sm bg-light"
-                                       value="{{ app.user ? app.user.email : '—' }}"
-                                       disabled>
+                                       class="form-control form-control-sm"
+                                       value="{{ app.user.email }}"
+                                       disabled
+                                       style="background:#f8f9fa;font-style:italic">
                             </div>
                             <div class="col-5">
-                                <label class="form-label fw-semibold small">Data/Hora</label>
+                                <label class="form-label fw-semibold small">Data/Hora (auto)</label>
                                 <input type="text"
-                                       class="form-control form-control-sm bg-light"
-                                       value="Agora (auto)"
-                                       disabled>
+                                       class="form-control form-control-sm"
+                                       value="Agora"
+                                       disabled
+                                       style="background:#f8f9fa;font-style:italic">
                             </div>
                         </div>
 
@@ -268,11 +279,12 @@
                             {{ wazeLink ? 'Salvar alterações' : 'Cadastrar link Waze' }}
                         </button>
                     </form>
-                </div>
 
-            </div>
-        </div>
-        {% endif %}
+                </div>{# /waze-form-wrap #}
+
+            </div>{# /card-body #}
+        </div>{# /card #}
+        {% endif %}{# app.user #}
 
         {# Histórico de verificações #}
         {% if historico is not empty %}
@@ -332,8 +344,8 @@
 
 <script>
 (function () {
-    const input   = document.querySelector('input[name="waze_link"]');
-    const preview = document.getElementById('waze-hazard-preview');
+    const input    = document.getElementById('waze-link-input');
+    const preview  = document.getElementById('waze-hazard-preview');
     const hazardEl = document.getElementById('waze-hazard-id');
     if (!input) return;
     function update() {
@@ -342,7 +354,7 @@
         else   { preview.classList.add('d-none'); }
     }
     input.addEventListener('input', update);
-    update();
+    update(); // roda ao carregar página (se já tem valor)
 }());
 </script>
 

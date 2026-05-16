@@ -7,10 +7,12 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
@@ -22,7 +24,8 @@ class RegistrationController extends AbstractController
         private readonly UserPasswordHasherInterface $hasher,
         private readonly MailerInterface             $mailer,
         private readonly UserRepository              $userRepo,
-        private readonly string                      $mailFrom = 'noreply@localhost',
+        private readonly LoggerInterface             $logger,
+        private readonly string                      $mailFrom,
     ) {}
 
     #[Route('/register', name: 'app_register')]
@@ -63,23 +66,8 @@ class RegistrationController extends AbstractController
                 $this->em->persist($user);
                 $this->em->flush();
 
-                // Notifica todos os admins (erros de e-mail nao bloqueiam o registro)
-                try {
-                    $admins = $this->userRepo->findAdmins();
-                    foreach ($admins as $admin) {
-                        $adminEmail = (new Email())
-                            ->from($this->mailFrom)
-                            ->to($admin->getEmail())
-                            ->subject('[ToolboxWaze] Nova solicitação de acesso')
-                            ->html($this->renderView('emails/new_registration.html.twig', [
-                                'user'  => $user,
-                                'admin' => $admin,
-                            ]));
-                        $this->mailer->send($adminEmail);
-                    }
-                } catch (\Throwable) {
-                    // log silencioso: usuario foi criado mesmo assim
-                }
+                // Notifica todos os admins sobre a nova solicitação
+                $this->notifyAdmins($user);
 
                 return $this->render('auth/register.html.twig', ['sent' => true]);
             }
@@ -90,5 +78,52 @@ class RegistrationController extends AbstractController
             'values' => $values,
             'sent'   => false,
         ]);
+    }
+
+    // -------------------------------------------------------------------------
+
+    private function notifyAdmins(User $newUser): void
+    {
+        $admins = $this->userRepo->findAdmins();
+
+        if (empty($admins)) {
+            $this->logger->warning(
+                '[Registration] Nenhum admin encontrado para notificar. Usuário: {email}',
+                ['email' => $newUser->getEmail()]
+            );
+            return;
+        }
+
+        foreach ($admins as $admin) {
+            try {
+                $fromAddress = new Address($this->mailFrom, 'ToolboxWaze');
+
+                $email = (new Email())
+                    ->from($fromAddress)
+                    ->to(new Address($admin->getEmail()))
+                    ->subject('[ToolboxWaze] Nova solicitação de acesso — ' . $newUser->getName())
+                    ->html($this->renderView('emails/new_registration.html.twig', [
+                        'user'  => $newUser,
+                        'admin' => $admin,
+                    ]));
+
+                $this->mailer->send($email);
+
+                $this->logger->info(
+                    '[Registration] E-mail de notificação enviado para admin {admin} sobre usuário {user}',
+                    ['admin' => $admin->getEmail(), 'user' => $newUser->getEmail()]
+                );
+            } catch (\Throwable $e) {
+                // Não bloqueia o registro, mas loga o erro com detalhes
+                $this->logger->error(
+                    '[Registration] Falha ao enviar e-mail para {admin}: {error}',
+                    [
+                        'admin' => $admin->getEmail(),
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]
+                );
+            }
+        }
     }
 }

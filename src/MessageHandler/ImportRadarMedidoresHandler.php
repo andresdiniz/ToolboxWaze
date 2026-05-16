@@ -10,17 +10,20 @@ use Doctrine\DBAL\ParameterType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
- * Baixa o JSON RBMLQ de um estado e faz upsert em radar_medidor / radar_faixa / radar_historico.
+ * Importa medidores RBMLQ de um estado com diff incremental.
  *
- * Problema de memória:
- *   Estados como SC e SP têm JSONs de centenas de MB.
- *   file_get_contents() carregava tudo na RAM → OOM.
+ * Fluxo por lote:
+ *   1. Calcula row_hash (SHA-256 do JSON bruto do item) para cada linha.
+ *   2. Consulta o banco: quais desses row_hashes JÁ existem?
+ *      → Idênticos: zero escrita (skip total).
+ *      → Ausentes no banco: INSERT (novo radar).
+ *      → identity_hash existe mas row_hash diferente: UPDATE (radar mudou).
+ *   3. Faixas e histórico só são recriados para radares que de fato mudaram.
  *
- * Solução:
- *   1. Download via cURL escrevendo direto em arquivo temporário (stream, zero RAM extra).
- *   2. Parse incremental: lê o arquivo char a char contando chaves { } para extrair
- *      cada objeto completo e fazer json_decode() só nele.
- *   3. Processa em lotes de BATCH_SIZE itens para não acumular memória.
+ * Resultado:
+ *   - Primeira importação: insere tudo.
+ *   - Reimportações: só toca nas linhas que mudaram ou são novas.
+ *   - Radares sem nenhuma alteração: zero queries de escrita.
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
@@ -35,13 +38,13 @@ final class ImportRadarMedidoresHandler
         'row_hash', 'identity_hash', 'raw_data', 'imported_at', 'updated_at',
     ];
 
+    /** Colunas que atualizam quando o radar mudou (row_hash e imported_at ficam de fora) */
     private const RADAR_UPDATE_COLS = [
         'sigla_uf', 'estado', 'municipio', 'local_verificacao',
         'data_ultima_verificacao', 'data_validade', 'ultimo_resultado', 'tipo_medidor',
         'proprietario_nome', 'proprietario_municipio', 'proprietario_estado',
         'faixas_json', 'historico_json',
         'identity_hash', 'raw_data', 'updated_at',
-        // row_hash e imported_at NÃO entram no UPDATE
     ];
 
     public function __construct(
@@ -67,7 +70,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Download via cURL em arquivo temporário (stream, sem alocar RAM)
+    // Download via cURL → arquivo temporário (stream, zero RAM extra)
     // -------------------------------------------------------------------------
 
     private function downloadToTempFile(string $url): ?string
@@ -86,7 +89,7 @@ final class ImportRadarMedidoresHandler
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
-            CURLOPT_FILE           => $fp,       // escreve direto no arquivo
+            CURLOPT_FILE           => $fp,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT        => 120,
             CURLOPT_CONNECTTIMEOUT => 10,
@@ -112,13 +115,6 @@ final class ImportRadarMedidoresHandler
     // Parse incremental: extrai objetos JSON {..} do arquivo um a um
     // -------------------------------------------------------------------------
 
-    /**
-     * Lê o arquivo em blocos de 64 KB, mantendo um buffer de acumulação.
-     * Conta abertura/fechamento de chaves para detectar quando um objeto
-     * JSON de nível raiz (depth 1 dentro do array) está completo.
-     *
-     * Funciona tanto para JSON formatado (multi-linha) quanto minificado.
-     */
     private function processFile(string $path, string $uf, string $importedAt): void
     {
         $fh = fopen($path, 'rb');
@@ -136,44 +132,25 @@ final class ImportRadarMedidoresHandler
         while (!feof($fh)) {
             $chunk   = fread($fh, 65536);
             $buffer .= $chunk;
-            $out     = ''           ; // parte já processada do buffer — descartada
+            $out      = '';
             $objStart = null;
-
-            $len = strlen($buffer);
+            $len      = strlen($buffer);
 
             for ($i = 0; $i < $len; $i++) {
                 $c = $buffer[$i];
 
-                // Controle de string JSON (ignora chaves dentro de strings)
-                if ($escape) {
-                    $escape = false;
-                    continue;
-                }
-
-                if ($c === '\\' && $inString) {
-                    $escape = true;
-                    continue;
-                }
-
-                if ($c === '"') {
-                    $inString = !$inString;
-                    continue;
-                }
-
-                if ($inString) {
-                    continue;
-                }
+                if ($escape) { $escape = false; continue; }
+                if ($c === '\\' && $inString) { $escape = true; continue; }
+                if ($c === '"') { $inString = !$inString; continue; }
+                if ($inString) { continue; }
 
                 if ($c === '{') {
-                    if ($depth === 0) {
-                        $objStart = $i; // marca o início do objeto
-                    }
+                    if ($depth === 0) { $objStart = $i; }
                     $depth++;
                 } elseif ($c === '}') {
                     $depth--;
 
                     if ($depth === 0 && $objStart !== null) {
-                        // Objeto completo encontrado
                         $objJson = substr($buffer, $objStart, $i - $objStart + 1);
                         $item    = json_decode($objJson, true);
 
@@ -187,25 +164,18 @@ final class ImportRadarMedidoresHandler
                             }
                         }
 
-                        // Descarta tudo até aqui do buffer
                         $out      = substr($buffer, $i + 1);
                         $objStart = null;
                     }
                 }
             }
 
-            // Mantém no buffer apenas a parte ainda não processada
             if ($objStart !== null) {
-                // Objeto ainda aberto: mantém desde o início
                 $buffer = substr($buffer, $objStart);
             } elseif ($out !== '') {
                 $buffer = $out;
-            } else {
-                // Nenhum objeto encontrado neste chunk: descarta parte segura
-                // (guarda os últimos 256 bytes por segurança)
-                if (strlen($buffer) > 256) {
-                    $buffer = substr($buffer, -256);
-                }
+            } elseif (strlen($buffer) > 256) {
+                $buffer = substr($buffer, -256);
             }
         }
 
@@ -229,8 +199,7 @@ final class ImportRadarMedidoresHandler
         $rawJson       = json_encode($item,      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $faixasJson    = json_encode($faixas,    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $historicoJson = json_encode($historico, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        $siglaUf = strtoupper($this->str($item['SiglaUf'] ?? null) ?? $uf);
+        $siglaUf       = strtoupper($this->str($item['SiglaUf'] ?? null) ?? $uf);
 
         return [
             'sigla_uf'                => $siglaUf,
@@ -257,18 +226,72 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Lote: upsert + faixas + histórico
+    // Lote com diff incremental
     // -------------------------------------------------------------------------
 
+    /**
+     * Ponto central do diff incremental.
+     *
+     * Para cada lote:
+     *   - Busca no banco os row_hashes JÁ existentes.
+     *   - Separa o lote em:
+     *       $toInsert  → identity_hash nunca visto antes (novo radar)
+     *       $toUpdate  → identity_hash existe mas row_hash mudou (radar alterado)
+     *       skip       → row_hash igual ao que já está no banco (sem mudança)
+     */
     private function processBatch(array $rows): void
     {
+        // 1. Coleta todos os row_hashes e identity_hashes do lote
+        $rowHashes      = array_column($rows, 'row_hash');
+        $identityHashes = array_column($rows, 'identity_hash');
+
+        // 2. Busca no banco quais row_hashes já existem (= dado idêntico, skip)
+        $existingRowHashes = $this->fetchExistingRowHashes($rowHashes);
+
+        // 3. Busca no banco quais identity_hashes já existem e seus row_hashes atuais
+        //    [ identity_hash => ['id' => int, 'row_hash' => string] ]
+        $existingByIdentity = $this->fetchExistingByIdentity($identityHashes);
+
+        $toInsert = [];
+        $toUpdate = [];
+
+        foreach ($rows as $row) {
+            // row_hash idêntico ao banco → dado não mudou → pula
+            if (\in_array($row['row_hash'], $existingRowHashes, true)) {
+                continue;
+            }
+
+            $existing = $existingByIdentity[$row['identity_hash']] ?? null;
+
+            if ($existing === null) {
+                // Nunca visto → INSERT
+                $toInsert[] = $row;
+            } else {
+                // Mesma identidade, hash diferente → UPDATE
+                $row['_db_id'] = $existing['id'];
+                $toUpdate[]    = $row;
+            }
+        }
+
+        if ($toInsert === [] && $toUpdate === []) {
+            return; // lote inteiro sem mudanças
+        }
+
         $this->connection->beginTransaction();
 
         try {
-            $this->upsertRadarBatch($rows);
+            if ($toInsert !== []) {
+                $this->insertBatch($toInsert);
+            }
 
-            foreach ($rows as $row) {
-                $radarId = $this->findRadarIdByHash($row['row_hash']);
+            foreach ($toUpdate as $row) {
+                $this->updateRadar($row);
+            }
+
+            // Sincroniza faixas/histórico apenas para quem mudou
+            $changed = array_merge($toInsert, $toUpdate);
+            foreach ($changed as $row) {
+                $radarId = $row['_db_id'] ?? $this->findIdByRowHash($row['row_hash']);
 
                 if ($radarId === null) {
                     continue;
@@ -285,7 +308,69 @@ final class ImportRadarMedidoresHandler
         }
     }
 
-    private function upsertRadarBatch(array $rows): void
+    // -------------------------------------------------------------------------
+    // Queries de diff
+    // -------------------------------------------------------------------------
+
+    /**
+     * Retorna os row_hashes do lote que JÁ existem no banco.
+     * Esses registros estão idênticos → skip total.
+     *
+     * @param  string[] $rowHashes
+     * @return string[]
+     */
+    private function fetchExistingRowHashes(array $rowHashes): array
+    {
+        if ($rowHashes === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($rowHashes), '?'));
+
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT row_hash FROM radar_medidor WHERE row_hash IN ({$placeholders})",
+            $rowHashes
+        );
+
+        return array_column($rows, 'row_hash');
+    }
+
+    /**
+     * Retorna os registros do banco cujo identity_hash está no lote.
+     * Usado para diferenciar INSERT (novo) de UPDATE (alterado).
+     *
+     * @param  string[] $identityHashes
+     * @return array<string, array{id: int, row_hash: string}>
+     */
+    private function fetchExistingByIdentity(array $identityHashes): array
+    {
+        if ($identityHashes === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($identityHashes), '?'));
+
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT id, identity_hash, row_hash FROM radar_medidor WHERE identity_hash IN ({$placeholders})",
+            $identityHashes
+        );
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['identity_hash']] = [
+                'id'       => (int) $row['id'],
+                'row_hash' => $row['row_hash'],
+            ];
+        }
+
+        return $map;
+    }
+
+    // -------------------------------------------------------------------------
+    // INSERT em lote (novos radares)
+    // -------------------------------------------------------------------------
+
+    private function insertBatch(array $rows): void
     {
         $placeholders = [];
         $params       = [];
@@ -304,30 +389,54 @@ final class ImportRadarMedidoresHandler
             $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';
         }
 
-        $updateParts = [];
-        foreach (self::RADAR_UPDATE_COLS as $col) {
-            $updateParts[] = "{$col} = VALUES({$col})";
-        }
-
         $sql = sprintf(
-            'INSERT INTO radar_medidor (%s) VALUES %s ON DUPLICATE KEY UPDATE %s',
+            'INSERT INTO radar_medidor (%s) VALUES %s',
             implode(', ', self::RADAR_INSERT_COLS),
-            implode(', ', $placeholders),
-            implode(', ', $updateParts)
+            implode(', ', $placeholders)
         );
 
         $this->connection->executeStatement($sql, $params, $types);
     }
 
-    private function findRadarIdByHash(string $rowHash): ?int
+    // -------------------------------------------------------------------------
+    // UPDATE individual (radar alterado)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Atualiza apenas as colunas que podem mudar, identificando a linha pelo id
+     * que já temos do banco. Mais preciso e seguro do que ON DUPLICATE KEY.
+     */
+    private function updateRadar(array $row): void
     {
-        $result = $this->connection->fetchOne(
-            'SELECT id FROM radar_medidor WHERE row_hash = ?',
-            [$rowHash]
+        $setParts = [];
+        $params   = [];
+        $types    = [];
+
+        foreach (self::RADAR_UPDATE_COLS as $col) {
+            $setParts[]   = "{$col} = :{$col}";
+            $params[$col] = $row[$col] ?? null;
+            $types[$col]  = ParameterType::STRING;
+        }
+
+        // Atualiza também o row_hash para refletir a nova versão
+        $setParts[]         = 'row_hash = :row_hash';
+        $params['row_hash'] = $row['row_hash'];
+        $types['row_hash']  = ParameterType::STRING;
+
+        $params['_id'] = $row['_db_id'];
+        $types['_id']  = ParameterType::INTEGER;
+
+        $sql = sprintf(
+            'UPDATE radar_medidor SET %s WHERE id = :_id',
+            implode(', ', $setParts)
         );
 
-        return $result !== false ? (int) $result : null;
+        $this->connection->executeStatement($sql, $params, $types);
     }
+
+    // -------------------------------------------------------------------------
+    // Sync faixas e histórico (só para radares que mudaram)
+    // -------------------------------------------------------------------------
 
     private function syncFaixas(int $radarId, array $faixas): void
     {
@@ -388,6 +497,20 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
+    // Helpers de lookup
+    // -------------------------------------------------------------------------
+
+    private function findIdByRowHash(string $rowHash): ?int
+    {
+        $result = $this->connection->fetchOne(
+            'SELECT id FROM radar_medidor WHERE row_hash = ?',
+            [$rowHash]
+        );
+
+        return $result !== false ? (int) $result : null;
+    }
+
+    // -------------------------------------------------------------------------
     // Hashes
     // -------------------------------------------------------------------------
 
@@ -403,7 +526,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Helper
+    // str() helper
     // -------------------------------------------------------------------------
 
     private function str(mixed $value): ?string

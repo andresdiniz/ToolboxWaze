@@ -59,9 +59,9 @@
                     </a>
                 </li>
                 {% if is_granted('ROLE_ADMIN') %}
-                <li class="nav-item">
+                <li class="nav-item position-relative">
                     <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active fw-semibold{% endif %}"
-                       href="{{ path('admin_user_index') }}">
+                       href="{{ path('admin_users_index') }}">
                         <i class="bi bi-people me-1"></i>Usuários
                     </a>
                 </li>

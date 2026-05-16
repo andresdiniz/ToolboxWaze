@@ -20,19 +20,25 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
-    // Permissões de área disponíveis no sistema
-    public const PERMISSION_RADARS       = 'PERM_RADARS';
-    public const PERMISSION_FUEL         = 'PERM_FUEL';
-    public const PERMISSION_REPORTS      = 'PERM_REPORTS';
-    public const PERMISSION_TOOLS        = 'PERM_TOOLS';
-    public const PERMISSION_EXPORT       = 'PERM_EXPORT';
+    public const PERMISSION_RADARS  = 'PERM_RADARS';
+    public const PERMISSION_FUEL    = 'PERM_FUEL';
+    public const PERMISSION_REPORTS = 'PERM_REPORTS';
+    public const PERMISSION_TOOLS   = 'PERM_TOOLS';
+    public const PERMISSION_EXPORT  = 'PERM_EXPORT';
 
     public const ALL_PERMISSIONS = [
-        self::PERMISSION_RADARS   => 'Radares',
-        self::PERMISSION_FUEL     => 'Combustível',
-        self::PERMISSION_REPORTS  => 'Relatórios',
-        self::PERMISSION_TOOLS    => 'Ferramentas',
-        self::PERMISSION_EXPORT   => 'Exportação de Dados',
+        self::PERMISSION_RADARS  => 'Radares',
+        self::PERMISSION_FUEL    => 'Combustível',
+        self::PERMISSION_REPORTS => 'Relatórios',
+        self::PERMISSION_TOOLS   => 'Ferramentas',
+        self::PERMISSION_EXPORT  => 'Exportação de Dados',
+    ];
+
+    /** Lista oficial dos 27 estados brasileiros */
+    public const ALL_UFS = [
+        'AC','AL','AM','AP','BA','CE','DF','ES','GO',
+        'MA','MG','MS','MT','PA','PB','PE','PI','PR',
+        'RJ','RN','RO','RR','RS','SC','SE','SP','TO',
     ];
 
     #[ORM\Id]
@@ -56,6 +62,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /** @var list<string> permissões de área */
     #[ORM\Column]
     private array $permissions = [];
+
+    /**
+     * UFs que o usuário tem permissão de acessar/editar.
+     * Array vazio = nenhum estado (bloqueado).
+     * NULL = todos os estados (apenas ROLE_ADMIN herda isso automaticamente via isAdmin()).
+     *
+     * @var list<string>
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $allowedUfs = [];
 
     #[ORM\Column(nullable: true)]
     private ?string $password = null;
@@ -90,7 +106,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->createdAt = new \DateTimeImmutable();
     }
 
-    // --- Getters / Setters ---
+    // -------------------------------------------------------------------------
+    // Getters / Setters
+    // -------------------------------------------------------------------------
 
     public function getId(): ?int { return $this->id; }
 
@@ -107,7 +125,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getRoles(): array
     {
-        $roles = $this->roles;
+        $roles   = $this->roles;
         $roles[] = 'ROLE_USER';
         return array_unique($roles);
     }
@@ -120,9 +138,47 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->isAdmin() || in_array($perm, $this->permissions, true);
     }
 
+    // ---- UF access control --------------------------------------------------
+
+    public function getAllowedUfs(): ?array { return $this->allowedUfs; }
+    public function setAllowedUfs(?array $ufs): static
+    {
+        $this->allowedUfs = $ufs !== null ? array_values(array_unique($ufs)) : null;
+        return $this;
+    }
+
+    /**
+     * Retorna true se o usuário pode visualizar/editar dados do estado informado.
+     * Admins sempre podem. NULL significa "todos".
+     */
+    public function canAccessUf(string $uf): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+        if ($this->allowedUfs === null) {
+            return true; // acesso total explícito
+        }
+        return in_array(strtoupper($uf), $this->allowedUfs, true);
+    }
+
+    /**
+     * Retorna os UFs permitidos para uso em queries SQL.
+     * Admins e usuários com acesso total recebem null (sem restrição).
+     * Outros recebem o array de UFs ou [] se vazio.
+     */
+    public function getUfsForQuery(): ?array
+    {
+        if ($this->isAdmin() || $this->allowedUfs === null) {
+            return null; // sem filtro
+        }
+        return $this->allowedUfs;
+    }
+
+    // ---- Status helpers -----------------------------------------------------
+
     public function getPassword(): ?string { return $this->password; }
     public function setPassword(?string $v): static { $this->password = $v; return $this; }
-
     public function eraseCredentials(): void {}
 
     public function getStatus(): string { return $this->status; }

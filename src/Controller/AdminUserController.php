@@ -29,10 +29,11 @@ class AdminUserController extends AbstractController
     public function index(): Response
     {
         return $this->render('admin/users/index.html.twig', [
-            'pending'   => $this->userRepo->findBy(['status' => User::STATUS_PENDING], ['createdAt' => 'ASC']),
-            'approved'  => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
-            'rejected'  => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
-            'allPerms'  => User::ALL_PERMISSIONS,
+            'pending'  => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
+            'approved' => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
+            'rejected' => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
+            'allPerms' => User::ALL_PERMISSIONS,
+            'allUfs'   => User::ALL_UFS,
         ]);
     }
 
@@ -50,24 +51,38 @@ class AdminUserController extends AbstractController
             $roles[] = 'ROLE_ADMIN';
         }
 
+        // UFs permitidas: checkbox 'all_ufs' = null (sem restrição), senão array selecionado
+        $allowedUfs = $request->request->getBoolean('all_ufs')
+            ? null
+            : array_values(array_filter(
+                (array) $request->request->all('allowed_ufs'),
+                fn($v) => in_array($v, User::ALL_UFS, true)
+              ));
+
         $user->setStatus(User::STATUS_APPROVED)
              ->setApprovedAt(new \DateTimeImmutable())
              ->setRoles($roles)
-             ->setPermissions($permissions);
+             ->setPermissions($permissions)
+             ->setAllowedUfs($allowedUfs);
 
         $this->em->flush();
 
-        // Notifica o usuário aprovado
-        if ($user->getEmail()) {
+        try {
             $email = (new Email())
                 ->from($this->getParameter('app.mail_from'))
                 ->to($user->getEmail())
                 ->subject('[ToolboxWaze] Seu acesso foi aprovado!')
-                ->html($this->renderView('emails/user_approved.html.twig', ['user' => $user]));
+                ->html($this->renderView('emails/user_approved.html.twig', [
+                    'user'       => $user,
+                    'allowedUfs' => $allowedUfs,
+                ]));
             $this->mailer->send($email);
+        } catch (\Throwable) {
+            // e-mail não bloqueia o fluxo
         }
 
-        $this->addFlash('success', "Usuário {$user->getName()} aprovado com sucesso.");
+        $ufsLabel = $allowedUfs === null ? 'todos os estados' : implode(', ', $allowedUfs);
+        $this->addFlash('success', "Usuário {$user->getName()} aprovado. Estados: $ufsLabel.");
         return $this->redirectToRoute('admin_users_index');
     }
 
@@ -100,10 +115,20 @@ class AdminUserController extends AbstractController
             $roles[] = 'ROLE_ADMIN';
         }
 
-        $user->setRoles($roles)->setPermissions($permissions);
+        $allowedUfs = $request->request->getBoolean('all_ufs')
+            ? null
+            : array_values(array_filter(
+                (array) $request->request->all('allowed_ufs'),
+                fn($v) => in_array($v, User::ALL_UFS, true)
+              ));
+
+        $user->setRoles($roles)
+             ->setPermissions($permissions)
+             ->setAllowedUfs($allowedUfs);
         $this->em->flush();
 
-        $this->addFlash('success', "Permissões de {$user->getName()} atualizadas.");
+        $ufsLabel = $allowedUfs === null ? 'todos os estados' : implode(', ', $allowedUfs);
+        $this->addFlash('success', "Permissões de {$user->getName()} atualizadas. Estados: $ufsLabel.");
         return $this->redirectToRoute('admin_users_index');
     }
 
@@ -119,7 +144,7 @@ class AdminUserController extends AbstractController
         $this->em->remove($user);
         $this->em->flush();
 
-        $this->addFlash('success', "Usuário {$name} removido.");
+        $this->addFlash('success', "Usuário $name removido.");
         return $this->redirectToRoute('admin_users_index');
     }
 }

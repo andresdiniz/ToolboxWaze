@@ -1,32 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"><title>Seu acesso foi aprovado</title></head>
-<body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f7f6f2;margin:0;padding:2rem">
-<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
-    <div style="background:#01696f;padding:1.75rem 2rem">
-        <h1 style="color:#fff;font-size:1.25rem;margin:0">✅ Acesso Aprovado!</h1>
-        <p style="color:rgba(255,255,255,.8);margin:.5rem 0 0;font-size:.9rem">ToolboxWaze</p>
+<head>
+<meta charset="UTF-8">
+<style>
+  body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;padding:0}
+  .wrap{max-width:600px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+  .header{background:#01696f;padding:24px 32px}
+  .header h1{color:#fff;margin:0;font-size:1.2rem}
+  .body{padding:28px 32px}
+  .label{font-size:.75rem;text-transform:uppercase;color:#888;margin-bottom:2px}
+  .value{font-size:.95rem;color:#1a1a1a;font-weight:500;margin-bottom:16px}
+  .ufs-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+  .uf-badge{background:#e6f0f0;color:#01696f;border:1px solid #a0c8c8;border-radius:4px;padding:3px 8px;font-size:.78rem;font-weight:700}
+  .uf-all{background:#e6f4ea;color:#2d6a4f;border-color:#a8d5b5;border-radius:4px;padding:4px 12px;font-size:.85rem;font-weight:700}
+  .cta{display:inline-block;background:#01696f;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:.95rem;margin-top:8px}
+  .footer{background:#f9f8f5;border-top:1px solid #e5e5e5;padding:16px 32px;font-size:.8rem;color:#999}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header"><h1>✅ Seu acesso foi aprovado!</h1></div>
+  <div class="body">
+    <p style="margin-bottom:20px;color:#444">Olá, <strong>{{ user.name }}</strong>! Seu acesso ao ToolboxWaze foi aprovado.</p>
+
+    <div class="label">Acesso aos estados</div>
+    {% if allowedUfs is null %}
+    <div class="ufs-grid"><span class="uf-all">🌎 Todos os estados</span></div>
+    {% elseif allowedUfs|length > 0 %}
+    <div class="ufs-grid">
+        {% for uf in allowedUfs %}<span class="uf-badge">{{ uf }}</span>{% endfor %}
     </div>
-    <div style="padding:2rem">
-        <p style="color:#28251d;margin:0 0 1rem">Olá <strong>{{ user.name }}</strong>,</p>
-        <p style="color:#5a5957;margin:0 0 1.5rem">Sua solicitação de acesso ao <strong>ToolboxWaze</strong> foi aprovada! Você já pode fazer login e utilizar as ferramentas disponíveis.</p>
+    {% else %}
+    <p style="color:#e74c3c;font-size:.9rem">Nenhum estado configurado. Entre em contato com o administrador.</p>
+    {% endif %}
 
-        {% if user.permissions is not empty %}
-        <div style="background:#f3f0ec;border-radius:8px;padding:1.25rem;margin-bottom:1.75rem">
-            <p style="margin:0 0 .75rem;font-size:.875rem;color:#7a7974;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Seus acessos</p>
-            {% for perm in user.permissions %}
-            <span style="display:inline-block;background:#cedcd8;color:#01696f;padding:.2rem .6rem;border-radius:9999px;font-size:.8rem;font-weight:600;margin:.2rem">{{ constant('App\\Entity\\User::ALL_PERMISSIONS')[perm] ?? perm }}</span>
-            {% endfor %}
-        </div>
-        {% endif %}
+    <p style="color:#555;font-size:.9rem;margin-top:8px">Você pode visualizar e editar apenas dados dos estados listados acima. Caso precise de acesso adicional, solicite ao administrador.</p>
 
-        <a href="{{ app.request.schemeAndHttpHost ~ path('app_login') }}"
-           style="display:inline-block;background:#01696f;color:#fff;text-decoration:none;padding:.75rem 1.5rem;border-radius:8px;font-weight:600;font-size:.9rem">
-            Fazer Login →
-        </a>
-
-        <p style="color:#bab9b4;font-size:.8rem;margin-top:2rem">Caso tenha dúvidas, entre em contato com o administrador.</p>
-    </div>
+    <a href="{{ loginUrl }}" class="cta">Acessar o sistema</a>
+  </div>
+  <div class="footer">ToolboxWaze &mdash; sistema interno de gestão Waze</div>
 </div>
 </body>
 </html>

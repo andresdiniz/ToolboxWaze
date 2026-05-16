@@ -18,10 +18,11 @@ use Symfony\Component\Routing\Attribute\Route;
 class RegistrationController extends AbstractController
 {
     public function __construct(
-        private readonly EntityManagerInterface $em,
+        private readonly EntityManagerInterface      $em,
         private readonly UserPasswordHasherInterface $hasher,
-        private readonly MailerInterface $mailer,
-        private readonly UserRepository $userRepo,
+        private readonly MailerInterface             $mailer,
+        private readonly UserRepository              $userRepo,
+        private readonly string                      $mailFrom = 'noreply@localhost',
     ) {}
 
     #[Route('/register', name: 'app_register')]
@@ -62,18 +63,22 @@ class RegistrationController extends AbstractController
                 $this->em->persist($user);
                 $this->em->flush();
 
-                // Notifica todos os admins
-                $admins = $this->userRepo->findAdmins();
-                foreach ($admins as $admin) {
-                    $adminEmail = (new Email())
-                        ->from($this->getParameter('app.mail_from'))
-                        ->to($admin->getEmail())
-                        ->subject('[ToolboxWaze] Nova solicitação de acesso')
-                        ->html($this->renderView('emails/new_registration.html.twig', [
-                            'user'  => $user,
-                            'admin' => $admin,
-                        ]));
-                    $this->mailer->send($adminEmail);
+                // Notifica todos os admins (erros de e-mail nao bloqueiam o registro)
+                try {
+                    $admins = $this->userRepo->findAdmins();
+                    foreach ($admins as $admin) {
+                        $adminEmail = (new Email())
+                            ->from($this->mailFrom)
+                            ->to($admin->getEmail())
+                            ->subject('[ToolboxWaze] Nova solicitação de acesso')
+                            ->html($this->renderView('emails/new_registration.html.twig', [
+                                'user'  => $user,
+                                'admin' => $admin,
+                            ]));
+                        $this->mailer->send($adminEmail);
+                    }
+                } catch (\Throwable) {
+                    // log silencioso: usuario foi criado mesmo assim
                 }
 
                 return $this->render('auth/register.html.twig', ['sent' => true]);

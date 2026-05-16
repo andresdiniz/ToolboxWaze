@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -18,6 +19,7 @@ final class RadarController extends AbstractController
 
     public function __construct(
         private readonly Connection $db,
+        private readonly Security $security,
     ) {}
 
     #[Route('', name: 'index')]
@@ -25,7 +27,7 @@ final class RadarController extends AbstractController
     {
         /** @var User|null $user */
         $user        = $this->getUser();
-        $allowedUfs  = $user?->getUfsForQuery(); // null = sem restrição
+        $allowedUfs  = $user?->getUfsForQuery();
 
         $uf        = strtoupper(trim((string) $req->query->get('uf', '')));
         $municipio = trim((string) $req->query->get('municipio', ''));
@@ -36,7 +38,6 @@ final class RadarController extends AbstractController
         $page      = max(1, (int) $req->query->get('page', 1));
         $offset    = ($page - 1) * self::PER_PAGE;
 
-        // Se o usuário tentou filtrar um UF que não tem acesso, ignora
         if ($uf !== '' && $allowedUfs !== null && !in_array($uf, $allowedUfs, true)) {
             $uf = '';
         }
@@ -63,7 +64,6 @@ final class RadarController extends AbstractController
             $params
         );
 
-        // UFs disponíveis no filtro = interseção com o que o usuário pode ver
         $ufsQuery = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';
         $ufsParams = [];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
@@ -71,7 +71,7 @@ final class RadarController extends AbstractController
             $ufsQuery .= " AND sigla_uf IN ($placeholders)";
             $ufsParams = $allowedUfs;
         } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
-            $ufsQuery .= ' AND 1=0'; // sem acesso a nenhum estado
+            $ufsQuery .= ' AND 1=0';
         }
         $ufsQuery .= ' ORDER BY sigla_uf';
         $ufs = array_column($this->db->fetchAllAssociative($ufsQuery, $ufsParams), 'sigla_uf');
@@ -87,13 +87,10 @@ final class RadarController extends AbstractController
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
 
-        // Stats filtradas pelo acesso do usuário
-        $statsWhere  = '';
         $statsParams = ['hoje' => $hoje, 'em30' => $em30];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
             $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
             $statsWhere = " WHERE sigla_uf IN ($ph)";
-            $statsParams = array_merge($allowedUfs, [$hoje, $em30]);
             $stats = $this->db->fetchAssociative(
                 "SELECT COUNT(*) AS total,
                         SUM(ultimo_resultado = 'APROVADO') AS aprovados,
@@ -132,12 +129,16 @@ final class RadarController extends AbstractController
             'stats'       => $stats,
             'hoje'        => $hoje,
             'em30'        => $em30,
-            'allowedUfs'  => $allowedUfs, // para o template mostrar badge de restrição
+            'allowedUfs'  => $allowedUfs,
         ]);
     }
 
+    // =========================================================================
+    // SHOW — detalhes do radar + formulário Waze inline
+    // =========================================================================
+
     #[Route('/{id}', name: 'show', requirements: ['id' => '\\d+'])]
-    public function show(int $id): Response
+    public function show(int $id, Request $req): Response
     {
         /** @var User|null $user */
         $user  = $this->getUser();
@@ -147,7 +148,6 @@ final class RadarController extends AbstractController
             throw $this->createNotFoundException('Radar não encontrado.');
         }
 
-        // Bloqueia acesso direto via URL a estados não permitidos
         if ($user && !$user->canAccessUf((string) ($radar['sigla_uf'] ?? ''))) {
             throw $this->createAccessDeniedException('Você não tem acesso a dados deste estado.');
         }
@@ -159,14 +159,134 @@ final class RadarController extends AbstractController
             'SELECT * FROM radar_historico WHERE radar_medidor_id = ? ORDER BY ano DESC, data_laudo DESC', [$id]
         );
 
+        // Waze link atual (se houver)
+        $wazeLink = $this->db->fetchAssociative(
+            'SELECT wl.*, ui.email AS inserted_by_email, uu.email AS updated_by_email
+             FROM radar_waze_link wl
+             JOIN user ui ON ui.id = wl.inserted_by
+             LEFT JOIN user uu ON uu.id = wl.updated_by
+             WHERE wl.radar_medidor_id = ?',
+            [$id]
+        ) ?: null;
+
+        $wazeErrors  = [];
+        $wazeFormData = [];
+
         return $this->render('radar/show.html.twig', [
-            'radar'     => $radar,
-            'faixas'    => $faixas,
-            'historico' => $historico,
+            'radar'        => $radar,
+            'faixas'       => $faixas,
+            'historico'    => $historico,
+            'wazeLink'     => $wazeLink,
+            'wazeErrors'   => $wazeErrors,
+            'wazeFormData' => $wazeFormData,
         ]);
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // SAVE WAZE LINK — POST separado para manter show() limpo
+    // =========================================================================
+
+    #[Route('/{id}/waze-salvar', name: 'waze_save', requirements: ['id' => '\\d+'], methods: ['POST'])]
+    public function wazeSave(int $id, Request $req): Response
+    {
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
+
+        if (!$this->isCsrfTokenValid('waze_save_' . $id, $req->request->get('_token'))) {
+            $this->addFlash('error', 'Token de segurança inválido.');
+            return $this->redirectToRoute('radar_show', ['id' => $id]);
+        }
+
+        $radar = $this->db->fetchAssociative('SELECT id, sigla_uf FROM radar_medidor WHERE id = ?', [$id]);
+        if (!$radar) {
+            throw $this->createNotFoundException('Radar não encontrado.');
+        }
+
+        /** @var User $user */
+        $user   = $this->getUser();
+        $userId = $user->getId();
+        $now    = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        $wazeLink      = trim((string) $req->request->get('waze_link', ''));
+        $motivoRevisao = trim((string) $req->request->get('motivo_revisao', ''));
+
+        // ── Validação ──────────────────────────────────────────────────────────
+        $errors = [];
+
+        if ($wazeLink === '') {
+            $errors['waze_link'] = 'O link do Waze é obrigatório.';
+        } elseif (!filter_var($wazeLink, FILTER_VALIDATE_URL)) {
+            $errors['waze_link'] = 'Informe uma URL válida.';
+        } elseif (!preg_match('/[?&]permanentHazards=(\d+)/', $wazeLink, $m)) {
+            $errors['waze_link'] = 'A URL deve conter o parâmetro permanentHazards=NÚMERO.';
+        }
+
+        // Motivo obrigatório apenas ao editar
+        $existing = $this->db->fetchAssociative(
+            'SELECT * FROM radar_waze_link WHERE radar_medidor_id = ?', [$id]
+        ) ?: null;
+
+        if ($existing && $motivoRevisao === '') {
+            $errors['motivo_revisao'] = 'Informe o motivo da revisão.';
+        }
+
+        if ($errors !== []) {
+            // Repassa os erros para o show via flash de dados (usa sessão)
+            $req->getSession()->set('_waze_errors_' . $id, $errors);
+            $req->getSession()->set('_waze_form_'   . $id, [
+                'waze_link'     => $wazeLink,
+                'motivo_revisao' => $motivoRevisao,
+            ]);
+            return $this->redirectToRoute('radar_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
+        }
+
+        $hazardId = (int) $m[1];
+
+        // ── Persistência ───────────────────────────────────────────────────────
+        if ($existing) {
+            // Registra log de cada campo alterado
+            if ($wazeLink !== $existing['waze_link']) {
+                $this->db->executeStatement(
+                    'INSERT INTO radar_waze_link_log
+                     (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, motivo, changed_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [$existing['id'], $userId, 'waze_link', $existing['waze_link'], $wazeLink, $motivoRevisao, $now]
+                );
+            }
+
+            if (($existing['observacao'] ?? '') !== $motivoRevisao) {
+                $this->db->executeStatement(
+                    'INSERT INTO radar_waze_link_log
+                     (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, motivo, changed_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [$existing['id'], $userId, 'motivo_revisao', null, $motivoRevisao, $motivoRevisao, $now]
+                );
+            }
+
+            $this->db->executeStatement(
+                'UPDATE radar_waze_link
+                 SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
+                 WHERE id = ?',
+                [$wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
+            );
+
+            $this->addFlash('success', 'Link Waze atualizado com sucesso.');
+        } else {
+            $this->db->executeStatement(
+                'INSERT INTO radar_waze_link
+                 (radar_medidor_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
+                 VALUES (?, ?, ?, ?, ?, ?)',
+                [$id, $wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now]
+            );
+
+            $this->addFlash('success', 'Link Waze cadastrado com sucesso.');
+        }
+
+        return $this->redirectToRoute('radar_show', ['id' => $id]);
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
 
     private function buildFrom(string $serie): string
     {
@@ -185,10 +305,9 @@ final class RadarController extends AbstractController
         $parts  = [];
         $params = [];
 
-        // Restrição automática de estados do usuário
         if ($allowedUfs !== null) {
             if (count($allowedUfs) === 0) {
-                $parts[] = '1=0'; // sem acesso
+                $parts[] = '1=0';
             } else {
                 $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
                 $parts[] = "rm.sigla_uf IN ($ph)";
@@ -199,8 +318,8 @@ final class RadarController extends AbstractController
         }
 
         if ($uf !== '') {
-            $parts[]      = 'rm.sigla_uf = ?';
-            $params[]     = $uf;
+            $parts[]  = 'rm.sigla_uf = ?';
+            $params[] = $uf;
         }
         if ($municipio !== '') {
             $parts[]  = 'rm.municipio LIKE ?';

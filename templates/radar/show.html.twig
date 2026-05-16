@@ -29,6 +29,15 @@
     {% endif %}
 </div>
 
+{% for type, messages in app.flashes %}
+    {% for msg in messages %}
+        <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+{% endfor %}
+
 <div class="row g-4">
 
     {# ── Coluna esquerda ── #}
@@ -141,6 +150,130 @@
     {# ── Coluna direita ── #}
     <div class="col-lg-5">
 
+        {# ═══════════════════════════════════════════════════════
+           CARD: LINK WAZE (inserir / editar inline)
+           ═══════════════════════════════════════════════════════ #}
+        {% if is_granted('IS_AUTHENTICATED_FULLY') %}
+        <div class="card mb-4 border-primary">
+            <div class="card-header fw-semibold bg-primary text-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-signpost-2 me-2"></i>Editor Waze</span>
+                {% if wazeLink %}
+                    <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener"
+                       class="btn btn-sm btn-light">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Abrir Editor
+                    </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+
+                {# ── Estado atual (somente leitura) ── #}
+                {% if wazeLink %}
+                <div class="mb-3 p-2 rounded" style="background:var(--bs-light)">
+                    <div class="detail-label">Hazard ID</div>
+                    <div class="fw-semibold text-primary fs-5">#{{ wazeLink.permanent_hazard_id }}</div>
+                    <div class="detail-label mt-2">Cadastrado por</div>
+                    <div class="small">{{ wazeLink.inserted_by_email }} em {{ wazeLink.inserted_at|date('d/m/Y H:i') }}</div>
+                    {% if wazeLink.updated_at %}
+                    <div class="detail-label mt-2">Última edição</div>
+                    <div class="small text-warning">{{ wazeLink.updated_by_email }} em {{ wazeLink.updated_at|date('d/m/Y H:i') }}</div>
+                    {% endif %}
+                    {% if wazeLink.observacao %}
+                    <div class="detail-label mt-2">Observação</div>
+                    <div class="small">{{ wazeLink.observacao }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {# ── Formulário (collapsível se já tem link) ── #}
+                {% if wazeLink %}
+                <button class="btn btn-outline-primary btn-sm w-100 mb-2"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#waze-form-collapse"
+                        aria-expanded="false">
+                    <i class="bi bi-pencil me-1"></i>Editar link
+                </button>
+                <div class="collapse" id="waze-form-collapse">
+                {% else %}
+                <div id="waze-form-collapse">
+                {% endif %}
+
+                    <form method="post"
+                          action="{{ path('radar_waze_save', {id: radar.id}) }}"
+                          novalidate>
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('waze_save_' ~ radar.id) }}">
+
+                        {# Link do Waze #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">
+                                Link do Editor Waze
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="url"
+                                   name="waze_link"
+                                   value="{{ wazeLink ? wazeLink.waze_link : wazeFormData.waze_link|default('') }}"
+                                   class="form-control form-control-sm font-monospace {{ wazeErrors.waze_link is defined ? 'is-invalid' : '' }}"
+                                   placeholder="https://waze.com/pt-BR/editor?…&permanentHazards=272464"
+                                   required>
+                            {% if wazeErrors.waze_link is defined %}
+                                <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
+                            {% else %}
+                                <div class="form-text">Cole a URL do Editor Waze com <code>permanentHazards=NÚMERO</code>.</div>
+                            {% endif %}
+                        </div>
+
+                        {# Preview do Hazard ID em tempo real #}
+                        <div id="waze-hazard-preview" class="alert alert-info alert-sm py-1 px-2 mb-3 d-none small">
+                            Hazard ID detectado: <strong id="waze-hazard-id"></strong>
+                        </div>
+
+                        {# Motivo da revisão #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">
+                                Motivo da revisão
+                                {% if wazeLink %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <textarea name="motivo_revisao"
+                                      class="form-control form-control-sm {{ wazeErrors.motivo_revisao is defined ? 'is-invalid' : '' }}"
+                                      rows="2"
+                                      placeholder="Ex: atualização de posição, novo hazard, correção de velocidade…">{{ wazeFormData.motivo_revisao|default('') }}</textarea>
+                            {% if wazeErrors.motivo_revisao is defined %}
+                                <div class="invalid-feedback">{{ wazeErrors.motivo_revisao }}</div>
+                            {% else %}
+                                <div class="form-text">Obrigatório ao editar. Histórico de alterações é registrado automaticamente.</div>
+                            {% endif %}
+                        </div>
+
+                        {# Usuário e data — preenchidos automaticamente, só exibição #}
+                        <div class="row g-2 mb-3">
+                            <div class="col-7">
+                                <label class="form-label fw-semibold small">Usuário</label>
+                                <input type="text"
+                                       class="form-control form-control-sm bg-light"
+                                       value="{{ app.user ? app.user.email : '—' }}"
+                                       disabled>
+                            </div>
+                            <div class="col-5">
+                                <label class="form-label fw-semibold small">Data/Hora</label>
+                                <input type="text"
+                                       class="form-control form-control-sm bg-light"
+                                       value="Agora (auto)"
+                                       disabled>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-save me-1"></i>
+                            {{ wazeLink ? 'Salvar alterações' : 'Cadastrar link Waze' }}
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+        {% endif %}
+
         {# Histórico de verificações #}
         {% if historico is not empty %}
         <div class="card mb-4">
@@ -196,5 +329,21 @@
 
     </div>
 </div>
+
+<script>
+(function () {
+    const input   = document.querySelector('input[name="waze_link"]');
+    const preview = document.getElementById('waze-hazard-preview');
+    const hazardEl = document.getElementById('waze-hazard-id');
+    if (!input) return;
+    function update() {
+        const m = input.value.match(/[?&]permanentHazards=(\d+)/);
+        if (m) { hazardEl.textContent = m[1]; preview.classList.remove('d-none'); }
+        else   { preview.classList.add('d-none'); }
+    }
+    input.addEventListener('input', update);
+    update();
+}());
+</script>
 
 {% endblock %}

@@ -10,9 +10,13 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Tabela de estados brasileiros com sigla e nome.
  * Usada pelo handler de radares para iterar os 27 estados.
+ *
+ * O nome do índice único é fixado em UNIQ_645199D6B7405B21 para evitar
+ * que o Doctrine tente executar RENAME INDEX (não suportado no MariaDB < 10.5).
  */
 #[ORM\Entity(repositoryClass: BrazilianStateRepository::class)]
 #[ORM\Table(name: 'brazilian_state')]
+#[ORM\UniqueConstraint(name: 'UNIQ_645199D6B7405B21', columns: ['uf'])]
 class BrazilianState
 {
     #[ORM\Id]
@@ -21,7 +25,7 @@ class BrazilianState
     private ?int $id = null;
 
     /** Sigla UF: AC, AL, AM ... SP */
-    #[ORM\Column(type: 'string', length: 2, unique: true)]
+    #[ORM\Column(type: 'string', length: 2, unique: false)]
     private string $uf;
 
     /** Nome completo: Acre, Alagoas ... São Paulo */

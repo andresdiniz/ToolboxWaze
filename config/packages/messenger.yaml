@@ -3,14 +3,16 @@ framework:
         failure_transport: failed
 
         transports:
-            # https://symfony.com/doc/current/messenger.html#transport-configuration
-            async:
-                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                retry_strategy:
-                    max_retries: 3
-                    multiplier: 2
+            # sync:// executa o handler imediatamente, sem fila e sem worker separado.
+            # Necessário para versões antigas do MariaDB (< 10.6) que não suportam SKIP LOCKED.
+            # Para produção com MySQL 8+ / MariaDB 10.6+, troque por:
+            #   async:
+            #     dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+            #     options:
+            #       use_notify: true
+            async: 'sync://'
+
             failed: 'doctrine://default?queue_name=failed'
-            # sync: 'sync://'
 
         default_bus: messenger.bus.default
 
@@ -21,6 +23,4 @@ framework:
             Symfony\Component\Mailer\Messenger\SendEmailMessage: async
             Symfony\Component\Notifier\Message\ChatMessage: async
             Symfony\Component\Notifier\Message\SmsMessage: async
-
-            # Route your messages to the transports
-            # 'App\Message\YourMessage': async
+            App\Message\ImportFuelResellersMessage: async

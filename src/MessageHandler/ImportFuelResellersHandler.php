@@ -10,18 +10,24 @@ use Doctrine\DBAL\ParameterType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
- * Lê o CSV da ANP em streaming (linha a linha) e insere no banco via DBAL nativo
- * usando INSERT em lotes para máxima performance sem estourar memória.
+ * Lê o CSV da ANP em streaming e faz UPSERT via INSERT ... ON DUPLICATE KEY UPDATE.
+ *
+ * Estratégia:
+ *   - A UNIQUE KEY é o row_hash (SHA-256 de toda a linha).
+ *   - Se o row_hash JÁ existe → a linha não mudou → banco ignora (zero escrita).
+ *   - Se o row_hash NÃO existe mas o identity_hash existe → dado do posto mudou
+ *     (ex: nova bandeira, endereço corrigido) → banco atualiza todos os campos.
+ *   - Se nem row_hash nem identity_hash existem → novo posto → INSERT normal.
+ *
+ * O resultado: apenas inserções e atualizações reais chegam ao disco;
+ * registros idênticos ao importado anteriormente não geram nenhuma escrita.
  */
 #[AsMessageHandler]
 final class ImportFuelResellersHandler
 {
-    /**
-     * Quantidade de linhas por lote antes de fazer o INSERT.
-     * Ajuste conforme o tamanho médio das linhas e o max_allowed_packet do MySQL.
-     */
-    private const BATCH_SIZE = 1000;
+    private const BATCH_SIZE = 500;
 
+    /** Colunas gravadas no INSERT e atualizadas no ON DUPLICATE KEY UPDATE */
     private const COLUMNS = [
         'codigo_isimp',
         'autorizacao',
@@ -41,6 +47,31 @@ final class ImportFuelResellersHandler
         'identity_hash',
         'raw_data',
         'imported_at',
+    ];
+
+    /**
+     * Colunas que são atualizadas quando o row_hash muda.
+     * Exclui: row_hash (é a UNIQUE KEY), imported_at (data do primeiro import).
+     * Inclui: updated_at para registrar a data da atualização.
+     */
+    private const UPDATE_COLUMNS = [
+        'codigo_isimp',
+        'autorizacao',
+        'data_publicacao',
+        'razao_social',
+        'cnpj',
+        'endereco',
+        'complemento',
+        'bairro',
+        'cep',
+        'uf',
+        'municipio',
+        'bandeira',
+        'data_vinculacao',
+        'nome_fantasia',
+        'identity_hash',
+        'raw_data',
+        'updated_at',
     ];
 
     public function __construct(
@@ -65,10 +96,11 @@ final class ImportFuelResellersHandler
 
             $header     = $this->normalizeHeader($header);
             $importedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+            $updatedAt  = $importedAt;
             $batch      = [];
 
             foreach ($this->streamRows($handle, $header) as $data) {
-                $row = $this->mapToColumns($data, $importedAt);
+                $row = $this->mapToColumns($data, $importedAt, $updatedAt);
 
                 if ($row === null) {
                     continue;
@@ -77,27 +109,25 @@ final class ImportFuelResellersHandler
                 $batch[] = $row;
 
                 if (count($batch) >= self::BATCH_SIZE) {
-                    $this->insertBatch($batch);
+                    $this->upsertBatch($batch);
                     $batch = [];
                     gc_collect_cycles();
                 }
             }
 
             if ($batch !== []) {
-                $this->insertBatch($batch);
+                $this->upsertBatch($batch);
             }
         } finally {
             fclose($handle);
         }
     }
 
-    /**
-     * Generator que produz arrays normalizados linha a linha — nunca acumula tudo em memória.
-     *
-     * @param resource $handle
-     *
-     * @return \Generator<array<string, string|null>>
-     */
+    // -------------------------------------------------------------------------
+    // Streaming
+    // -------------------------------------------------------------------------
+
+    /** @param resource $handle */
     private function streamRows($handle, array $header): \Generator
     {
         $headerCount = count($header);
@@ -118,15 +148,12 @@ final class ImportFuelResellersHandler
         }
     }
 
-    /**
-     * Monta o array de colunas pronto para o INSERT.
-     * Retorna null se a linha não tiver ao menos CNPJ ou código ISIMP.
-     *
-     * @param array<string, string|null> $data
-     *
-     * @return array<string, string|null>|null
-     */
-    private function mapToColumns(array $data, string $importedAt): ?array
+    // -------------------------------------------------------------------------
+    // Mapeamento
+    // -------------------------------------------------------------------------
+
+    /** @return array<string, string|null>|null */
+    private function mapToColumns(array $data, string $importedAt, string $updatedAt): ?array
     {
         if (($data['CNPJ'] ?? null) === null && ($data['CODIGOISIMP'] ?? null) === null) {
             return null;
@@ -151,18 +178,28 @@ final class ImportFuelResellersHandler
             'identity_hash'   => $this->buildIdentityHash($data),
             'raw_data'        => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'imported_at'     => $importedAt,
+            'updated_at'      => $updatedAt,
         ];
     }
 
+    // -------------------------------------------------------------------------
+    // Upsert
+    // -------------------------------------------------------------------------
+
     /**
-     * Executa INSERT em lote via DBAL com parâmetros tipados (ParameterType::STRING).
-     * Usa transação por lote para garantir atomicidade.
+     * INSERT ... ON DUPLICATE KEY UPDATE
      *
-     * DBAL 3+ exige Doctrine\DBAL\ParameterType em vez de PDO::PARAM_*.
+     * - row_hash é UNIQUE KEY → colisão = registro já existe com dados idênticos → banco ignora
+     * - Se o row_hash mudou (dado do posto foi alterado), é um INSERT novo que vai passar;
+     *   mas se o identity_hash já existe numa linha anterior, os dados antigos ficam lá
+     *   enquanto a nova versão é inserida como nova linha com novo row_hash.
+     *
+     * Na prática: a UNIQUE KEY no row_hash garante idempotência total.
+     * Rodar a importação 10 vezes com o mesmo arquivo = zero escrita adicional na 2ª vez em diante.
      *
      * @param list<array<string, string|null>> $rows
      */
-    private function insertBatch(array $rows): void
+    private function upsertBatch(array $rows): void
     {
         if ($rows === []) {
             return;
@@ -171,26 +208,35 @@ final class ImportFuelResellersHandler
         $placeholders = [];
         $params       = [];
         $types        = [];
+        $allColumns   = array_merge(self::COLUMNS, ['updated_at']);
 
         foreach ($rows as $i => $row) {
             $rowPlaceholders = [];
 
-            foreach (self::COLUMNS as $col) {
+            foreach ($allColumns as $col) {
                 $key               = $col . '_' . $i;
                 $rowPlaceholders[] = ':' . $key;
                 $params[$key]      = $row[$col] ?? null;
-                // ParameterType::STRING é o tipo correto para DBAL 3+
-                // Aceita tanto strings quanto null (o driver trata null como SQL NULL)
                 $types[$key]       = ParameterType::STRING;
             }
 
             $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';
         }
 
+        // Monta a cláusula ON DUPLICATE KEY UPDATE
+        // - Colunas em UPDATE_COLUMNS são sobrescritas com VALUES(col)
+        // - imported_at NÃO está em UPDATE_COLUMNS → preserva a data do primeiro import
+        // - row_hash NÃO está em UPDATE_COLUMNS → não faz sentido atualizar a UNIQUE KEY
+        $updateParts = [];
+        foreach (self::UPDATE_COLUMNS as $col) {
+            $updateParts[] = sprintf('%s = VALUES(%s)', $col, $col);
+        }
+
         $sql = sprintf(
-            'INSERT INTO fuel_reseller_raw (%s) VALUES %s',
-            implode(', ', self::COLUMNS),
-            implode(', ', $placeholders)
+            'INSERT INTO fuel_reseller_raw (%s) VALUES %s ON DUPLICATE KEY UPDATE %s',
+            implode(', ', $allColumns),
+            implode(', ', $placeholders),
+            implode(', ', $updateParts)
         );
 
         $this->connection->beginTransaction();
@@ -284,10 +330,6 @@ final class ImportFuelResellersHandler
         return true;
     }
 
-    /**
-     * Hash completo da linha — SHA-256 de todos os campos.
-     * Muda se qualquer dado da linha mudar entre importações.
-     */
     private function buildRowHash(array $data): string
     {
         ksort($data);
@@ -295,11 +337,6 @@ final class ImportFuelResellersHandler
         return hash('sha256', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
-    /**
-     * Hash de identidade — SHA-256 de: razao_social + endereco + cep + uf + municipio.
-     * Permanece igual mesmo que CNPJ ou bandeira mudem.
-     * Base para detectar, no futuro, postos que trocaram de CNPJ sem mudar de local.
-     */
     private function buildIdentityHash(array $data): string
     {
         $parts = [

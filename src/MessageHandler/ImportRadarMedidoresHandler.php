@@ -12,7 +12,7 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 /**
  * Baixa o JSON de medidores RBMLQ de um estado e faz upsert na tabela radar_medidor.
  *
- * Estratégia idêntica ao ImportFuelResellersHandler:
+ * Estratégia:
  *   - row_hash UNIQUE KEY → INSERT ON DUPLICATE KEY UPDATE
  *   - Linha idêntica à anterior → zero escrita no banco
  *   - Dado alterado → atualiza campos + updated_at
@@ -23,7 +23,10 @@ final class ImportRadarMedidoresHandler
 {
     private const BATCH_SIZE = 200;
 
-    /** Mapeamento chave-JSON → coluna do banco */
+    /**
+     * Mapeamento chave-JSON → coluna do banco.
+     * O handler tenta cada chave exata, sem underlines e em camelCase.
+     */
     private const FIELD_MAP = [
         'municipio'          => 'municipio',
         'logradouro'         => 'logradouro',
@@ -74,7 +77,6 @@ final class ImportRadarMedidoresHandler
         'updated_at',
     ];
 
-    /** Colunas atualizadas no ON DUPLICATE KEY UPDATE (exclui row_hash e imported_at) */
     private const UPDATE_COLUMNS = [
         'uf',
         'municipio',
@@ -108,12 +110,9 @@ final class ImportRadarMedidoresHandler
 
     public function __invoke(ImportRadarMedidoresMessage $message): void
     {
-        $uf  = strtoupper($message->uf);
-        $url = $message->getUrl();
+        $uf   = strtoupper($message->uf);
+        $json = $this->fetchJson($message->getUrl());
 
-        $json = $this->fetchJson($url);
-
-        // API pode retornar array direto ou objeto com chave de dados
         $items = match (true) {
             isset($json['data'])    => $json['data'],
             isset($json['items'])   => $json['items'],
@@ -134,8 +133,7 @@ final class ImportRadarMedidoresHandler
                 continue;
             }
 
-            $row     = $this->mapItem($item, $uf, $importedAt);
-            $batch[] = $row;
+            $batch[] = $this->mapItem($item, $uf, $importedAt);
 
             if (count($batch) >= self::BATCH_SIZE) {
                 $this->upsertBatch($batch);
@@ -164,8 +162,7 @@ final class ImportRadarMedidoresHandler
 
         $raw = @file_get_contents($url, false, $context);
 
-        if ($raw === false || $raw === '') {
-            // Estado sem dados ou endpoint fora do ar — não é erro fatal
+        if ($raw === false || trim($raw) === '') {
             return [];
         }
 
@@ -180,30 +177,96 @@ final class ImportRadarMedidoresHandler
 
     private function mapItem(array $item, string $uf, string $importedAt): array
     {
-        // Normaliza chaves do JSON para snake_case minúsculo
-        $normalized = [];
-        foreach ($item as $k => $v) {
-            $key              = strtolower((string) $k);
-            $normalized[$key] = $this->normalizeValue($v);
-        }
+        // Normaliza TODAS as chaves para minúsculo sem underline para lookup flexível
+        $flat = $this->flattenItem($item);
 
         $row = ['uf' => $uf];
 
         foreach (self::FIELD_MAP as $jsonKey => $colKey) {
-            // Tenta a chave exata e variações comuns (sem underline, camelCase)
-            $row[$colKey] = $normalized[$jsonKey]
-                ?? $normalized[str_replace('_', '', $jsonKey)]
-                ?? $normalized[$this->toCamel($jsonKey)]
+            $row[$colKey] = $flat[$jsonKey]
+                ?? $flat[str_replace('_', '', $jsonKey)]
+                ?? $flat[$this->toCamel($jsonKey)]
                 ?? null;
         }
 
-        $row['row_hash']      = $this->buildRowHash($normalized, $uf);
-        $row['identity_hash'] = $this->buildIdentityHash($normalized, $uf);
+        // Latitude e longitude: podem vir como objeto/array {lat, lng} ou campo separado
+        if ($row['latitude'] === null && isset($item['localizacao'])) {
+            $row['latitude']  = $this->extractScalar($item['localizacao'], ['lat', 'latitude']);
+            $row['longitude'] = $this->extractScalar($item['localizacao'], ['lng', 'lon', 'longitude']);
+        }
+
+        $row['row_hash']      = $this->buildRowHash($flat, $uf);
+        $row['identity_hash'] = $this->buildIdentityHash($flat, $uf);
+        // raw_data: JSON string do item original (nunca array)
         $row['raw_data']      = json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $row['imported_at']   = $importedAt;
         $row['updated_at']    = $importedAt;
 
         return $row;
+    }
+
+    /**
+     * Transforma o item em array plano chave=string, valor=string|null.
+     * Campos que são arrays aninhados são serializados como JSON string
+     * (evita o "Array to string conversion").
+     */
+    private function flattenItem(array $item): array
+    {
+        $flat = [];
+
+        foreach ($item as $k => $v) {
+            $key        = strtolower((string) $k);
+            $flat[$key] = $this->scalarize($v);
+
+            // Tambem indexa sem underlines e em camelCase para lookup flexível
+            $keyNoUnderscore   = str_replace('_', '', $key);
+            $flat[$keyNoUnderscore] = $flat[$key];
+        }
+
+        return $flat;
+    }
+
+    /**
+     * Converte qualquer valor para string|null seguro para o banco.
+     * Arrays e objetos são codificados como JSON string.
+     */
+    private function scalarize(mixed $value): ?string
+    {
+        if ($value === null || $value === false || $value === '') {
+            return null;
+        }
+
+        if (\is_array($value) || \is_object($value)) {
+            $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            return ($encoded === false || $encoded === 'null' || $encoded === '[]' || $encoded === '{}') ? null : $encoded;
+        }
+
+        $str = trim((string) $value);
+
+        if ($str !== '' && !mb_check_encoding($str, 'UTF-8')) {
+            $str = mb_convert_encoding($str, 'UTF-8', 'ISO-8859-1');
+        }
+
+        return $str === '' ? null : $str;
+    }
+
+    /**
+     * Extrai um valor escalar de um array/objeto aninhado, tentando múltiplas chaves.
+     */
+    private function extractScalar(mixed $source, array $keys): ?string
+    {
+        if (!\is_array($source)) {
+            return null;
+        }
+
+        foreach ($keys as $key) {
+            if (isset($source[$key])) {
+                return $this->scalarize($source[$key]);
+            }
+        }
+
+        return null;
     }
 
     // -------------------------------------------------------------------------
@@ -259,21 +322,20 @@ final class ImportRadarMedidoresHandler
     // Hashes
     // -------------------------------------------------------------------------
 
-    private function buildRowHash(array $data, string $uf): string
+    private function buildRowHash(array $flat, string $uf): string
     {
-        $payload = array_merge(['_uf' => $uf], $data);
+        $payload = array_merge(['_uf' => $uf], $flat);
         ksort($payload);
 
         return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
-    private function buildIdentityHash(array $data, string $uf): string
+    private function buildIdentityHash(array $flat, string $uf): string
     {
-        // Número de série + UF identificam unicamente um medidor físico
         $parts = [
-            strtoupper(trim((string) ($data['numero_serie'] ?? $data['numeroserie'] ?? ''))),
+            strtoupper(trim((string) ($flat['numero_serie'] ?? $flat['numeroserie'] ?? ''))),
             strtoupper($uf),
-            strtoupper(trim((string) ($data['cnpj_empresa'] ?? $data['cnpjempresa'] ?? ''))),
+            strtoupper(trim((string) ($flat['cnpj_empresa'] ?? $flat['cnpjempresa'] ?? ''))),
         ];
 
         return hash('sha256', implode('|', $parts));
@@ -282,21 +344,6 @@ final class ImportRadarMedidoresHandler
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
-
-    private function normalizeValue(mixed $value): ?string
-    {
-        if ($value === null || $value === '' || $value === false) {
-            return null;
-        }
-
-        $str = trim((string) $value);
-
-        if ($str !== '' && !mb_check_encoding($str, 'UTF-8')) {
-            $str = mb_convert_encoding($str, 'UTF-8', 'ISO-8859-1');
-        }
-
-        return $str === '' ? null : $str;
-    }
 
     private function toCamel(string $snake): string
     {

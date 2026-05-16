@@ -11,7 +11,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
-use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Http\Authenticator\AbstractLoginFormAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\CsrfTokenBadge;
@@ -31,8 +30,7 @@ class AppAuthenticator extends AbstractLoginFormAuthenticator
     public function __construct(
         private readonly RouterInterface $router,
         private readonly EntityManagerInterface $em,
-    ) {
-    }
+    ) {}
 
     public function authenticate(Request $request): Passport
     {
@@ -41,14 +39,17 @@ class AppAuthenticator extends AbstractLoginFormAuthenticator
 
         return new Passport(
             new UserBadge($email, function (string $userIdentifier) {
-                $user = $this->em->getRepository(User::class)->findByEmail($userIdentifier);
+                /** @var User|null $user */
+                $user = $this->em->getRepository(User::class)->findOneBy(['email' => $userIdentifier]);
 
                 if (!$user) {
                     throw new CustomUserMessageAuthenticationException('E-mail ou senha incorretos.');
                 }
+
                 if ($user->isPending()) {
                     throw new CustomUserMessageAuthenticationException('Sua conta está aguardando aprovação do administrador.');
                 }
+
                 if ($user->isRejected()) {
                     throw new CustomUserMessageAuthenticationException('Sua conta foi recusada. Entre em contato com o administrador.');
                 }

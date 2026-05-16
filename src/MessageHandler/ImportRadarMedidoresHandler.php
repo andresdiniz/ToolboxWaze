@@ -16,14 +16,18 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  *   1. Calcula row_hash (SHA-256 do JSON bruto do item) para cada linha.
  *   2. Consulta o banco: quais desses row_hashes JÁ existem?
  *      → Idênticos: zero escrita (skip total).
- *      → Ausentes no banco: INSERT IGNORE (novo radar; IGNORE evita race condition entre estados).
+ *      → Ausentes no banco: INSERT IGNORE (novo radar).
  *      → identity_hash existe mas row_hash diferente: UPDATE (radar mudou).
  *   3. Faixas e histórico só são recriados para radares que de fato mudaram.
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
 {
-    private const BATCH_SIZE = 50;
+    /** Registros por lote de INSERT/UPDATE — maior = menos round-trips ao BD */
+    private const BATCH_SIZE = 200;
+
+    /** Timeout total do download por estado (segundos) — estados grandes como SP podem ser lentos */
+    private const CURL_TIMEOUT = 600;
 
     private const RADAR_INSERT_COLS = [
         'sigla_uf', 'estado', 'municipio', 'local_verificacao',
@@ -33,7 +37,6 @@ final class ImportRadarMedidoresHandler
         'row_hash', 'identity_hash', 'raw_data', 'imported_at', 'updated_at',
     ];
 
-    /** Colunas que atualizam quando o radar mudou (row_hash e imported_at ficam de fora) */
     private const RADAR_UPDATE_COLS = [
         'sigla_uf', 'estado', 'municipio', 'local_verificacao',
         'data_ultima_verificacao', 'data_validade', 'ultimo_resultado', 'tipo_medidor',
@@ -42,19 +45,28 @@ final class ImportRadarMedidoresHandler
         'identity_hash', 'raw_data', 'updated_at',
     ];
 
+    /** Contadores para relatório por estado */
+    private int $countInserted = 0;
+    private int $countUpdated  = 0;
+    private int $countSkipped  = 0;
+
     public function __construct(
         private readonly Connection $connection,
-    ) {
-    }
+    ) {}
 
     public function __invoke(ImportRadarMedidoresMessage $message): void
     {
         $uf         = strtoupper($message->uf);
         $importedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-        $tmpFile    = $this->downloadToTempFile($message->getUrl());
+
+        $this->countInserted = 0;
+        $this->countUpdated  = 0;
+        $this->countSkipped  = 0;
+
+        $tmpFile = $this->downloadToTempFile($message->getUrl());
 
         if ($tmpFile === null) {
-            return;
+            throw new \RuntimeException("Falha no download para UF={$uf}: {$message->getUrl()}");
         }
 
         try {
@@ -62,6 +74,17 @@ final class ImportRadarMedidoresHandler
         } finally {
             @unlink($tmpFile);
         }
+
+        // Imprime sumário (visível no CLI via --verbose)
+        $total = $this->countInserted + $this->countUpdated + $this->countSkipped;
+        echo sprintf(
+            "  [%s] total=%d  inseridos=%d  atualizados=%d  sem-mudança=%d\n",
+            $uf,
+            $total,
+            $this->countInserted,
+            $this->countUpdated,
+            $this->countSkipped
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -86,21 +109,24 @@ final class ImportRadarMedidoresHandler
         curl_setopt_array($ch, [
             CURLOPT_FILE           => $fp,
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT        => 120,
-            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT        => self::CURL_TIMEOUT,
+            CURLOPT_CONNECTTIMEOUT => 30,
             CURLOPT_USERAGENT      => 'ToolboxWaze/1.0',
             CURLOPT_HTTPHEADER     => ['Accept: application/json'],
             CURLOPT_FAILONERROR    => true,
+            CURLOPT_SSL_VERIFYPEER => false, // alguns ambientes de hospedagem têm CA desatualizada
         ]);
 
         $ok      = curl_exec($ch);
         $errCode = curl_errno($ch);
+        $errMsg  = curl_error($ch);
         curl_close($ch);
         fclose($fp);
 
         if (!$ok || $errCode !== 0 || filesize($tmpPath) < 3) {
             @unlink($tmpPath);
-            return null;
+            // Relança como exceção para o command logar o estado com erro
+            throw new \RuntimeException("cURL erro {$errCode}: {$errMsg} — URL: {$url}");
         }
 
         return $tmpPath;
@@ -237,12 +263,14 @@ final class ImportRadarMedidoresHandler
 
         foreach ($rows as $row) {
             if (\in_array($row['row_hash'], $existingRowHashes, true)) {
-                continue; // idêntico ao banco → skip
+                $this->countSkipped++;
+                continue;
             }
 
             $existing = $existingByIdentity[$row['identity_hash']] ?? null;
 
             if ($existing === null) {
+                $toInsert[];
                 $toInsert[] = $row;
             } else {
                 $row['_db_id'] = $existing['id'];
@@ -259,10 +287,12 @@ final class ImportRadarMedidoresHandler
         try {
             if ($toInsert !== []) {
                 $this->insertBatch($toInsert);
+                $this->countInserted += count($toInsert);
             }
 
             foreach ($toUpdate as $row) {
                 $this->updateRadar($row);
+                $this->countUpdated++;
             }
 
             $changed = array_merge($toInsert, $toUpdate);
@@ -288,7 +318,6 @@ final class ImportRadarMedidoresHandler
     // Queries de diff
     // -------------------------------------------------------------------------
 
-    /** @return string[] */
     private function fetchExistingRowHashes(array $rowHashes): array
     {
         if ($rowHashes === []) {
@@ -305,7 +334,6 @@ final class ImportRadarMedidoresHandler
         return array_column($rows, 'row_hash');
     }
 
-    /** @return array<string, array{id: int, row_hash: string}> */
     private function fetchExistingByIdentity(array $identityHashes): array
     {
         if ($identityHashes === []) {
@@ -331,9 +359,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // INSERT IGNORE em lote (novos radares)
-    // INSERT IGNORE evita erro de duplicate entry em caso de race condition
-    // entre estados sendo processados em paralelo com radares compartilhados.
+    // INSERT IGNORE em lote
     // -------------------------------------------------------------------------
 
     private function insertBatch(array $rows): void
@@ -365,7 +391,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // UPDATE individual (radar alterado)
+    // UPDATE individual
     // -------------------------------------------------------------------------
 
     private function updateRadar(array $row): void
@@ -407,9 +433,7 @@ final class ImportRadarMedidoresHandler
         );
 
         foreach ($faixas as $faixa) {
-            if (!\is_array($faixa)) {
-                continue;
-            }
+            if (!\is_array($faixa)) { continue; }
 
             $this->connection->executeStatement(
                 'INSERT INTO radar_faixa
@@ -435,9 +459,7 @@ final class ImportRadarMedidoresHandler
         );
 
         foreach ($historico as $h) {
-            if (!\is_array($h)) {
-                continue;
-            }
+            if (!\is_array($h)) { continue; }
 
             $this->connection->executeStatement(
                 'INSERT INTO radar_historico

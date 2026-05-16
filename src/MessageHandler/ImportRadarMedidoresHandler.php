@@ -6,20 +6,23 @@ namespace App\MessageHandler;
 
 use App\Message\ImportRadarMedidoresMessage;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\ParameterType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
  * Importa medidores RBMLQ de um estado com diff incremental.
  *
- * SP tem 17MB de JSON (~5 mil registros). Usamos json_decode direto no arquivo
- * e positional params (?) nos INSERTs para manter o consumo de RAM baixo.
+ * Estratégia de memória:
+ *   - Download: cURL → arquivo temporário em disco (zero RAM extra).
+ *   - Parse: lê o arquivo linha por linha. Como a API do RBMLQ gera um
+ *     objeto JSON por linha dentro de um array, basta fazer json_decode
+ *     em cada linha individualmente — RAM constante ~2-3MB independente
+ *     do tamanho do arquivo (SP tem 17MB / ~5k registros).
+ *   - INSERT: positional params (?), lotes de 30 linhas (540 params/query).
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
 {
-    /** Linhas por INSERT em lote. 50 = ~900 params por query, seguro para qualquer PHP. */
-    private const BATCH_SIZE   = 50;
+    private const BATCH_SIZE   = 30;
     private const CURL_TIMEOUT = 600;
 
     private const RADAR_INSERT_COLS = [
@@ -71,7 +74,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Download via cURL → arquivo temporário
+    // Download via cURL → arquivo temporário em disco
     // -------------------------------------------------------------------------
 
     private function downloadToTempFile(string $url): string
@@ -115,42 +118,66 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Parse: json_decode direto no arquivo completo
+    // Parse linha-por-linha — RAM constante ~2-3MB
+    //
+    // A API RBMLQ gera JSON no formato:
+    //   [
+    //   {"SiglaUf":"SP",...},
+    //   {"SiglaUf":"SP",...},
+    //   ...
+    //   ]
+    //
+    // Cada objeto ocupa exatamente uma linha, então fazemos json_decode
+    // por linha, descartando linhas que sejam apenas "[", "]" ou ",".
+    // Nunca mais de um objeto na RAM ao mesmo tempo.
     // -------------------------------------------------------------------------
 
     private function processFile(string $path, string $uf, string $importedAt): void
     {
-        $content = file_get_contents($path);
+        $fh = fopen($path, 'rb');
 
-        if ($content === false || $content === '') {
-            throw new \RuntimeException("Não foi possível ler o arquivo temporário: {$path}");
-        }
-
-        $items = json_decode($content, true);
-        unset($content);
-
-        if (!\is_array($items)) {
-            throw new \RuntimeException(
-                'JSON inválido ou formato inesperado (esperado array raiz). Erro: '
-                . json_last_error_msg()
-            );
+        if ($fh === false) {
+            throw new \RuntimeException("Não foi possível abrir: {$path}");
         }
 
         $batch = [];
 
-        foreach ($items as $item) {
-            if (!\is_array($item) || $item === []) {
+        while (!feof($fh)) {
+            $line = fgets($fh);
+
+            if ($line === false) {
+                break;
+            }
+
+            // Remove vírgula final e espaços — linhas como "  }," viram "  }"
+            $line = rtrim(trim($line), ',');
+
+            // Descarta linhas que não são objetos JSON
+            if ($line === '' || $line === '[' || $line === ']') {
+                continue;
+            }
+
+            // Deve começar com { para ser um objeto
+            if ($line[0] !== '{') {
+                continue;
+            }
+
+            $item = json_decode($line, true);
+
+            if (!is_array($item) || $item === []) {
                 continue;
             }
 
             $batch[] = $this->mapItem($item, $uf, $importedAt);
+            unset($item); // libera imediatamente
 
             if (count($batch) >= self::BATCH_SIZE) {
                 $this->processBatch($batch);
                 $batch = [];
-                gc_collect_cycles();
             }
         }
+
+        fclose($fh);
 
         if ($batch !== []) {
             $this->processBatch($batch);
@@ -306,17 +333,14 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // INSERT IGNORE em lote — positional params (?) para RAM baixa
-    // 50 linhas × 18 colunas = 900 params por query, bem dentro dos limites.
+    // INSERT IGNORE em lote — positional params, 30 linhas × 18 cols = 540 params
     // -------------------------------------------------------------------------
 
     private function insertBatch(array $rows): void
     {
-        $cols         = self::RADAR_INSERT_COLS;
-        $colCount     = count($cols);
-        $rowHolder    = '(' . implode(',', array_fill(0, $colCount, '?')) . ')';
-        $placeholders = implode(',', array_fill(0, count($rows), $rowHolder));
-        $params       = [];
+        $cols      = self::RADAR_INSERT_COLS;
+        $rowHolder = '(' . implode(',', array_fill(0, count($cols), '?')) . ')';
+        $params    = [];
 
         foreach ($rows as $row) {
             foreach ($cols as $col) {
@@ -328,14 +352,14 @@ final class ImportRadarMedidoresHandler
             sprintf(
                 'INSERT IGNORE INTO radar_medidor (%s) VALUES %s',
                 implode(',', $cols),
-                $placeholders
+                implode(',', array_fill(0, count($rows), $rowHolder))
             ),
             $params
         );
     }
 
     // -------------------------------------------------------------------------
-    // UPDATE individual (positional params)
+    // UPDATE individual — positional params
     // -------------------------------------------------------------------------
 
     private function updateRadar(array $row): void

@@ -1,0 +1,201 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Postos de Combustível — ToolboxWaze{% endblock %}
+
+{% block body %}
+
+{# ── Cabeçalho ── #}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h4 mb-0 fw-bold">
+            <i class="bi bi-fuel-pump text-success me-2"></i>Postos de Combustível
+        </h1>
+        <small class="text-muted">Dados ANP — revendedores varejistas autorizados</small>
+    </div>
+    <span class="badge bg-secondary">{{ total|number_format(0, ',', '.') }} registros</span>
+</div>
+
+{# ── Stats ── #}
+{% if stats %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card stat-card p-3">
+            <div class="detail-label">Total</div>
+            <div class="stat-value">{{ stats.total|number_format(0,',','.') }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card p-3" style="border-left:3px solid #6c757d">
+            <div class="detail-label">Estados</div>
+            <div class="stat-value" style="color:#6c757d">{{ stats.estados }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card p-3" style="border-left:3px solid #0d6efd">
+            <div class="detail-label">Municípios</div>
+            <div class="stat-value" style="color:#0d6efd">{{ stats.municipios|number_format(0,',','.') }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card p-3" style="border-left:3px solid #fd7e14">
+            <div class="detail-label">Bandeiras</div>
+            <div class="stat-value" style="color:#fd7e14">{{ stats.bandeiras }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Filtros ── #}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="filters-form">
+            <div class="row g-2 align-items-end">
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label mb-1 detail-label">Buscar (nome, CNPJ)</label>
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           placeholder="Razão social ou CNPJ" value="{{ filters.busca }}">
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1 detail-label">Estado</label>
+                    <select name="uf" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for u in ufs %}
+                            <option value="{{ u }}" {{ filters.uf == u ? 'selected' }}>{{ u }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label mb-1 detail-label">Município</label>
+                    <input type="text" name="municipio" class="form-control form-control-sm"
+                           placeholder="Ex: Conselheiro Lafaiete" value="{{ filters.municipio }}">
+                </div>
+
+                <div class="col-12 col-md-2">
+                    <label class="form-label mb-1 detail-label">Bandeira</label>
+                    <select name="bandeira" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for b in bandeiras %}
+                            <option value="{{ b }}" {{ filters.bandeira == b ? 'selected' }}>{{ b }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+
+                {% if filters.uf or filters.municipio or filters.bandeira or filters.busca %}
+                <div class="col-auto">
+                    <a href="{{ path('posto_index') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-x-circle me-1"></i>Limpar
+                    </a>
+                </div>
+                {% endif %}
+
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Tabela ── #}
+{% if rows is empty %}
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-fuel-pump fs-2 d-block mb-2"></i>
+        Nenhum posto encontrado com os filtros selecionados.
+    </div>
+{% else %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Razão Social / Fantasia</th>
+                    <th>CNPJ</th>
+                    <th>Bandeira</th>
+                    <th>Endereço</th>
+                    <th>Município</th>
+                    <th>UF</th>
+                    <th>Autorização</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr class="row-link" onclick="window.location='{{ path('posto_show', {id: row.id}) }}'">
+                    <td>
+                        <div class="fw-semibold" style="max-width:200px" class="text-truncate">{{ row.razao_social }}</div>
+                        {% if row.nome_fantasia and row.nome_fantasia != row.razao_social %}
+                            <small class="text-muted">{{ row.nome_fantasia }}</small>
+                        {% endif %}
+                    </td>
+                    <td><code class="small">{{ row.cnpj }}</code></td>
+                    <td>
+                        {% if row.bandeira %}
+                            <span class="badge bg-light text-dark border">{{ row.bandeira }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="text-truncate" style="max-width:180px" title="{{ row.endereco }}, {{ row.complemento }}">
+                        <small>{{ row.endereco }}{% if row.complemento %}, {{ row.complemento }}{% endif %}</small>
+                    </td>
+                    <td><small>{{ row.municipio }}</small></td>
+                    <td><span class="badge badge-uf">{{ row.uf }}</span></td>
+                    <td><small class="text-muted">{{ row.autorizacao ?? '—' }}</small></td>
+                    <td>
+                        <a href="{{ path('posto_show', {id: row.id}) }}" class="btn btn-outline-primary btn-sm py-0"
+                           onclick="event.stopPropagation()">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── Paginação ── #}
+{% if pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center flex-wrap">
+
+        <li class="page-item {{ page == 1 ? 'disabled' }}">
+            <a class="page-link" href="{{ path('posto_index', filters|merge({page: page - 1})) }}">‹</a>
+        </li>
+
+        {% set from = max(1, page - 2) %}
+        {% set to   = min(pages, page + 2) %}
+
+        {% if from > 1 %}
+            <li class="page-item"><a class="page-link" href="{{ path('posto_index', filters|merge({page: 1})) }}">1</a></li>
+            {% if from > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+        {% endif %}
+
+        {% for p in from..to %}
+            <li class="page-item {{ p == page ? 'active' }}">
+                <a class="page-link" href="{{ path('posto_index', filters|merge({page: p})) }}">{{ p }}</a>
+            </li>
+        {% endfor %}
+
+        {% if to < pages %}
+            {% if to < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+            <li class="page-item"><a class="page-link" href="{{ path('posto_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
+        {% endif %}
+
+        <li class="page-item {{ page == pages ? 'disabled' }}">
+            <a class="page-link" href="{{ path('posto_index', filters|merge({page: page + 1})) }}">›</a>
+        </li>
+
+    </ul>
+    <p class="text-center text-muted small">
+        Página {{ page }} de {{ pages }} — {{ total|number_format(0,',','.') }} registros
+    </p>
+</nav>
+{% endif %}
+
+{% endif %}
+{% endblock %}

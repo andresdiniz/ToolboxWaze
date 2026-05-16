@@ -1,0 +1,229 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Radares Medidores — ToolboxWaze{% endblock %}
+
+{% block body %}
+
+{# ── Cabeçalho ── #}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h4 mb-0 fw-bold">
+            <i class="bi bi-camera-video text-success me-2"></i>Radares Medidores
+        </h1>
+        <small class="text-muted">Dados RBMLQ — atualizados por estado</small>
+    </div>
+    <span class="badge bg-secondary">{{ total|number_format(0, ',', '.') }} registros</span>
+</div>
+
+{# ── Stats ── #}
+{% if stats %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card stat-card p-3">
+            <div class="detail-label">Total</div>
+            <div class="stat-value">{{ stats.total|number_format(0, ',', '.') }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card p-3" style="border-left:3px solid #198754">
+            <div class="detail-label">Aprovados</div>
+            <div class="stat-value" style="color:#198754">{{ stats.aprovados|default(0)|number_format(0,',','.') }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card p-3" style="border-left:3px solid #dc3545">
+            <div class="detail-label">Reprovados</div>
+            <div class="stat-value" style="color:#dc3545">{{ stats.reprovados|default(0)|number_format(0,',','.') }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card p-3" style="border-left:3px solid #6c757d">
+            <div class="detail-label">Estados</div>
+            <div class="stat-value" style="color:#6c757d">{{ stats.estados }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Filtros ── #}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="filters-form">
+            <div class="row g-2 align-items-end">
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1 detail-label">Estado</label>
+                    <select name="uf" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for u in ufs %}
+                            <option value="{{ u }}" {{ filters.uf == u ? 'selected' }}>{{ u }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <label class="form-label mb-1 detail-label">Município</label>
+                    <input type="text" name="municipio" class="form-control form-control-sm"
+                           placeholder="Ex: São Paulo" value="{{ filters.municipio }}">
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1 detail-label">Resultado</label>
+                    <select name="resultado" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for r in resultados %}
+                            <option value="{{ r }}" {{ filters.resultado == r ? 'selected' }}>{{ r }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1 detail-label">Tipo Medidor</label>
+                    <select name="tipo" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for t in tipos %}
+                            <option value="{{ t }}" {{ filters.tipo == t ? 'selected' }}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1 detail-label">Validade</label>
+                    <select name="validade" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        <option value="valido"  {{ filters.validade == 'valido'  ? 'selected' }}>Dentro do prazo</option>
+                        <option value="vencido" {{ filters.validade == 'vencido' ? 'selected' }}>Vencido</option>
+                        <option value="30dias"  {{ filters.validade == '30dias'  ? 'selected' }}>Vence em 30 dias</option>
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+
+                {% if filters.uf or filters.municipio or filters.resultado or filters.tipo or filters.validade %}
+                <div class="col-auto">
+                    <a href="{{ path('radar_index') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-x-circle me-1"></i>Limpar
+                    </a>
+                </div>
+                {% endif %}
+
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Tabela ── #}
+{% if rows is empty %}
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-camera-video-off fs-2 d-block mb-2"></i>
+        Nenhum radar encontrado com os filtros selecionados.
+    </div>
+{% else %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>UF</th>
+                    <th>Município</th>
+                    <th>Local de Verificação</th>
+                    <th>Tipo</th>
+                    <th>Resultado</th>
+                    <th>Última Verif.</th>
+                    <th>Validade</th>
+                    <th>Proprietário</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr class="row-link" onclick="window.location='{{ path('radar_show', {id: row.id}) }}'">
+                    <td><span class="badge badge-uf">{{ row.sigla_uf }}</span></td>
+                    <td>{{ row.municipio }}</td>
+                    <td class="text-truncate" style="max-width:220px" title="{{ row.local_verificacao }}">
+                        {{ row.local_verificacao }}
+                    </td>
+                    <td><small>{{ row.tipo_medidor }}</small></td>
+                    <td>
+                        {% if row.ultimo_resultado == 'APROVADO' %}
+                            <span class="badge badge-aprovado">✓ APROVADO</span>
+                        {% elseif row.ultimo_resultado == 'REPROVADO' %}
+                            <span class="badge badge-reprovado">✗ REPROVADO</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ row.ultimo_resultado ?? '—' }}</span>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ row.data_ultima_verificacao ?? '—' }}</small></td>
+                    <td>
+                        {% set hoje = 'now'|date('Y-m-d') %}
+                        {% if row.data_validade %}
+                            {% if row.data_validade < hoje %}
+                                <span class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ row.data_validade }}</span>
+                            {% elseif row.data_validade <= hoje|date_modify('+30 days')|date('Y-m-d') %}
+                                <span class="text-warning fw-semibold"><i class="bi bi-clock me-1"></i>{{ row.data_validade }}</span>
+                            {% else %}
+                                <span class="text-success">{{ row.data_validade }}</span>
+                            {% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="text-truncate" style="max-width:160px" title="{{ row.proprietario_nome }}">
+                        <small>{{ row.proprietario_nome ?? '—' }}</small>
+                    </td>
+                    <td>
+                        <a href="{{ path('radar_show', {id: row.id}) }}" class="btn btn-outline-primary btn-sm py-0"
+                           onclick="event.stopPropagation()">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── Paginação ── #}
+{% if pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center flex-wrap">
+
+        <li class="page-item {{ page == 1 ? 'disabled' }}">
+            <a class="page-link" href="{{ path('radar_index', filters|merge({page: page - 1})) }}">‹</a>
+        </li>
+
+        {% set from = max(1, page - 2) %}
+        {% set to   = min(pages, page + 2) %}
+
+        {% if from > 1 %}
+            <li class="page-item"><a class="page-link" href="{{ path('radar_index', filters|merge({page: 1})) }}">1</a></li>
+            {% if from > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+        {% endif %}
+
+        {% for p in from..to %}
+            <li class="page-item {{ p == page ? 'active' }}">
+                <a class="page-link" href="{{ path('radar_index', filters|merge({page: p})) }}">{{ p }}</a>
+            </li>
+        {% endfor %}
+
+        {% if to < pages %}
+            {% if to < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+            <li class="page-item"><a class="page-link" href="{{ path('radar_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
+        {% endif %}
+
+        <li class="page-item {{ page == pages ? 'disabled' }}">
+            <a class="page-link" href="{{ path('radar_index', filters|merge({page: page + 1})) }}">›</a>
+        </li>
+
+    </ul>
+    <p class="text-center text-muted small">
+        Página {{ page }} de {{ pages }} — {{ total|number_format(0,',','.') }} registros
+    </p>
+</nav>
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ posto.razao_social }} — Posto{% endblock %}
+
+{% block body %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ path('posto_index') }}">Postos</a></li>
+        <li class="breadcrumb-item active">{{ posto.nome_fantasia ?? posto.razao_social }}</li>
+    </ol>
+</nav>
+
+{# ── Cabeçalho ── #}
+<div class="d-flex align-items-start justify-content-between mb-4">
+    <div>
+        <h1 class="h4 mb-1 fw-bold">
+            <i class="bi bi-fuel-pump text-success me-2"></i>
+            {{ posto.razao_social }}
+        </h1>
+        {% if posto.nome_fantasia and posto.nome_fantasia != posto.razao_social %}
+            <div class="text-muted">{{ posto.nome_fantasia }}</div>
+        {% endif %}
+        <div class="mt-1">
+            <span class="badge badge-uf me-1">{{ posto.uf }}</span>
+            {% if posto.bandeira %}
+                <span class="badge bg-light text-dark border">{{ posto.bandeira }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <code class="fs-6 text-muted">{{ posto.cnpj }}</code>
+</div>
+
+<div class="row g-4">
+
+    {# ── Coluna esquerda ── #}
+    <div class="col-lg-6">
+
+        {# Endereço #}
+        <div class="card mb-4">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-geo-alt me-2"></i>Localização
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="detail-label">Endereço</div>
+                        <div class="detail-value">
+                            {{ posto.endereco }}
+                            {% if posto.complemento %}, {{ posto.complemento }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Bairro</div>
+                        <div class="detail-value">{{ posto.bairro ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">CEP</div>
+                        <div class="detail-value">{{ posto.cep ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-8">
+                        <div class="detail-label">Município</div>
+                        <div class="detail-value">{{ posto.municipio ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="detail-label">UF</div>
+                        <div class="detail-value">{{ posto.uf ?? '—' }}</div>
+                    </div>
+                    <div class="col-12">
+                        <a href="https://www.google.com/maps/search/{{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
+                           target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-google me-1"></i>Ver no Google Maps
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Dados cadastrais #}
+        <div class="card mb-4">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-card-text me-2"></i>Dados Cadastrais
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <div class="detail-label">CNPJ</div>
+                        <div class="detail-value"><code>{{ posto.cnpj }}</code></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Bandeira</div>
+                        <div class="detail-value">{{ posto.bandeira ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Código ISIMP</div>
+                        <div class="detail-value"><code>{{ posto.codigo_isimp ?? '—' }}</code></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Autorização ANP</div>
+                        <div class="detail-value"><code>{{ posto.autorizacao ?? '—' }}</code></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Data Publicação</div>
+                        <div class="detail-value">{{ posto.data_publicacao ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Data Vinculação</div>
+                        <div class="detail-value">{{ posto.data_vinculacao ?? '—' }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {# ── Coluna direita ── #}
+    <div class="col-lg-6">
+
+        {# Links úteis #}
+        <div class="card mb-4">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-link-45deg me-2"></i>Consultas Externas
+            </div>
+            <div class="list-group list-group-flush">
+                <a href="https://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/cnpjrevaresultado.asp?txtCNPJ={{ posto.cnpj|replace({'.': '', '/': '', '-': ''}) }}"
+                   target="_blank" rel="noopener" class="list-group-item list-group-item-action">
+                    <i class="bi bi-building me-2"></i>Consultar CNPJ — Receita Federal
+                </a>
+                <a href="https://consultapublica.anp.gov.br/pages/postos/index.xhtml"
+                   target="_blank" rel="noopener" class="list-group-item list-group-item-action">
+                    <i class="bi bi-fuel-pump me-2"></i>Consulta Pública ANP
+                </a>
+            </div>
+        </div>
+
+        {# Metadados #}
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-database me-2"></i>Metadados
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <div class="detail-label">Importado em</div>
+                        <div class="detail-value small">{{ posto.imported_at ?? '—' }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="detail-label">Row Hash</div>
+                        <div class="detail-value"><code style="font-size:.7rem">{{ posto.row_hash }}</code></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

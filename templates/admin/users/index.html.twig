@@ -1,168 +1,327 @@
 {% extends 'base.html.twig' %}
-
 {% block title %}Gerenciar Usuários — Admin{% endblock %}
 
 {% block body %}
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Usuários — ToolboxWaze Admin</title>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
+    <style>
+        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--surface2:#f3f0ec;--border:#d4d1ca;--divider:#e8e5e0;--text:#28251d;--muted:#7a7974;--faint:#bab9b4;--primary:#01696f;--primary-h:#0c4e54;--primary-hl:color-mix(in oklab,#01696f 12%,transparent);--success:#437a22;--success-hl:color-mix(in oklab,#437a22 12%,transparent);--error:#a12c7b;--error-hl:color-mix(in oklab,#a12c7b 12%,transparent);--warning:#964219;--warning-hl:color-mix(in oklab,#964219 12%,transparent);--radius:.75rem;--shadow:0 2px 12px rgba(0,0,0,.07)}
+        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--surface2:#22211f;--border:#393836;--divider:#2a2927;--text:#cdccca;--muted:#797876;--faint:#5a5957;--primary:#4f98a3;--primary-h:#227f8b;--primary-hl:color-mix(in oklab,#4f98a3 15%,transparent);--success:#6daa45;--success-hl:color-mix(in oklab,#6daa45 15%,transparent);--error:#d163a7;--error-hl:color-mix(in oklab,#d163a7 15%,transparent);--warning:#bb653b;--warning-hl:color-mix(in oklab,#bb653b 15%,transparent)}
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        html{-webkit-font-smoothing:antialiased}
+        body{font-family:'Satoshi',sans-serif;font-size:1rem;color:var(--text);background:var(--bg);min-height:100dvh}
 
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <h1 class="h4 fw-bold mb-0">
-        <i class="bi bi-people me-2 text-danger"></i>Gerenciar Usuários
-    </h1>
-</div>
+        /* Layout */
+        .page{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+        .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;gap:1rem;flex-wrap:wrap}
+        .page-title{font-size:1.5rem;font-weight:700}
+        .page-title span{color:var(--muted);font-size:.95rem;font-weight:400;margin-left:.5rem}
 
-{# ── Pendentes ── #}
-{% if pending is not empty %}
-<div class="card border-warning mb-4">
-    <div class="card-header bg-warning bg-opacity-10 fw-semibold">
-        <i class="bi bi-hourglass-split me-2 text-warning"></i>
-        Aguardando Aprovação
-        <span class="badge bg-warning text-dark ms-1">{{ pending|length }}</span>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Nome</th>
-                    <th>E-mail</th>
-                    <th>Origem</th>
-                    <th>Solicitado em</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for u in pending %}
-                <tr>
-                    <td class="fw-semibold">{{ u.name }}</td>
-                    <td>{{ u.email }}</td>
-                    <td>
-                        {% if u.googleId %}
-                            <span class="badge bg-light text-dark border">
-                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="14"> Google
-                            </span>
-                        {% else %}
-                            <span class="badge bg-light text-dark border"><i class="bi bi-envelope me-1"></i>E-mail</span>
-                        {% endif %}
-                    </td>
-                    <td><small class="text-muted">{{ u.createdAt|date('d/m/Y H:i') }}</small></td>
-                    <td>
-                        <div class="d-flex gap-2">
-                            <form method="post" action="{{ path('admin_user_approve', {id: u.id}) }}">
-                                <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ u.id) }}">
-                                <button type="submit" class="btn btn-success btn-sm">
-                                    <i class="bi bi-check-lg me-1"></i>Aprovar
-                                </button>
-                            </form>
-                            <form method="post" action="{{ path('admin_user_reject', {id: u.id}) }}"
-                                  onsubmit="return confirm('Recusar este usuário?')">
-                                <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ u.id) }}">
-                                <button type="submit" class="btn btn-outline-danger btn-sm">
-                                    <i class="bi bi-x-lg me-1"></i>Recusar
-                                </button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% else %}
-<div class="alert alert-success mb-4">
-    <i class="bi bi-check-circle me-2"></i>Nenhum usuário pendente de aprovação.
-</div>
-{% endif %}
+        /* Tabs */
+        .tabs{display:flex;gap:.25rem;border-bottom:1px solid var(--divider);margin-bottom:1.75rem}
+        .tab-btn{padding:.6rem 1.2rem;border:none;background:none;color:var(--muted);font-size:.9rem;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.18s;font-family:inherit;border-radius:.4rem .4rem 0 0}
+        .tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+        .tab-btn:hover:not(.active){color:var(--text);background:var(--surface2)}
+        .tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;font-size:.7rem;font-weight:700;padding:0 5px;margin-left:.4rem}
+        .tab-badge.pending{background:var(--warning-hl);color:var(--warning)}
+        .tab-badge.approved{background:var(--success-hl);color:var(--success)}
+        .tab-badge.rejected{background:var(--error-hl);color:var(--error)}
+        .tab-panel{display:none}.tab-panel.active{display:block}
 
-{# ── Todos os usuários ── #}
-<div class="card">
-    <div class="card-header fw-semibold">
-        <i class="bi bi-list-ul me-2"></i>Todos os Usuários
-        <span class="badge bg-secondary ms-1">{{ all|length }}</span>
+        /* Flash */
+        .flash{padding:.8rem 1rem;border-radius:.5rem;margin-bottom:1.25rem;font-size:.9rem;font-weight:500}
+        .flash-success{background:var(--success-hl);color:var(--success)}
+        .flash-warning{background:var(--warning-hl);color:var(--warning)}
+        .flash-error{background:var(--error-hl);color:var(--error)}
+
+        /* User cards */
+        .user-list{display:flex;flex-direction:column;gap:1rem}
+        .user-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+        .user-card-header{display:flex;align-items:center;gap:1rem;padding:1rem 1.25rem;cursor:pointer;user-select:none}
+        .avatar{width:42px;height:42px;border-radius:50%;background:var(--primary-hl);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.1rem;color:var(--primary);flex-shrink:0;overflow:hidden}
+        .avatar img{width:100%;height:100%;object-fit:cover}
+        .user-info{flex:1;min-width:0}
+        .user-name{font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .user-meta{font-size:.8rem;color:var(--muted);display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.15rem}
+        .badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .55rem;border-radius:9999px;font-size:.75rem;font-weight:600}
+        .badge-pending{background:var(--warning-hl);color:var(--warning)}
+        .badge-approved{background:var(--success-hl);color:var(--success)}
+        .badge-rejected{background:var(--error-hl);color:var(--error)}
+        .badge-admin{background:var(--primary-hl);color:var(--primary)}
+        .chevron{color:var(--faint);transition:transform .2s;flex-shrink:0}
+        .user-card.open .chevron{transform:rotate(180deg)}
+
+        /* Expanded panel */
+        .user-card-body{display:none;border-top:1px solid var(--divider);padding:1.25rem}
+        .user-card.open .user-card-body{display:block}
+        .section-label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-bottom:.75rem}
+
+        /* Permissions grid */
+        .perms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem;margin-bottom:1.25rem}
+        .perm-check{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;cursor:pointer;transition:.15s}
+        .perm-check:hover{border-color:var(--primary);background:var(--primary-hl)}
+        .perm-check input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
+        .perm-check span{font-size:.875rem;font-weight:500}
+        .admin-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--primary);border-radius:.5rem;background:var(--primary-hl);margin-bottom:1rem;width:fit-content}
+        .admin-toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
+        .admin-toggle label{font-size:.875rem;font-weight:600;color:var(--primary);cursor:pointer}
+
+        /* Actions */
+        .actions{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:1rem;border-top:1px solid var(--divider);margin-top:1rem}
+        .btn{padding:.55rem 1.1rem;border-radius:.5rem;font-size:.875rem;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:.18s;display:inline-flex;align-items:center;gap:.4rem}
+        .btn-approve{background:var(--success);color:#fff}.btn-approve:hover{filter:brightness(.9)}
+        .btn-reject{background:var(--warning-hl);color:var(--warning);border:1px solid var(--warning)}.btn-reject:hover{background:var(--warning);color:#fff}
+        .btn-save{background:var(--primary);color:#fff}.btn-save:hover{background:var(--primary-h)}
+        .btn-delete{background:var(--error-hl);color:var(--error);border:1px solid var(--error)}.btn-delete:hover{background:var(--error);color:#fff}
+        .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:var(--text)}
+
+        /* Dates info */
+        .info-row{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.85rem;color:var(--muted)}
+        .info-row strong{color:var(--text)}
+
+        /* Empty */
+        .empty{text-align:center;padding:3rem 1rem;color:var(--muted)}
+        .empty svg{margin:0 auto 1rem;color:var(--faint)}
+
+        /* Toggle */
+        .theme-btn{position:fixed;top:1rem;right:1rem;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);z-index:100}
+
+        @media(max-width:600px){.page{padding:1rem}.actions{gap:.4rem}.btn{padding:.5rem .8rem;font-size:.8rem}}
+    </style>
+</head>
+<body>
+
+<button class="theme-btn" data-theme-toggle aria-label="Alternar tema">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+</button>
+
+<div class="page">
+    <div class="page-header">
+        <div>
+            <div class="page-title">Gerenciar Usuários <span>Painel Admin</span></div>
+        </div>
+        <a href="{{ path('app_logout') }}" style="font-size:.875rem;color:var(--muted);text-decoration:none">Sair →</a>
     </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Nome</th>
-                    <th>E-mail</th>
-                    <th>Papéis</th>
-                    <th>Status</th>
-                    <th>Cadastro</th>
-                    <th>Último login</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for u in all %}
-                <tr>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            {% if u.avatarUrl %}
-                                <img src="{{ u.avatarUrl }}" class="rounded-circle" width="32" height="32" alt="">
-                            {% else %}
-                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white"
-                                     style="width:32px;height:32px;font-size:.8rem;font-weight:700">
-                                    {{ u.name|first|upper }}
-                                </div>
-                            {% endif %}
-                            <span class="fw-semibold">{{ u.name }}</span>
-                            {% if u == app.user %}
-                                <span class="badge bg-primary" style="font-size:.65rem">você</span>
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td><small>{{ u.email }}</small></td>
-                    <td>
-                        {% for role in u.roles %}
-                            {% if role != 'ROLE_USER' %}
-                                <span class="badge {{ role == 'ROLE_ADMIN' ? 'bg-danger' : 'bg-secondary' }}">
-                                    {{ role|replace({'ROLE_': ''}) }}
-                                </span>
-                            {% endif %}
+
+    {% for type, messages in app.flashes %}
+        {% for msg in messages %}
+            <div class="flash flash-{{ type }}">{{ msg }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    {# Tabs #}
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('pending',this)">
+            Pendentes <span class="tab-badge pending">{{ pending|length }}</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('approved',this)">
+            Aprovados <span class="tab-badge approved">{{ approved|length }}</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('rejected',this)">
+            Rejeitados <span class="tab-badge rejected">{{ rejected|length }}</span>
+        </button>
+    </div>
+
+    {# ===== PENDENTES ===== #}
+    <div class="tab-panel active" id="tab-pending">
+        {% if pending is empty %}
+            <div class="empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+                <p>Nenhuma solicitação pendente.</p>
+            </div>
+        {% else %}
+        <div class="user-list">
+        {% for user in pending %}
+        <div class="user-card" id="card-{{ user.id }}">
+            <div class="user-card-header" onclick="toggleCard({{ user.id }})">
+                <div class="avatar">
+                    {% if user.avatarUrl %}<img src="{{ user.avatarUrl }}" alt="">{% else %}{{ user.name|first|upper }}{% endif %}
+                </div>
+                <div class="user-info">
+                    <div class="user-name">{{ user.name }}</div>
+                    <div class="user-meta">
+                        <span>{{ user.email }}</span>
+                        {% if user.wazeNickname %}<span>🗺 {{ user.wazeNickname }}</span>{% endif %}
+                        <span>Solicitado {{ user.createdAt|date('d/m/Y H:i') }}</span>
+                    </div>
+                </div>
+                <span class="badge badge-pending">Pendente</span>
+                <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="user-card-body">
+                <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
+
+                    <div class="admin-toggle">
+                        <input type="checkbox" name="is_admin" id="is_admin_{{ user.id }}" value="1">
+                        <label for="is_admin_{{ user.id }}">Conceder privilégios de Administrador</label>
+                    </div>
+
+                    <div class="section-label">Permissões de Área</div>
+                    <div class="perms-grid">
+                        {% for key, label in allPerms %}
+                        <label class="perm-check">
+                            <input type="checkbox" name="permissions[]" value="{{ key }}">
+                            <span>{{ label }}</span>
+                        </label>
                         {% endfor %}
-                    </td>
-                    <td>
-                        {% if u.status == 'approved' %}
-                            <span class="badge bg-success"><i class="bi bi-check me-1"></i>Aprovado</span>
-                        {% elseif u.status == 'pending' %}
-                            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass me-1"></i>Pendente</span>
-                        {% else %}
-                            <span class="badge bg-danger"><i class="bi bi-x me-1"></i>Recusado</span>
-                        {% endif %}
-                    </td>
-                    <td><small class="text-muted">{{ u.createdAt|date('d/m/Y') }}</small></td>
-                    <td><small class="text-muted">{{ u.lastLoginAt ? u.lastLoginAt|date('d/m/Y H:i') : '—' }}</small></td>
-                    <td>
-                        {% if u != app.user %}
-                        <div class="d-flex gap-1">
-                            {% if u.status == 'pending' %}
-                            <form method="post" action="{{ path('admin_user_approve', {id: u.id}) }}">
-                                <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ u.id) }}">
-                                <button class="btn btn-success btn-sm py-0 px-2" title="Aprovar"><i class="bi bi-check-lg"></i></button>
-                            </form>
-                            <form method="post" action="{{ path('admin_user_reject', {id: u.id}) }}" onsubmit="return confirm('Recusar?')">
-                                <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ u.id) }}">
-                                <button class="btn btn-outline-danger btn-sm py-0 px-2" title="Recusar"><i class="bi bi-x-lg"></i></button>
-                            </form>
-                            {% endif %}
-                            <form method="post" action="{{ path('admin_user_toggle_admin', {id: u.id}) }}"
-                                  onsubmit="return confirm('Alterar papel de administrador?')">
-                                <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ u.id) }}">
-                                <button class="btn btn-outline-secondary btn-sm py-0 px-2"
-                                        title="{{ u.isAdmin() ? 'Remover admin' : 'Tornar admin' }}">
-                                    <i class="bi bi-shield{{ u.isAdmin() ? '-fill text-warning' : '' }}"></i>
-                                </button>
-                            </form>
-                        </div>
-                        {% else %}
-                            <span class="text-muted small">—</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" class="btn btn-approve">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                            Aprovar
+                        </button>
+                    </div>
+                </form>
+                <form method="POST" action="{{ path('admin_users_reject', {id: user.id}) }}" style="display:inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
+                    <button type="submit" class="btn btn-reject" onclick="return confirm('Rejeitar este usuário?')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        Rejeitar
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    {# ===== APROVADOS ===== #}
+    <div class="tab-panel" id="tab-approved">
+        {% if approved is empty %}
+            <div class="empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <p>Nenhum usuário aprovado ainda.</p>
+            </div>
+        {% else %}
+        <div class="user-list">
+        {% for user in approved %}
+        <div class="user-card" id="card-{{ user.id }}">
+            <div class="user-card-header" onclick="toggleCard({{ user.id }})">
+                <div class="avatar">
+                    {% if user.avatarUrl %}<img src="{{ user.avatarUrl }}" alt="">{% else %}{{ user.name|first|upper }}{% endif %}
+                </div>
+                <div class="user-info">
+                    <div class="user-name">{{ user.name }}</div>
+                    <div class="user-meta">
+                        <span>{{ user.email }}</span>
+                        {% if user.wazeNickname %}<span>🗺 {{ user.wazeNickname }}</span>{% endif %}
+                        {% if user.lastLoginAt %}<span>Último acesso {{ user.lastLoginAt|date('d/m/Y') }}</span>{% endif %}
+                    </div>
+                </div>
+                {% if user.isAdmin %}<span class="badge badge-admin">Admin</span>{% else %}<span class="badge badge-approved">Ativo</span>{% endif %}
+                <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="user-card-body">
+                <div class="info-row">
+                    <span>Aprovado em <strong>{{ user.approvedAt ? user.approvedAt|date('d/m/Y') : '—' }}</strong></span>
+                    <span>Cadastrado em <strong>{{ user.createdAt|date('d/m/Y') }}</strong></span>
+                </div>
+
+                <form method="POST" action="{{ path('admin_users_permissions', {id: user.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('user_perms_' ~ user.id) }}">
+
+                    <div class="admin-toggle">
+                        <input type="checkbox" name="is_admin" id="admin_{{ user.id }}" value="1" {{ user.isAdmin ? 'checked' : '' }}>
+                        <label for="admin_{{ user.id }}">Privilégios de Administrador</label>
+                    </div>
+
+                    <div class="section-label">Permissões de Área</div>
+                    <div class="perms-grid">
+                        {% for key, label in allPerms %}
+                        <label class="perm-check">
+                            <input type="checkbox" name="permissions[]" value="{{ key }}" {{ key in user.permissions ? 'checked' : '' }}>
+                            <span>{{ label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" class="btn btn-save">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Salvar Permissões
+                        </button>
+                        <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}" style="display:inline">
+                            <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
+                            <button type="submit" class="btn btn-delete" onclick="return confirm('Remover este usuário permanentemente?')">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                Remover
+                            </button>
+                        </form>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    {# ===== REJEITADOS ===== #}
+    <div class="tab-panel" id="tab-rejected">
+        {% if rejected is empty %}
+            <div class="empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+                <p>Nenhum usuário rejeitado.</p>
+            </div>
+        {% else %}
+        <div class="user-list">
+        {% for user in rejected %}
+        <div class="user-card" id="card-{{ user.id }}">
+            <div class="user-card-header" onclick="toggleCard({{ user.id }})">
+                <div class="avatar">{{ user.name|first|upper }}</div>
+                <div class="user-info">
+                    <div class="user-name">{{ user.name }}</div>
+                    <div class="user-meta"><span>{{ user.email }}</span>{% if user.wazeNickname %}<span>🗺 {{ user.wazeNickname }}</span>{% endif %}</div>
+                </div>
+                <span class="badge badge-rejected">Rejeitado</span>
+                <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div class="user-card-body">
+                <div class="actions">
+                    <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
+                        <button type="submit" class="btn btn-approve">Reativar e Aprovar</button>
+                    </form>
+                    <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
+                        <button type="submit" class="btn btn-delete" onclick="return confirm('Remover permanentemente?')">Remover</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </div>
 
+<script>
+function switchTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+}
+function toggleCard(id) {
+    document.getElementById('card-' + id).classList.toggle('open');
+}
+(function(){
+    const t=document.querySelector('[data-theme-toggle]'),r=document.documentElement;
+    let d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+    r.setAttribute('data-theme',d);
+    if(t)t.addEventListener('click',()=>{d=d==='dark'?'light':'dark';r.setAttribute('data-theme',d);
+        t.innerHTML=d==='dark'?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    });
+})();
+</script>
+</body>
+</html>
 {% endblock %}

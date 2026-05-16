@@ -20,6 +20,21 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
+    // Permissões de área disponíveis no sistema
+    public const PERMISSION_RADARS       = 'PERM_RADARS';
+    public const PERMISSION_FUEL         = 'PERM_FUEL';
+    public const PERMISSION_REPORTS      = 'PERM_REPORTS';
+    public const PERMISSION_TOOLS        = 'PERM_TOOLS';
+    public const PERMISSION_EXPORT       = 'PERM_EXPORT';
+
+    public const ALL_PERMISSIONS = [
+        self::PERMISSION_RADARS   => 'Radares',
+        self::PERMISSION_FUEL     => 'Combustível',
+        self::PERMISSION_REPORTS  => 'Relatórios',
+        self::PERMISSION_TOOLS    => 'Ferramentas',
+        self::PERMISSION_EXPORT   => 'Exportação de Dados',
+    ];
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -31,9 +46,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 120)]
     private string $name = '';
 
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $wazeNickname = null;
+
     /** @var list<string> */
     #[ORM\Column]
     private array $roles = [];
+
+    /** @var list<string> permissões de área */
+    #[ORM\Column]
+    private array $permissions = [];
 
     #[ORM\Column(nullable: true)]
     private ?string $password = null;
@@ -78,6 +100,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getName(): string { return $this->name; }
     public function setName(string $v): static { $this->name = $v; return $this; }
 
+    public function getWazeNickname(): ?string { return $this->wazeNickname; }
+    public function setWazeNickname(?string $v): static { $this->wazeNickname = $v; return $this; }
+
     public function getUserIdentifier(): string { return $this->email; }
 
     public function getRoles(): array
@@ -87,6 +112,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return array_unique($roles);
     }
     public function setRoles(array $v): static { $this->roles = $v; return $this; }
+
+    public function getPermissions(): array { return $this->permissions; }
+    public function setPermissions(array $v): static { $this->permissions = $v; return $this; }
+    public function hasPermission(string $perm): bool
+    {
+        return $this->isAdmin() || in_array($perm, $this->permissions, true);
+    }
 
     public function getPassword(): ?string { return $this->password; }
     public function setPassword(?string $v): static { $this->password = $v; return $this; }

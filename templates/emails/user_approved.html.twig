@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Seu acesso foi aprovado</title></head>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f7f6f2;margin:0;padding:2rem">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
+    <div style="background:#01696f;padding:1.75rem 2rem">
+        <h1 style="color:#fff;font-size:1.25rem;margin:0">✅ Acesso Aprovado!</h1>
+        <p style="color:rgba(255,255,255,.8);margin:.5rem 0 0;font-size:.9rem">ToolboxWaze</p>
+    </div>
+    <div style="padding:2rem">
+        <p style="color:#28251d;margin:0 0 1rem">Olá <strong>{{ user.name }}</strong>,</p>
+        <p style="color:#5a5957;margin:0 0 1.5rem">Sua solicitação de acesso ao <strong>ToolboxWaze</strong> foi aprovada! Você já pode fazer login e utilizar as ferramentas disponíveis.</p>
+
+        {% if user.permissions is not empty %}
+        <div style="background:#f3f0ec;border-radius:8px;padding:1.25rem;margin-bottom:1.75rem">
+            <p style="margin:0 0 .75rem;font-size:.875rem;color:#7a7974;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Seus acessos</p>
+            {% for perm in user.permissions %}
+            <span style="display:inline-block;background:#cedcd8;color:#01696f;padding:.2rem .6rem;border-radius:9999px;font-size:.8rem;font-weight:600;margin:.2rem">{{ constant('App\\Entity\\User::ALL_PERMISSIONS')[perm] ?? perm }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <a href="{{ app.request.schemeAndHttpHost ~ path('app_login') }}"
+           style="display:inline-block;background:#01696f;color:#fff;text-decoration:none;padding:.75rem 1.5rem;border-radius:8px;font-weight:600;font-size:.9rem">
+            Fazer Login →
+        </a>
+
+        <p style="color:#bab9b4;font-size:.8rem;margin-top:2rem">Caso tenha dúvidas, entre em contato com o administrador.</p>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Nova solicitação de acesso</title></head>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f7f6f2;margin:0;padding:2rem">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
+    <div style="background:#01696f;padding:1.75rem 2rem">
+        <h1 style="color:#fff;font-size:1.25rem;margin:0">📬 Nova Solicitação de Acesso</h1>
+        <p style="color:rgba(255,255,255,.8);margin:.5rem 0 0;font-size:.9rem">ToolboxWaze</p>
+    </div>
+    <div style="padding:2rem">
+        <p style="color:#28251d;margin:0 0 1.25rem">Olá <strong>{{ admin.name }}</strong>,</p>
+        <p style="color:#5a5957;margin:0 0 1.5rem">Um novo usuário solicitou acesso à plataforma ToolboxWaze e aguarda sua aprovação.</p>
+
+        <div style="background:#f3f0ec;border-radius:8px;padding:1.25rem;margin-bottom:1.75rem">
+            <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem;width:130px">Nome</td><td style="padding:.35rem 0;font-weight:600;color:#28251d">{{ user.name }}</td></tr>
+                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">E-mail</td><td style="padding:.35rem 0;color:#28251d">{{ user.email }}</td></tr>
+                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">Waze Nickname</td><td style="padding:.35rem 0;font-weight:600;color:#01696f">{{ user.wazeNickname ?? '—' }}</td></tr>
+                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">Solicitado em</td><td style="padding:.35rem 0;color:#28251d">{{ user.createdAt|date('d/m/Y \\à\\s H:i') }}</td></tr>
+            </table>
+        </div>
+
+        <a href="{{ app.request.schemeAndHttpHost ~ path('admin_users_index') }}"
+           style="display:inline-block;background:#01696f;color:#fff;text-decoration:none;padding:.75rem 1.5rem;border-radius:8px;font-weight:600;font-size:.9rem">
+            Gerenciar Usuários →
+        </a>
+
+        <p style="color:#bab9b4;font-size:.8rem;margin-top:2rem">Você recebeu este e-mail por ser administrador do ToolboxWaze.</p>
+    </div>
+</div>
+</body>
+</html>

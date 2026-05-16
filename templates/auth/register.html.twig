@@ -4,298 +4,149 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solicitar Acesso — ToolboxWaze</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=instrument-serif@400&display=swap" rel="stylesheet">
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-            --tw: #01696f; --tw-d: #0c4e54; --tw-dd: #0f3638;
-            --tw-light: #e8f4f4; --tw-muted: #cedcd8;
-            --text: #1e2a2b; --text-muted: #637070; --text-faint: #a0b0b0;
-            --surface: #fff; --surface-2: #f5f9f9;
-            --border: rgba(1,105,111,.14);
-            --shadow-card: 0 2px 6px rgba(1,105,111,.06), 0 16px 48px rgba(0,0,0,.10);
-            --radius: .875rem; --transition: 180ms cubic-bezier(.16,1,.3,1);
-        }
-        [data-theme="dark"] {
-            --text: #d0dede; --text-muted: #7a9898; --text-faint: #4a6464;
-            --surface: #1a2424; --surface-2: #1e2c2c;
-            --border: rgba(79,152,163,.18);
-            --tw: #4f98a3; --tw-d: #227f8b; --tw-light: #1e3434; --tw-muted: #2a4848;
-        }
-        html { -webkit-font-smoothing: antialiased; }
-        body {
-            min-height: 100dvh;
-            font-family: 'Inter', sans-serif; font-size: 1rem;
-            color: var(--text);
-            background: var(--surface-2);
-            display: flex; align-items: center; justify-content: center;
-            padding: 1.5rem 1rem;
-        }
-        .auth-container {
-            width: 100%; max-width: 480px;
-        }
-        /* Back link */
-        .back-link {
-            display: inline-flex; align-items: center; gap: .375rem;
-            color: var(--tw); font-size: .875rem; font-weight: 500;
-            text-decoration: none; margin-bottom: 1.5rem;
-            transition: color var(--transition);
-        }
-        .back-link:hover { color: var(--tw-d); }
-        /* Card */
-        .auth-card {
-            background: var(--surface);
-            border-radius: 1.125rem;
-            box-shadow: var(--shadow-card);
-            overflow: hidden;
-        }
-        .auth-card-header {
-            background: linear-gradient(135deg, var(--tw-dd) 0%, var(--tw) 100%);
-            padding: 2rem;
-            display: flex; align-items: flex-start; gap: 1rem;
-        }
-        .auth-card-header .header-icon {
-            width: 48px; height: 48px; border-radius: .75rem;
-            background: rgba(255,255,255,.15);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.375rem; color: #fff; flex-shrink: 0;
-        }
-        .auth-card-header h1 {
-            font-family: 'Instrument Serif', serif;
-            font-size: 1.5rem; color: #fff; line-height: 1.2;
-            margin-bottom: .25rem;
-        }
-        .auth-card-header p { color: rgba(255,255,255,.75); font-size: .875rem; line-height: 1.5; }
-        /* Body */
-        .auth-card-body { padding: 2rem; }
-        /* Pending notice */
-        .notice-pending {
-            background: var(--tw-light);
-            border: 1px solid var(--tw-muted);
-            border-radius: .625rem;
-            padding: .875rem 1rem;
-            display: flex; align-items: flex-start; gap: .625rem;
-            font-size: .875rem; color: var(--tw-d);
-            margin-bottom: 1.5rem; line-height: 1.5;
-        }
-        [data-theme="dark"] .notice-pending { color: var(--tw); border-color: var(--tw-muted); }
-        .notice-pending i { font-size: 1.1rem; flex-shrink: 0; margin-top: .1rem; }
-        /* Alerts */
-        .alert {
-            border-radius: .625rem; padding: .75rem 1rem;
-            font-size: .875rem; margin-bottom: 1rem;
-            display: flex; align-items: flex-start; gap: .6rem; border: none;
-        }
-        .alert-danger { background: #fdf0f3; color: #8b1a33; }
-        .alert-danger ul { margin: .25rem 0 0 1rem; padding: 0; }
-        [data-theme="dark"] .alert-danger { background: #2f1520; color: #f08fa8; }
-        /* Form */
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .form-group { margin-bottom: 1.125rem; }
-        .form-group label {
-            display: block; font-size: .8125rem; font-weight: 600;
-            color: var(--text-muted); margin-bottom: .375rem;
-            letter-spacing: .02em; text-transform: uppercase;
-        }
-        .input-wrap { position: relative; }
-        .input-wrap .icon {
-            position: absolute; left: .875rem; top: 50%; transform: translateY(-50%);
-            color: var(--text-faint); font-size: 1rem; pointer-events: none;
-        }
-        .input-wrap input {
-            width: 100%; padding: .75rem .875rem .75rem 2.5rem;
-            border: 1.5px solid var(--border); border-radius: .625rem;
-            background: var(--surface-2); color: var(--text); font-size: .9375rem;
-            transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
-            outline: none; font-family: inherit;
-        }
-        .input-wrap input:focus {
-            border-color: var(--tw); box-shadow: 0 0 0 3px rgba(1,105,111,.12);
-            background: var(--surface);
-        }
-        .input-wrap input::placeholder { color: var(--text-faint); }
-        /* Strength */
-        .strength-track {
-            height: 4px; border-radius: 2px;
-            background: var(--border); margin-top: .5rem; overflow: hidden;
-        }
-        .strength-bar {
-            height: 100%; border-radius: 2px;
-            width: 0; transition: width .35s ease, background .35s ease;
-        }
-        .strength-label { font-size: .75rem; color: var(--text-faint); margin-top: .3rem; }
-        /* Button */
-        .btn-primary {
-            width: 100%; padding: .8125rem 1.25rem;
-            border-radius: .625rem; border: none;
-            background: var(--tw); color: #fff;
-            font-size: 1rem; font-weight: 600;
-            cursor: pointer; font-family: inherit;
-            display: flex; align-items: center; justify-content: center; gap: .5rem;
-            margin-top: .5rem;
-            transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
-        }
-        .btn-primary:hover { background: var(--tw-d); box-shadow: 0 4px 16px rgba(1,105,111,.35); transform: translateY(-1px); }
-        .btn-primary:active { transform: translateY(0); }
-        /* Footer */
-        .auth-card-footer {
-            padding: 1.125rem 2rem;
-            background: var(--surface-2);
-            text-align: center;
-            font-size: .9rem; color: var(--text-muted);
-            border-top: 1px solid var(--border);
-        }
-        .link { color: var(--tw); text-decoration: none; font-weight: 600; }
-        .link:hover { text-decoration: underline; }
-        /* Theme toggle */
-        .theme-toggle {
-            position: fixed; top: 1.25rem; right: 1.25rem;
-            width: 38px; height: 38px; border-radius: 50%;
-            border: 1px solid var(--border); background: var(--surface);
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; color: var(--text-muted); font-size: 1rem;
-            transition: background var(--transition);
-        }
-        .theme-toggle:hover { background: var(--tw-light); color: var(--tw); }
-        @media (max-width: 480px) {
-            .form-row { grid-template-columns: 1fr; }
-            .auth-card-body { padding: 1.5rem; }
-            .auth-card-header { padding: 1.5rem; }
-        }
+        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--border:#d4d1ca;--text:#28251d;--muted:#7a7974;--primary:#01696f;--primary-h:#0c4e54;--error:#a12c7b;--warning-bg:#fef9ec;--warning-border:#f0d060;--warning-text:#7a5a00;--radius:0.75rem;--shadow:0 4px 24px rgba(0,0,0,.08)}
+        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--border:#393836;--text:#cdccca;--muted:#797876;--primary:#4f98a3;--primary-h:#227f8b;--error:#d163a7;--warning-bg:#2a2510;--warning-border:#6b5500;--warning-text:#e8c84a}
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+        body{min-height:100dvh;font-family:'Satoshi',sans-serif;font-size:1rem;color:var(--text);background:var(--bg);display:flex;align-items:center;justify-content:center;padding:2rem 1rem}
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:480px;padding:2.5rem}
+        .logo{display:flex;align-items:center;gap:.6rem;margin-bottom:2rem;justify-content:center}
+        .logo svg{width:36px;height:36px;color:var(--primary)}
+        .logo-text{font-family:'Instrument Serif',serif;font-size:1.4rem;color:var(--text)}
+        h1{font-size:1.4rem;font-weight:700;margin-bottom:.4rem;text-align:center}
+        .subtitle{color:var(--muted);font-size:.9rem;text-align:center;margin-bottom:1.75rem}
+        .notice{background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning-text);border-radius:.5rem;padding:.85rem 1rem;font-size:.875rem;margin-bottom:1.5rem;display:flex;gap:.6rem;align-items:flex-start}
+        .notice svg{flex-shrink:0;margin-top:2px}
+        .row-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+        .field{display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem}
+        label{font-size:.85rem;font-weight:500;color:var(--text)}
+        input{padding:.65rem .9rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);color:var(--text);font-size:.95rem;transition:.18s;width:100%}
+        input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in oklab,var(--primary) 18%,transparent)}
+        .hint{font-size:.78rem;color:var(--muted)}
+        .strength{height:3px;border-radius:2px;background:var(--border);margin-top:.35rem;overflow:hidden}
+        .strength-bar{height:100%;width:0;transition:width .3s,background .3s;border-radius:2px}
+        .btn{width:100%;padding:.75rem;border-radius:.5rem;font-size:.95rem;font-weight:600;cursor:pointer;border:none;transition:.18s}
+        .btn-primary{background:var(--primary);color:#fff}
+        .btn-primary:hover{background:var(--primary-h)}
+        .errors{background:#fdf0f6;border:1px solid #e8b4d5;border-radius:.5rem;padding:.85rem 1rem;margin-bottom:1.25rem}
+        .errors li{font-size:.875rem;color:var(--error);margin-left:1.1rem}
+        .footer-link{text-align:center;margin-top:1.25rem;font-size:.875rem;color:var(--muted)}
+        .footer-link a{color:var(--primary);text-decoration:none;font-weight:500}
+        .success-box{text-align:center;padding:1rem 0}
+        .success-icon{width:64px;height:64px;background:color-mix(in oklab,var(--primary) 12%,transparent);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem}
+        .toggle{position:fixed;top:1rem;right:1rem;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+        @media(max-width:480px){.row-2{grid-template-columns:1fr}.card{padding:1.75rem 1.25rem}}
     </style>
 </head>
 <body>
-
-<button class="theme-toggle" data-theme-toggle aria-label="Alternar tema">
-    <i class="bi bi-moon" id="themeIcon"></i>
+<button class="toggle" data-theme-toggle aria-label="Alternar tema">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
 </button>
 
-<div class="auth-container">
-    <a href="{{ path('app_login') }}" class="back-link">
-        <i class="bi bi-arrow-left"></i> Voltar para o login
-    </a>
-
-    <div class="auth-card">
-        <div class="auth-card-header">
-            <div class="header-icon"><i class="bi bi-person-plus-fill"></i></div>
-            <div>
-                <h1>Solicitar Acesso</h1>
-                <p>Preencha os dados abaixo. Seu acesso será liberado após aprovação de um administrador.</p>
-            </div>
-        </div>
-
-        <div class="auth-card-body">
-
-            <div class="notice-pending">
-                <i class="bi bi-shield-check-fill"></i>
-                <span>Seu cadastro ficará <strong>pendente</strong> até que um administrador aprove sua solicitação. Você receberá uma notificação quando sua conta for ativada.</span>
-            </div>
-
-            {% if errors is not empty %}
-                <div class="alert alert-danger" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill" style="flex-shrink:0;margin-top:.1rem"></i>
-                    <div><strong>Por favor corrija os erros:</strong>
-                        <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
-                    </div>
-                </div>
-            {% endif %}
-
-            <form method="post" novalidate>
-
-                <div class="form-group">
-                    <label for="name">Nome completo</label>
-                    <div class="input-wrap">
-                        <i class="bi bi-person icon"></i>
-                        <input type="text" id="name" name="name"
-                               value="{{ values.name ?? '' }}"
-                               placeholder="Seu nome completo"
-                               required autofocus>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="email">E-mail</label>
-                    <div class="input-wrap">
-                        <i class="bi bi-envelope icon"></i>
-                        <input type="email" id="email" name="email"
-                               value="{{ values.email ?? '' }}"
-                               placeholder="seu@email.com"
-                               required>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="password">Senha</label>
-                        <div class="input-wrap">
-                            <i class="bi bi-lock icon"></i>
-                            <input type="password" id="password" name="password"
-                                   placeholder="Mínimo 8 caracteres"
-                                   required oninput="checkStrength(this.value)">
-                        </div>
-                        <div class="strength-track"><div class="strength-bar" id="strengthBar"></div></div>
-                        <div class="strength-label" id="strengthLabel"></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="confirm">Confirmar senha</label>
-                        <div class="input-wrap">
-                            <i class="bi bi-lock-fill icon"></i>
-                            <input type="password" id="confirm" name="confirm"
-                                   placeholder="Repita a senha" required>
-                        </div>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn-primary">
-                    <i class="bi bi-send"></i>
-                    Enviar solicitação de acesso
-                </button>
-            </form>
-        </div>
-
-        <div class="auth-card-footer">
-            Já tem conta? <a href="{{ path('app_login') }}" class="link">Fazer login</a>
-        </div>
+<div class="card">
+    <div class="logo">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ToolboxWaze logo">
+            <rect width="40" height="40" rx="10" fill="currentColor" opacity=".12"/>
+            <path d="M10 28 L20 12 L30 28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 22 h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="20" cy="20" r="2" fill="currentColor"/>
+        </svg>
+        <span class="logo-text">ToolboxWaze</span>
     </div>
+
+    {% if sent %}
+    <div class="success-box">
+        <div class="success-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#01696f" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h1>Solicitação enviada!</h1>
+        <p class="subtitle" style="margin-top:.5rem">Sua solicitação foi recebida. Os administradores foram notificados e analisarão seu pedido em breve.</p>
+        <a href="{{ path('app_login') }}" style="display:inline-block;margin-top:1.5rem;color:var(--primary);font-weight:500;text-decoration:none">← Voltar ao login</a>
+    </div>
+    {% else %}
+    <h1>Solicitar Acesso</h1>
+    <p class="subtitle">Preencha os dados abaixo. Sua conta será ativada após aprovação.</p>
+
+    <div class="notice">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+        <span>Sua conta ficará <strong>pendente</strong> até que um administrador aprove e configure suas permissões.</span>
+    </div>
+
+    {% if errors is defined and errors|length > 0 %}
+    <ul class="errors">
+        {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    <form method="POST">
+        <div class="row-2">
+            <div class="field">
+                <label for="name">Nome completo</label>
+                <input type="text" id="name" name="name" required autocomplete="name"
+                       value="{{ values.name ?? '' }}" placeholder="João Silva">
+            </div>
+            <div class="field">
+                <label for="waze_nickname">Nickname no Waze</label>
+                <input type="text" id="waze_nickname" name="waze_nickname" required
+                       value="{{ values.waze_nickname ?? '' }}" placeholder="Ex: JoaoWaze_BR">
+            </div>
+        </div>
+        <div class="field">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="email" required autocomplete="email"
+                   value="{{ values.email ?? '' }}" placeholder="seu@email.com">
+        </div>
+        <div class="row-2">
+            <div class="field">
+                <label for="password">Senha</label>
+                <input type="password" id="password" name="password" required autocomplete="new-password" placeholder="Mín. 8 caracteres">
+                <div class="strength"><div class="strength-bar" id="strength-bar"></div></div>
+                <span class="hint" id="strength-label"> </span>
+            </div>
+            <div class="field">
+                <label for="password2">Confirmar senha</label>
+                <input type="password" id="password2" name="password2" required autocomplete="new-password" placeholder="Repita a senha">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Solicitar acesso</button>
+    </form>
+
+    <div class="footer-link">
+        Já tem conta? <a href="{{ path('app_login') }}">Fazer login</a>
+    </div>
+    {% endif %}
 </div>
 
 <script>
 (function(){
-    const root = document.documentElement;
-    const btn  = document.querySelector('[data-theme-toggle]');
-    const icon = document.getElementById('themeIcon');
-    let dark = window.matchMedia('(prefers-color-scheme:dark)').matches;
-    function apply(d) {
-        root.setAttribute('data-theme', d ? 'dark' : 'light');
-        icon.className = d ? 'bi bi-sun' : 'bi bi-moon';
-    }
-    apply(dark);
-    btn.addEventListener('click', () => { dark = !dark; apply(dark); });
-})();
+    // theme toggle
+    const t=document.querySelector('[data-theme-toggle]'),r=document.documentElement;
+    let d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+    r.setAttribute('data-theme',d);
+    if(t)t.addEventListener('click',()=>{d=d==='dark'?'light':'dark';r.setAttribute('data-theme',d)});
 
-function checkStrength(v) {
-    const bar = document.getElementById('strengthBar');
-    const lbl = document.getElementById('strengthLabel');
-    if (!v) { bar.style.width = '0'; lbl.textContent = ''; return; }
-    let score = 0;
-    if (v.length >= 8)  score++;
-    if (v.length >= 12) score++;
-    if (/[A-Z]/.test(v)) score++;
-    if (/[0-9]/.test(v)) score++;
-    if (/[^A-Za-z0-9]/.test(v)) score++;
-    const configs = ['#dc3545','Muito fraca','#dc3545','Fraca','#fd7e14','Média','#f0ad4e','Boa','#198754','Forte'];
-    const i = Math.max(0, (score - 1)) * 2;
-    const color = configs[i] ?? '#01696f';
-    const label = configs[i + 1] ?? 'Forte';
-    bar.style.width = (score * 20) + '%';
-    bar.style.background = color;
-    lbl.textContent = label;
-    lbl.style.color = color;
-}
+    // password strength
+    const pw=document.getElementById('password');
+    const bar=document.getElementById('strength-bar');
+    const lbl=document.getElementById('strength-label');
+    if(pw&&bar){
+        pw.addEventListener('input',()=>{
+            const v=pw.value;
+            let s=0;
+            if(v.length>=8)s++;
+            if(/[A-Z]/.test(v))s++;
+            if(/[0-9]/.test(v))s++;
+            if(/[^A-Za-z0-9]/.test(v))s++;
+            const cols=['#e74c3c','#e67e22','#f1c40f','#2ecc71'];
+            const labs=['Fraca','Razoável','Boa','Forte'];
+            bar.style.width=(s*25)+'%';
+            bar.style.background=cols[s-1]||'#e74c3c';
+            lbl.textContent=v.length?labs[s-1]||'Muito fraca':' ';
+        });
+    }
+})();
 </script>
 </body>
 </html>

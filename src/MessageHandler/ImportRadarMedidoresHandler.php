@@ -10,29 +10,22 @@ use Doctrine\DBAL\ParameterType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
- * Baixa o JSON RBMLQ de um estado e faz upsert na tabela radar_medidor.
+ * Baixa o JSON RBMLQ de um estado e faz upsert em radar_medidor / radar_faixa / radar_historico.
  *
- * Estrutura real do JSON:
- * [
- *   {
- *     "SiglaUf", "Estado", "Municipio", "LocalVerificacao",
- *     "DataUltimaVerificacao", "DataValidade", "UltimoResultado", "TipoMedidor",
- *     "Faixas":    [{ NumeroFaixa, NumeroInmetro, NumeroSerie, Sentido, VelocidadeNominal }],
- *     "Historico": [{ NumeroCertificado, NumeroEnsaio, Ano, DataLaudo, DataValidade, TipoServico, Resultado }],
- *     "Proprietario": { Nome, Municipio, Estado }
- *   }
- * ]
+ * Problema de memória:
+ *   Estados como SC e SP têm JSONs de centenas de MB.
+ *   file_get_contents() carregava tudo na RAM → OOM.
  *
- * Estratégia de upsert:
- *   - row_hash (SHA-256 do JSON completo) é UNIQUE KEY
- *   - Se row_hash já existe → dado não mudou → zero escrita
- *   - Se row_hash mudou → atualiza o radar + apaga e recria faixas/histórico
- *   - Se novo → insere radar + faixas + histórico
+ * Solução:
+ *   1. Download via cURL escrevendo direto em arquivo temporário (stream, zero RAM extra).
+ *   2. Parse incremental: lê o arquivo char a char contando chaves { } para extrair
+ *      cada objeto completo e fazer json_decode() só nele.
+ *   3. Processa em lotes de BATCH_SIZE itens para não acumular memória.
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
 {
-    private const BATCH_SIZE = 100;
+    private const BATCH_SIZE = 50;
 
     private const RADAR_INSERT_COLS = [
         'sigla_uf', 'estado', 'municipio', 'local_verificacao',
@@ -58,63 +51,169 @@ final class ImportRadarMedidoresHandler
 
     public function __invoke(ImportRadarMedidoresMessage $message): void
     {
-        $uf    = strtoupper($message->uf);
-        $items = $this->fetchItems($message->getUrl());
+        $uf         = strtoupper($message->uf);
+        $importedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $tmpFile    = $this->downloadToTempFile($message->getUrl());
 
-        if ($items === []) {
+        if ($tmpFile === null) {
             return;
         }
 
-        $importedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-        $batch      = [];
-
-        foreach ($items as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-
-            $batch[] = $this->mapItem($item, $uf, $importedAt);
-
-            if (count($batch) >= self::BATCH_SIZE) {
-                $this->processBatch($batch);
-                $batch = [];
-            }
-        }
-
-        if ($batch !== []) {
-            $this->processBatch($batch);
+        try {
+            $this->processFile($tmpFile, $uf, $importedAt);
+        } finally {
+            @unlink($tmpFile);
         }
     }
 
     // -------------------------------------------------------------------------
-    // HTTP
+    // Download via cURL em arquivo temporário (stream, sem alocar RAM)
     // -------------------------------------------------------------------------
 
-    private function fetchItems(string $url): array
+    private function downloadToTempFile(string $url): ?string
     {
-        $context = stream_context_create([
-            'http' => [
-                'timeout'       => 30,
-                'ignore_errors' => true,
-                'header'        => "Accept: application/json\r\nUser-Agent: ToolboxWaze/1.0\r\n",
-            ],
-        ]);
+        $tmpPath = tempnam(sys_get_temp_dir(), 'rbmlq_');
 
-        $raw  = @file_get_contents($url, false, $context);
-        $data = $raw ? json_decode($raw, true) : null;
-
-        if (!\is_array($data)) {
-            return [];
+        if ($tmpPath === false) {
+            return null;
         }
 
-        // API retorna lista direta ou objeto com chave de dados
-        return match (true) {
-            isset($data['data'])    => $data['data'],
-            isset($data['items'])   => $data['items'],
-            isset($data['results']) => $data['results'],
-            array_is_list($data)    => $data,
-            default                 => [],
-        };
+        $fp = fopen($tmpPath, 'wb');
+
+        if ($fp === false) {
+            return null;
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_FILE           => $fp,       // escreve direto no arquivo
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT        => 120,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_USERAGENT      => 'ToolboxWaze/1.0',
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            CURLOPT_FAILONERROR    => true,
+        ]);
+
+        $ok      = curl_exec($ch);
+        $errCode = curl_errno($ch);
+        curl_close($ch);
+        fclose($fp);
+
+        if (!$ok || $errCode !== 0 || filesize($tmpPath) < 3) {
+            @unlink($tmpPath);
+            return null;
+        }
+
+        return $tmpPath;
+    }
+
+    // -------------------------------------------------------------------------
+    // Parse incremental: extrai objetos JSON {..} do arquivo um a um
+    // -------------------------------------------------------------------------
+
+    /**
+     * Lê o arquivo em blocos de 64 KB, mantendo um buffer de acumulação.
+     * Conta abertura/fechamento de chaves para detectar quando um objeto
+     * JSON de nível raiz (depth 1 dentro do array) está completo.
+     *
+     * Funciona tanto para JSON formatado (multi-linha) quanto minificado.
+     */
+    private function processFile(string $path, string $uf, string $importedAt): void
+    {
+        $fh = fopen($path, 'rb');
+
+        if ($fh === false) {
+            return;
+        }
+
+        $buffer   = '';
+        $depth    = 0;
+        $inString = false;
+        $escape   = false;
+        $batch    = [];
+
+        while (!feof($fh)) {
+            $chunk   = fread($fh, 65536);
+            $buffer .= $chunk;
+            $out     = ''           ; // parte já processada do buffer — descartada
+            $objStart = null;
+
+            $len = strlen($buffer);
+
+            for ($i = 0; $i < $len; $i++) {
+                $c = $buffer[$i];
+
+                // Controle de string JSON (ignora chaves dentro de strings)
+                if ($escape) {
+                    $escape = false;
+                    continue;
+                }
+
+                if ($c === '\\' && $inString) {
+                    $escape = true;
+                    continue;
+                }
+
+                if ($c === '"') {
+                    $inString = !$inString;
+                    continue;
+                }
+
+                if ($inString) {
+                    continue;
+                }
+
+                if ($c === '{') {
+                    if ($depth === 0) {
+                        $objStart = $i; // marca o início do objeto
+                    }
+                    $depth++;
+                } elseif ($c === '}') {
+                    $depth--;
+
+                    if ($depth === 0 && $objStart !== null) {
+                        // Objeto completo encontrado
+                        $objJson = substr($buffer, $objStart, $i - $objStart + 1);
+                        $item    = json_decode($objJson, true);
+
+                        if (\is_array($item) && $item !== []) {
+                            $batch[] = $this->mapItem($item, $uf, $importedAt);
+
+                            if (count($batch) >= self::BATCH_SIZE) {
+                                $this->processBatch($batch);
+                                $batch = [];
+                                gc_collect_cycles();
+                            }
+                        }
+
+                        // Descarta tudo até aqui do buffer
+                        $out      = substr($buffer, $i + 1);
+                        $objStart = null;
+                    }
+                }
+            }
+
+            // Mantém no buffer apenas a parte ainda não processada
+            if ($objStart !== null) {
+                // Objeto ainda aberto: mantém desde o início
+                $buffer = substr($buffer, $objStart);
+            } elseif ($out !== '') {
+                $buffer = $out;
+            } else {
+                // Nenhum objeto encontrado neste chunk: descarta parte segura
+                // (guarda os últimos 256 bytes por segurança)
+                if (strlen($buffer) > 256) {
+                    $buffer = substr($buffer, -256);
+                }
+            }
+        }
+
+        fclose($fh);
+
+        if ($batch !== []) {
+            $this->processBatch($batch);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -123,50 +222,42 @@ final class ImportRadarMedidoresHandler
 
     private function mapItem(array $item, string $uf, string $importedAt): array
     {
-        $prop = \is_array($item['Proprietario'] ?? null) ? $item['Proprietario'] : [];
+        $prop      = \is_array($item['Proprietario'] ?? null) ? $item['Proprietario'] : [];
+        $faixas    = \is_array($item['Faixas']       ?? null) ? $item['Faixas']       : [];
+        $historico = \is_array($item['Historico']    ?? null) ? $item['Historico']    : [];
 
-        // Faixas e Histórico são arrays — gravados como JSON string na coluna
-        $faixas    = \is_array($item['Faixas']    ?? null) ? $item['Faixas']    : [];
-        $historico = \is_array($item['Historico'] ?? null) ? $item['Historico'] : [];
-
-        $rawJson      = json_encode($item,      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $faixasJson   = json_encode($faixas,    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $rawJson       = json_encode($item,      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $faixasJson    = json_encode($faixas,    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $historicoJson = json_encode($historico, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        $rowHash      = hash('sha256', $rawJson);
-        $identityHash = $this->buildIdentityHash($item, $uf);
+        $siglaUf = strtoupper($this->str($item['SiglaUf'] ?? null) ?? $uf);
 
         return [
-            // Campos simples
-            'sigla_uf'                => $uf,
-            'estado'                  => $this->str($item['Estado'] ?? null),
-            'municipio'               => $this->str($item['Municipio'] ?? null),
-            'local_verificacao'       => $this->str($item['LocalVerificacao'] ?? null),
+            'sigla_uf'                => $siglaUf,
+            'estado'                  => $this->str($item['Estado']                ?? null),
+            'municipio'               => $this->str($item['Municipio']             ?? null),
+            'local_verificacao'       => $this->str($item['LocalVerificacao']      ?? null),
             'data_ultima_verificacao' => $this->str($item['DataUltimaVerificacao'] ?? null),
-            'data_validade'           => $this->str($item['DataValidade'] ?? null),
-            'ultimo_resultado'        => $this->str($item['UltimoResultado'] ?? null),
-            'tipo_medidor'            => $this->str($item['TipoMedidor'] ?? null),
-            // Proprietário
-            'proprietario_nome'       => $this->str($prop['Nome'] ?? null),
-            'proprietario_municipio'  => $this->str($prop['Municipio'] ?? null),
-            'proprietario_estado'     => $this->str($prop['Estado'] ?? null),
-            // Arrays como JSON string
+            'data_validade'           => $this->str($item['DataValidade']          ?? null),
+            'ultimo_resultado'        => $this->str($item['UltimoResultado']       ?? null),
+            'tipo_medidor'            => $this->str($item['TipoMedidor']           ?? null),
+            'proprietario_nome'       => $this->str($prop['Nome']                  ?? null),
+            'proprietario_municipio'  => $this->str($prop['Municipio']             ?? null),
+            'proprietario_estado'     => $this->str($prop['Estado']                ?? null),
             'faixas_json'             => $faixasJson,
             'historico_json'          => $historicoJson,
-            // Metadados
-            'row_hash'                => $rowHash,
-            'identity_hash'           => $identityHash,
+            'row_hash'                => hash('sha256', $rawJson),
+            'identity_hash'           => $this->buildIdentityHash($item, $siglaUf),
             'raw_data'                => $rawJson,
             'imported_at'             => $importedAt,
             'updated_at'              => $importedAt,
-            // Guardados separado para inserir nas tabelas relacionadas
             '_faixas'                 => $faixas,
             '_historico'              => $historico,
         ];
     }
 
     // -------------------------------------------------------------------------
-    // Processo de lote: upsert radares + faixas + histórico
+    // Lote: upsert + faixas + histórico
     // -------------------------------------------------------------------------
 
     private function processBatch(array $rows): void
@@ -174,10 +265,8 @@ final class ImportRadarMedidoresHandler
         $this->connection->beginTransaction();
 
         try {
-            // 1. Upsert dos radares
             $this->upsertRadarBatch($rows);
 
-            // 2. Para cada radar, sincroniza faixas e histórico
             foreach ($rows as $row) {
                 $radarId = $this->findRadarIdByHash($row['row_hash']);
 
@@ -240,7 +329,6 @@ final class ImportRadarMedidoresHandler
         return $result !== false ? (int) $result : null;
     }
 
-    /** Apaga e recria as faixas do radar (são poucos registros por radar) */
     private function syncFaixas(int $radarId, array $faixas): void
     {
         $this->connection->executeStatement(
@@ -249,7 +337,9 @@ final class ImportRadarMedidoresHandler
         );
 
         foreach ($faixas as $faixa) {
-            if (!\is_array($faixa)) continue;
+            if (!\is_array($faixa)) {
+                continue;
+            }
 
             $this->connection->executeStatement(
                 'INSERT INTO radar_faixa
@@ -257,17 +347,16 @@ final class ImportRadarMedidoresHandler
                  VALUES (?, ?, ?, ?, ?, ?)',
                 [
                     $radarId,
-                    $this->str($faixa['NumeroFaixa']      ?? null),
-                    $this->str($faixa['NumeroInmetro']    ?? null),
-                    $this->str($faixa['NumeroSerie']      ?? null),
-                    $this->str($faixa['Sentido']          ?? null),
+                    $this->str($faixa['NumeroFaixa']       ?? null),
+                    $this->str($faixa['NumeroInmetro']     ?? null),
+                    $this->str($faixa['NumeroSerie']       ?? null),
+                    $this->str($faixa['Sentido']           ?? null),
                     $this->str($faixa['VelocidadeNominal'] ?? null),
                 ]
             );
         }
     }
 
-    /** Apaga e recria o histórico do radar */
     private function syncHistorico(int $radarId, array $historico): void
     {
         $this->connection->executeStatement(
@@ -276,7 +365,9 @@ final class ImportRadarMedidoresHandler
         );
 
         foreach ($historico as $h) {
-            if (!\is_array($h)) continue;
+            if (!\is_array($h)) {
+                continue;
+            }
 
             $this->connection->executeStatement(
                 'INSERT INTO radar_historico
@@ -302,7 +393,6 @@ final class ImportRadarMedidoresHandler
 
     private function buildIdentityHash(array $item, string $uf): string
     {
-        // Identifica o mesmo ponto físico mesmo que o conteúdo mude
         $parts = [
             strtoupper($uf),
             strtoupper(trim((string) ($item['LocalVerificacao'] ?? ''))),

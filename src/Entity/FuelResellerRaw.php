@@ -61,37 +61,31 @@ class FuelResellerRaw
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $nomeFantasia = null;
 
-    /**
-     * Hash de toda a linha (SHA-256). Permite detectar se qualquer campo mudou.
-     */
     #[ORM\Column(length: 64)]
     private string $rowHash;
 
-    /**
-     * Hash de identidade baseado em razao_social + endereco + cep + uf + municipio.
-     * Permite detectar, em análises futuras, postos com mesma identidade mas CNPJ diferente.
-     */
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $identityHash = null;
 
-    /**
-     * Dados brutos originais do CSV em JSON — preserva o formato original sem interpretação.
-     */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $rawData = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $importedAt;
 
+    /**
+     * Data da última atualização do registro (quando o dado do posto mudou).
+     * NULL = nunca atualizado após o primeiro import.
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $updatedAt = null;
+
     public function __construct()
     {
         $this->importedAt = new \DateTimeImmutable();
     }
 
-    public function getId(): ?int
-    {
-        return $this->id;
-    }
+    public function getId(): ?int { return $this->id; }
 
     public function getCodigoIsimp(): ?string { return $this->codigoIsimp; }
     public function setCodigoIsimp(?string $value): self { $this->codigoIsimp = $value; return $this; }
@@ -146,4 +140,7 @@ class FuelResellerRaw
 
     public function getImportedAt(): \DateTimeImmutable { return $this->importedAt; }
     public function setImportedAt(\DateTimeImmutable $value): self { $this->importedAt = $value; return $this; }
+
+    public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+    public function setUpdatedAt(?\DateTimeImmutable $value): self { $this->updatedAt = $value; return $this; }
 }

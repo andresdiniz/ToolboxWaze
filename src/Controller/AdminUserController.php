@@ -13,10 +13,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/admin/users', name: 'admin_users_')]
-#[IsGranted('ROLE_ADMIN')]
 class AdminUserController extends AbstractController
 {
     public function __construct(
@@ -28,6 +26,8 @@ class AdminUserController extends AbstractController
     #[Route('', name: 'index')]
     public function index(): Response
     {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+
         return $this->render('admin/users/index.html.twig', [
             'pending'  => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
             'approved' => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
@@ -40,6 +40,8 @@ class AdminUserController extends AbstractController
     #[Route('/{id}/approve', name: 'approve', methods: ['POST'])]
     public function approve(User $user, Request $request): Response
     {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+
         if (!$this->isCsrfTokenValid('user_action_' . $user->getId(), $request->request->get('_token'))) {
             $this->addFlash('error', 'Token inválido.');
             return $this->redirectToRoute('admin_users_index');
@@ -51,7 +53,6 @@ class AdminUserController extends AbstractController
             $roles[] = 'ROLE_ADMIN';
         }
 
-        // UFs permitidas: checkbox 'all_ufs' = null (sem restrição), senão array selecionado
         $allowedUfs = $request->request->getBoolean('all_ufs')
             ? null
             : array_values(array_filter(
@@ -89,6 +90,8 @@ class AdminUserController extends AbstractController
     #[Route('/{id}/reject', name: 'reject', methods: ['POST'])]
     public function reject(User $user, Request $request): Response
     {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+
         if (!$this->isCsrfTokenValid('user_action_' . $user->getId(), $request->request->get('_token'))) {
             $this->addFlash('error', 'Token inválido.');
             return $this->redirectToRoute('admin_users_index');
@@ -104,6 +107,8 @@ class AdminUserController extends AbstractController
     #[Route('/{id}/permissions', name: 'permissions', methods: ['POST'])]
     public function updatePermissions(User $user, Request $request): Response
     {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+
         if (!$this->isCsrfTokenValid('user_perms_' . $user->getId(), $request->request->get('_token'))) {
             $this->addFlash('error', 'Token inválido.');
             return $this->redirectToRoute('admin_users_index');
@@ -135,6 +140,8 @@ class AdminUserController extends AbstractController
     #[Route('/{id}/delete', name: 'delete', methods: ['POST'])]
     public function delete(User $user, Request $request): Response
     {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+
         if (!$this->isCsrfTokenValid('user_delete_' . $user->getId(), $request->request->get('_token'))) {
             $this->addFlash('error', 'Token inválido.');
             return $this->redirectToRoute('admin_users_index');

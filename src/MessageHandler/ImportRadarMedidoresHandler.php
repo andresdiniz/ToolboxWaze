@@ -9,24 +9,10 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
-/**
- * Importa medidores RBMLQ de um estado com diff incremental.
- *
- * Fluxo por lote:
- *   1. Calcula row_hash (SHA-256 do JSON bruto do item) para cada linha.
- *   2. Consulta o banco: quais desses row_hashes JÁ existem?
- *      → Idênticos: zero escrita (skip total).
- *      → Ausentes no banco: INSERT IGNORE (novo radar).
- *      → identity_hash existe mas row_hash diferente: UPDATE (radar mudou).
- *   3. Faixas e histórico só são recriados para radares que de fato mudaram.
- */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
 {
-    /** Registros por lote de INSERT/UPDATE — maior = menos round-trips ao BD */
-    private const BATCH_SIZE = 200;
-
-    /** Timeout total do download por estado (segundos) — estados grandes como SP podem ser lentos */
+    private const BATCH_SIZE   = 200;
     private const CURL_TIMEOUT = 600;
 
     private const RADAR_INSERT_COLS = [
@@ -45,7 +31,6 @@ final class ImportRadarMedidoresHandler
         'identity_hash', 'raw_data', 'updated_at',
     ];
 
-    /** Contadores para relatório por estado */
     private int $countInserted = 0;
     private int $countUpdated  = 0;
     private int $countSkipped  = 0;
@@ -65,44 +50,35 @@ final class ImportRadarMedidoresHandler
 
         $tmpFile = $this->downloadToTempFile($message->getUrl());
 
-        if ($tmpFile === null) {
-            throw new \RuntimeException("Falha no download para UF={$uf}: {$message->getUrl()}");
-        }
-
         try {
             $this->processFile($tmpFile, $uf, $importedAt);
         } finally {
             @unlink($tmpFile);
         }
 
-        // Imprime sumário (visível no CLI via --verbose)
         $total = $this->countInserted + $this->countUpdated + $this->countSkipped;
         echo sprintf(
             "  [%s] total=%d  inseridos=%d  atualizados=%d  sem-mudança=%d\n",
-            $uf,
-            $total,
-            $this->countInserted,
-            $this->countUpdated,
-            $this->countSkipped
+            $uf, $total, $this->countInserted, $this->countUpdated, $this->countSkipped
         );
     }
 
     // -------------------------------------------------------------------------
-    // Download via cURL → arquivo temporário (stream, zero RAM extra)
+    // Download
     // -------------------------------------------------------------------------
 
-    private function downloadToTempFile(string $url): ?string
+    private function downloadToTempFile(string $url): string
     {
         $tmpPath = tempnam(sys_get_temp_dir(), 'rbmlq_');
 
         if ($tmpPath === false) {
-            return null;
+            throw new \RuntimeException("Não foi possível criar arquivo temporário.");
         }
 
         $fp = fopen($tmpPath, 'wb');
 
         if ($fp === false) {
-            return null;
+            throw new \RuntimeException("Não foi possível abrir arquivo temporário para escrita.");
         }
 
         $ch = curl_init($url);
@@ -114,7 +90,7 @@ final class ImportRadarMedidoresHandler
             CURLOPT_USERAGENT      => 'ToolboxWaze/1.0',
             CURLOPT_HTTPHEADER     => ['Accept: application/json'],
             CURLOPT_FAILONERROR    => true,
-            CURLOPT_SSL_VERIFYPEER => false, // alguns ambientes de hospedagem têm CA desatualizada
+            CURLOPT_SSL_VERIFYPEER => false,
         ]);
 
         $ok      = curl_exec($ch);
@@ -125,7 +101,6 @@ final class ImportRadarMedidoresHandler
 
         if (!$ok || $errCode !== 0 || filesize($tmpPath) < 3) {
             @unlink($tmpPath);
-            // Relança como exceção para o command logar o estado com erro
             throw new \RuntimeException("cURL erro {$errCode}: {$errMsg} — URL: {$url}");
         }
 
@@ -133,7 +108,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Parse incremental: extrai objetos JSON {..} do arquivo um a um
+    // Parse incremental (streaming JSON)
     // -------------------------------------------------------------------------
 
     private function processFile(string $path, string $uf, string $importedAt): void
@@ -160,10 +135,10 @@ final class ImportRadarMedidoresHandler
             for ($i = 0; $i < $len; $i++) {
                 $c = $buffer[$i];
 
-                if ($escape) { $escape = false; continue; }
-                if ($c === '\\' && $inString) { $escape = true; continue; }
-                if ($c === '"') { $inString = !$inString; continue; }
-                if ($inString) { continue; }
+                if ($escape)                     { $escape = false; continue; }
+                if ($c === '\\' && $inString)    { $escape = true;  continue; }
+                if ($c === '"')                  { $inString = !$inString; continue; }
+                if ($inString)                   { continue; }
 
                 if ($c === '{') {
                     if ($depth === 0) { $objStart = $i; }
@@ -270,8 +245,7 @@ final class ImportRadarMedidoresHandler
             $existing = $existingByIdentity[$row['identity_hash']] ?? null;
 
             if ($existing === null) {
-                $toInsert[];
-                $toInsert[] = $row;
+                $toInsert[] = $row;               // <-- linha corrigida (sem o [] duplicado)
             } else {
                 $row['_db_id'] = $existing['id'];
                 $toUpdate[]    = $row;
@@ -326,12 +300,13 @@ final class ImportRadarMedidoresHandler
 
         $placeholders = implode(',', array_fill(0, count($rowHashes), '?'));
 
-        $rows = $this->connection->fetchAllAssociative(
-            "SELECT row_hash FROM radar_medidor WHERE row_hash IN ({$placeholders})",
-            $rowHashes
+        return array_column(
+            $this->connection->fetchAllAssociative(
+                "SELECT row_hash FROM radar_medidor WHERE row_hash IN ({$placeholders})",
+                $rowHashes
+            ),
+            'row_hash'
         );
-
-        return array_column($rows, 'row_hash');
     }
 
     private function fetchExistingByIdentity(array $identityHashes): array
@@ -349,10 +324,7 @@ final class ImportRadarMedidoresHandler
 
         $map = [];
         foreach ($rows as $row) {
-            $map[$row['identity_hash']] = [
-                'id'       => (int) $row['id'],
-                'row_hash' => $row['row_hash'],
-            ];
+            $map[$row['identity_hash']] = ['id' => (int) $row['id'], 'row_hash' => $row['row_hash']];
         }
 
         return $map;
@@ -413,12 +385,11 @@ final class ImportRadarMedidoresHandler
         $params['_id'] = $row['_db_id'];
         $types['_id']  = ParameterType::INTEGER;
 
-        $sql = sprintf(
-            'UPDATE radar_medidor SET %s WHERE id = :_id',
-            implode(', ', $setParts)
+        $this->connection->executeStatement(
+            sprintf('UPDATE radar_medidor SET %s WHERE id = :_id', implode(', ', $setParts)),
+            $params,
+            $types
         );
-
-        $this->connection->executeStatement($sql, $params, $types);
     }
 
     // -------------------------------------------------------------------------
@@ -495,13 +466,11 @@ final class ImportRadarMedidoresHandler
 
     private function buildIdentityHash(array $item, string $uf): string
     {
-        $parts = [
+        return hash('sha256', implode('|', [
             strtoupper($uf),
             strtoupper(trim((string) ($item['LocalVerificacao'] ?? ''))),
             strtoupper(trim((string) ($item['TipoMedidor']     ?? ''))),
-        ];
-
-        return hash('sha256', implode('|', $parts));
+        ]));
     }
 
     private function str(mixed $value): ?string

@@ -9,6 +9,13 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
+/**
+ * Importa medidores RBMLQ de um estado com diff incremental.
+ *
+ * O arquivo JSON por UF pode chegar a 17MB+ (ex: SP).
+ * Usamos json_decode direto no conteúdo do arquivo — mais simples e 100% correto.
+ * Para 17MB de JSON o pico de RAM é ~80-100MB, aceitável em qualquer VPS.
+ */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
 {
@@ -64,7 +71,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Download
+    // Download via cURL → arquivo temporário
     // -------------------------------------------------------------------------
 
     private function downloadToTempFile(string $url): string
@@ -72,13 +79,13 @@ final class ImportRadarMedidoresHandler
         $tmpPath = tempnam(sys_get_temp_dir(), 'rbmlq_');
 
         if ($tmpPath === false) {
-            throw new \RuntimeException("Não foi possível criar arquivo temporário.");
+            throw new \RuntimeException('Não foi possível criar arquivo temporário.');
         }
 
         $fp = fopen($tmpPath, 'wb');
 
         if ($fp === false) {
-            throw new \RuntimeException("Não foi possível abrir arquivo temporário para escrita.");
+            throw new \RuntimeException('Não foi possível abrir arquivo temporário para escrita.');
         }
 
         $ch = curl_init($url);
@@ -108,74 +115,43 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Parse incremental (streaming JSON)
+    // Parse: lê o arquivo inteiro e usa json_decode
+    // Para SP (17MB) o pico de RAM é ~80-100MB — seguro em qualquer VPS.
     // -------------------------------------------------------------------------
 
     private function processFile(string $path, string $uf, string $importedAt): void
     {
-        $fh = fopen($path, 'rb');
+        $content = file_get_contents($path);
 
-        if ($fh === false) {
-            return;
+        if ($content === false || $content === '') {
+            throw new \RuntimeException("Não foi possível ler o arquivo temporário: {$path}");
         }
 
-        $buffer   = '';
-        $depth    = 0;
-        $inString = false;
-        $escape   = false;
-        $batch    = [];
+        $items = json_decode($content, true);
+        unset($content); // libera RAM imediatamente após o decode
 
-        while (!feof($fh)) {
-            $chunk   = fread($fh, 65536);
-            $buffer .= $chunk;
-            $out      = '';
-            $objStart = null;
-            $len      = strlen($buffer);
-
-            for ($i = 0; $i < $len; $i++) {
-                $c = $buffer[$i];
-
-                if ($escape)                     { $escape = false; continue; }
-                if ($c === '\\' && $inString)    { $escape = true;  continue; }
-                if ($c === '"')                  { $inString = !$inString; continue; }
-                if ($inString)                   { continue; }
-
-                if ($c === '{') {
-                    if ($depth === 0) { $objStart = $i; }
-                    $depth++;
-                } elseif ($c === '}') {
-                    $depth--;
-
-                    if ($depth === 0 && $objStart !== null) {
-                        $objJson = substr($buffer, $objStart, $i - $objStart + 1);
-                        $item    = json_decode($objJson, true);
-
-                        if (\is_array($item) && $item !== []) {
-                            $batch[] = $this->mapItem($item, $uf, $importedAt);
-
-                            if (count($batch) >= self::BATCH_SIZE) {
-                                $this->processBatch($batch);
-                                $batch = [];
-                                gc_collect_cycles();
-                            }
-                        }
-
-                        $out      = substr($buffer, $i + 1);
-                        $objStart = null;
-                    }
-                }
-            }
-
-            if ($objStart !== null) {
-                $buffer = substr($buffer, $objStart);
-            } elseif ($out !== '') {
-                $buffer = $out;
-            } elseif (strlen($buffer) > 256) {
-                $buffer = substr($buffer, -256);
-            }
+        if (!\is_array($items)) {
+            throw new \RuntimeException(
+                'JSON inválido ou formato inesperado (esperado array raiz). Erro: '
+                . json_last_error_msg()
+            );
         }
 
-        fclose($fh);
+        $batch = [];
+
+        foreach ($items as $item) {
+            if (!\is_array($item) || $item === []) {
+                continue;
+            }
+
+            $batch[] = $this->mapItem($item, $uf, $importedAt);
+
+            if (count($batch) >= self::BATCH_SIZE) {
+                $this->processBatch($batch);
+                $batch = [];
+                gc_collect_cycles();
+            }
+        }
 
         if ($batch !== []) {
             $this->processBatch($batch);
@@ -183,7 +159,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Mapeamento
+    // Mapeamento item → linha BD
     // -------------------------------------------------------------------------
 
     private function mapItem(array $item, string $uf, string $importedAt): array
@@ -245,7 +221,7 @@ final class ImportRadarMedidoresHandler
             $existing = $existingByIdentity[$row['identity_hash']] ?? null;
 
             if ($existing === null) {
-                $toInsert[] = $row;               // <-- linha corrigida (sem o [] duplicado)
+                $toInsert[] = $row;
             } else {
                 $row['_db_id'] = $existing['id'];
                 $toUpdate[]    = $row;
@@ -353,13 +329,15 @@ final class ImportRadarMedidoresHandler
             $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';
         }
 
-        $sql = sprintf(
-            'INSERT IGNORE INTO radar_medidor (%s) VALUES %s',
-            implode(', ', self::RADAR_INSERT_COLS),
-            implode(', ', $placeholders)
+        $this->connection->executeStatement(
+            sprintf(
+                'INSERT IGNORE INTO radar_medidor (%s) VALUES %s',
+                implode(', ', self::RADAR_INSERT_COLS),
+                implode(', ', $placeholders)
+            ),
+            $params,
+            $types
         );
-
-        $this->connection->executeStatement($sql, $params, $types);
     }
 
     // -------------------------------------------------------------------------
@@ -404,7 +382,9 @@ final class ImportRadarMedidoresHandler
         );
 
         foreach ($faixas as $faixa) {
-            if (!\is_array($faixa)) { continue; }
+            if (!\is_array($faixa)) {
+                continue;
+            }
 
             $this->connection->executeStatement(
                 'INSERT INTO radar_faixa
@@ -430,7 +410,9 @@ final class ImportRadarMedidoresHandler
         );
 
         foreach ($historico as $h) {
-            if (!\is_array($h)) { continue; }
+            if (!\is_array($h)) {
+                continue;
+            }
 
             $this->connection->executeStatement(
                 'INSERT INTO radar_historico

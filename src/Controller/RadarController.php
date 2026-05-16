@@ -169,14 +169,30 @@ final class RadarController extends AbstractController
             [$id]
         ) ?: null;
 
-        $wazeErrors  = [];
-        $wazeFormData = [];
+        // Histórico de alterações do link Waze
+        $wazeLog = [];
+        if ($wazeLink) {
+            $wazeLog = $this->db->fetchAllAssociative(
+                'SELECT wll.*, u.email AS changed_by_email
+                 FROM radar_waze_link_log wll
+                 JOIN user u ON u.id = wll.changed_by
+                 WHERE wll.radar_waze_link_id = ?
+                 ORDER BY wll.changed_at DESC',
+                [$wazeLink['id']]
+            );
+        }
+
+        // Recupera erros/dados de formulário que vieram de um redirect
+        $session      = $req->getSession();
+        $wazeErrors   = $session->remove('_waze_errors_' . $id) ?? [];
+        $wazeFormData = $session->remove('_waze_form_'   . $id) ?? [];
 
         return $this->render('radar/show.html.twig', [
             'radar'        => $radar,
             'faixas'       => $faixas,
             'historico'    => $historico,
             'wazeLink'     => $wazeLink,
+            'wazeLog'      => $wazeLog,
             'wazeErrors'   => $wazeErrors,
             'wazeFormData' => $wazeFormData,
         ]);
@@ -189,7 +205,9 @@ final class RadarController extends AbstractController
     #[Route('/{id}/waze-salvar', name: 'waze_save', requirements: ['id' => '\\d+'], methods: ['POST'])]
     public function wazeSave(int $id, Request $req): Response
     {
-        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
+        // IS_AUTHENTICATED_REMEMBERED permite acesso via remember-me cookie
+        // (IS_AUTHENTICATED_FULLY bloqueava usuários autenticados por cookie)
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
 
         if (!$this->isCsrfTokenValid('waze_save_' . $id, $req->request->get('_token'))) {
             $this->addFlash('error', 'Token de segurança inválido.');
@@ -230,10 +248,9 @@ final class RadarController extends AbstractController
         }
 
         if ($errors !== []) {
-            // Repassa os erros para o show via flash de dados (usa sessão)
             $req->getSession()->set('_waze_errors_' . $id, $errors);
             $req->getSession()->set('_waze_form_'   . $id, [
-                'waze_link'     => $wazeLink,
+                'waze_link'      => $wazeLink,
                 'motivo_revisao' => $motivoRevisao,
             ]);
             return $this->redirectToRoute('radar_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
@@ -258,7 +275,7 @@ final class RadarController extends AbstractController
                     'INSERT INTO radar_waze_link_log
                      (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, motivo, changed_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [$existing['id'], $userId, 'motivo_revisao', null, $motivoRevisao, $motivoRevisao, $now]
+                    [$existing['id'], $userId, 'motivo_revisao', $existing['observacao'] ?? null, $motivoRevisao, $motivoRevisao, $now]
                 );
             }
 
@@ -271,11 +288,22 @@ final class RadarController extends AbstractController
 
             $this->addFlash('success', 'Link Waze atualizado com sucesso.');
         } else {
+            // Primeiro cadastro
             $this->db->executeStatement(
                 'INSERT INTO radar_waze_link
                  (radar_medidor_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
                 [$id, $wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now]
+            );
+
+            $newId = (int) $this->db->lastInsertId();
+
+            // Registra log de criação para aparecer no histórico
+            $this->db->executeStatement(
+                'INSERT INTO radar_waze_link_log
+                 (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, motivo, changed_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [$newId, $userId, 'waze_link', null, $wazeLink, 'Cadastro inicial', $now]
             );
 
             $this->addFlash('success', 'Link Waze cadastrado com sucesso.');

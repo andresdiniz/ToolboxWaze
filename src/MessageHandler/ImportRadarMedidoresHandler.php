@@ -12,14 +12,14 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 /**
  * Importa medidores RBMLQ de um estado com diff incremental.
  *
- * O arquivo JSON por UF pode chegar a 17MB+ (ex: SP).
- * Usamos json_decode direto no conteúdo do arquivo — mais simples e 100% correto.
- * Para 17MB de JSON o pico de RAM é ~80-100MB, aceitável em qualquer VPS.
+ * SP tem 17MB de JSON (~5 mil registros). Usamos json_decode direto no arquivo
+ * e positional params (?) nos INSERTs para manter o consumo de RAM baixo.
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
 {
-    private const BATCH_SIZE   = 200;
+    /** Linhas por INSERT em lote. 50 = ~900 params por query, seguro para qualquer PHP. */
+    private const BATCH_SIZE   = 50;
     private const CURL_TIMEOUT = 600;
 
     private const RADAR_INSERT_COLS = [
@@ -115,8 +115,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Parse: lê o arquivo inteiro e usa json_decode
-    // Para SP (17MB) o pico de RAM é ~80-100MB — seguro em qualquer VPS.
+    // Parse: json_decode direto no arquivo completo
     // -------------------------------------------------------------------------
 
     private function processFile(string $path, string $uf, string $importedAt): void
@@ -128,7 +127,7 @@ final class ImportRadarMedidoresHandler
         }
 
         $items = json_decode($content, true);
-        unset($content); // libera RAM imediatamente após o decode
+        unset($content);
 
         if (!\is_array($items)) {
             throw new \RuntimeException(
@@ -307,66 +306,48 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // INSERT IGNORE em lote
+    // INSERT IGNORE em lote — positional params (?) para RAM baixa
+    // 50 linhas × 18 colunas = 900 params por query, bem dentro dos limites.
     // -------------------------------------------------------------------------
 
     private function insertBatch(array $rows): void
     {
-        $placeholders = [];
+        $cols         = self::RADAR_INSERT_COLS;
+        $colCount     = count($cols);
+        $rowHolder    = '(' . implode(',', array_fill(0, $colCount, '?')) . ')';
+        $placeholders = implode(',', array_fill(0, count($rows), $rowHolder));
         $params       = [];
-        $types        = [];
 
-        foreach ($rows as $i => $row) {
-            $rowPlaceholders = [];
-
-            foreach (self::RADAR_INSERT_COLS as $col) {
-                $key               = $col . '_' . $i;
-                $rowPlaceholders[] = ':' . $key;
-                $params[$key]      = $row[$col] ?? null;
-                $types[$key]       = ParameterType::STRING;
+        foreach ($rows as $row) {
+            foreach ($cols as $col) {
+                $params[] = $row[$col] ?? null;
             }
-
-            $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';
         }
 
         $this->connection->executeStatement(
             sprintf(
                 'INSERT IGNORE INTO radar_medidor (%s) VALUES %s',
-                implode(', ', self::RADAR_INSERT_COLS),
-                implode(', ', $placeholders)
+                implode(',', $cols),
+                $placeholders
             ),
-            $params,
-            $types
+            $params
         );
     }
 
     // -------------------------------------------------------------------------
-    // UPDATE individual
+    // UPDATE individual (positional params)
     // -------------------------------------------------------------------------
 
     private function updateRadar(array $row): void
     {
-        $setParts = [];
-        $params   = [];
-        $types    = [];
-
-        foreach (self::RADAR_UPDATE_COLS as $col) {
-            $setParts[]   = "{$col} = :{$col}";
-            $params[$col] = $row[$col] ?? null;
-            $types[$col]  = ParameterType::STRING;
-        }
-
-        $setParts[]         = 'row_hash = :row_hash';
-        $params['row_hash'] = $row['row_hash'];
-        $types['row_hash']  = ParameterType::STRING;
-
-        $params['_id'] = $row['_db_id'];
-        $types['_id']  = ParameterType::INTEGER;
+        $cols     = array_merge(self::RADAR_UPDATE_COLS, ['row_hash']);
+        $setParts = array_map(fn(string $c) => "{$c} = ?", $cols);
+        $params   = array_map(fn(string $c) => $row[$c] ?? null, $cols);
+        $params[] = $row['_db_id'];
 
         $this->connection->executeStatement(
-            sprintf('UPDATE radar_medidor SET %s WHERE id = :_id', implode(', ', $setParts)),
-            $params,
-            $types
+            sprintf('UPDATE radar_medidor SET %s WHERE id = ?', implode(', ', $setParts)),
+            $params
         );
     }
 

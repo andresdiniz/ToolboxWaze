@@ -88,10 +88,10 @@ HELP);
 
         $io->title('ToolboxWaze — Envio de E-mail de Teste');
         $io->definitionList(
-            ['De'       => $from],
-            ['Para'     => $to],
-            ['Assunto'  => $subject],
-            ['DSN'      => $this->maskDsn($_ENV['MAILER_DSN'] ?? '(não definido)')],
+            ['De'      => $from],
+            ['Para'    => $to],
+            ['Assunto' => $subject],
+            ['DSN'     => $this->maskDsn($_ENV['MAILER_DSN'] ?? '(não definido)')],
         );
 
         $sentAt = new \DateTimeImmutable();
@@ -213,10 +213,11 @@ HELP);
 
     /**
      * Oculta a senha no DSN para exibição segura no terminal.
-     * smtp://user:SENHA@host:port → smtp://user:***@host:port
+     * smtp://user:SENHA@host:port -> smtp://user:***@host:port
      */
     private function maskDsn(string $dsn): string
     {
-        return preg_replace('/(:/\/[^:]+:)([^@]+)(@)/', '$1***$3', $dsn) ?? $dsn;
+        // Usa # como delimitador para evitar conflito com as barras do DSN
+        return preg_replace('#(://[^:]+:)([^@]+)(@)#', '$1***$3', $dsn) ?? $dsn;
     }
 }

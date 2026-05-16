@@ -16,14 +16,9 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  *   1. Calcula row_hash (SHA-256 do JSON bruto do item) para cada linha.
  *   2. Consulta o banco: quais desses row_hashes JÁ existem?
  *      → Idênticos: zero escrita (skip total).
- *      → Ausentes no banco: INSERT (novo radar).
+ *      → Ausentes no banco: INSERT IGNORE (novo radar; IGNORE evita race condition entre estados).
  *      → identity_hash existe mas row_hash diferente: UPDATE (radar mudou).
  *   3. Faixas e histórico só são recriados para radares que de fato mudaram.
- *
- * Resultado:
- *   - Primeira importação: insere tudo.
- *   - Reimportações: só toca nas linhas que mudaram ou são novas.
- *   - Radares sem nenhuma alteração: zero queries de escrita.
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
@@ -229,52 +224,34 @@ final class ImportRadarMedidoresHandler
     // Lote com diff incremental
     // -------------------------------------------------------------------------
 
-    /**
-     * Ponto central do diff incremental.
-     *
-     * Para cada lote:
-     *   - Busca no banco os row_hashes JÁ existentes.
-     *   - Separa o lote em:
-     *       $toInsert  → identity_hash nunca visto antes (novo radar)
-     *       $toUpdate  → identity_hash existe mas row_hash mudou (radar alterado)
-     *       skip       → row_hash igual ao que já está no banco (sem mudança)
-     */
     private function processBatch(array $rows): void
     {
-        // 1. Coleta todos os row_hashes e identity_hashes do lote
         $rowHashes      = array_column($rows, 'row_hash');
         $identityHashes = array_column($rows, 'identity_hash');
 
-        // 2. Busca no banco quais row_hashes já existem (= dado idêntico, skip)
-        $existingRowHashes = $this->fetchExistingRowHashes($rowHashes);
-
-        // 3. Busca no banco quais identity_hashes já existem e seus row_hashes atuais
-        //    [ identity_hash => ['id' => int, 'row_hash' => string] ]
+        $existingRowHashes  = $this->fetchExistingRowHashes($rowHashes);
         $existingByIdentity = $this->fetchExistingByIdentity($identityHashes);
 
         $toInsert = [];
         $toUpdate = [];
 
         foreach ($rows as $row) {
-            // row_hash idêntico ao banco → dado não mudou → pula
             if (\in_array($row['row_hash'], $existingRowHashes, true)) {
-                continue;
+                continue; // idêntico ao banco → skip
             }
 
             $existing = $existingByIdentity[$row['identity_hash']] ?? null;
 
             if ($existing === null) {
-                // Nunca visto → INSERT
                 $toInsert[] = $row;
             } else {
-                // Mesma identidade, hash diferente → UPDATE
                 $row['_db_id'] = $existing['id'];
                 $toUpdate[]    = $row;
             }
         }
 
         if ($toInsert === [] && $toUpdate === []) {
-            return; // lote inteiro sem mudanças
+            return;
         }
 
         $this->connection->beginTransaction();
@@ -288,7 +265,6 @@ final class ImportRadarMedidoresHandler
                 $this->updateRadar($row);
             }
 
-            // Sincroniza faixas/histórico apenas para quem mudou
             $changed = array_merge($toInsert, $toUpdate);
             foreach ($changed as $row) {
                 $radarId = $row['_db_id'] ?? $this->findIdByRowHash($row['row_hash']);
@@ -312,13 +288,7 @@ final class ImportRadarMedidoresHandler
     // Queries de diff
     // -------------------------------------------------------------------------
 
-    /**
-     * Retorna os row_hashes do lote que JÁ existem no banco.
-     * Esses registros estão idênticos → skip total.
-     *
-     * @param  string[] $rowHashes
-     * @return string[]
-     */
+    /** @return string[] */
     private function fetchExistingRowHashes(array $rowHashes): array
     {
         if ($rowHashes === []) {
@@ -335,13 +305,7 @@ final class ImportRadarMedidoresHandler
         return array_column($rows, 'row_hash');
     }
 
-    /**
-     * Retorna os registros do banco cujo identity_hash está no lote.
-     * Usado para diferenciar INSERT (novo) de UPDATE (alterado).
-     *
-     * @param  string[] $identityHashes
-     * @return array<string, array{id: int, row_hash: string}>
-     */
+    /** @return array<string, array{id: int, row_hash: string}> */
     private function fetchExistingByIdentity(array $identityHashes): array
     {
         if ($identityHashes === []) {
@@ -367,7 +331,9 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // INSERT em lote (novos radares)
+    // INSERT IGNORE em lote (novos radares)
+    // INSERT IGNORE evita erro de duplicate entry em caso de race condition
+    // entre estados sendo processados em paralelo com radares compartilhados.
     // -------------------------------------------------------------------------
 
     private function insertBatch(array $rows): void
@@ -390,7 +356,7 @@ final class ImportRadarMedidoresHandler
         }
 
         $sql = sprintf(
-            'INSERT INTO radar_medidor (%s) VALUES %s',
+            'INSERT IGNORE INTO radar_medidor (%s) VALUES %s',
             implode(', ', self::RADAR_INSERT_COLS),
             implode(', ', $placeholders)
         );
@@ -402,10 +368,6 @@ final class ImportRadarMedidoresHandler
     // UPDATE individual (radar alterado)
     // -------------------------------------------------------------------------
 
-    /**
-     * Atualiza apenas as colunas que podem mudar, identificando a linha pelo id
-     * que já temos do banco. Mais preciso e seguro do que ON DUPLICATE KEY.
-     */
     private function updateRadar(array $row): void
     {
         $setParts = [];
@@ -418,7 +380,6 @@ final class ImportRadarMedidoresHandler
             $types[$col]  = ParameterType::STRING;
         }
 
-        // Atualiza também o row_hash para refletir a nova versão
         $setParts[]         = 'row_hash = :row_hash';
         $params['row_hash'] = $row['row_hash'];
         $types['row_hash']  = ParameterType::STRING;
@@ -435,7 +396,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Sync faixas e histórico (só para radares que mudaram)
+    // Sync faixas e histórico
     // -------------------------------------------------------------------------
 
     private function syncFaixas(int $radarId, array $faixas): void
@@ -497,7 +458,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Helpers de lookup
+    // Helpers
     // -------------------------------------------------------------------------
 
     private function findIdByRowHash(string $rowHash): ?int
@@ -510,10 +471,6 @@ final class ImportRadarMedidoresHandler
         return $result !== false ? (int) $result : null;
     }
 
-    // -------------------------------------------------------------------------
-    // Hashes
-    // -------------------------------------------------------------------------
-
     private function buildIdentityHash(array $item, string $uf): string
     {
         $parts = [
@@ -524,10 +481,6 @@ final class ImportRadarMedidoresHandler
 
         return hash('sha256', implode('|', $parts));
     }
-
-    // -------------------------------------------------------------------------
-    // str() helper
-    // -------------------------------------------------------------------------
 
     private function str(mixed $value): ?string
     {

@@ -1,0 +1,116 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width: 760px">
+
+    <div class="d-flex align-items-center mb-4 gap-2">
+        <a href="{{ path('admin_waze_link_index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h1 class="h4 mb-0">
+            <i class="fas fa-map-marked-alt me-2 text-primary"></i>{{ title }}
+        </h1>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" action="{{ action }}" novalidate>
+
+                {# Radar #}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Radar <span class="text-danger">*</span></label>
+                    {% if isEdit %}
+                        <input type="text" class="form-control" value="{{ radarLabel }}" disabled>
+                    {% else %}
+                        <select name="radar_medidor_id"
+                                class="form-select {{ errors.radar is defined ? 'is-invalid' : '' }}"
+                                required>
+                            <option value="">Selecione o radar…</option>
+                            {% for r in radares %}
+                                <option value="{{ r.id }}"
+                                    {{ r.id == radarId ? 'selected' : '' }}>
+                                    {{ r.municipio }}/{{ r.sigla_uf }} — {{ r.local_verificacao }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if errors.radar is defined %}
+                            <div class="invalid-feedback">{{ errors.radar }}</div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                {# Link Waze #}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        Link do Editor Waze <span class="text-danger">*</span>
+                    </label>
+                    <input type="url" name="waze_link" value="{{ wazeLink }}"
+                           class="form-control font-monospace {{ errors.waze_link is defined ? 'is-invalid' : '' }}"
+                           placeholder="https://waze.com/pt-BR/editor?env=row&…&permanentHazards=272464"
+                           required>
+                    {% if errors.waze_link is defined %}
+                        <div class="invalid-feedback">{{ errors.waze_link }}</div>
+                    {% else %}
+                        <div class="form-text">
+                            O link deve conter o parâmetro
+                            <code>permanentHazards=&lt;número&gt;</code>.<br>
+                            Exemplo:
+                            <code class="text-break">https://waze.com/pt-BR/editor?env=row&amp;lat=-20.597&amp;lon=-43.798&amp;zoomLevel=16&amp;permanentHazards=272464</code>
+                        </div>
+                    {% endif %}
+                </div>
+
+                {# Preview do link em tempo real #}
+                <div id="link-preview" class="alert alert-info d-none mb-3">
+                    <i class="fas fa-map me-2"></i>
+                    Hazard ID detectado: <strong id="hazard-id-preview"></strong>
+                    — <a id="link-preview-href" href="#" target="_blank" rel="noopener">Abrir no Waze Editor ↗</a>
+                </div>
+
+                {# Observação #}
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Observação <span class="text-muted fw-normal">(opcional)</span></label>
+                    <textarea name="observacao" class="form-control" rows="3"
+                              placeholder="Informações adicionais sobre este radar no Waze…">{{ observacao }}</textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>
+                        {{ isEdit ? 'Salvar alterações' : 'Cadastrar link' }}
+                    </button>
+                    <a href="{{ path('admin_waze_link_index') }}" class="btn btn-outline-secondary">Cancelar</a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    const input   = document.querySelector('input[name="waze_link"]');
+    const preview = document.getElementById('link-preview');
+    const hazardEl = document.getElementById('hazard-id-preview');
+    const linkEl   = document.getElementById('link-preview-href');
+
+    function update() {
+        const url = input.value.trim();
+        const m   = url.match(/[?&]permanentHazards=(\d+)/);
+        if (m) {
+            hazardEl.textContent = m[1];
+            linkEl.href = url;
+            preview.classList.remove('d-none');
+        } else {
+            preview.classList.add('d-none');
+        }
+    }
+
+    input.addEventListener('input', update);
+    update();
+}());
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Histórico — Link Waze #{{ link.id }}{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex align-items-center mb-4 gap-2">
+        <a href="{{ path('admin_waze_link_index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h1 class="h4 mb-0">
+            <i class="fas fa-history me-2 text-info"></i>
+            Histórico de Alterações — Link Waze #{{ link.id }}
+        </h1>
+    </div>
+
+    {# Card: estado atual do link #}
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-map-marker-alt me-2"></i>
+            {{ link.radarMedidor.municipio }}/{{ link.radarMedidor.siglaUf }}
+            — {{ link.radarMedidor.localVerificacao }}
+        </div>
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-7">
+                    <div class="mb-1">
+                        <span class="text-muted small">Link atual:</span><br>
+                        <a href="{{ link.wazeLink }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary mt-1">
+                            <i class="fas fa-map me-1"></i> Abrir Editor Waze
+                            — Hazard <strong>#{{ link.permanentHazardId }}</strong>
+                        </a>
+                    </div>
+                    {% if link.observacao %}
+                    <div class="mt-2 text-muted small">
+                        <i class="fas fa-comment-alt me-1"></i>{{ link.observacao }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-5 text-md-end mt-2 mt-md-0">
+                    <small class="text-muted d-block">
+                        <i class="fas fa-user-plus me-1"></i>
+                        Inserido por <strong>{{ link.insertedBy.email }}</strong>
+                        em {{ link.insertedAt|date('d/m/Y H:i') }}
+                    </small>
+                    {% if link.updatedAt %}
+                    <small class="text-warning d-block mt-1">
+                        <i class="fas fa-edit me-1"></i>
+                        Última edição por <strong>{{ link.updatedBy.email }}</strong>
+                        em {{ link.updatedAt|date('d/m/Y H:i') }}
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <a href="{{ path('admin_waze_link_edit', {id: link.id}) }}" class="btn btn-sm btn-warning">
+                <i class="fas fa-pen me-1"></i> Editar este link
+            </a>
+        </div>
+    </div>
+
+    {# Tabela de logs #}
+    {% if logs is empty %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Nenhuma alteração registrada ainda.
+        </div>
+    {% else %}
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <i class="fas fa-history me-2"></i>
+            {{ logs|length }} alteração(s) registrada(s)
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="text-nowrap">Data/Hora</th>
+                        <th>Usuário</th>
+                        <th>Campo</th>
+                        <th>Valor anterior</th>
+                        <th>Novo valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="text-nowrap small">{{ log.changed_at|date('d/m/Y H:i:s') }}</td>
+                        <td class="small">{{ log.changed_by }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ log.campo_alterado }}</span>
+                        </td>
+                        <td class="text-danger small">
+                            {% if log.campo_alterado == 'waze_link' and log.valor_anterior %}
+                                <a href="{{ log.valor_anterior }}" target="_blank" rel="noopener"
+                                   class="text-danger text-decoration-line-through">
+                                    {{ log.valor_anterior|u.truncate(70, '…') }}
+                                </a>
+                            {% else %}
+                                {{ log.valor_anterior|default('—')|u.truncate(90, '…') }}
+                            {% endif %}
+                        </td>
+                        <td class="text-success small">
+                            {% if log.campo_alterado == 'waze_link' and log.valor_novo %}
+                                <a href="{{ log.valor_novo }}" target="_blank" rel="noopener"
+                                   class="text-success">
+                                    {{ log.valor_novo|u.truncate(70, '…') }}
+                                </a>
+                            {% else %}
+                                {{ log.valor_novo|default('—')|u.truncate(90, '…') }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

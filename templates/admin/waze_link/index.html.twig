@@ -1,0 +1,142 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Links do Editor Waze{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-map-marked-alt me-2 text-primary"></i>
+            Links do Editor Waze
+        </h1>
+        <a href="{{ path('admin_waze_link_new') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Novo Link
+        </a>
+    </div>
+
+    {% for type, messages in app.flashes %}
+        {% for msg in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show">
+                {{ msg }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    {# Busca #}
+    <form method="get" class="row g-2 mb-4">
+        <div class="col-md-6">
+            <div class="input-group">
+                <input type="text" name="q" value="{{ search }}" class="form-control"
+                       placeholder="Buscar por município, local, link ou ID hazard…">
+                <button class="btn btn-outline-secondary" type="submit">
+                    <i class="fas fa-search"></i>
+                </button>
+                {% if search %}
+                    <a href="{{ path('admin_waze_link_index') }}" class="btn btn-outline-danger">
+                        <i class="fas fa-times"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-auto">
+            <span class="badge bg-secondary fs-6 py-2 px-3">
+                {{ total }} registro(s)
+            </span>
+        </div>
+    </form>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Radar</th>
+                        <th>Link Waze</th>
+                        <th>Hazard ID</th>
+                        <th>Observação</th>
+                        <th>Inserido por</th>
+                        <th>Data</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td class="text-muted small">{{ row.id }}</td>
+                        <td>
+                            <strong>{{ row.municipio }}/{{ row.sigla_uf }}</strong><br>
+                            <small class="text-muted">{{ row.local_verificacao }}</small>
+                        </td>
+                        <td>
+                            <a href="{{ row.waze_link }}" target="_blank" rel="noopener"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-map me-1"></i> Abrir Editor
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-info text-dark">#{{ row.permanent_hazard_id }}</span>
+                        </td>
+                        <td class="small text-muted">
+                            {{ row.observacao|default('—')|u.truncate(50, '…') }}
+                        </td>
+                        <td class="small">{{ row.inserted_by_email }}</td>
+                        <td class="small text-nowrap">
+                            {{ row.inserted_at|date('d/m/Y H:i') }}
+                            {% if row.updated_at %}
+                                <br><span class="text-warning">editado {{ row.updated_at|date('d/m/Y H:i') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center text-nowrap">
+                            <a href="{{ path('admin_waze_link_edit', {id: row.id}) }}"
+                               class="btn btn-sm btn-warning" title="Editar">
+                                <i class="fas fa-pen"></i>
+                            </a>
+                            <a href="{{ path('admin_waze_link_historico', {id: row.id}) }}"
+                               class="btn btn-sm btn-info" title="Histórico">
+                                <i class="fas fa-history"></i>
+                            </a>
+                            <form method="post"
+                                  action="{{ path('admin_waze_link_delete', {id: row.id}) }}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('Excluir este link?')">
+                                <input type="hidden" name="_token"
+                                       value="{{ csrf_token('delete_waze_link_' ~ row.id) }}">
+                                <button class="btn btn-sm btn-danger" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="fas fa-map-marked-alt fa-2x mb-2 d-block opacity-25"></i>
+                            Nenhum link cadastrado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Paginação #}
+        {% if pages > 1 %}
+        <div class="card-footer d-flex justify-content-center">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% for p in 1..pages %}
+                    <li class="page-item {{ p == page ? 'active' : '' }}">
+                        <a class="page-link" href="{{ path('admin_waze_link_index', {page: p, q: search}) }}">{{ p }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

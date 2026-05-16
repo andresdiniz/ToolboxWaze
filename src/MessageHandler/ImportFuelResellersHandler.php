@@ -6,6 +6,7 @@ namespace App\MessageHandler;
 
 use App\Message\ImportFuelResellersMessage;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\ParameterType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -62,22 +63,18 @@ final class ImportFuelResellersHandler
                 throw new \RuntimeException('Não foi possível ler o cabeçalho do CSV.');
             }
 
-            $header      = $this->normalizeHeader($header);
-            $importedAt  = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-            $batch       = [];
-            $totalRows   = 0;
-            $skippedRows = 0;
+            $header     = $this->normalizeHeader($header);
+            $importedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+            $batch      = [];
 
             foreach ($this->streamRows($handle, $header) as $data) {
                 $row = $this->mapToColumns($data, $importedAt);
 
                 if ($row === null) {
-                    ++$skippedRows;
                     continue;
                 }
 
                 $batch[] = $row;
-                ++$totalRows;
 
                 if (count($batch) >= self::BATCH_SIZE) {
                     $this->insertBatch($batch);
@@ -89,7 +86,6 @@ final class ImportFuelResellersHandler
             if ($batch !== []) {
                 $this->insertBatch($batch);
             }
-
         } finally {
             fclose($handle);
         }
@@ -99,6 +95,7 @@ final class ImportFuelResellersHandler
      * Generator que produz arrays normalizados linha a linha — nunca acumula tudo em memória.
      *
      * @param resource $handle
+     *
      * @return \Generator<array<string, string|null>>
      */
     private function streamRows($handle, array $header): \Generator
@@ -110,8 +107,7 @@ final class ImportFuelResellersHandler
                 continue;
             }
 
-            $row = $this->normalizeRowColumnCount($row, $headerCount);
-
+            $row  = $this->normalizeRowColumnCount($row, $headerCount);
             $data = array_combine($header, $row);
 
             if ($data === false) {
@@ -127,11 +123,11 @@ final class ImportFuelResellersHandler
      * Retorna null se a linha não tiver ao menos CNPJ ou código ISIMP.
      *
      * @param array<string, string|null> $data
+     *
      * @return array<string, string|null>|null
      */
     private function mapToColumns(array $data, string $importedAt): ?array
     {
-        // Linhas completamente sem identificação são descartadas
         if (($data['CNPJ'] ?? null) === null && ($data['CODIGOISIMP'] ?? null) === null) {
             return null;
         }
@@ -159,8 +155,10 @@ final class ImportFuelResellersHandler
     }
 
     /**
-     * Executa INSERT em lote usando parâmetros nomeados via DBAL.
+     * Executa INSERT em lote via DBAL com parâmetros tipados (ParameterType::STRING).
      * Usa transação por lote para garantir atomicidade.
+     *
+     * DBAL 3+ exige Doctrine\DBAL\ParameterType em vez de PDO::PARAM_*.
      *
      * @param list<array<string, string|null>> $rows
      */
@@ -178,10 +176,12 @@ final class ImportFuelResellersHandler
             $rowPlaceholders = [];
 
             foreach (self::COLUMNS as $col) {
-                $key                = $col . '_' . $i;
-                $rowPlaceholders[]  = ':' . $key;
-                $params[$key]       = $row[$col] ?? null;
-                $types[$key]        = \PDO::PARAM_STR;
+                $key               = $col . '_' . $i;
+                $rowPlaceholders[] = ':' . $key;
+                $params[$key]      = $row[$col] ?? null;
+                // ParameterType::STRING é o tipo correto para DBAL 3+
+                // Aceita tanto strings quanto null (o driver trata null como SQL NULL)
+                $types[$key]       = ParameterType::STRING;
             }
 
             $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';

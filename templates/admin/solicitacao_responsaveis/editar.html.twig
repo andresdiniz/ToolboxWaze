@@ -1,0 +1,171 @@
+{% extends 'base.html.twig' %}
+{% block title %}Editar Responsáveis — {{ label }}{% endblock %}
+
+{% block stylesheets %}
+<style>
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: .5rem;
+  margin-top: .5rem;
+}
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .55rem .8rem;
+  border: 1.5px solid #e2e5ea;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  background: #fff;
+  user-select: none;
+}
+.check-item:hover { border-color: #0077b5; background: #f0f7ff; }
+.check-item input[type=checkbox] { width: 1rem; height: 1rem; accent-color: #0077b5; flex-shrink: 0; }
+.check-item.checked {
+  border-color: #0077b5;
+  background: #e8f3fb;
+}
+.check-item .user-name { font-size: .87rem; font-weight: 500; color: #1e293b; }
+.check-item .user-email { font-size: .75rem; color: #6b7280; }
+.search-box {
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  padding: .45rem .85rem;
+  font-size: .875rem;
+  width: 100%;
+  margin-bottom: .75rem;
+  transition: border-color .18s, box-shadow .18s;
+}
+.search-box:focus {
+  outline: none;
+  border-color: #0077b5;
+  box-shadow: 0 0 0 3px rgba(0,119,181,.15);
+}
+.btn-salvar {
+  background: #0077b5; color: #fff; border: none;
+  border-radius: 8px; padding: .55rem 2rem;
+  font-weight: 600; font-size: .9rem;
+  transition: background .18s;
+}
+.btn-salvar:hover { background: #005c8e; }
+.btn-voltar {
+  background: transparent; color: #5a6478;
+  border: 1px solid #d1d5db; border-radius: 8px;
+  padding: .5rem 1.2rem; font-size: .875rem;
+  text-decoration: none; transition: background .15s;
+}
+.btn-voltar:hover { background: #f3f6fb; color: #374151; }
+.header-tipo {
+  display: inline-flex; align-items: center; gap: .45rem;
+  background: #e8f3fb; color: #0055a0;
+  border-radius: 8px; padding: .35rem .9rem;
+  font-size: .85rem; font-weight: 600;
+}
+.counter { font-size: .8rem; color: #6b7280; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width: 720px">
+
+  <div class="mb-3">
+    <a href="{{ path('admin_sol_responsaveis_index') }}" class="btn-voltar">
+      <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+  </div>
+
+  <div class="mb-4">
+    <h4 class="fw-bold mb-1">👥 Responsáveis por tipo</h4>
+    <span class="header-tipo">
+      <i class="bi bi-{{ {
+        'imagem_satelite':     'globe',
+        'gerente_area':        'map',
+        'gerente_estado_pais': 'flag',
+        'nivel':              'bar-chart',
+        'oops':               'exclamation-triangle',
+        'bandeira_posto':     'fuel-pump',
+        'id_segmento':        'signpost-2'
+      }[tipo] ?? 'circle' }}"></i>
+      {{ label }}
+    </span>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+
+      {{ form_start(form, {attr: {id: 'form-responsaveis'}}) }}
+
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <label class="fw-semibold mb-0">Selecione os usuários aprovados</label>
+        <span class="counter" id="counter">0 selecionado(s)</span>
+      </div>
+
+      <input type="text" class="search-box" id="busca-usuario"
+             placeholder="🔍 Filtrar por nome ou e-mail…" autocomplete="off">
+
+      {#
+        O Symfony gera os checkboxes via form_widget;
+        envolvemos cada label+input numa div .check-item para estilo interativo.
+      #}
+      <div class="check-grid" id="check-grid">
+        {% for child in form.responsaveis %}
+          {% set uid = child.vars.id %}
+          {% set checked = child.vars.checked %}
+          {% set name = child.vars.label %}
+          {% set email = child.vars.attr['data-email'] ?? '' %}
+          <label class="check-item{{ checked ? ' checked' : '' }}" for="{{ uid }}">
+            {{ form_widget(child) }}
+            <span>
+              <span class="user-name d-block">{{ name }}</span>
+              <span class="user-email">{{ email }}</span>
+            </span>
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="d-flex justify-content-end gap-2 mt-4">
+        <a href="{{ path('admin_sol_responsaveis_index') }}" class="btn-voltar">Cancelar</a>
+        <button type="submit" class="btn-salvar">
+          <i class="bi bi-check-lg me-1"></i> Salvar alterações
+        </button>
+      </div>
+
+      {{ form_end(form) }}
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const grid    = document.getElementById('check-grid');
+  const busca   = document.getElementById('busca-usuario');
+  const counter = document.getElementById('counter');
+
+  function updateCounter() {
+    const n = grid.querySelectorAll('input[type=checkbox]:checked').length;
+    counter.textContent = n + ' selecionado(s)';
+  }
+
+  // Toggle visual .checked
+  grid.addEventListener('change', e => {
+    if (e.target.type === 'checkbox') {
+      e.target.closest('.check-item').classList.toggle('checked', e.target.checked);
+      updateCounter();
+    }
+  });
+
+  // Filtro por texto
+  busca.addEventListener('input', () => {
+    const q = busca.value.toLowerCase();
+    grid.querySelectorAll('.check-item').forEach(item => {
+      const txt = item.textContent.toLowerCase();
+      item.style.display = txt.includes(q) ? '' : 'none';
+    });
+  });
+
+  updateCounter();
+})();
+</script>
+{% endblock %}

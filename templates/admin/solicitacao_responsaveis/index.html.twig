@@ -1,0 +1,151 @@
+{% extends 'base.html.twig' %}
+{% block title %}Responsáveis por Tipo de Solicitação{% endblock %}
+
+{% block stylesheets %}
+<style>
+.resp-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.resp-table thead tr th {
+  background: #f3f6fb;
+  border-bottom: 2px solid #dee2e8;
+  padding: .65rem 1rem;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #5a6478;
+  white-space: nowrap;
+}
+.resp-table tbody tr {
+  border-bottom: 1px solid #f0f2f5;
+  transition: background .14s;
+}
+.resp-table tbody tr:hover { background: #f8fafc; }
+.resp-table td { padding: .7rem 1rem; vertical-align: middle; font-size: .875rem; }
+.tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  background: #e8f3fb;
+  color: #0055a0;
+  border-radius: 6px;
+  padding: .25rem .65rem;
+  font-size: .78rem;
+  font-weight: 600;
+}
+.avatar-stack { display: flex; flex-wrap: wrap; gap: .3rem; }
+.avatar-chip {
+  background: #f0f4f8;
+  border: 1px solid #d1dbe8;
+  border-radius: 20px;
+  padding: .2rem .6rem;
+  font-size: .75rem;
+  color: #374151;
+  white-space: nowrap;
+}
+.empty-resp { color: #adb5bd; font-size: .82rem; font-style: italic; }
+.btn-edit {
+  background: #0077b5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: .3rem .85rem;
+  font-size: .8rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.btn-edit:hover { background: #005c8e; color: #fff; }
+.btn-clear {
+  background: transparent;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+  border-radius: 6px;
+  padding: .28rem .75rem;
+  font-size: .78rem;
+  font-weight: 600;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.btn-clear:hover { background: #dc3545; color: #fff; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width: 900px">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-0">👥 Responsáveis por tipo de solicitação</h4>
+      <p class="text-muted small mt-1">Defina quais usuários recebem notificações e são listados como responsáveis de cada tipo.</p>
+    </div>
+  </div>
+
+  {% for msg in app.flashes('success') %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <i class="bi bi-check-circle me-1"></i> {{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <table class="resp-table">
+        <thead>
+          <tr>
+            <th style="width:30%">Tipo</th>
+            <th>Responsáveis atuais</th>
+            <th style="width:160px">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>
+              <span class="tipo-badge">
+                <i class="bi bi-{{ {
+                  'imagem_satelite':     'globe',
+                  'gerente_area':        'map',
+                  'gerente_estado_pais': 'flag',
+                  'nivel':              'bar-chart',
+                  'oops':               'exclamation-triangle',
+                  'bandeira_posto':     'fuel-pump',
+                  'id_segmento':        'signpost-2'
+                }[row.valor] ?? 'circle' }}"></i>
+                {{ row.label }}
+              </span>
+            </td>
+            <td>
+              {% if row.config and row.config.responsaveis|length > 0 %}
+                <div class="avatar-stack">
+                  {% for user in row.config.responsaveis %}
+                    <span class="avatar-chip" title="{{ user.email }}">
+                      {{ user.name ?: user.email }}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <span class="empty-resp">Nenhum responsável definido</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-2">
+                <a href="{{ path('admin_sol_responsaveis_editar', {tipo: row.valor}) }}" class="btn-edit">
+                  <i class="bi bi-pencil"></i> Editar
+                </a>
+                {% if row.config and row.config.responsaveis|length > 0 %}
+                <form method="post" action="{{ path('admin_sol_responsaveis_limpar', {tipo: row.valor}) }}"
+                      onsubmit="return confirm('Remover todos os responsáveis de \"{{ row.label }}\"?')">
+                  <input type="hidden" name="_token" value="{{ csrf_token('limpar_' ~ row.valor) }}">
+                  <button type="submit" class="btn-clear"><i class="bi bi-trash"></i></button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

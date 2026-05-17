@@ -10,19 +10,15 @@
     <title>Gerenciar Usuários — ToolboxWaze Admin</title>
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
     <style>
-        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--surface2:#f3f0ec;--border:#d4d1ca;--divider:#e8e5e0;--text:#28251d;--muted:#7a7974;--faint:#bab9b4;--primary:#01696f;--primary-h:#0c4e54;--primary-hl:color-mix(in oklab,#01696f 12%,transparent);--success:#437a22;--success-hl:color-mix(in oklab,#437a22 12%,transparent);--error:#a12c7b;--error-hl:color-mix(in oklab,#a12c7b 12%,transparent);--warning:#964219;--warning-hl:color-mix(in oklab,#964219 12%,transparent);--radius:.75rem;--shadow:0 2px 12px rgba(0,0,0,.07)}
-        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--surface2:#22211f;--border:#393836;--divider:#2a2927;--text:#cdccca;--muted:#797876;--faint:#5a5957;--primary:#4f98a3;--primary-h:#227f8b;--primary-hl:color-mix(in oklab,#4f98a3 15%,transparent);--success:#6daa45;--success-hl:color-mix(in oklab,#6daa45 15%,transparent);--error:#d163a7;--error-hl:color-mix(in oklab,#d163a7 15%,transparent);--warning:#bb653b;--warning-hl:color-mix(in oklab,#bb653b 15%,transparent)}
+        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--surface2:#f3f0ec;--border:#d4d1ca;--divider:#e8e5e0;--text:#28251d;--muted:#7a7974;--faint:#bab9b4;--primary:#01696f;--primary-h:#0c4e54;--primary-hl:color-mix(in oklab,#01696f 12%,transparent);--success:#437a22;--success-hl:color-mix(in oklab,#437a22 12%,transparent);--error:#a12c7b;--error-hl:color-mix(in oklab,#a12c7b 12%,transparent);--warning:#964219;--warning-hl:color-mix(in oklab,#964219 12%,transparent);--amber:#7a5c00;--amber-hl:color-mix(in oklab,#7a5c00 10%,transparent);--radius:.75rem;--shadow:0 2px 12px rgba(0,0,0,.07)}
+        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--surface2:#22211f;--border:#393836;--divider:#2a2927;--text:#cdccca;--muted:#797876;--faint:#5a5957;--primary:#4f98a3;--primary-h:#227f8b;--primary-hl:color-mix(in oklab,#4f98a3 15%,transparent);--success:#6daa45;--success-hl:color-mix(in oklab,#6daa45 15%,transparent);--error:#d163a7;--error-hl:color-mix(in oklab,#d163a7 15%,transparent);--warning:#bb653b;--warning-hl:color-mix(in oklab,#bb653b 15%,transparent);--amber:#c8960a;--amber-hl:color-mix(in oklab,#c8960a 15%,transparent)}
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html{-webkit-font-smoothing:antialiased}
         body{font-family:'Satoshi',sans-serif;font-size:1rem;color:var(--text);background:var(--bg);min-height:100dvh}
-
-        /* Layout */
         .page{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
         .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;gap:1rem;flex-wrap:wrap}
         .page-title{font-size:1.5rem;font-weight:700}
         .page-title span{color:var(--muted);font-size:.95rem;font-weight:400;margin-left:.5rem}
-
-        /* Tabs */
         .tabs{display:flex;gap:.25rem;border-bottom:1px solid var(--divider);margin-bottom:1.75rem}
         .tab-btn{padding:.6rem 1.2rem;border:none;background:none;color:var(--muted);font-size:.9rem;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.18s;font-family:inherit;border-radius:.4rem .4rem 0 0}
         .tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
@@ -32,14 +28,10 @@
         .tab-badge.approved{background:var(--success-hl);color:var(--success)}
         .tab-badge.rejected{background:var(--error-hl);color:var(--error)}
         .tab-panel{display:none}.tab-panel.active{display:block}
-
-        /* Flash */
         .flash{padding:.8rem 1rem;border-radius:.5rem;margin-bottom:1.25rem;font-size:.9rem;font-weight:500}
         .flash-success{background:var(--success-hl);color:var(--success)}
         .flash-warning{background:var(--warning-hl);color:var(--warning)}
         .flash-error{background:var(--error-hl);color:var(--error)}
-
-        /* User cards */
         .user-list{display:flex;flex-direction:column;gap:1rem}
         .user-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
         .user-card-header{display:flex;align-items:center;gap:1rem;padding:1rem 1.25rem;cursor:pointer;user-select:none}
@@ -55,13 +47,9 @@
         .badge-admin{background:var(--primary-hl);color:var(--primary)}
         .chevron{color:var(--faint);transition:transform .2s;flex-shrink:0}
         .user-card.open .chevron{transform:rotate(180deg)}
-
-        /* Expanded panel */
         .user-card-body{display:none;border-top:1px solid var(--divider);padding:1.25rem}
         .user-card.open .user-card-body{display:block}
         .section-label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-bottom:.75rem}
-
-        /* Permissions grid */
         .perms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem;margin-bottom:1.25rem}
         .perm-check{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;cursor:pointer;transition:.15s}
         .perm-check:hover{border-color:var(--primary);background:var(--primary-hl)}
@@ -71,7 +59,19 @@
         .admin-toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
         .admin-toggle label{font-size:.875rem;font-weight:600;color:var(--primary);cursor:pointer}
 
-        /* Actions */
+        /* Tipos de Solicitação */
+        .tipos-section{margin-top:1rem;margin-bottom:1.25rem}
+        .tipos-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem}
+        .tipos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.5rem}
+        .tipo-check{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;cursor:pointer;transition:.15s;background:var(--surface)}
+        .tipo-check:hover{border-color:var(--amber);background:var(--amber-hl)}
+        .tipo-check input{accent-color:var(--amber);width:15px;height:15px;cursor:pointer}
+        .tipo-check span{font-size:.85rem;font-weight:500}
+        .tipo-check.is-checked{border-color:var(--amber);background:var(--amber-hl)}
+        .all-tipos-toggle{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--muted);cursor:pointer;user-select:none}
+        .all-tipos-toggle input{accent-color:var(--amber);width:14px;height:14px;cursor:pointer}
+        .tipos-count{font-size:.78rem;color:var(--muted);margin-top:.45rem}
+
         .actions{display:flex;gap:.6rem;flex-wrap:wrap;padding-top:1rem;border-top:1px solid var(--divider);margin-top:1rem}
         .btn{padding:.55rem 1.1rem;border-radius:.5rem;font-size:.875rem;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:.18s;display:inline-flex;align-items:center;gap:.4rem}
         .btn-approve{background:var(--success);color:#fff}.btn-approve:hover{filter:brightness(.9)}
@@ -79,18 +79,11 @@
         .btn-save{background:var(--primary);color:#fff}.btn-save:hover{background:var(--primary-h)}
         .btn-delete{background:var(--error-hl);color:var(--error);border:1px solid var(--error)}.btn-delete:hover{background:var(--error);color:#fff}
         .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:var(--text)}
-
-        /* Dates info */
         .info-row{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.85rem;color:var(--muted)}
         .info-row strong{color:var(--text)}
-
-        /* Empty */
         .empty{text-align:center;padding:3rem 1rem;color:var(--muted)}
         .empty svg{margin:0 auto 1rem;color:var(--faint)}
-
-        /* Toggle */
         .theme-btn{position:fixed;top:1rem;right:1rem;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);z-index:100}
-
         @media(max-width:600px){.page{padding:1rem}.actions{gap:.4rem}.btn{padding:.5rem .8rem;font-size:.8rem}}
     </style>
 </head>
@@ -114,7 +107,6 @@
         {% endfor %}
     {% endfor %}
 
-    {# Tabs #}
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('pending',this)">
             Pendentes <span class="tab-badge pending">{{ pending|length }}</span>
@@ -126,6 +118,35 @@
             Rejeitados <span class="tab-badge rejected">{{ rejected|length }}</span>
         </button>
     </div>
+
+    {# Macro para o bloco de Tipos de Solicitação (reutilizado em pendentes e aprovados) #}
+    {% macro tiposBlock(user, allTipos, formPrefix) %}
+    <div class="tipos-section">
+        <div class="tipos-header">
+            <div class="section-label" style="margin-bottom:0">Tipos de Solicitação que pode tratar</div>
+            <label class="all-tipos-toggle">
+                <input type="checkbox" name="all_tipos" value="1"
+                    id="all_tipos_{{ user.id }}"
+                    {{ user.solicitacaoTipos is null ? 'checked' : '' }}
+                    onchange="toggleAllTipos({{ user.id }}, this.checked)">
+                Todos os tipos
+            </label>
+        </div>
+        <div class="tipos-grid" id="tipos_grid_{{ user.id }}"
+             style="margin-top:.6rem;{{ user.solicitacaoTipos is null ? 'opacity:.4;pointer-events:none' : '' }}">
+            {% for valor, label in allTipos %}
+            {% set checked = user.solicitacaoTipos is null or valor in (user.solicitacaoTipos ?? []) %}
+            <label class="tipo-check {{ checked ? 'is-checked' : '' }}" id="tlabel_{{ user.id }}_{{ valor }}">
+                <input type="checkbox" name="solicitacao_tipos[]" value="{{ valor }}"
+                    {{ checked ? 'checked' : '' }}
+                    onchange="this.closest('.tipo-check').classList.toggle('is-checked', this.checked)">
+                <span>{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <div class="tipos-count" id="tipos_count_{{ user.id }}"></div>
+    </div>
+    {% endmacro %}
 
     {# ===== PENDENTES ===== #}
     <div class="tab-panel active" id="tab-pending">
@@ -171,6 +192,8 @@
                         </label>
                         {% endfor %}
                     </div>
+
+                    {{ _self.tiposBlock(user, allTipos, 'pend') }}
 
                     <div class="actions">
                         <button type="submit" class="btn btn-approve">
@@ -243,6 +266,8 @@
                         {% endfor %}
                     </div>
 
+                    {{ _self.tiposBlock(user, allTipos, 'appr') }}
+
                     <div class="actions">
                         <button type="submit" class="btn btn-save">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -313,6 +338,39 @@ function switchTab(name, btn) {
 function toggleCard(id) {
     document.getElementById('card-' + id).classList.toggle('open');
 }
+function toggleAllTipos(userId, allChecked) {
+    const grid = document.getElementById('tipos_grid_' + userId);
+    grid.style.opacity = allChecked ? '.4' : '1';
+    grid.style.pointerEvents = allChecked ? 'none' : '';
+    if (allChecked) {
+        grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+            cb.checked = true;
+            cb.closest('.tipo-check').classList.add('is-checked');
+        });
+    }
+    updateTiposCount(userId);
+}
+function updateTiposCount(userId) {
+    const grid  = document.getElementById('tipos_grid_' + userId);
+    const all   = document.getElementById('all_tipos_' + userId);
+    const count = document.getElementById('tipos_count_' + userId);
+    if (!count) return;
+    if (all && all.checked) {
+        count.textContent = 'Todos os tipos habilitados';
+    } else {
+        const n = grid ? grid.querySelectorAll('input:checked').length : 0;
+        count.textContent = n + ' tipo(s) selecionado(s)';
+    }
+}
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[id^="tipos_grid_"]').forEach(grid => {
+        const uid = grid.id.replace('tipos_grid_', '');
+        updateTiposCount(uid);
+        grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+            cb.addEventListener('change', () => updateTiposCount(uid));
+        });
+    });
+});
 (function(){
     const t=document.querySelector('[data-theme-toggle]'),r=document.documentElement;
     let d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';

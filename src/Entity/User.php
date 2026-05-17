@@ -64,6 +64,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private array $permissions = [];
 
     /**
+     * Tipos de solicitação que este usuário pode receber/tratar.
+     * Array vazio = nenhum tipo. NULL = todos os tipos (admin herda automaticamente via isAdmin()).
+     *
+     * @var list<string>
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $solicitacaoTipos = [];
+
+    /**
      * UFs que o usuário tem permissão de acessar/editar.
      * Array vazio = nenhum estado (bloqueado).
      * NULL = todos os estados (apenas ROLE_ADMIN herda isso automaticamente via isAdmin()).
@@ -138,6 +147,31 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->isAdmin() || in_array($perm, $this->permissions, true);
     }
 
+    // ---- Tipos de Solicitação -----------------------------------------------
+
+    public function getSolicitacaoTipos(): ?array { return $this->solicitacaoTipos; }
+
+    public function setSolicitacaoTipos(?array $tipos): static
+    {
+        $this->solicitacaoTipos = $tipos !== null ? array_values(array_unique($tipos)) : null;
+        return $this;
+    }
+
+    /**
+     * Retorna true se o usuário pode tratar o tipo informado.
+     * Admins sempre podem. NULL = todos os tipos.
+     */
+    public function podeTratar(string $tipo): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+        if ($this->solicitacaoTipos === null) {
+            return true;
+        }
+        return in_array($tipo, $this->solicitacaoTipos, true);
+    }
+
     // ---- UF access control --------------------------------------------------
 
     public function getAllowedUfs(): ?array { return $this->allowedUfs; }
@@ -157,7 +191,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
             return true;
         }
         if ($this->allowedUfs === null) {
-            return true; // acesso total explícito
+            return true;
         }
         return in_array(strtoupper($uf), $this->allowedUfs, true);
     }
@@ -165,12 +199,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /**
      * Retorna os UFs permitidos para uso em queries SQL.
      * Admins e usuários com acesso total recebem null (sem restrição).
-     * Outros recebem o array de UFs ou [] se vazio.
      */
     public function getUfsForQuery(): ?array
     {
         if ($this->isAdmin() || $this->allowedUfs === null) {
-            return null; // sem filtro
+            return null;
         }
         return $this->allowedUfs;
     }

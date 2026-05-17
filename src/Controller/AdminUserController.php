@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Entity\Solicitacao;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -31,11 +32,12 @@ class AdminUserController extends AbstractController
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
         return $this->render('admin/users/index.html.twig', [
-            'pending'  => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
-            'approved' => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
-            'rejected' => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
-            'allPerms' => User::ALL_PERMISSIONS,
-            'allUfs'   => User::ALL_UFS,
+            'pending'   => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
+            'approved'  => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
+            'rejected'  => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
+            'allPerms'  => User::ALL_PERMISSIONS,
+            'allUfs'    => User::ALL_UFS,
+            'allTipos'  => Solicitacao::TIPOS,
         ]);
     }
 
@@ -62,11 +64,19 @@ class AdminUserController extends AbstractController
                 fn($v) => in_array($v, User::ALL_UFS, true)
               ));
 
+        $solicitacaoTipos = $request->request->getBoolean('all_tipos')
+            ? null
+            : array_values(array_filter(
+                (array) $request->request->all('solicitacao_tipos'),
+                fn($v) => array_key_exists($v, Solicitacao::TIPOS)
+              ));
+
         $user->setStatus(User::STATUS_APPROVED)
              ->setApprovedAt(new \DateTimeImmutable())
              ->setRoles($roles)
              ->setPermissions($permissions)
-             ->setAllowedUfs($allowedUfs);
+             ->setAllowedUfs($allowedUfs)
+             ->setSolicitacaoTipos($solicitacaoTipos);
 
         $this->em->flush();
 
@@ -145,9 +155,18 @@ class AdminUserController extends AbstractController
                 fn($v) => in_array($v, User::ALL_UFS, true)
               ));
 
+        $solicitacaoTipos = $request->request->getBoolean('all_tipos')
+            ? null
+            : array_values(array_filter(
+                (array) $request->request->all('solicitacao_tipos'),
+                fn($v) => array_key_exists($v, Solicitacao::TIPOS)
+              ));
+
         $user->setRoles($roles)
              ->setPermissions($permissions)
-             ->setAllowedUfs($allowedUfs);
+             ->setAllowedUfs($allowedUfs)
+             ->setSolicitacaoTipos($solicitacaoTipos);
+
         $this->em->flush();
 
         $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);

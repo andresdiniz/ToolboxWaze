@@ -10,6 +10,7 @@
         "doctrine/doctrine-bundle": "^2.18",
         "doctrine/doctrine-migrations-bundle": "^3.7",
         "doctrine/orm": "^3.6",
+        "easycorp/easyadmin-bundle": "*",
         "knpuniversity/oauth2-client-bundle": "^2.19",
         "league/oauth2-google": "^5.0",
         "phpdocumentor/reflection-docblock": "^6.0",

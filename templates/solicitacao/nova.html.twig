@@ -3,7 +3,6 @@
 
 {% block stylesheets %}
 <style>
-/* ── Cartão principal ────────────────────────────────────────── */
 .sol-card {
   background: #fff;
   border: 1px solid #e2e5ea;
@@ -27,8 +26,6 @@
 }
 .sol-card-header i { color: #0077b5; font-size: 1rem; }
 .sol-card-body { padding: 1.1rem 1.25rem; }
-
-/* ── Tipos de solicitação (pill cards) ───────────────────────── */
 .tipo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -66,14 +63,8 @@
 .tipo-pill.active .tipo-icon { background: #0077b5; color: #fff; }
 .tipo-pill .tipo-label { font-size: .82rem; font-weight: 500; color: #374151; line-height: 1.3; }
 .tipo-pill.active .tipo-label { color: #0055a0; font-weight: 600; }
-
-/* ── Área de campos dinâmicos ────────────────────────────────── */
-#campos-dinamicos {
-  transition: opacity .22s ease;
-}
+#campos-dinamicos { transition: opacity .22s ease; }
 #campos-dinamicos.loading { opacity: .4; pointer-events: none; }
-
-/* ── Spinner ─────────────────────────────────────────────────── */
 #campos-spinner {
   display: none;
   justify-content: center;
@@ -84,8 +75,6 @@
   font-size: .9rem;
 }
 #campos-spinner.show { display: flex; }
-
-/* ── Campos do form ─────────────────────────────────────────── */
 .sol-card-body .form-label { font-weight: 500; font-size: .875rem; margin-bottom: .3rem; }
 .sol-card-body .form-control,
 .sol-card-body .form-select {
@@ -99,7 +88,6 @@
   border-color: #0077b5;
   box-shadow: 0 0 0 3px rgba(0,119,181,.15);
 }
-/* Botão enviar */
 .btn-enviar {
   background: #0077b5;
   color: #fff;
@@ -112,8 +100,6 @@
 }
 .btn-enviar:hover { background: #005c8e; box-shadow: 0 3px 10px rgba(0,119,181,.25); }
 .btn-enviar:disabled { background: #a0c4d8; cursor: not-allowed; }
-
-/* Animação fade-in dos campos dinâmicos */
 @keyframes fadeSlideIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -124,7 +110,6 @@
 
 {% block body %}
 <div class="container py-4" style="max-width:780px">
-
   <div class="mb-4">
     <h4 class="fw-bold mb-0">📋 Formulário de Solicitações</h4>
     <p class="text-muted small mt-1">Escolha o tipo, preencha os dados e envie. Responderemos por e-mail.</p>
@@ -133,7 +118,6 @@
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
-  {# ── 1. Dados do solicitante ───────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-person"></i> Seus dados</div>
     <div class="sol-card-body">
@@ -145,28 +129,24 @@
     </div>
   </div>
 
-  {# ── 2. Escolha do tipo (pills visuais) ───────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
     <div class="sol-card-body">
-
-      {# select oculto real do Symfony #}
       {{ form_widget(form.tipo, {attr: {id: 'tipo-select', class: 'd-none', 'aria-hidden': 'true'}}) }}
       {{ form_widget(form.estado, {attr: {id: 'estado-select'}}) }}
       {{ form_errors(form.tipo) }}
-
       <div class="tipo-grid mt-3" id="tipo-pills">
         {% set iconMap = {
-          'imagem_satelite':     {'icon': 'bi-globe',        'label': 'Imagem de Satélite'},
-          'gerente_area':        {'icon': 'bi-map',          'label': 'Gerente de Área'},
-          'gerente_estado_pais': {'icon': 'bi-flag',         'label': 'Gerente de Estado/País'},
-          'nivel':               {'icon': 'bi-bar-chart',    'label': 'Nível'},
-          'oops':                {'icon': 'bi-exclamation-triangle', 'label': 'Oops'},
-          'bandeira_posto':      {'icon': 'bi-fuel-pump',   'label': 'Bandeira de Posto'},
-          'id_segmento':         {'icon': 'bi-signpost-2',  'label': 'ID de Segmento'}
+          'imagem_satelite':     {'icon': 'bi-globe',                 'label': 'Imagem de Satélite'},
+          'gerente_area':        {'icon': 'bi-map',                   'label': 'Gerente de Área'},
+          'gerente_estado_pais': {'icon': 'bi-flag',                  'label': 'Gerente de Estado/País'},
+          'nivel':               {'icon': 'bi-bar-chart',             'label': 'Nível'},
+          'oops':                {'icon': 'bi-exclamation-triangle',  'label': 'Oops'},
+          'bandeira_posto':      {'icon': 'bi-fuel-pump',             'label': 'Bandeira de Posto'},
+          'id_segmento':         {'icon': 'bi-signpost-2',            'label': 'ID de Segmento'}
         } %}
         {% for valor, info in iconMap %}
-          <div class="tipo-pill" data-value="{{ valor }}" tabindex="0" role="button" aria-pressed="false">
+          <div class="tipo-pill{% if tipoAtual == valor %} active{% endif %}" data-value="{{ valor }}" tabindex="0" role="button" aria-pressed="{{ tipoAtual == valor ? 'true' : 'false' }}">
             <span class="tipo-icon"><i class="bi {{ info.icon }}"></i></span>
             <span class="tipo-label">{{ info.label }}</span>
           </div>
@@ -175,7 +155,6 @@
     </div>
   </div>
 
-  {# ── 3. Campos dinâmicos ────────────────────────────────────── #}
   <div id="campos-spinner"><div class="spinner-border spinner-border-sm" role="status"></div> Carregando campos…</div>
 
   <div id="campos-dinamicos">
@@ -187,8 +166,7 @@
       {% endif %}
     {% endfor %}
 
-    {# upload de provas para Oops #}
-    <div id="bloco-oops" class="sol-card campo-animado {{ form.vars.data.tipo is defined and form.vars.data.tipo == 'oops' ? '' : 'd-none' }}">
+    <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
       <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
       <div class="sol-card-body">
         <label class="form-label">Compartilhe provas <span class="text-muted">(até 5 imagens, 1 MB cada)</span></label>
@@ -198,7 +176,7 @@
   </div>
 
   <div class="d-flex justify-content-end mt-2 mb-4">
-    <button type="submit" class="btn-enviar" id="btn-enviar" disabled>
+    <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
       <i class="bi bi-send me-1"></i> Enviar solicitação
     </button>
   </div>
@@ -208,26 +186,21 @@
 
 <script>
 (function () {
-  const tipoSelect  = document.getElementById('tipo-select');
-  const pills       = document.querySelectorAll('.tipo-pill');
-  const dinamicos   = document.getElementById('campos-dinamicos');
-  const spinner     = document.getElementById('campos-spinner');
-  const btnEnviar   = document.getElementById('btn-enviar');
-  const blocoOops   = document.getElementById('bloco-oops');
-  const formEl      = document.getElementById('form-solicitacao');
+  const tipoSelect = document.getElementById('tipo-select');
+  const pills      = document.querySelectorAll('.tipo-pill');
+  const dinamicos  = document.getElementById('campos-dinamicos');
+  const spinner    = document.getElementById('campos-spinner');
+  const btnEnviar  = document.getElementById('btn-enviar');
 
-  // Restaura pill ativa se há tipo já escolhido (ex: recarregar com erro)
-  const tipoAtual = tipoSelect.value;
-  if (tipoAtual) activatePill(tipoAtual);
-
-  // Clique nas pills
   pills.forEach(pill => {
     pill.addEventListener('click', () => chooseTipo(pill.dataset.value));
-    pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); } });
+    pill.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); }
+    });
   });
 
   function chooseTipo(valor) {
-    if (tipoSelect.value === valor) return; // já selecionado, não refaz
+    if (tipoSelect.value === valor) return;
     tipoSelect.value = valor;
     activatePill(valor);
     fetchCampos(valor);
@@ -235,9 +208,9 @@
 
   function activatePill(valor) {
     pills.forEach(p => {
-      const isActive = p.dataset.value === valor;
-      p.classList.toggle('active', isActive);
-      p.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      const on = p.dataset.value === valor;
+      p.classList.toggle('active', on);
+      p.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     btnEnviar.disabled = !valor;
   }
@@ -245,45 +218,29 @@
   function fetchCampos(tipo) {
     spinner.classList.add('show');
     dinamicos.classList.add('loading');
-
-    // Constrói URL com tipo + estado atual
     const estadoVal = document.getElementById('estado-select')?.value ?? '';
     const url = new URL(window.location.href);
     url.searchParams.set('_ajax_tipo', tipo);
     url.searchParams.set('_ajax_estado', estadoVal);
-
-    fetch(url.toString(), {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(r => r.text())
-    .then(html => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const novosCampos = doc.getElementById('campos-dinamicos');
-      if (novosCampos) {
-        dinamicos.innerHTML = novosCampos.innerHTML;
-        // Anima os novos campos
-        dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
-          el.style.animationDelay = (i * 0.05) + 's';
-          el.classList.add('campo-animado');
-        });
-      }
-    })
-    .catch(() => {
-      // Fallback silencioso — campos podem já estar no DOM se PRE_SET_DATA rodou
-    })
-    .finally(() => {
-      spinner.classList.remove('show');
-      dinamicos.classList.remove('loading');
-    });
+    fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.text())
+      .then(html => {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const novos = doc.getElementById('campos-dinamicos');
+        if (novos) {
+          dinamicos.innerHTML = novos.innerHTML;
+          dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
+            el.style.animationDelay = (i * 0.05) + 's';
+            el.classList.add('campo-animado');
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        spinner.classList.remove('show');
+        dinamicos.classList.remove('loading');
+      });
   }
-
-  // Atualiza bloco-oops ao trocar tipo (também no fallback)
-  document.addEventListener('change', e => {
-    if (e.target === tipoSelect && blocoOops) {
-      blocoOops.classList.toggle('d-none', tipoSelect.value !== 'oops');
-    }
-  });
 })();
 </script>
 {% endblock %}

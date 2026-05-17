@@ -22,28 +22,33 @@ class SolicitacaoController extends AbstractController
     public function nova(Request $request): Response
     {
         $solicitacao = new Solicitacao();
+        $tipoAtual   = null;
 
         // Suporte ao AJAX de pré-visualização de campos dinâmicos
         $ajaxTipo = $request->query->get('_ajax_tipo');
-        if ($ajaxTipo && $request->isXmlHttpRequest()) {
-            try { $solicitacao->setTipo($ajaxTipo); } catch (\Throwable) {}
+        if ($ajaxTipo) {
+            try {
+                $solicitacao->setTipo($ajaxTipo);
+                $tipoAtual = $ajaxTipo;
+            } catch (\Throwable) {}
         }
 
         $form = $this->createForm(SolicitacaoType::class, $solicitacao);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // Coleta todos os campos mapeados com prefixo dados_
+            // Resolve tipoAtual para o template de confirmação
+            try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
+
             $dados = [];
             foreach ($form->all() as $fieldName => $field) {
                 if (str_starts_with($fieldName, 'dados_')) {
-                    $key = substr($fieldName, 6); // remove 'dados_'
-                    $dados[$key] = $field->getData();
+                    $dados[substr($fieldName, 6)] = $field->getData();
                 }
             }
             $solicitacao->setDados($dados);
 
-            if ($solicitacao->getTipo() === Solicitacao::TIPO_OOPS) {
+            if ($tipoAtual === Solicitacao::TIPO_OOPS) {
                 $arquivos = $request->files->get('arquivos_oops', []);
                 $nomes = [];
                 foreach ((array) $arquivos as $file) {
@@ -57,11 +62,19 @@ class SolicitacaoController extends AbstractController
             }
 
             $this->solicitacaoService->criar($solicitacao);
-            $this->addFlash('success', 'Solicita\u00e7\u00e3o enviada com sucesso! Voc\u00ea receber\u00e1 uma confirma\u00e7\u00e3o por e-mail.');
+            $this->addFlash('success', 'Solicitação enviada com sucesso! Você receberá uma confirmação por e-mail.');
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
-        return $this->render('solicitacao/nova.html.twig', ['form' => $form]);
+        // Recupera tipoAtual do form já submetido com erro (reexibição)
+        if ($form->isSubmitted() && !$form->isValid()) {
+            try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) { $tipoAtual = null; }
+        }
+
+        return $this->render('solicitacao/nova.html.twig', [
+            'form'      => $form,
+            'tipoAtual' => $tipoAtual,
+        ]);
     }
 
     #[Route('/confirmacao/{id}', name: 'solicitacao_confirmacao')]
@@ -95,10 +108,10 @@ class SolicitacaoController extends AbstractController
     {
         $this->denyAccessUnlessGranted('SOLICITACAO_RESOLVER', $solicitacao);
         if (!$this->isCsrfTokenValid('resolver_' . $solicitacao->getId(), $request->request->get('_token'))) {
-            throw $this->createAccessDeniedException('Token inv\u00e1lido.');
+            throw $this->createAccessDeniedException('Token inválido.');
         }
         $this->solicitacaoService->resolver($solicitacao, $this->getUser(), $request->request->get('nota'));
-        $this->addFlash('success', 'Solicita\u00e7\u00e3o marcada como resolvida.');
+        $this->addFlash('success', 'Solicitação marcada como resolvida.');
         return $this->redirectToRoute('solicitacao_pendencias');
     }
 }

@@ -4,34 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ToolboxWaze{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <style>
-        :root { --tw: #01696f; --tw-d: #0c4e54; --tw-border: #d4d1ca; --tw-surface: #f7f6f2; }
-        body { background: var(--tw-surface); font-size:.9375rem; }
-        .navbar { background: var(--tw) !important; }
-        .navbar-brand, .nav-link { color:#fff !important; }
-        .nav-link:hover, .nav-link.active { opacity:.8; }
-        .card { border-color: var(--tw-border); }
-        .badge-aprovado  { background:#198754; }
-        .badge-reprovado { background:#dc3545; }
-        .badge-uf { background:var(--tw); font-size:.7rem; }
-        .stat-card { border-left:3px solid var(--tw); }
-        .stat-card .stat-value { font-size:1.75rem; font-weight:700; color:var(--tw); }
-        .filters-form .form-select, .filters-form .form-control { font-size:.875rem; }
-        .page-link { color:var(--tw); }
-        .page-item.active .page-link { background:var(--tw); border-color:var(--tw); }
-        .btn-primary { background:var(--tw); border-color:var(--tw); }
-        .btn-primary:hover { background:var(--tw-d); border-color:var(--tw-d); }
-        .btn-outline-primary { color:var(--tw); border-color:var(--tw); }
-        .btn-outline-primary:hover { background:var(--tw); border-color:var(--tw); }
-        .detail-label { font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; color:#6c757d; }
-        .detail-value { font-size:.9375rem; font-weight:500; }
-        .row-link:hover td { background:#f0f5f5; cursor:pointer; }
-        .avatar-sm { width:32px; height:32px; border-radius:50%; object-fit:cover; }
-        .user-menu .dropdown-toggle::after { display:none; }
-        .navbar-pending-badge { position:absolute; top:-4px; right:-4px; background:#dc3545; color:#fff; border-radius:50%; width:16px; height:16px; font-size:.6rem; display:flex; align-items:center; justify-content:center; }
-    </style>
+
+    {#
+      Bootstrap CSS + Bootstrap Icons são importados via assets/styles/app.css
+      gerenciado pelo Symfony AssetMapper — sem dependência de CDN externa.
+    #}
+    {{ importmap('app') }}
+
     {% block stylesheets %}{% endblock %}
 </head>
 <body>
@@ -39,28 +18,38 @@
 <nav class="navbar navbar-expand-lg mb-4 shadow-sm">
     <div class="container-xl">
         <a class="navbar-brand fw-bold" href="{{ path('app_dashboard') }}">
-            <i class="bi bi-map me-1"></i> ToolboxWaze
+            {# SVG logo inline — funciona em qualquer ambiente sem CDN #}
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2"
+                 aria-label="ToolboxWaze" style="vertical-align:-.25em;margin-right:.35em">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/>
+                <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
+            </svg>
+            ToolboxWaze
         </a>
-        <button class="navbar-toggler bg-white" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+        <button class="navbar-toggler bg-white" type="button"
+                data-bs-toggle="collapse" data-bs-target="#nav"
+                aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav me-auto gap-1">
                 <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/radares' %}active fw-semibold{% endif %}"
+                    <a class="nav-link {% if app.request.pathInfo starts with '/radares' %}active{% endif %}"
                        href="{{ path('radar_index') }}">
                         <i class="bi bi-camera-video me-1"></i>Radares
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/postos' %}active fw-semibold{% endif %}"
+                    <a class="nav-link {% if app.request.pathInfo starts with '/postos' %}active{% endif %}"
                        href="{{ path('posto_index') }}">
                         <i class="bi bi-fuel-pump me-1"></i>Postos
                     </a>
                 </li>
                 {% if is_granted('ROLE_ADMIN') %}
                 <li class="nav-item position-relative">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active fw-semibold{% endif %}"
+                    <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active{% endif %}"
                        href="{{ path('admin_users_index') }}">
                         <i class="bi bi-people me-1"></i>Usuários
                     </a>
@@ -74,9 +63,10 @@
                     <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#"
                        data-bs-toggle="dropdown" aria-expanded="false">
                         {% if app.user.avatarUrl %}
-                            <img src="{{ app.user.avatarUrl }}" class="avatar-sm" alt="">
+                            <img src="{{ app.user.avatarUrl }}" class="avatar-sm" alt="" loading="lazy">
                         {% else %}
-                            <div class="avatar-sm bg-white text-success d-flex align-items-center justify-content-center fw-bold" style="font-size:.8rem">
+                            <div class="avatar-sm bg-white text-success d-flex align-items-center justify-content-center fw-bold"
+                                 style="font-size:.8rem">
                                 {{ app.user.name|first|upper }}
                             </div>
                         {% endif %}
@@ -105,18 +95,17 @@
 </nav>
 
 <div class="container-xl pb-5">
-    {% for label, messages in app.flashes(['success','warning','danger','info']) %}
+    {% for label, messages in app.flashes(['success','warning','danger','info','error']) %}
         {% for msg in messages %}
-            <div class="alert alert-{{ label }} alert-dismissible py-2 mb-3" role="alert">
+            <div class="alert alert-{{ label == 'error' ? 'danger' : label }} alert-dismissible py-2 mb-3" role="alert">
                 {{ msg }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
             </div>
         {% endfor %}
     {% endfor %}
     {% block body %}{% endblock %}
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 {% block javascripts %}{% endblock %}
 </body>
 </html>

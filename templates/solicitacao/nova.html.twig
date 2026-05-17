@@ -25,16 +25,6 @@
   gap: .45rem;
 }
 .sol-card-header i { color: #0077b5; font-size: 1rem; }
-.sol-card-header .badge-admin {
-  margin-left: auto;
-  background: #fff3cd;
-  color: #856404;
-  font-size: .7rem;
-  border-radius: 4px;
-  padding: 2px 7px;
-  font-weight: 600;
-  letter-spacing: .02em;
-}
 .sol-card-body { padding: 1.1rem 1.25rem; }
 .tipo-grid {
   display: grid;
@@ -115,17 +105,6 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 .campo-animado { animation: fadeSlideIn .28s ease both; }
-/* Bloco admin */
-.sol-card.admin-only {
-  border-color: #ffc107;
-  background: #fffdf4;
-}
-.sol-card.admin-only .sol-card-header {
-  background: #fff8e1;
-  border-bottom-color: #ffc107;
-  color: #7a5c00;
-}
-.sol-card.admin-only .sol-card-header i { color: #e6a800; }
 </style>
 {% endblock %}
 
@@ -181,21 +160,7 @@
     </div>
   </div>
 
-  {# ── 3. [ADMIN ONLY] Responsáveis por tipo ──────────────── #}
-  {% if isAdmin %}
-  <div class="sol-card admin-only">
-    <div class="sol-card-header">
-      <i class="bi bi-people"></i> Responsáveis pela solicitação
-      <span class="badge-admin">🔒 Admin</span>
-    </div>
-    <div class="sol-card-body">
-      <p class="text-muted small mb-2">Selecione os usuários que serão vinculados como responsáveis. Segure <kbd>Ctrl</kbd> para múltipla seleção.</p>
-      {{ form_row(form.responsaveis) }}
-    </div>
-  </div>
-  {% endif %}
-
-  {# ── 4. Campos dinâmicos (AJAX) ────────────────────────────── #}
+  {# ── 3. Campos dinâmicos (AJAX) ────────────────────────────── #}
   <div id="campos-spinner">
     <div class="spinner-border spinner-border-sm" role="status"></div> Carregando campos…
   </div>

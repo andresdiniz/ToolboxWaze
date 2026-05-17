@@ -21,7 +21,6 @@ class SolicitacaoController extends AbstractController
     #[Route('/nova', name: 'solicitacao_nova', methods: ['GET', 'POST'])]
     public function nova(Request $request): Response
     {
-        $isAdmin     = $this->isGranted('ROLE_ADMIN');
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
@@ -34,9 +33,7 @@ class SolicitacaoController extends AbstractController
             } catch (\Throwable) {}
         }
 
-        $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-            'is_admin' => $isAdmin,
-        ]);
+        $form = $this->createForm(SolicitacaoType::class, $solicitacao);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -75,7 +72,6 @@ class SolicitacaoController extends AbstractController
         return $this->render('solicitacao/nova.html.twig', [
             'form'      => $form,
             'tipoAtual' => $tipoAtual,
-            'isAdmin'   => $isAdmin,
         ]);
     }
 

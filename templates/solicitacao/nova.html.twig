@@ -27,10 +27,12 @@
     </div>
 
     <div id="campos-dinamicos">
-      {% for field in form if field.vars.name starts with 'dados[' %}
-        <div class="card shadow-sm mb-3">
-          <div class="card-body">{{ form_row(field) }}</div>
-        </div>
+      {% for field in form %}
+        {% if field.vars.name starts with 'dados[' %}
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">{{ form_row(field) }}</div>
+          </div>
+        {% endif %}
       {% endfor %}
     </div>
 
@@ -38,7 +40,7 @@
       <div class="card-header fw-semibold">Provas (imagens)</div>
       <div class="card-body">
         <label class="form-label">Compartilhe provas <small class="text-muted">(até 5 imagens, 1 MB cada)</small></label>
-        <input type="file" name="arquivos_oops[]" class="form-control" accept="image/*" multiple max="5">
+        <input type="file" name="arquivos_oops[]" class="form-control" accept="image/*" multiple>
       </div>
     </div>
 

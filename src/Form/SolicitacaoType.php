@@ -55,21 +55,15 @@ class SolicitacaoType extends AbstractType
 
         $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) {
             $solicitacao = $event->getData();
-            // $tipo pode não estar inicializado quando o form é criado do zero
             $tipo = null;
             if ($solicitacao instanceof Solicitacao) {
-                try {
-                    $tipo = $solicitacao->getTipo();
-                } catch (\Error) {
-                    $tipo = null;
-                }
+                try { $tipo = $solicitacao->getTipo(); } catch (\Error) { $tipo = null; }
             }
             $this->addDadosDinamicos($event->getForm(), $tipo);
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) {
-            $data = $event->getData();
-            $tipo = $data['tipo'] ?? null;
+            $tipo = $event->getData()['tipo'] ?? null;
             $this->addDadosDinamicos($event->getForm(), $tipo);
         });
     }
@@ -91,7 +85,7 @@ class SolicitacaoType extends AbstractType
     private function addCamposImagemSatelite(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados[motivo]', ChoiceType::class, [
+            ->add('dados_motivo', ChoiceType::class, [
                 'label' => 'Motivo da solicitação', 'mapped' => false,
                 'choices' => [
                     'A imagem com maior resolução é muito antiga' => 'muito_antiga',
@@ -101,17 +95,17 @@ class SolicitacaoType extends AbstractType
                 ],
                 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[idadeImagem]', ChoiceType::class, [
+            ->add('dados_idadeImagem', ChoiceType::class, [
                 'label' => 'Quão antiga pode ser a imagem atualizada?', 'mapped' => false,
                 'choices' => ['1 ano' => '1_ano', '6 meses' => '6_meses', '1 mês' => '1_mes', '1 semana' => '1_semana'],
                 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[urgente]', ChoiceType::class, [
+            ->add('dados_urgente', ChoiceType::class, [
                 'label' => 'É urgente?', 'mapped' => false,
                 'choices' => ['Sim' => 'sim', 'Não' => 'nao'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[permalink]', TextType::class, [
+            ->add('dados_permalink', TextType::class, [
                 'label' => 'Permalink (zoom ≥ 15)', 'mapped' => false,
                 'constraints' => [
                     new Assert\NotBlank(),
@@ -123,9 +117,9 @@ class SolicitacaoType extends AbstractType
     private function addCamposGerenteArea(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados[mentor]', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
-            ->add('dados[recomendadores]', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
-            ->add('dados[poligono]', TextareaType::class, [
+            ->add('dados_mentor', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
+            ->add('dados_recomendadores', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
+            ->add('dados_poligono', TextareaType::class, [
                 'label' => 'Polígono da área', 'mapped' => false, 'attr' => ['rows' => 4],
                 'constraints' => [
                     new Assert\NotBlank(),
@@ -135,55 +129,55 @@ class SolicitacaoType extends AbstractType
                     ]),
                 ],
             ])
-            ->add('dados[comunicouIntencao]', CheckboxType::class, [
+            ->add('dados_comunicouIntencao', CheckboxType::class, [
                 'label' => 'Comuniquei minha intenção no Discuss do Estado', 'mapped' => false, 'required' => true,
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
             ])
-            ->add('dados[comentarios]', TextareaType::class, ['label' => 'Comentários', 'mapped' => false, 'required' => false]);
+            ->add('dados_comentarios', TextareaType::class, ['label' => 'Comentários', 'mapped' => false, 'required' => false]);
     }
 
     private function addCamposGerenteEstadoPais(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados[acao]', ChoiceType::class, [
+            ->add('dados_acao', ChoiceType::class, [
                 'label' => 'Você deseja…', 'mapped' => false,
                 'choices' => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[mentor]', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
-            ->add('dados[recomendadores]', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
-            ->add('dados[cargo]', ChoiceType::class, [
+            ->add('dados_mentor', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
+            ->add('dados_recomendadores', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
+            ->add('dados_cargo', ChoiceType::class, [
                 'label' => 'Cargo desejado', 'mapped' => false,
                 'choices' => ['Gerente de Estado' => 'gerente_estado', 'Gerente de País' => 'gerente_pais'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[comentarios]', TextareaType::class, ['label' => 'Comentários', 'mapped' => false, 'required' => false]);
+            ->add('dados_comentarios', TextareaType::class, ['label' => 'Comentários', 'mapped' => false, 'required' => false]);
     }
 
     private function addCamposNivel(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados[tipoNivel]', ChoiceType::class, [
+            ->add('dados_tipoNivel', ChoiceType::class, [
                 'label' => 'É um pedido de…', 'mapped' => false,
                 'choices' => ['Upgrade' => 'upgrade', 'Downgrade' => 'downgrade'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[mentor]', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
-            ->add('dados[recomendadores]', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
-            ->add('dados[nivelAtual]', TextType::class, [
+            ->add('dados_mentor', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
+            ->add('dados_recomendadores', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
+            ->add('dados_nivelAtual', TextType::class, [
                 'label' => 'Nível atual (1–5)', 'mapped' => false,
                 'constraints' => [new Assert\NotBlank(), new Assert\Range(['min' => 1, 'max' => 5])],
             ])
-            ->add('dados[nivelDesejado]', TextType::class, [
+            ->add('dados_nivelDesejado', TextType::class, [
                 'label' => 'Nível desejado (2–6)', 'mapped' => false,
                 'constraints' => [new Assert\NotBlank(), new Assert\Range(['min' => 2, 'max' => 6])],
             ])
-            ->add('dados[ativo]', ChoiceType::class, [
+            ->add('dados_ativo', ChoiceType::class, [
                 'label' => 'Você se considera ativo na comunidade?', 'mapped' => false,
                 'choices' => ['Sim' => 'sim', 'Não' => 'nao'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[postagens]', ChoiceType::class, [
+            ->add('dados_postagens', ChoiceType::class, [
                 'label' => 'Quantas postagens no Discuss (último ano)?', 'mapped' => false,
                 'choices' => [
                     'Entre 1 e 5' => '1_5', 'Entre 6 e 10' => '6_10', 'Entre 11 e 20' => '11_20',
@@ -191,11 +185,11 @@ class SolicitacaoType extends AbstractType
                 ],
                 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[motivacao]', TextareaType::class, [
+            ->add('dados_motivacao', TextareaType::class, [
                 'label' => 'O que te motiva a subir de nível?', 'mapped' => false,
                 'constraints' => [new Assert\NotBlank(), new Assert\Length(['min' => 20])],
             ])
-            ->add('dados[cumpriuRequisitos]', ChoiceType::class, [
+            ->add('dados_cumpriuRequisitos', ChoiceType::class, [
                 'label' => 'Você cumpre os requisitos para essa promoção?', 'mapped' => false,
                 'choices' => ['Sim' => 'sim', 'Não' => 'nao'],
                 'expanded' => true,
@@ -209,12 +203,12 @@ class SolicitacaoType extends AbstractType
     private function addCamposOops(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados[editorNome]', TextType::class, [
+            ->add('dados_editorNome', TextType::class, [
                 'label' => 'Nome do editor que cometeu o Oops', 'mapped' => false,
                 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[permalink]', TextType::class, ['label' => 'Permalink do WME', 'mapped' => false, 'required' => false])
-            ->add('dados[descricao]', TextareaType::class, [
+            ->add('dados_permalink', TextType::class, ['label' => 'Permalink do WME', 'mapped' => false, 'required' => false])
+            ->add('dados_descricao', TextareaType::class, [
                 'label' => 'Fundamente as regras infringidas e descreva os fatos', 'mapped' => false, 'attr' => ['rows' => 5],
                 'constraints' => [new Assert\NotBlank(), new Assert\Length(['min' => 30])],
             ]);
@@ -223,16 +217,16 @@ class SolicitacaoType extends AbstractType
     private function addCamposBandeiraPosto(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados[acao]', ChoiceType::class, [
+            ->add('dados_acao', ChoiceType::class, [
                 'label' => 'Você deseja…', 'mapped' => false,
                 'choices' => ['Adicionar' => 'adicionar', 'Remover' => 'remover'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[nomeBandeira]', TextType::class, [
+            ->add('dados_nomeBandeira', TextType::class, [
                 'label' => 'Nome da bandeira', 'mapped' => false,
                 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[cnpj]', TextType::class, [
+            ->add('dados_cnpj', TextType::class, [
                 'label' => 'CNPJ de um posto ativo com cadastro atualizado', 'mapped' => false, 'required' => false,
                 'constraints' => [
                     new Assert\Regex(['pattern' => '/^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/', 'message' => 'CNPJ inválido']),
@@ -243,11 +237,11 @@ class SolicitacaoType extends AbstractType
     private function addCamposIdSegmento(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados[nomeSegmento]', TextType::class, [
+            ->add('dados_nomeSegmento', TextType::class, [
                 'label' => 'Nome do segmento (conforme WME)', 'mapped' => false,
                 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados[idSegmento]', TextType::class, [
+            ->add('dados_idSegmento', TextType::class, [
                 'label' => 'ID do segmento (sem permalink)', 'mapped' => false,
                 'constraints' => [
                     new Assert\NotBlank(),

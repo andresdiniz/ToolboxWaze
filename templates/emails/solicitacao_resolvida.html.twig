@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Solicitação tratada</title></head>
+<body style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px">
+  <h2 style="color:#16a34a">Sua solicitação foi tratada ✓</h2>
+  <p>Olá, <strong>{{ solicitacao.solicitanteNome }}</strong>!</p>
+  <p>Sua solicitação <strong>#{{ solicitacao.id }} — {{ solicitacao.tipoLabel }}</strong> foi marcada como resolvida em {{ solicitacao.resolvidaEm|date('d/m/Y H:i') }}.</p>
+  {% if solicitacao.notaResolucao %}
+  <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:12px 16px;border-radius:4px;margin:16px 0">
+    <strong>Nota:</strong> {{ solicitacao.notaResolucao }}
+  </div>
+  {% endif %}
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+  <p style="font-size:12px;color:#999">ToolboxWaze — Gerentes do Brasil</p>
+</body>
+</html>

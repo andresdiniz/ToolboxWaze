@@ -1,0 +1,75 @@
+{% extends 'base.html.twig' %}
+{% block title %}Solicitação #{{ solicitacao.id }}{% endblock %}
+{% block body %}
+<div class="container py-4" style="max-width:780px">
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <h2 class="mb-0">{{ solicitacao.tipoLabel }}</h2>
+      <small class="text-muted">#{{ solicitacao.id }} · {{ solicitacao.criadaEm|date('d/m/Y H:i') }}</small>
+    </div>
+    {% if solicitacao.status == 'pendente' %}<span class="badge bg-warning text-dark fs-6">Pendente</span>
+    {% elseif solicitacao.status == 'resolvida' %}<span class="badge bg-success fs-6">Resolvida</span>
+    {% else %}<span class="badge bg-danger fs-6">Cancelada</span>{% endif %}
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Solicitante</div>
+    <div class="card-body">
+      <dl class="row mb-0">
+        <dt class="col-sm-3">Nome</dt>      <dd class="col-sm-9">{{ solicitacao.solicitanteNome }}</dd>
+        <dt class="col-sm-3">Usuário</dt>   <dd class="col-sm-9">{{ solicitacao.solicitanteUsuario }}</dd>
+        <dt class="col-sm-3">E-mail</dt>    <dd class="col-sm-9">{{ solicitacao.solicitanteEmail }}</dd>
+        {% if solicitacao.estado %}<dt class="col-sm-3">Estado</dt><dd class="col-sm-9">{{ solicitacao.estado }}</dd>{% endif %}
+      </dl>
+    </div>
+  </div>
+
+  {% if solicitacao.dados %}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Detalhes da solicitação</div>
+    <div class="card-body">
+      <dl class="row mb-0">
+      {% for chave, valor in solicitacao.dados %}
+        <dt class="col-sm-4 text-capitalize">{{ chave|replace({'_': ' '}) }}</dt>
+        <dd class="col-sm-8">
+          {% if valor is iterable %}{{ valor|join(', ') }}
+          {% elseif valor == true or valor == 'sim' %}<span class="text-success">✓ Sim</span>
+          {% elseif valor == false or valor == 'nao' %}<span class="text-danger">✗ Não</span>
+          {% else %}{{ valor }}{% endif %}
+        </dd>
+      {% endfor %}
+      </dl>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if solicitacao.isPendente() and is_granted('SOLICITACAO_RESOLVER', solicitacao) %}
+  <div class="card border-warning">
+    <div class="card-header fw-semibold text-warning-emphasis bg-warning-subtle">Resolver esta solicitação</div>
+    <div class="card-body">
+      <form method="post" action="{{ path('solicitacao_resolver', {id: solicitacao.id}) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('resolver_' ~ solicitacao.id) }}">
+        <div class="mb-3">
+          <label class="form-label">Nota de resolução (opcional)</label>
+          <textarea name="nota" class="form-control" rows="3" placeholder="Descreva como foi tratado…"></textarea>
+        </div>
+        <button type="submit" class="btn btn-warning"
+                onclick="return confirm('Marcar como resolvida? Isso irá remover esta pendência para TODOS os responsáveis.')">
+          ✓ Marcar como resolvida
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not solicitacao.isPendente() and solicitacao.resolvidaPor %}
+  <div class="alert alert-success mt-3">
+    Resolvida por <strong>{{ solicitacao.resolvidaPor.username ?? solicitacao.resolvidaPor.email }}</strong>
+    em {{ solicitacao.resolvidaEm|date('d/m/Y H:i') }}.
+    {% if solicitacao.notaResolucao %}<br><em>{{ solicitacao.notaResolucao }}</em>{% endif %}
+  </div>
+  {% endif %}
+
+  <a href="{{ path('solicitacao_pendencias') }}" class="btn btn-link ps-0 mt-3">← Voltar para pendências</a>
+</div>
+{% endblock %}

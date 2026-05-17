@@ -1,0 +1,57 @@
+{% extends 'base.html.twig' %}
+{% block title %}Nova Solicitação{% endblock %}
+{% block body %}
+<div class="container py-4" style="max-width:780px">
+  <h2 class="mb-1 fw-bold">Formulário Único de Solicitações</h2>
+  <p class="text-muted mb-4">Preencha com atenção. Faça apenas uma solicitação por vez.</p>
+
+  {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate'}}) }}
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">Seus dados</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">{{ form_row(form.solicitanteNome) }}</div>
+          <div class="col-md-6">{{ form_row(form.solicitanteUsuario) }}</div>
+          <div class="col-12">{{ form_row(form.solicitanteEmail) }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">Tipo de solicitação</div>
+      <div class="card-body">
+        {{ form_row(form.tipo) }}
+        {{ form_row(form.estado) }}
+      </div>
+    </div>
+
+    <div id="campos-dinamicos">
+      {% for field in form if field.vars.name starts with 'dados[' %}
+        <div class="card shadow-sm mb-3">
+          <div class="card-body">{{ form_row(field) }}</div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div id="bloco-oops" class="card shadow-sm mb-3 d-none">
+      <div class="card-header fw-semibold">Provas (imagens)</div>
+      <div class="card-body">
+        <label class="form-label">Compartilhe provas <small class="text-muted">(até 5 imagens, 1 MB cada)</small></label>
+        <input type="file" name="arquivos_oops[]" class="form-control" accept="image/*" multiple max="5">
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary px-4">Enviar solicitação</button>
+  {{ form_end(form) }}
+</div>
+<script>
+  const tipoSelect = document.querySelector('#solicitacao_tipo');
+  const blocoOops  = document.getElementById('bloco-oops');
+  if (tipoSelect) {
+    tipoSelect.addEventListener('change', () => {
+      blocoOops.classList.toggle('d-none', tipoSelect.value !== 'oops');
+    });
+  }
+</script>
+{% endblock %}

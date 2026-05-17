@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Nova pendência</title></head>
+<body style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px">
+  <h2 style="color:#d97706">Nova pendência para tratar</h2>
+  <p>Olá, <strong>{{ responsavel.username ?? responsavel.email }}</strong>!</p>
+  <p>Uma nova solicitação do tipo <strong>{{ solicitacao.tipoLabel }}</strong> está aguardando sua atenção.</p>
+  <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0">
+    <tr><td style="padding:6px 0;color:#666">Protocolo</td><td><strong>#{{ solicitacao.id }}</strong></td></tr>
+    <tr><td style="padding:6px 0;color:#666">Solicitante</td><td>{{ solicitacao.solicitanteUsuario }}</td></tr>
+    {% if solicitacao.estado %}<tr><td style="padding:6px 0;color:#666">Estado</td><td>{{ solicitacao.estado }}</td></tr>{% endif %}
+    <tr><td style="padding:6px 0;color:#666">Data</td><td>{{ solicitacao.criadaEm|date('d/m/Y H:i') }}</td></tr>
+  </table>
+  <a href="{{ url }}" style="display:inline-block;padding:10px 20px;background:#d97706;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold">Ver solicitação</a>
+  <p style="margin-top:16px;font-size:13px;color:#666"><em>Atenção: se outro responsável tratar esta solicitação, ela desaparecerá da sua lista automaticamente.</em></p>
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+  <p style="font-size:12px;color:#999">ToolboxWaze — Gerentes do Brasil</p>
+</body>
+</html>

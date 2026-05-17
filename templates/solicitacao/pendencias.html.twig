@@ -1,0 +1,34 @@
+{% extends 'base.html.twig' %}
+{% block title %}Minhas Pendências{% endblock %}
+{% block body %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Pendências para tratar
+      {% if total > 0 %}
+        <span class="badge bg-warning text-dark ms-2">{{ total }}</span>
+      {% endif %}
+    </h2>
+  </div>
+  {% if pendencias is empty %}
+    <div class="text-center py-5 text-muted">
+      <div class="fs-1">✅</div>
+      <p class="mt-2">Nenhuma pendência no momento.</p>
+    </div>
+  {% else %}
+    <div class="list-group shadow-sm">
+    {% for s in pendencias %}
+      <a href="{{ path('solicitacao_detalhe', {id: s.id}) }}" class="list-group-item list-group-item-action">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="badge bg-secondary me-2">{{ s.tipoLabel }}</span>
+            <strong>{{ s.solicitanteUsuario }}</strong>
+            {% if s.estado %}<span class="text-muted ms-1">({{ s.estado }})</span>{% endif %}
+          </div>
+          <small class="text-muted">{{ s.criadaEm|date('d/m/Y H:i') }}</small>
+        </div>
+      </a>
+    {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -89,8 +89,8 @@ class AuthController extends AbstractController
                 $em->persist($user);
                 $em->flush();
 
-                // Notifica todos os admins sobre o novo cadastro
-                $admins = $userRepo->findByRole('ROLE_ADMIN');
+                // Notifica todos os admins aprovados sobre o novo cadastro
+                $admins = $userRepo->findAdmins();
                 $adminUsersUrl = $urlGenerator->generate('admin_users_index', [], UrlGeneratorInterface::ABSOLUTE_URL);
                 foreach ($admins as $admin) {
                     try {

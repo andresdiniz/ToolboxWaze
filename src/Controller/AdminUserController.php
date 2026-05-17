@@ -13,6 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 #[Route('/admin/users', name: 'admin_users_')]
 class AdminUserController extends AbstractController
@@ -21,6 +22,7 @@ class AdminUserController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly UserRepository $userRepo,
         private readonly MailerInterface $mailer,
+        private readonly UrlGeneratorInterface $urlGenerator,
     ) {}
 
     #[Route('', name: 'index')]
@@ -68,6 +70,8 @@ class AdminUserController extends AbstractController
 
         $this->em->flush();
 
+        $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);
+
         try {
             $email = (new Email())
                 ->from($this->getParameter('app.mail_from'))
@@ -76,6 +80,7 @@ class AdminUserController extends AbstractController
                 ->html($this->renderView('emails/user_approved.html.twig', [
                     'user'       => $user,
                     'allowedUfs' => $allowedUfs,
+                    'loginUrl'   => $loginUrl,
                 ]));
             $this->mailer->send($email);
         } catch (\Throwable) {
@@ -99,6 +104,19 @@ class AdminUserController extends AbstractController
 
         $user->setStatus(User::STATUS_REJECTED);
         $this->em->flush();
+
+        try {
+            $email = (new Email())
+                ->from($this->getParameter('app.mail_from'))
+                ->to($user->getEmail())
+                ->subject('[ToolboxWaze] Atualização sobre sua solicitação de acesso')
+                ->html($this->renderView('emails/user_rejected.html.twig', [
+                    'user' => $user,
+                ]));
+            $this->mailer->send($email);
+        } catch (\Throwable) {
+            // e-mail não bloqueia o fluxo
+        }
 
         $this->addFlash('warning', "Usuário {$user->getName()} rejeitado.");
         return $this->redirectToRoute('admin_users_index');
@@ -131,6 +149,23 @@ class AdminUserController extends AbstractController
              ->setPermissions($permissions)
              ->setAllowedUfs($allowedUfs);
         $this->em->flush();
+
+        $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);
+
+        try {
+            $email = (new Email())
+                ->from($this->getParameter('app.mail_from'))
+                ->to($user->getEmail())
+                ->subject('[ToolboxWaze] Suas permissões foram atualizadas')
+                ->html($this->renderView('emails/user_permissions_updated.html.twig', [
+                    'user'       => $user,
+                    'allowedUfs' => $allowedUfs,
+                    'loginUrl'   => $loginUrl,
+                ]));
+            $this->mailer->send($email);
+        } catch (\Throwable) {
+            // e-mail não bloqueia o fluxo
+        }
 
         $ufsLabel = $allowedUfs === null ? 'todos os estados' : implode(', ', $allowedUfs);
         $this->addFlash('success', "Permissões de {$user->getName()} atualizadas. Estados: $ufsLabel.");

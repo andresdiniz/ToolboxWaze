@@ -20,7 +20,8 @@
             </table>
         </div>
 
-        <a href="{{ app.request.schemeAndHttpHost ~ path('admin_users_index') }}"
+        {# adminUsersUrl é gerado pelo controller com UrlGeneratorInterface::ABSOLUTE_URL #}
+        <a href="{{ adminUsersUrl }}"
            style="display:inline-block;background:#01696f;color:#fff;text-decoration:none;padding:.75rem 1.5rem;border-radius:8px;font-weight:600;font-size:.9rem">
             Gerenciar Usuários →
         </a>

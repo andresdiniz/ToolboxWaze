@@ -7,9 +7,9 @@
   .wrap{max-width:600px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
   .header{background:#01696f;padding:24px 32px}
   .header h1{color:#fff;margin:0;font-size:1.2rem}
-  .body{padding:28px 32px}
-  .label{font-size:.75rem;text-transform:uppercase;color:#888;margin-bottom:2px}
-  .value{font-size:.95rem;color:#1a1a1a;font-weight:500;margin-bottom:16px}
+  .body{padding:28px 32px;color:#444}
+  .body p{margin:0 0 14px;line-height:1.6}
+  .label{font-size:.75rem;text-transform:uppercase;color:#888;margin-bottom:4px}
   .ufs-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
   .uf-badge{background:#e6f0f0;color:#01696f;border:1px solid #a0c8c8;border-radius:4px;padding:3px 8px;font-size:.78rem;font-weight:700}
   .uf-all{background:#e6f4ea;color:#2d6a4f;border-color:#a8d5b5;border-radius:4px;padding:4px 12px;font-size:.85rem;font-weight:700}
@@ -19,9 +19,10 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="header"><h1>✅ Seu acesso foi aprovado!</h1></div>
+  <div class="header"><h1>🔄 Suas permissões foram atualizadas</h1></div>
   <div class="body">
-    <p style="margin-bottom:20px;color:#444">Olá, <strong>{{ user.name }}</strong>! Seu acesso ao ToolboxWaze foi aprovado.</p>
+    <p>Olá, <strong>{{ user.name }}</strong>!</p>
+    <p>O administrador do <strong>ToolboxWaze</strong> atualizou suas permissões de acesso.</p>
 
     <div class="label">Acesso aos estados</div>
     {% if allowedUfs is null %}
@@ -34,8 +35,7 @@
       <p style="color:#e74c3c;font-size:.9rem">Nenhum estado configurado. Entre em contato com o administrador.</p>
     {% endif %}
 
-    <p style="color:#555;font-size:.9rem;margin-top:8px">Você pode visualizar e editar apenas dados dos estados listados acima. Caso precise de acesso adicional, solicite ao administrador.</p>
-
+    <p style="color:#555;font-size:.9rem">Se tiver dúvidas sobre as mudanças, entre em contato com o responsável pela sua regional.</p>
     <a href="{{ loginUrl }}" class="cta">Acessar o sistema</a>
   </div>
   <div class="footer">ToolboxWaze &mdash; sistema interno de gestão Waze</div>

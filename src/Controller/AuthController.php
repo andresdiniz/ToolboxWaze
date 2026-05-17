@@ -58,6 +58,8 @@ class AuthController extends AbstractController
         UserPasswordHasherInterface $hasher,
         EntityManagerInterface $em,
         UserRepository $userRepo,
+        MailerInterface $mailer,
+        UrlGeneratorInterface $urlGenerator,
     ): Response {
         if ($this->getUser()) {
             return $this->redirectToRoute('app_dashboard');
@@ -86,6 +88,24 @@ class AuthController extends AbstractController
 
                 $em->persist($user);
                 $em->flush();
+
+                // Notifica todos os admins sobre o novo cadastro
+                $admins = $userRepo->findByRole('ROLE_ADMIN');
+                $adminUsersUrl = $urlGenerator->generate('admin_users_index', [], UrlGeneratorInterface::ABSOLUTE_URL);
+                foreach ($admins as $admin) {
+                    try {
+                        $adminEmail = (new Email())
+                            ->from($this->getParameter('app.mail_from'))
+                            ->to($admin->getEmail())
+                            ->subject('[ToolboxWaze] Nova solicitação de acesso')
+                            ->html($this->renderView('emails/new_registration.html.twig', [
+                                'admin'         => $admin,
+                                'user'          => $user,
+                                'adminUsersUrl' => $adminUsersUrl,
+                            ]));
+                        $mailer->send($adminEmail);
+                    } catch (\Throwable) {}
+                }
 
                 $this->addFlash('success',
                     'Cadastro realizado! Aguarde a aprovação do administrador para acessar o sistema.');
@@ -123,12 +143,13 @@ class AuthController extends AbstractController
         UserRepository $userRepo,
         EntityManagerInterface $em,
         MailerInterface $mailer,
+        UrlGeneratorInterface $urlGenerator,
     ): Response {
         $sent = false;
 
         if ($req->isMethod('POST')) {
-            $email = trim($req->request->getString('email'));
-            $user  = $userRepo->findByEmail($email);
+            $emailAddr = trim($req->request->getString('email'));
+            $user      = $userRepo->findByEmail($emailAddr);
 
             if ($user) {
                 $token = bin2hex(random_bytes(32));
@@ -136,17 +157,20 @@ class AuthController extends AbstractController
                 $user->setResetTokenExpiresAt(new \DateTimeImmutable('+1 hour'));
                 $em->flush();
 
-                $link = $this->generateUrl(
+                $link = $urlGenerator->generate(
                     'app_reset_password',
                     ['token' => $token],
                     UrlGeneratorInterface::ABSOLUTE_URL
                 );
 
                 $email = (new Email())
-                    ->from('noreply@toolboxwaze.com.br')
+                    ->from($this->getParameter('app.mail_from'))
                     ->to($user->getEmail())
-                    ->subject('Recuperação de senha — ToolboxWaze')
-                    ->html("<p>Olá, {$user->getName()}!</p><p>Clique no link abaixo para redefinir sua senha (válido por 1 hora):</p><p><a href='{$link}'>{$link}</a></p>");
+                    ->subject('[ToolboxWaze] Recuperação de senha')
+                    ->html($this->renderView('emails/reset_password.html.twig', [
+                        'user' => $user,
+                        'link' => $link,
+                    ]));
 
                 try { $mailer->send($email); } catch (\Throwable) {}
             }

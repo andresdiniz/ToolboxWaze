@@ -118,6 +118,7 @@
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
+  {# ── 1. Dados do solicitante ───────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-person"></i> Seus dados</div>
     <div class="sol-card-body">
@@ -129,24 +130,33 @@
     </div>
   </div>
 
+  {# ── 2. Tipo (pills visuais) + select real oculto ─────────── #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
     <div class="sol-card-body">
-      {{ form_widget(form.tipo, {attr: {id: 'tipo-select', class: 'd-none', 'aria-hidden': 'true'}}) }}
-      {{ form_widget(form.estado, {attr: {id: 'estado-select'}}) }}
+
+      {#
+        O Symfony gera id="solicitacao_tipo" para este campo.
+        Ocultamos visualmente mas mantemos acessível para JS.
+      #}
+      {{ form_widget(form.tipo, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
+      {{ form_widget(form.estado, {attr: {'data-estado-select': '1'}}) }}
       {{ form_errors(form.tipo) }}
+
       <div class="tipo-grid mt-3" id="tipo-pills">
         {% set iconMap = {
-          'imagem_satelite':     {'icon': 'bi-globe',                 'label': 'Imagem de Satélite'},
-          'gerente_area':        {'icon': 'bi-map',                   'label': 'Gerente de Área'},
-          'gerente_estado_pais': {'icon': 'bi-flag',                  'label': 'Gerente de Estado/País'},
-          'nivel':               {'icon': 'bi-bar-chart',             'label': 'Nível'},
-          'oops':                {'icon': 'bi-exclamation-triangle',  'label': 'Oops'},
-          'bandeira_posto':      {'icon': 'bi-fuel-pump',             'label': 'Bandeira de Posto'},
-          'id_segmento':         {'icon': 'bi-signpost-2',            'label': 'ID de Segmento'}
+          'imagem_satelite':     {'icon': 'bi-globe',                'label': 'Imagem de Satélite'},
+          'gerente_area':        {'icon': 'bi-map',                  'label': 'Gerente de Área'},
+          'gerente_estado_pais': {'icon': 'bi-flag',                 'label': 'Gerente de Estado/País'},
+          'nivel':               {'icon': 'bi-bar-chart',            'label': 'Nível (Upgrade/Downgrade)'},
+          'oops':                {'icon': 'bi-exclamation-triangle', 'label': 'Oops de Editor'},
+          'bandeira_posto':      {'icon': 'bi-fuel-pump',            'label': 'Bandeira de Posto de Gasolina'},
+          'id_segmento':         {'icon': 'bi-signpost-2',           'label': 'Cadastro de ID de Segmento'}
         } %}
         {% for valor, info in iconMap %}
-          <div class="tipo-pill{% if tipoAtual == valor %} active{% endif %}" data-value="{{ valor }}" tabindex="0" role="button" aria-pressed="{{ tipoAtual == valor ? 'true' : 'false' }}">
+          <div class="tipo-pill{% if tipoAtual == valor %} active{% endif %}"
+               data-value="{{ valor }}" tabindex="0" role="button"
+               aria-pressed="{{ tipoAtual == valor ? 'true' : 'false' }}">
             <span class="tipo-icon"><i class="bi {{ info.icon }}"></i></span>
             <span class="tipo-label">{{ info.label }}</span>
           </div>
@@ -155,7 +165,10 @@
     </div>
   </div>
 
-  <div id="campos-spinner"><div class="spinner-border spinner-border-sm" role="status"></div> Carregando campos…</div>
+  {# ── 3. Campos dinâmicos (carregados via AJAX) ─────────────── #}
+  <div id="campos-spinner">
+    <div class="spinner-border spinner-border-sm" role="status"></div> Carregando campos…
+  </div>
 
   <div id="campos-dinamicos">
     {% for field in form %}
@@ -186,12 +199,18 @@
 
 <script>
 (function () {
-  const tipoSelect = document.getElementById('tipo-select');
-  const pills      = document.querySelectorAll('.tipo-pill');
-  const dinamicos  = document.getElementById('campos-dinamicos');
-  const spinner    = document.getElementById('campos-spinner');
-  const btnEnviar  = document.getElementById('btn-enviar');
+  // Usa data-attribute para não depender do ID gerado pelo Symfony
+  const tipoSelect  = document.querySelector('[data-tipo-select]');
+  const estadoSel   = document.querySelector('[data-estado-select]');
+  const pills       = document.querySelectorAll('.tipo-pill');
+  const dinamicos   = document.getElementById('campos-dinamicos');
+  const spinner     = document.getElementById('campos-spinner');
+  const btnEnviar   = document.getElementById('btn-enviar');
+  const formEl      = document.getElementById('form-solicitacao');
 
+  if (!tipoSelect) { console.error('ToolboxWaze: campo tipo não encontrado no DOM'); return; }
+
+  // Clique / teclado nas pills
   pills.forEach(pill => {
     pill.addEventListener('click', () => chooseTipo(pill.dataset.value));
     pill.addEventListener('keydown', e => {
@@ -218,28 +237,32 @@
   function fetchCampos(tipo) {
     spinner.classList.add('show');
     dinamicos.classList.add('loading');
-    const estadoVal = document.getElementById('estado-select')?.value ?? '';
+
+    // Envia via GET com parâmetro _ajax_tipo
     const url = new URL(window.location.href);
     url.searchParams.set('_ajax_tipo', tipo);
-    url.searchParams.set('_ajax_estado', estadoVal);
-    fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(r => r.text())
-      .then(html => {
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const novos = doc.getElementById('campos-dinamicos');
-        if (novos) {
-          dinamicos.innerHTML = novos.innerHTML;
-          dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
-            el.style.animationDelay = (i * 0.05) + 's';
-            el.classList.add('campo-animado');
-          });
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        spinner.classList.remove('show');
-        dinamicos.classList.remove('loading');
-      });
+    if (estadoSel) url.searchParams.set('_ajax_estado', estadoSel.value ?? '');
+
+    fetch(url.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(html => {
+      const doc  = new DOMParser().parseFromString(html, 'text/html');
+      const novo = doc.getElementById('campos-dinamicos');
+      if (novo) {
+        dinamicos.innerHTML = novo.innerHTML;
+        dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
+          el.style.animationDelay = (i * 0.05) + 's';
+          el.classList.add('campo-animado');
+        });
+      }
+    })
+    .catch(err => console.error('ToolboxWaze: erro ao carregar campos', err))
+    .finally(() => {
+      spinner.classList.remove('show');
+      dinamicos.classList.remove('loading');
+    });
   }
 })();
 </script>

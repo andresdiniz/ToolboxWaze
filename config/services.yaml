@@ -2,17 +2,17 @@
 # Files in the packages/ subdirectory configure your dependencies.
 
 parameters:
-    # Remetente dos e-mails do sistema.
-    # Defina MAILER_FROM no .env.local (ex: MAILER_FROM=sistema@seudominio.com.br)
-    app.mail_from: '%env(MAILER_FROM)%'
+    app.mailer_from: '%env(default:noreply@toolboxwaze.com.br:MAILER_FROM)%'
+    app.base_url:    '%env(default:http://localhost:8000:APP_BASE_URL)%'
 
 services:
     _defaults:
         autowire: true
         autoconfigure: true
         bind:
-            # Injeta MAILER_FROM em qualquer serviço que declare `string $mailFrom`
-            string $mailFrom: '%app.mail_from%'
+            string $mailerFrom: '%app.mailer_from%'
+            string $mailFrom:   '%app.mailer_from%'
+            string $appBaseUrl: '%app.base_url%'
 
     App\:
         resource: '../src/'

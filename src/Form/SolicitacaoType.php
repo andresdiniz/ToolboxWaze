@@ -28,8 +28,8 @@ class SolicitacaoType extends AbstractType
     {
         $builder
             ->add('tipo', ChoiceType::class, [
-                'label'   => 'Tipo de solicitação',
-                'choices' => array_flip(Solicitacao::TIPOS),
+                'label'       => 'Tipo de solicitação',
+                'choices'     => array_flip(Solicitacao::TIPOS),
                 'placeholder' => 'Escolher',
                 'constraints' => [new Assert\NotBlank()],
             ])
@@ -47,15 +47,23 @@ class SolicitacaoType extends AbstractType
                 'constraints' => [new Assert\NotBlank(), new Assert\Email()],
             ])
             ->add('estado', ChoiceType::class, [
-                'label'    => 'Estado',
-                'choices'  => self::UFS,
+                'label'       => 'Estado',
+                'choices'     => self::UFS,
                 'placeholder' => 'Escolher',
-                'required' => false,
+                'required'    => false,
             ]);
 
         $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) {
             $solicitacao = $event->getData();
-            $tipo = $solicitacao instanceof Solicitacao ? $solicitacao->getTipo() : null;
+            // $tipo pode não estar inicializado quando o form é criado do zero
+            $tipo = null;
+            if ($solicitacao instanceof Solicitacao) {
+                try {
+                    $tipo = $solicitacao->getTipo();
+                } catch (\Error) {
+                    $tipo = null;
+                }
+            }
             $this->addDadosDinamicos($event->getForm(), $tipo);
         });
 

@@ -206,7 +206,6 @@ final class RadarController extends AbstractController
     public function wazeSave(int $id, Request $req): Response
     {
         // IS_AUTHENTICATED_REMEMBERED permite acesso via remember-me cookie
-        // (IS_AUTHENTICATED_FULLY bloqueava usuários autenticados por cookie)
         $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
 
         if (!$this->isCsrfTokenValid('waze_save_' . $id, $req->request->get('_token'))) {
@@ -261,21 +260,22 @@ final class RadarController extends AbstractController
         // ── Persistência ───────────────────────────────────────────────────────
         if ($existing) {
             // Registra log de cada campo alterado
+            // Colunas da tabela: id, radar_waze_link_id, changed_by, changed_at, campo_alterado, valor_anterior, valor_novo
             if ($wazeLink !== $existing['waze_link']) {
                 $this->db->executeStatement(
                     'INSERT INTO radar_waze_link_log
-                     (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, motivo, changed_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [$existing['id'], $userId, 'waze_link', $existing['waze_link'], $wazeLink, $motivoRevisao, $now]
+                     (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, changed_at)
+                     VALUES (?, ?, ?, ?, ?, ?)',
+                    [$existing['id'], $userId, 'waze_link', $existing['waze_link'], $wazeLink, $now]
                 );
             }
 
             if (($existing['observacao'] ?? '') !== $motivoRevisao) {
                 $this->db->executeStatement(
                     'INSERT INTO radar_waze_link_log
-                     (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, motivo, changed_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [$existing['id'], $userId, 'motivo_revisao', $existing['observacao'] ?? null, $motivoRevisao, $motivoRevisao, $now]
+                     (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, changed_at)
+                     VALUES (?, ?, ?, ?, ?, ?)',
+                    [$existing['id'], $userId, 'motivo_revisao', $existing['observacao'] ?? null, $motivoRevisao, $now]
                 );
             }
 
@@ -301,9 +301,9 @@ final class RadarController extends AbstractController
             // Registra log de criação para aparecer no histórico
             $this->db->executeStatement(
                 'INSERT INTO radar_waze_link_log
-                 (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, motivo, changed_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [$newId, $userId, 'waze_link', null, $wazeLink, 'Cadastro inicial', $now]
+                 (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, changed_at)
+                 VALUES (?, ?, ?, ?, ?, ?)',
+                [$newId, $userId, 'waze_link', null, $wazeLink, $now]
             );
 
             $this->addFlash('success', 'Link Waze cadastrado com sucesso.');

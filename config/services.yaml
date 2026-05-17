@@ -2,8 +2,8 @@
 # Files in the packages/ subdirectory configure your dependencies.
 
 parameters:
-    app.mailer_from: '%env(default:noreply@toolboxwaze.com.br:MAILER_FROM)%'
-    app.base_url:    '%env(default:http://localhost:8000:APP_BASE_URL)%'
+    app.mailer_from: '%env(MAILER_FROM)%'
+    app.base_url:    '%env(APP_BASE_URL)%'
 
 services:
     _defaults:

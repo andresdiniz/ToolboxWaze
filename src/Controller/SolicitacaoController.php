@@ -21,10 +21,11 @@ class SolicitacaoController extends AbstractController
     #[Route('/nova', name: 'solicitacao_nova', methods: ['GET', 'POST'])]
     public function nova(Request $request): Response
     {
+        $isAdmin     = $this->isGranted('ROLE_ADMIN');
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
-        // Suporte ao AJAX de pré-visualização de campos dinâmicos
+        // Suporte ao AJAX de campos dinâmicos
         $ajaxTipo = $request->query->get('_ajax_tipo');
         if ($ajaxTipo) {
             try {
@@ -33,11 +34,12 @@ class SolicitacaoController extends AbstractController
             } catch (\Throwable) {}
         }
 
-        $form = $this->createForm(SolicitacaoType::class, $solicitacao);
+        $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
+            'is_admin' => $isAdmin,
+        ]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // Resolve tipoAtual para o template de confirmação
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
 
             $dados = [];
@@ -66,7 +68,6 @@ class SolicitacaoController extends AbstractController
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
-        // Recupera tipoAtual do form já submetido com erro (reexibição)
         if ($form->isSubmitted() && !$form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) { $tipoAtual = null; }
         }
@@ -74,6 +75,7 @@ class SolicitacaoController extends AbstractController
         return $this->render('solicitacao/nova.html.twig', [
             'form'      => $form,
             'tipoAtual' => $tipoAtual,
+            'isAdmin'   => $isAdmin,
         ]);
     }
 

@@ -25,6 +25,16 @@
   gap: .45rem;
 }
 .sol-card-header i { color: #0077b5; font-size: 1rem; }
+.sol-card-header .badge-admin {
+  margin-left: auto;
+  background: #fff3cd;
+  color: #856404;
+  font-size: .7rem;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
 .sol-card-body { padding: 1.1rem 1.25rem; }
 .tipo-grid {
   display: grid;
@@ -105,6 +115,17 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 .campo-animado { animation: fadeSlideIn .28s ease both; }
+/* Bloco admin */
+.sol-card.admin-only {
+  border-color: #ffc107;
+  background: #fffdf4;
+}
+.sol-card.admin-only .sol-card-header {
+  background: #fff8e1;
+  border-bottom-color: #ffc107;
+  color: #7a5c00;
+}
+.sol-card.admin-only .sol-card-header i { color: #e6a800; }
 </style>
 {% endblock %}
 
@@ -118,7 +139,7 @@
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
-  {# ── 1. Dados do solicitante ───────────────────────────────── #}
+  {# ── 1. Dados do solicitante ─────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-person"></i> Seus dados</div>
     <div class="sol-card-body">
@@ -130,15 +151,10 @@
     </div>
   </div>
 
-  {# ── 2. Tipo (pills visuais) + select real oculto ─────────── #}
+  {# ── 2. Tipo (pills visuais) ───────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
     <div class="sol-card-body">
-
-      {#
-        O Symfony gera id="solicitacao_tipo" para este campo.
-        Ocultamos visualmente mas mantemos acessível para JS.
-      #}
       {{ form_widget(form.tipo, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
       {{ form_widget(form.estado, {attr: {'data-estado-select': '1'}}) }}
       {{ form_errors(form.tipo) }}
@@ -165,7 +181,21 @@
     </div>
   </div>
 
-  {# ── 3. Campos dinâmicos (carregados via AJAX) ─────────────── #}
+  {# ── 3. [ADMIN ONLY] Responsáveis por tipo ──────────────── #}
+  {% if isAdmin %}
+  <div class="sol-card admin-only">
+    <div class="sol-card-header">
+      <i class="bi bi-people"></i> Responsáveis pela solicitação
+      <span class="badge-admin">🔒 Admin</span>
+    </div>
+    <div class="sol-card-body">
+      <p class="text-muted small mb-2">Selecione os usuários que serão vinculados como responsáveis. Segure <kbd>Ctrl</kbd> para múltipla seleção.</p>
+      {{ form_row(form.responsaveis) }}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── 4. Campos dinâmicos (AJAX) ────────────────────────────── #}
   <div id="campos-spinner">
     <div class="spinner-border spinner-border-sm" role="status"></div> Carregando campos…
   </div>
@@ -199,18 +229,15 @@
 
 <script>
 (function () {
-  // Usa data-attribute para não depender do ID gerado pelo Symfony
-  const tipoSelect  = document.querySelector('[data-tipo-select]');
-  const estadoSel   = document.querySelector('[data-estado-select]');
-  const pills       = document.querySelectorAll('.tipo-pill');
-  const dinamicos   = document.getElementById('campos-dinamicos');
-  const spinner     = document.getElementById('campos-spinner');
-  const btnEnviar   = document.getElementById('btn-enviar');
-  const formEl      = document.getElementById('form-solicitacao');
+  const tipoSelect = document.querySelector('[data-tipo-select]');
+  const estadoSel  = document.querySelector('[data-estado-select]');
+  const pills      = document.querySelectorAll('.tipo-pill');
+  const dinamicos  = document.getElementById('campos-dinamicos');
+  const spinner    = document.getElementById('campos-spinner');
+  const btnEnviar  = document.getElementById('btn-enviar');
 
   if (!tipoSelect) { console.error('ToolboxWaze: campo tipo não encontrado no DOM'); return; }
 
-  // Clique / teclado nas pills
   pills.forEach(pill => {
     pill.addEventListener('click', () => chooseTipo(pill.dataset.value));
     pill.addEventListener('keydown', e => {
@@ -237,32 +264,27 @@
   function fetchCampos(tipo) {
     spinner.classList.add('show');
     dinamicos.classList.add('loading');
-
-    // Envia via GET com parâmetro _ajax_tipo
     const url = new URL(window.location.href);
     url.searchParams.set('_ajax_tipo', tipo);
     if (estadoSel) url.searchParams.set('_ajax_estado', estadoSel.value ?? '');
-
-    fetch(url.toString(), {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-    .then(html => {
-      const doc  = new DOMParser().parseFromString(html, 'text/html');
-      const novo = doc.getElementById('campos-dinamicos');
-      if (novo) {
-        dinamicos.innerHTML = novo.innerHTML;
-        dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
-          el.style.animationDelay = (i * 0.05) + 's';
-          el.classList.add('campo-animado');
-        });
-      }
-    })
-    .catch(err => console.error('ToolboxWaze: erro ao carregar campos', err))
-    .finally(() => {
-      spinner.classList.remove('show');
-      dinamicos.classList.remove('loading');
-    });
+    fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(html => {
+        const doc  = new DOMParser().parseFromString(html, 'text/html');
+        const novo = doc.getElementById('campos-dinamicos');
+        if (novo) {
+          dinamicos.innerHTML = novo.innerHTML;
+          dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
+            el.style.animationDelay = (i * 0.05) + 's';
+            el.classList.add('campo-animado');
+          });
+        }
+      })
+      .catch(err => console.error('ToolboxWaze fetchCampos erro:', err))
+      .finally(() => {
+        spinner.classList.remove('show');
+        dinamicos.classList.remove('loading');
+      });
   }
 })();
 </script>

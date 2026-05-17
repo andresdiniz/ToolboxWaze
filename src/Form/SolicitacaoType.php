@@ -3,6 +3,8 @@
 namespace App\Form;
 
 use App\Entity\Solicitacao;
+use App\Entity\User;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\{
     ChoiceType, EmailType, TextareaType, TextType, CheckboxType
@@ -12,6 +14,7 @@ use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints as Assert;
+use Doctrine\ORM\EntityRepository;
 
 class SolicitacaoType extends AbstractType
 {
@@ -26,6 +29,8 @@ class SolicitacaoType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
+        $isAdmin = $options['is_admin'];
+
         $builder
             ->add('tipo', ChoiceType::class, [
                 'label'       => 'Tipo de solicitação',
@@ -52,6 +57,27 @@ class SolicitacaoType extends AbstractType
                 'placeholder' => 'Escolher',
                 'required'    => false,
             ]);
+
+        // Campo de responsaveis: visivel somente para ROLE_ADMIN
+        if ($isAdmin) {
+            $builder->add('responsaveis', EntityType::class, [
+                'label'         => 'Responsáveis por tipo',
+                'class'         => User::class,
+                'choice_label'  => fn(User $u) => $u->getEmail(),
+                'multiple'      => true,
+                'expanded'      => false,   // <select multiple>
+                'required'      => false,
+                'attr'          => [
+                    'class' => 'form-select',
+                    'size'  => 6,
+                    'data-responsaveis-select' => '1',
+                ],
+                'label_attr'    => ['class' => 'form-label fw-semibold'],
+                'query_builder' => fn(EntityRepository $er) =>
+                    $er->createQueryBuilder('u')
+                       ->orderBy('u.email', 'ASC'),
+            ]);
+        }
 
         $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) {
             $solicitacao = $event->getData();
@@ -90,8 +116,8 @@ class SolicitacaoType extends AbstractType
                 'choices' => [
                     'A imagem com maior resolução é muito antiga' => 'muito_antiga',
                     'A imagem está com qualidade/resolução baixa' => 'baixa_qualidade',
-                    'Alterações significativas na área'          => 'alteracoes',
-                    'As imagens estão ruins ou nubladas'         => 'ruins_nubladas',
+                    'Alterações significativas na área'           => 'alteracoes',
+                    'As imagens estão ruins ou nubladas'           => 'ruins_nubladas',
                 ],
                 'constraints' => [new Assert\NotBlank()],
             ])
@@ -257,6 +283,7 @@ class SolicitacaoType extends AbstractType
             'csrf_protection' => true,
             'csrf_field_name' => '_token',
             'csrf_token_id'   => 'solicitacao',
+            'is_admin'        => false,   // passa true no controller quando ROLE_ADMIN
         ]);
     }
 }

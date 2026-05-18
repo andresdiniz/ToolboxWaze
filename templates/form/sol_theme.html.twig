@@ -3,6 +3,7 @@
   Uso: {% form_theme form 'form/sol_theme.html.twig' %}
   Garante: label em cima do input, classes corretas, mensagens de erro inline.
 #}
+{% use 'bootstrap_5_layout.html.twig' %}
 
 {%- block form_row -%}
   {%- set row_class = row_class|default('') -%}

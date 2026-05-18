@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Repository\SolicitacaoRepository;
 use App\Repository\TipoSolicitacaoConfigRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Twig\Environment;
@@ -14,13 +15,14 @@ use Twig\Environment;
 class SolicitacaoService
 {
     public function __construct(
-        private readonly EntityManagerInterface $em,
-        private readonly SolicitacaoRepository $solicitacaoRepo,
+        private readonly EntityManagerInterface          $em,
+        private readonly SolicitacaoRepository          $solicitacaoRepo,
         private readonly TipoSolicitacaoConfigRepository $configRepo,
-        private readonly MailerInterface $mailer,
-        private readonly Environment $twig,
-        private readonly string $mailerFrom,
-        private readonly string $appBaseUrl,
+        private readonly MailerInterface                $mailer,
+        private readonly Environment                    $twig,
+        private readonly LoggerInterface                $logger,
+        private readonly string                         $mailerFrom,
+        private readonly string                         $appBaseUrl,
     ) {}
 
     public function criar(Solicitacao $solicitacao): void
@@ -31,11 +33,30 @@ class SolicitacaoService
                 $solicitacao->addResponsavel($responsavel);
             }
         }
+
         $this->em->persist($solicitacao);
         $this->em->flush();
-        $this->enviarEmailConfirmacao($solicitacao);
+
+        // E-mails são best-effort: falha de envio não reverte o registro
+        try {
+            $this->enviarEmailConfirmacao($solicitacao);
+        } catch (\Throwable $e) {
+            $this->logger->error('SolicitacaoService: falha ao enviar e-mail de confirmação', [
+                'solicitacao_id' => $solicitacao->getId(),
+                'error'          => $e->getMessage(),
+            ]);
+        }
+
         foreach ($solicitacao->getResponsaveis() as $responsavel) {
-            $this->enviarEmailResponsavel($solicitacao, $responsavel);
+            try {
+                $this->enviarEmailResponsavel($solicitacao, $responsavel);
+            } catch (\Throwable $e) {
+                $this->logger->error('SolicitacaoService: falha ao enviar e-mail de responsável', [
+                    'solicitacao_id'  => $solicitacao->getId(),
+                    'responsavel_id'  => $responsavel->getId(),
+                    'error'           => $e->getMessage(),
+                ]);
+            }
         }
     }
 
@@ -50,7 +71,15 @@ class SolicitacaoService
             ->setResolvidaEm(new \DateTimeImmutable())
             ->setNotaResolucao($nota);
         $this->em->flush();
-        $this->enviarEmailResolucao($solicitacao);
+
+        try {
+            $this->enviarEmailResolucao($solicitacao);
+        } catch (\Throwable $e) {
+            $this->logger->error('SolicitacaoService: falha ao enviar e-mail de resolução', [
+                'solicitacao_id' => $solicitacao->getId(),
+                'error'          => $e->getMessage(),
+            ]);
+        }
     }
 
     public function getPendenciasDoUsuario(User $user): array

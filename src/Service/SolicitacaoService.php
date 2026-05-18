@@ -2,28 +2,27 @@
 
 namespace App\Service;
 
-use App\Entity\Solicitacao;
-use App\Entity\User;
-use App\Repository\SolicitacaoRepository;
-use App\Repository\TipoSolicitacaoConfigRepository;
+use App\Entity\{Notificacao, Solicitacao, SolicitacaoComentario, SolicitacaoHistorico, User};
+use App\Message\EnviarEmailSolicitacao;
+use App\Repository\{NotificacaoRepository, SolicitacaoRepository, TipoSolicitacaoConfigRepository};
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
-use Twig\Environment;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 class SolicitacaoService
 {
     public function __construct(
-        private readonly EntityManagerInterface          $em,
-        private readonly SolicitacaoRepository          $solicitacaoRepo,
+        private readonly EntityManagerInterface           $em,
+        private readonly SolicitacaoRepository           $solicitacaoRepo,
         private readonly TipoSolicitacaoConfigRepository $configRepo,
-        private readonly MailerInterface                $mailer,
-        private readonly Environment                    $twig,
-        private readonly LoggerInterface                $logger,
-        private readonly string                         $mailerFrom,
-        private readonly string                         $appBaseUrl,
+        private readonly NotificacaoRepository           $notifRepo,
+        private readonly MessageBusInterface             $bus,
+        private readonly LoggerInterface                 $logger,
     ) {}
+
+    // ---------------------------------------------------------------
+    // CRIAÇÃO
+    // ---------------------------------------------------------------
 
     public function criar(Solicitacao $solicitacao): void
     {
@@ -34,53 +33,125 @@ class SolicitacaoService
             }
         }
 
+        // Primeiro histórico: criação
+        $this->registrarHistorico($solicitacao, null, Solicitacao::STATUS_PENDENTE, null, 'Solicitação criada.');
+
         $this->em->persist($solicitacao);
         $this->em->flush();
 
-        // E-mails são best-effort: falha de envio não reverte o registro
-        try {
-            $this->enviarEmailConfirmacao($solicitacao);
-        } catch (\Throwable $e) {
-            $this->logger->error('SolicitacaoService: falha ao enviar e-mail de confirmação', [
-                'solicitacao_id' => $solicitacao->getId(),
-                'error'          => $e->getMessage(),
-            ]);
-        }
-
+        // Notificar responsáveis
         foreach ($solicitacao->getResponsaveis() as $responsavel) {
-            try {
-                $this->enviarEmailResponsavel($solicitacao, $responsavel);
-            } catch (\Throwable $e) {
-                $this->logger->error('SolicitacaoService: falha ao enviar e-mail de responsável', [
-                    'solicitacao_id'  => $solicitacao->getId(),
-                    'responsavel_id'  => $responsavel->getId(),
-                    'error'           => $e->getMessage(),
-                ]);
-            }
+            $this->criarNotificacao(
+                $responsavel,
+                $solicitacao,
+                Notificacao::TIPO_NOVA_SOLICITACAO,
+                sprintf('Nova solicitação: %s (#%d)', $solicitacao->getTipoLabel(), $solicitacao->getId())
+            );
         }
-    }
-
-    public function resolver(Solicitacao $solicitacao, User $resolvidaPor, ?string $nota = null): void
-    {
-        if (!$solicitacao->isPendente()) {
-            throw new \LogicException('Esta solicitação já foi tratada.');
-        }
-        $solicitacao
-            ->setStatus(Solicitacao::STATUS_RESOLVIDA)
-            ->setResolvidaPor($resolvidaPor)
-            ->setResolvidaEm(new \DateTimeImmutable())
-            ->setNotaResolucao($nota);
         $this->em->flush();
 
-        try {
-            $this->enviarEmailResolucao($solicitacao);
-        } catch (\Throwable $e) {
-            $this->logger->error('SolicitacaoService: falha ao enviar e-mail de resolução', [
-                'solicitacao_id' => $solicitacao->getId(),
-                'error'          => $e->getMessage(),
-            ]);
+        // E-mails via Messenger (assíncrono, não bloqueia)
+        $this->dispatchEmail('confirmacao', $solicitacao->getId());
+        foreach ($solicitacao->getResponsaveis() as $r) {
+            $this->dispatchEmail('responsavel', $solicitacao->getId(), $r->getId());
         }
     }
+
+    // ---------------------------------------------------------------
+    // MUDANÇA DE STATUS
+    // ---------------------------------------------------------------
+
+    public function mudarStatus(Solicitacao $solicitacao, string $novoStatus, User $autor, ?string $nota = null): void
+    {
+        $statusAnterior = $solicitacao->getStatus();
+
+        if ($statusAnterior === $novoStatus) {
+            return;
+        }
+
+        if (!array_key_exists($novoStatus, Solicitacao::STATUS_LABELS)) {
+            throw new \InvalidArgumentException("Status inválido: $novoStatus");
+        }
+
+        // Se for status final, preenche campos de resolução
+        if (in_array($novoStatus, Solicitacao::STATUS_FINAIS, true)) {
+            $solicitacao
+                ->setResolvidaPor($autor)
+                ->setResolvidaEm(new \DateTimeImmutable())
+                ->setNotaResolucao($nota);
+        }
+
+        $solicitacao->setStatus($novoStatus);
+        $this->registrarHistorico($solicitacao, $statusAnterior, $novoStatus, $autor, $nota);
+        $this->em->flush();
+
+        // Notificar outros responsáveis e o solicitante (por e-mail)
+        foreach ($solicitacao->getResponsaveis() as $r) {
+            if ($r->getId() !== $autor->getId()) {
+                $this->criarNotificacao(
+                    $r,
+                    $solicitacao,
+                    Notificacao::TIPO_STATUS_ALTERADO,
+                    sprintf('Status alterado para "%s" em #%d', $solicitacao->getStatusLabel(), $solicitacao->getId())
+                );
+            }
+        }
+        $this->em->flush();
+
+        // E-mail para o solicitante se status final
+        if (in_array($novoStatus, Solicitacao::STATUS_FINAIS, true)) {
+            $this->dispatchEmail('resolucao', $solicitacao->getId());
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // COMENTÁRIOS
+    // ---------------------------------------------------------------
+
+    public function adicionarComentario(
+        Solicitacao $solicitacao,
+        string $mensagem,
+        ?User $autor = null,
+        ?string $autorNome = null,
+        bool $interno = false
+    ): SolicitacaoComentario {
+        $comentario = new SolicitacaoComentario();
+        $comentario->setSolicitacao($solicitacao);
+        $comentario->setMensagem(trim($mensagem));
+        $comentario->setInterno($interno);
+
+        if ($autor) {
+            $comentario->setAutor($autor);
+        } else {
+            $comentario->setAutorNomeExterno($autorNome ?? $solicitacao->getSolicitanteNome());
+        }
+
+        $this->em->persist($comentario);
+        $this->em->flush();
+
+        // Notificar responsáveis sobre novo comentário
+        foreach ($solicitacao->getResponsaveis() as $r) {
+            if ($autor && $r->getId() === $autor->getId()) {
+                continue; // não notifica quem comentou
+            }
+            $this->criarNotificacao(
+                $r,
+                $solicitacao,
+                Notificacao::TIPO_NOVO_COMENTARIO,
+                sprintf('Novo comentário em #%d: %s', $solicitacao->getId(), mb_substr($mensagem, 0, 60))
+            );
+        }
+        $this->em->flush();
+
+        // E-mail best-effort para os responsáveis
+        $this->dispatchEmail('comentario', $solicitacao->getId());
+
+        return $comentario;
+    }
+
+    // ---------------------------------------------------------------
+    // NOTIFICAÇÕES
+    // ---------------------------------------------------------------
 
     public function getPendenciasDoUsuario(User $user): array
     {
@@ -92,34 +163,51 @@ class SolicitacaoService
         return $this->solicitacaoRepo->countPendentesDoResponsavel($user);
     }
 
-    private function enviarEmailConfirmacao(Solicitacao $s): void
+    public function countNotificacoesNaoLidas(User $user): int
     {
-        $html = $this->twig->render('emails/solicitacao_confirmacao.html.twig', ['solicitacao' => $s]);
-        $this->mailer->send(
-            (new Email())->from($this->mailerFrom)->to($s->getSolicitanteEmail())
-                ->subject('[ToolboxWaze] Solicitação recebida: ' . $s->getTipoLabel())->html($html)
-        );
+        return $this->notifRepo->countNaoLidas($user);
     }
 
-    private function enviarEmailResponsavel(Solicitacao $s, User $responsavel): void
-    {
-        $html = $this->twig->render('emails/solicitacao_responsavel.html.twig', [
-            'solicitacao' => $s,
-            'responsavel' => $responsavel,
-            'url'         => $this->appBaseUrl . '/solicitacoes/' . $s->getId(),
-        ]);
-        $this->mailer->send(
-            (new Email())->from($this->mailerFrom)->to($responsavel->getEmail())
-                ->subject('[ToolboxWaze] Nova pendência: ' . $s->getTipoLabel() . ' (#' . $s->getId() . ')')->html($html)
-        );
+    // ---------------------------------------------------------------
+    // HELPERS PRIVADOS
+    // ---------------------------------------------------------------
+
+    private function registrarHistorico(
+        Solicitacao $solicitacao,
+        ?string $statusAnterior,
+        string $statusNovo,
+        ?User $autor,
+        ?string $nota
+    ): void {
+        $h = new SolicitacaoHistorico();
+        $h->setStatusAnterior($statusAnterior);
+        $h->setStatusNovo($statusNovo);
+        $h->setAutor($autor);
+        $h->setNota($nota);
+        $solicitacao->addHistorico($h);
+        $this->em->persist($h);
     }
 
-    private function enviarEmailResolucao(Solicitacao $s): void
+    private function criarNotificacao(User $user, Solicitacao $sol, string $tipo, string $mensagem): void
     {
-        $html = $this->twig->render('emails/solicitacao_resolvida.html.twig', ['solicitacao' => $s]);
-        $this->mailer->send(
-            (new Email())->from($this->mailerFrom)->to($s->getSolicitanteEmail())
-                ->subject('[ToolboxWaze] Sua solicitação foi tratada: ' . $s->getTipoLabel())->html($html)
-        );
+        $n = new Notificacao();
+        $n->setUsuario($user);
+        $n->setSolicitacao($sol);
+        $n->setTipo($tipo);
+        $n->setMensagem($mensagem);
+        $this->em->persist($n);
+    }
+
+    private function dispatchEmail(string $tipo, int $solicitacaoId, ?int $destinatarioId = null): void
+    {
+        try {
+            $this->bus->dispatch(new EnviarEmailSolicitacao($tipo, $solicitacaoId, $destinatarioId));
+        } catch (\Throwable $e) {
+            $this->logger->warning('SolicitacaoService: falha ao despachar e-mail', [
+                'tipo'  => $tipo,
+                'id'    => $solicitacaoId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

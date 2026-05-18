@@ -1,0 +1,35 @@
+{% if is_granted('ROLE_ADMIN') and not solicitacao.isFinal() %}
+{% set cores = constant('App\\Entity\\Solicitacao::STATUS_CORES') %}
+{% set labels = constant('App\\Entity\\Solicitacao::STATUS_LABELS') %}
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-transparent fw-semibold">
+    <i class="bi bi-arrow-repeat me-2"></i>Alterar status
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ path('solicitacao_status_change', {id: solicitacao.id}) }}">
+      <input type="hidden" name="_token" value="{{ csrf_token('status_' ~ solicitacao.id) }}">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label fw-medium">Novo status</label>
+          <select name="status" class="form-select" required>
+            <option value="">Escolher…</option>
+            {% for slug, label in labels %}
+              {% if slug != solicitacao.status %}
+              <option value="{{ slug }}">{{ label }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label fw-medium">Nota (opcional)</label>
+          <input type="text" name="nota" class="form-control" placeholder="Justificativa ou observação…">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-success w-100">Salvar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}

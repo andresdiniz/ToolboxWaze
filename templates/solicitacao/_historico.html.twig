@@ -1,0 +1,23 @@
+{% set cores = constant('App\\Entity\\Solicitacao::STATUS_CORES') %}
+
+<div class="mt-4">
+  <h5 class="mb-3"><i class="bi bi-clock-history me-2"></i>Histórico de status</h5>
+  <ol class="list-group list-group-flush border rounded">
+    {% for h in solicitacao.historicos %}
+    <li class="list-group-item d-flex gap-3 align-items-start py-3">
+      <span class="badge bg-{{ cores[h.statusNovo] ?? 'secondary' }} mt-1">{{ h.statusNovoLabel }}</span>
+      <div class="flex-grow-1">
+        {% if h.statusAnterior %}
+          <small class="text-muted">De <em>{{ h.statusAnteriorLabel }}</em> → </small>
+        {% endif %}
+        <strong>{{ h.statusNovoLabel }}</strong>
+        {% if h.nota %}<p class="mb-0 text-muted" style="font-size:.88rem">{{ h.nota }}</p>{% endif %}
+        <div class="text-muted" style="font-size:.8rem">
+          {{ h.criadoEm|date('d/m/Y H:i') }}
+          {% if h.autor %} — por {{ h.autor.name }}{% endif %}
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+</div>

@@ -30,9 +30,41 @@ class Solicitacao
         self::TIPO_ID_SEGMENTO         => 'Cadastro de ID de Segmento',
     ];
 
-    public const STATUS_PENDENTE   = 'pendente';
-    public const STATUS_RESOLVIDA  = 'resolvida';
-    public const STATUS_CANCELADA  = 'cancelada';
+    // Status completos do fluxo
+    public const STATUS_PENDENTE      = 'pendente';      // Recém criada, aguardando triagem
+    public const STATUS_EM_ANALISE    = 'em_analise';    // Responsável está analisando
+    public const STATUS_EM_ANDAMENTO  = 'em_andamento';  // Em execução
+    public const STATUS_AGUARDANDO    = 'aguardando';    // Aguardando retorno do solicitante
+    public const STATUS_RESOLVIDA     = 'resolvida';     // Concluída com sucesso
+    public const STATUS_NEGADA        = 'negada';        // Negada com justificativa
+    public const STATUS_CANCELADA     = 'cancelada';     // Cancelada pelo solicitante
+
+    public const STATUS_LABELS = [
+        self::STATUS_PENDENTE     => 'Pendente',
+        self::STATUS_EM_ANALISE   => 'Em análise',
+        self::STATUS_EM_ANDAMENTO => 'Em andamento',
+        self::STATUS_AGUARDANDO   => 'Aguardando retorno',
+        self::STATUS_RESOLVIDA    => 'Resolvida',
+        self::STATUS_NEGADA       => 'Negada',
+        self::STATUS_CANCELADA    => 'Cancelada',
+    ];
+
+    public const STATUS_CORES = [
+        self::STATUS_PENDENTE     => 'warning',
+        self::STATUS_EM_ANALISE   => 'info',
+        self::STATUS_EM_ANDAMENTO => 'primary',
+        self::STATUS_AGUARDANDO   => 'secondary',
+        self::STATUS_RESOLVIDA    => 'success',
+        self::STATUS_NEGADA       => 'danger',
+        self::STATUS_CANCELADA    => 'dark',
+    ];
+
+    /** Status que encerram o fluxo */
+    public const STATUS_FINAIS = [
+        self::STATUS_RESOLVIDA,
+        self::STATUS_NEGADA,
+        self::STATUS_CANCELADA,
+    ];
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -42,7 +74,7 @@ class Solicitacao
     #[ORM\Column(length: 64)]
     private string $tipo;
 
-    #[ORM\Column(length: 16)]
+    #[ORM\Column(length: 32)]
     private string $status = self::STATUS_PENDENTE;
 
     #[ORM\Column(length: 255)]
@@ -83,9 +115,19 @@ class Solicitacao
     #[ORM\JoinTable(name: 'solicitacao_responsaveis')]
     private Collection $responsaveis;
 
+    #[ORM\OneToMany(mappedBy: 'solicitacao', targetEntity: SolicitacaoHistorico::class, cascade: ['persist'], orphanRemoval: true)]
+    #[ORM\OrderBy(['criadoEm' => 'ASC'])]
+    private Collection $historicos;
+
+    #[ORM\OneToMany(mappedBy: 'solicitacao', targetEntity: SolicitacaoComentario::class, cascade: ['persist'], orphanRemoval: true)]
+    #[ORM\OrderBy(['criadoEm' => 'ASC'])]
+    private Collection $comentarios;
+
     public function __construct()
     {
         $this->responsaveis = new ArrayCollection();
+        $this->historicos   = new ArrayCollection();
+        $this->comentarios  = new ArrayCollection();
         $this->criadaEm     = new \DateTimeImmutable();
         $this->atualizadaEm = new \DateTimeImmutable();
     }
@@ -111,7 +153,10 @@ class Solicitacao
 
     public function getStatus(): string { return $this->status; }
     public function setStatus(string $status): static { $this->status = $status; return $this; }
+    public function getStatusLabel(): string { return self::STATUS_LABELS[$this->status] ?? $this->status; }
+    public function getStatusCor(): string { return self::STATUS_CORES[$this->status] ?? 'secondary'; }
     public function isPendente(): bool { return $this->status === self::STATUS_PENDENTE; }
+    public function isFinal(): bool { return in_array($this->status, self::STATUS_FINAIS, true); }
 
     public function getSolicitanteNome(): string { return $this->solicitanteNome; }
     public function setSolicitanteNome(string $v): static { $this->solicitanteNome = $v; return $this; }
@@ -153,6 +198,26 @@ class Solicitacao
     public function removeResponsavel(User $u): static
     {
         $this->responsaveis->removeElement($u);
+        return $this;
+    }
+
+    public function getHistoricos(): Collection { return $this->historicos; }
+    public function addHistorico(SolicitacaoHistorico $h): static
+    {
+        if (!$this->historicos->contains($h)) {
+            $this->historicos->add($h);
+            $h->setSolicitacao($this);
+        }
+        return $this;
+    }
+
+    public function getComentarios(): Collection { return $this->comentarios; }
+    public function addComentario(SolicitacaoComentario $c): static
+    {
+        if (!$this->comentarios->contains($c)) {
+            $this->comentarios->add($c);
+            $c->setSolicitacao($this);
+        }
         return $this;
     }
 }

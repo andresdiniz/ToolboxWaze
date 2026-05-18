@@ -204,8 +204,9 @@ final class PostoController extends AbstractController
             $errors['waze_link'] = 'O link do Waze \u00e9 obrigat\u00f3rio.';
         } elseif (!filter_var($wazeLink, FILTER_VALIDATE_URL)) {
             $errors['waze_link'] = 'Informe uma URL v\u00e1lida.';
-        } elseif (!preg_match('/[?&]venues=(\d+)/', $wazeLink, $m)) {
-            $errors['waze_link'] = 'A URL deve conter o par\u00e2metro venues=N\u00daMERO.';
+        } elseif (!preg_match('/[?&]venues=([\d.]+)/', $wazeLink, $m)) {
+            // Captura o ID completo do place no Waze, ex: 207160888.2071412273.41231195
+            $errors['waze_link'] = 'A URL deve conter o par\u00e2metro venues=ID.';
         }
 
         $existing = $this->db->fetchAssociative(
@@ -225,8 +226,8 @@ final class PostoController extends AbstractController
             return $this->redirectToRoute('posto_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
         }
 
-        // O parâmetro da URL é venues= mas a coluna no banco é permanent_hazard_id
-        $hazardId = (int) $m[1];
+        // ID completo do place no Waze (string com pontos, ex: "207160888.2071412273.41231195")
+        $venueId = $m[1];
 
         if ($existing) {
             if ($wazeLink !== $existing['waze_link']) {
@@ -251,7 +252,7 @@ final class PostoController extends AbstractController
                 'UPDATE posto_waze_link
                  SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
                  WHERE id = ?',
-                [$wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
+                [$wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
             );
 
             $this->addFlash('success', 'Link Waze atualizado com sucesso.');
@@ -260,7 +261,7 @@ final class PostoController extends AbstractController
                 'INSERT INTO posto_waze_link
                  (posto_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now]
+                [$id, $wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now]
             );
 
             $newId = (int) $this->db->lastInsertId();

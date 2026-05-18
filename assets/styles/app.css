@@ -345,6 +345,222 @@ body {
 }
 
 /* ---------------------------------------------------------
+   Campos gerados pelo sol_theme.html.twig
+   Cada form_row() vira um .sol-field com .sol-label + .sol-input
+   --------------------------------------------------------- */
+
+/* Wrapper de cada campo */
+.sol-field {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    margin-bottom: 1rem;
+}
+.sol-field:last-child { margin-bottom: 0; }
+
+/* Label */
+.sol-label {
+    display: block;
+    font-size: .875rem;
+    font-weight: 500;
+    color: #374151;
+    line-height: 1.4;
+}
+.sol-label--required .sol-required,
+.sol-required {
+    color: #ef4444;
+    margin-left: .2rem;
+    font-weight: 700;
+}
+
+/* Input / Textarea / Select genérico */
+.sol-input {
+    display: block;
+    width: 100%;
+    padding: .48rem .75rem;
+    font-size: .875rem;
+    font-family: inherit;
+    color: #1e293b;
+    background: #fff;
+    border: 1.5px solid #d1d9e0;
+    border-radius: var(--sol-radius-sm);
+    line-height: 1.5;
+    appearance: none;
+    transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.sol-input:focus {
+    outline: none;
+    border-color: var(--tw);
+    box-shadow: 0 0 0 3px rgba(1,105,111,.13);
+}
+.sol-input.is-invalid {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239,68,68,.1);
+}
+.sol-input.is-valid {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16,185,129,.1);
+}
+
+/* Select — seta customizada */
+.sol-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right .75rem center;
+    background-size: 10px 6px;
+    padding-right: 2.25rem;
+    cursor: pointer;
+}
+
+/* Textarea */
+.sol-textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+/* Texto de ajuda */
+.sol-help {
+    font-size: .78rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.45;
+}
+
+/* Mensagem de erro */
+.sol-error {
+    font-size: .8rem;
+    color: #dc2626;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+}
+.sol-error i { flex-shrink: 0; }
+
+/* ---------------------------------------------------------
+   Checkbox customizado (.sol-check)
+   --------------------------------------------------------- */
+.sol-check {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: .6rem;
+    cursor: pointer;
+    user-select: none;
+    padding: .1rem 0;
+}
+.sol-check input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.sol-check__box {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: .1rem;
+    border: 2px solid #d1d9e0;
+    border-radius: 5px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color var(--t-fast), background var(--t-fast);
+}
+.sol-check__box::after {
+    content: '';
+    width: 9px;
+    height: 5px;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: rotate(-45deg) scale(0);
+    transform-origin: center;
+    transition: transform var(--t-fast);
+    margin-top: -2px;
+}
+.sol-check input:checked ~ .sol-check__box {
+    background: var(--tw);
+    border-color: var(--tw);
+}
+.sol-check input:checked ~ .sol-check__box::after {
+    transform: rotate(-45deg) scale(1);
+}
+.sol-check input:focus-visible ~ .sol-check__box {
+    box-shadow: 0 0 0 3px rgba(1,105,111,.2);
+}
+.sol-check__label {
+    font-size: .875rem;
+    color: #374151;
+    line-height: 1.45;
+}
+
+/* ---------------------------------------------------------
+   Radio customizado (.sol-radio)
+   --------------------------------------------------------- */
+.sol-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+    cursor: pointer;
+    user-select: none;
+    padding: .1rem 0;
+}
+.sol-radio input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.sol-radio__dot {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #d1d9e0;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color var(--t-fast);
+}
+.sol-radio__dot::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--tw);
+    transform: scale(0);
+    transition: transform var(--t-fast);
+}
+.sol-radio input:checked ~ .sol-radio__dot {
+    border-color: var(--tw);
+}
+.sol-radio input:checked ~ .sol-radio__dot::after {
+    transform: scale(1);
+}
+.sol-radio input:focus-visible ~ .sol-radio__dot {
+    box-shadow: 0 0 0 3px rgba(1,105,111,.2);
+}
+.sol-radio__label {
+    font-size: .875rem;
+    color: #374151;
+}
+
+/* ---------------------------------------------------------
+   Grupo de choices expandidas (.sol-choices)
+   --------------------------------------------------------- */
+.sol-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem .75rem;
+}
+.sol-choices--radio,
+.sol-choices--checkbox {
+    flex-direction: column;
+    gap: .45rem;
+}
+
+/* ---------------------------------------------------------
    Grid de tipo-pills
    --------------------------------------------------------- */
 .tipo-grid {
@@ -486,6 +702,7 @@ body {
 .permalink-wrapper {
     position: relative;
 }
+.permalink-wrapper .sol-input,
 .permalink-wrapper .form-control {
     padding-right: 2.5rem;
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;

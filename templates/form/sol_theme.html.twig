@@ -1,0 +1,86 @@
+{#
+  Tema Twig para formulários de solicitação.
+  Uso: {% form_theme form 'form/sol_theme.html.twig' %}
+  Garante: label em cima do input, classes corretas, mensagens de erro inline.
+#}
+
+{%- block form_row -%}
+  {%- set row_class = row_class|default('') -%}
+  <div class="sol-field {{ row_class }}">
+    {{- form_label(form) -}}
+    {{- form_widget(form) -}}
+    {{- form_help(form) -}}
+    {{- form_errors(form) -}}
+  </div>
+{%- endblock form_row -%}
+
+{%- block form_label -%}
+  {%- if label is not same as(false) -%}
+    {%- set label = label|default(form.vars.label|default(form.vars.name|replace({'_': ' '})|title)) -%}
+    <label class="sol-label{{ required ? ' sol-label--required' : '' }}" for="{{ id }}">
+      {{- label|trans({}, translation_domain) -}}
+      {%- if required -%}<span class="sol-required" aria-hidden="true">*</span>{%- endif -%}
+    </label>
+  {%- endif -%}
+{%- endblock form_label -%}
+
+{%- block form_widget_simple -%}
+  {%- set type = type|default('text') -%}
+  {%- if type == 'range' or type == 'color' -%}
+    {%- set attr = attr|merge({class: (attr.class|default('')) ~ ' form-range'}) -%}
+  {%- else -%}
+    {%- set attr = attr|merge({class: (attr.class|default('')) ~ ' sol-input'}) -%}
+  {%- endif -%}
+  {{- parent() -}}
+{%- endblock form_widget_simple -%}
+
+{%- block textarea_widget -%}
+  {%- set attr = attr|merge({class: (attr.class|default('')) ~ ' sol-input sol-textarea'}) -%}
+  {{- parent() -}}
+{%- endblock textarea_widget -%}
+
+{%- block choice_widget_collapsed -%}
+  {%- set attr = attr|merge({class: (attr.class|default('')) ~ ' sol-input sol-select'}) -%}
+  {{- parent() -}}
+{%- endblock choice_widget_collapsed -%}
+
+{%- block checkbox_widget -%}
+  <label class="sol-check">
+    <input type="checkbox" id="{{ id }}" name="{{ full_name }}"{% if required %} required{% endif %}{% if value is defined %} value="{{ value }}"{% endif %}{% if checked %} checked{% endif %}{% for attrname, attrvalue in attr %} {{ attrname }}="{{ attrvalue }}"{% endfor %}>
+    <span class="sol-check__box"></span>
+    <span class="sol-check__label">{{ label|default(form.vars.label)|trans({}, translation_domain) }}</span>
+  </label>
+{%- endblock checkbox_widget -%}
+
+{%- block radio_widget -%}
+  <label class="sol-radio">
+    <input type="radio" id="{{ id }}" name="{{ full_name }}"{% if required %} required{% endif %} value="{{ value }}"{% if checked %} checked{% endif %}{% for attrname, attrvalue in attr %} {{ attrname }}="{{ attrvalue }}"{% endfor %}>
+    <span class="sol-radio__dot"></span>
+    <span class="sol-radio__label">{{ label|default(form.vars.label)|trans({}, translation_domain) }}</span>
+  </label>
+{%- endblock radio_widget -%}
+
+{%- block choice_widget_expanded -%}
+  <div class="sol-choices {{ multiple ? 'sol-choices--checkbox' : 'sol-choices--radio' }}">
+    {%- for child in form -%}
+      <label class="sol-choice-item">
+        {{- form_widget(child) -}}
+        <span class="sol-choice-label">{{ child.vars.label|trans({}, translation_domain) }}</span>
+      </label>
+    {%- endfor -%}
+  </div>
+{%- endblock choice_widget_expanded -%}
+
+{%- block form_help -%}
+  {%- if help is not empty -%}
+    <p class="sol-help" id="{{ id }}_help">{{ help|trans({}, help_translation_domain) }}</p>
+  {%- endif -%}
+{%- endblock form_help -%}
+
+{%- block form_errors -%}
+  {%- if errors|length > 0 -%}
+    {%- for error in errors -%}
+      <p class="sol-error"><i class="bi bi-exclamation-circle"></i> {{ error.message }}</p>
+    {%- endfor -%}
+  {%- endif -%}
+{%- endblock form_errors -%}

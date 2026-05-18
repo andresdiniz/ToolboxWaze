@@ -1,118 +1,13 @@
 {% extends 'base.html.twig' %}
 {% block title %}Nova Solicitação{% endblock %}
-
-{% block stylesheets %}
-<style>
-.sol-card {
-  background: #fff;
-  border: 1px solid #e2e5ea;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.06);
-  margin-bottom: 1.25rem;
-  overflow: hidden;
-}
-.sol-card-header {
-  background: #f8f9fb;
-  border-bottom: 1px solid #e2e5ea;
-  padding: .7rem 1.1rem;
-  font-weight: 600;
-  font-size: .85rem;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: #5a6478;
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-}
-.sol-card-header i { color: #0077b5; font-size: 1rem; }
-.sol-card-body { padding: 1.1rem 1.25rem; }
-.tipo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: .65rem;
-  margin-top: .35rem;
-}
-.tipo-pill {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  padding: .65rem .85rem;
-  border: 2px solid #dee2e8;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color .18s, background .18s, box-shadow .18s;
-  user-select: none;
-  background: #fff;
-}
-.tipo-pill:hover { border-color: #0077b5; background: #f0f7ff; }
-.tipo-pill.active {
-  border-color: #0077b5;
-  background: #e8f3fb;
-  box-shadow: 0 0 0 3px rgba(0,119,181,.12);
-}
-.tipo-pill .tipo-icon {
-  width: 32px; height: 32px;
-  border-radius: 7px;
-  background: #e8f3fb;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  font-size: .95rem;
-  color: #0077b5;
-  transition: background .18s;
-}
-.tipo-pill.active .tipo-icon { background: #0077b5; color: #fff; }
-.tipo-pill .tipo-label { font-size: .82rem; font-weight: 500; color: #374151; line-height: 1.3; }
-.tipo-pill.active .tipo-label { color: #0055a0; font-weight: 600; }
-#campos-dinamicos { transition: opacity .22s ease; }
-#campos-dinamicos.loading { opacity: .4; pointer-events: none; }
-#campos-spinner {
-  display: none;
-  justify-content: center;
-  align-items: center;
-  padding: 1.5rem 0;
-  gap: .6rem;
-  color: #0077b5;
-  font-size: .9rem;
-}
-#campos-spinner.show { display: flex; }
-.sol-card-body .form-label { font-weight: 500; font-size: .875rem; margin-bottom: .3rem; }
-.sol-card-body .form-control,
-.sol-card-body .form-select {
-  border-color: #d1d5db;
-  border-radius: 7px;
-  font-size: .875rem;
-  transition: border-color .18s, box-shadow .18s;
-}
-.sol-card-body .form-control:focus,
-.sol-card-body .form-select:focus {
-  border-color: #0077b5;
-  box-shadow: 0 0 0 3px rgba(0,119,181,.15);
-}
-.btn-enviar {
-  background: #0077b5;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: .6rem 2rem;
-  font-weight: 600;
-  font-size: .9rem;
-  transition: background .18s, box-shadow .18s;
-}
-.btn-enviar:hover { background: #005c8e; box-shadow: 0 3px 10px rgba(0,119,181,.25); }
-.btn-enviar:disabled { background: #a0c4d8; cursor: not-allowed; }
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.campo-animado { animation: fadeSlideIn .28s ease both; }
-</style>
-{% endblock %}
+{% form_theme form 'form/sol_theme.html.twig' %}
 
 {% block body %}
-<div class="container py-4" style="max-width:780px">
-  <div class="mb-4">
-    <h4 class="fw-bold mb-0">📋 Formulário de Solicitações</h4>
-    <p class="text-muted small mt-1">Escolha o tipo, preencha os dados e envie. Responderemos por e-mail.</p>
+<div class="container py-4" style="max-width:800px">
+
+  <div class="sol-hub-header">
+    <h4><i class="bi bi-send"></i> Nova Solicitação</h4>
+    <p>Escolha o tipo, preencha os dados e envie. Responderemos por e-mail.</p>
   </div>
 
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
@@ -130,15 +25,15 @@
     </div>
   </div>
 
-  {# ── 2. Tipo (pills visuais) ───────────────────────────────── #}
+  {# ── 2. Tipo (pills visuais) ──────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
     <div class="sol-card-body">
-      {{ form_widget(form.tipo, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
-      {{ form_widget(form.estado, {attr: {'data-estado-select': '1'}}) }}
+      {{ form_widget(form.tipo,   {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
+      {{ form_widget(form.estado, {attr: {'data-estado-select': '1', class: 'd-none', 'aria-hidden': 'true'}}) }}
       {{ form_errors(form.tipo) }}
 
-      <div class="tipo-grid mt-3" id="tipo-pills">
+      <div class="tipo-grid" id="tipo-pills">
         {% set iconMap = {
           'imagem_satelite':     {'icon': 'bi-globe',                'label': 'Imagem de Satélite'},
           'gerente_area':        {'icon': 'bi-map',                  'label': 'Gerente de Área'},
@@ -160,51 +55,143 @@
     </div>
   </div>
 
-  {# ── 3. Campos dinâmicos (AJAX) ────────────────────────────── #}
+  {# ── 3. Campos dinâmicos ──────────────────────────────────── #}
   <div id="campos-spinner">
-    <div class="spinner-border spinner-border-sm" role="status"></div> Carregando campos…
+    <div class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></div>
+    Carregando campos…
   </div>
 
   <div id="campos-dinamicos">
     {% for field in form %}
       {% if field.vars.name starts with 'dados_' %}
+        {% set isPermalink = field.vars.name == 'dados_permalink' %}
         <div class="sol-card campo-animado">
-          <div class="sol-card-body">{{ form_row(field) }}</div>
+          <div class="sol-card-body">
+
+            {% if isPermalink %}
+              {# Permalink com botão copiar embutido #}
+              <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
+                {{ field.vars.label }}
+                {% if field.vars.required %}<span class="sol-required" aria-hidden="true">*</span>{% endif %}
+              </label>
+              <div class="permalink-wrapper">
+                {{ form_widget(field, {attr: {
+                  'data-permalink': '1',
+                  'autocomplete':   'off',
+                  'spellcheck':     'false',
+                  'placeholder':    'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46'
+                }}) }}
+                <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
+                  <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+              {% if field.vars.help is defined and field.vars.help %}
+                <p class="sol-help">{{ field.vars.help }}</p>
+              {% endif %}
+              {{ form_errors(field) }}
+
+            {% else %}
+              {{ form_row(field) }}
+            {% endif %}
+
+          </div>
         </div>
       {% endif %}
     {% endfor %}
 
+    {# Bloco de provas Oops #}
     <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
       <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
       <div class="sol-card-body">
-        <label class="form-label">Compartilhe provas <span class="text-muted">(até 5 imagens, 1 MB cada)</span></label>
-        <input type="file" name="arquivos_oops[]" class="form-control" accept="image/*" multiple>
+        <label class="sol-label">Compartilhe as provas <span class="text-muted fw-normal" style="font-size:.8rem">(até 5 imagens, 1 MB cada)</span></label>
+        <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
       </div>
     </div>
   </div>
 
-  <div class="d-flex justify-content-end mt-2 mb-4">
+  <div class="d-flex justify-content-end mt-2 mb-5">
     <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
-      <i class="bi bi-send me-1"></i> Enviar solicitação
+      <i class="bi bi-send"></i> Enviar solicitação
     </button>
   </div>
 
   {{ form_end(form) }}
 </div>
+{% endblock %}
 
+{% block javascripts %}
 <script>
 (function () {
-  const tipoSelect = document.querySelector('[data-tipo-select]');
-  const estadoSel  = document.querySelector('[data-estado-select]');
-  const pills      = document.querySelectorAll('.tipo-pill');
-  const dinamicos  = document.getElementById('campos-dinamicos');
-  const spinner    = document.getElementById('campos-spinner');
-  const btnEnviar  = document.getElementById('btn-enviar');
+  /* ── Permalink copy ───────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.permalink-copy-btn');
+    if (!btn) return;
+    const input = btn.closest('.permalink-wrapper')?.querySelector('input');
+    if (!input || !input.value) return;
+    navigator.clipboard.writeText(input.value).then(() => {
+      const icon = btn.querySelector('i');
+      icon.className = 'bi bi-clipboard-check';
+      btn.style.color = 'var(--tw)';
+      setTimeout(() => { icon.className = 'bi bi-clipboard'; btn.style.color = ''; }, 1800);
+    });
+  });
 
-  if (!tipoSelect) { console.error('ToolboxWaze: campo tipo não encontrado no DOM'); return; }
+  /* ── Validação de permalink (zoom ≥15) ─────────────────── */
+  const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com\/editor\//i;
+  const ZOOM_RE = /[?&]zoom=(\d+)/i;
+  function checkPermalink(val) {
+    const v = val.trim();
+    if (!v) return { ok: true };
+    if (!WAZE_RE.test(v)) return { ok: false, msg: 'A URL deve ser do editor Waze (waze.com/editor).' };
+    const m = ZOOM_RE.exec(v);
+    if (!m) return { ok: false, msg: 'URL sem parâmetro zoom. Copie a URL completa do editor.' };
+    const z = parseInt(m[1], 10);
+    if (z < 15) return { ok: false, msg: `Zoom ${z} é insuficiente — mínimo exigido: 15.` };
+    return { ok: true, zoom: z };
+  }
+  function applyPermalinkFeedback(input, result) {
+    const wrap   = input.closest('.permalink-wrapper') ?? input.parentElement;
+    const parent = wrap.parentElement;
+    input.classList.toggle('is-invalid', !result.ok);
+    input.classList.toggle('is-valid',    result.ok && input.value.trim().length > 0);
+    let fb = parent.querySelector('.permalink-feedback');
+    if (!result.ok) {
+      if (!fb) { fb = document.createElement('p'); fb.className = 'sol-error permalink-feedback'; wrap.insertAdjacentElement('afterend', fb); }
+      fb.innerHTML = '<i class="bi bi-exclamation-circle"></i> ' + result.msg;
+    } else if (fb) { fb.remove(); }
+    let badge = parent.querySelector('.permalink-zoom-badge');
+    if (result.ok && result.zoom) {
+      if (!badge) { badge = document.createElement('span'); badge.className = 'permalink-zoom-badge zoom-ok'; wrap.insertAdjacentElement('afterend', badge); }
+      badge.className = 'permalink-zoom-badge zoom-ok';
+      badge.innerHTML = `<i class="bi bi-check-circle-fill"></i> Zoom ${result.zoom} — válido`;
+    } else if (badge) { badge.remove(); }
+  }
+  function initPermalinks() {
+    document.querySelectorAll('[data-permalink]').forEach(input => {
+      if (input.dataset.plInit) return;
+      input.dataset.plInit = '1';
+      input.addEventListener('blur',  () => applyPermalinkFeedback(input, checkPermalink(input.value)));
+      input.addEventListener('input', () => {
+        if (input.classList.contains('is-invalid')) {
+          const r = checkPermalink(input.value);
+          if (r.ok) applyPermalinkFeedback(input, r);
+        }
+      });
+    });
+  }
+  initPermalinks();
+
+  /* ── Pills de tipo ────────────────────────────────────── */
+  const tipoSelect = document.querySelector('[data-tipo-select]');
+  if (!tipoSelect) return;
+  const estadoSel = document.querySelector('[data-estado-select]');
+  const pills     = document.querySelectorAll('.tipo-pill');
+  const dinamicos = document.getElementById('campos-dinamicos');
+  const spinner   = document.getElementById('campos-spinner');
+  const btnEnviar = document.getElementById('btn-enviar');
 
   pills.forEach(pill => {
-    pill.addEventListener('click', () => chooseTipo(pill.dataset.value));
+    pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
     pill.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); }
     });
@@ -216,16 +203,14 @@
     activatePill(valor);
     fetchCampos(valor);
   }
-
   function activatePill(valor) {
     pills.forEach(p => {
       const on = p.dataset.value === valor;
       p.classList.toggle('active', on);
       p.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
-    btnEnviar.disabled = !valor;
+    if (btnEnviar) btnEnviar.disabled = !valor;
   }
-
   function fetchCampos(tipo) {
     spinner.classList.add('show');
     dinamicos.classList.add('loading');
@@ -240,9 +225,9 @@
         if (novo) {
           dinamicos.innerHTML = novo.innerHTML;
           dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
-            el.style.animationDelay = (i * 0.05) + 's';
-            el.classList.add('campo-animado');
+            el.style.animationDelay = (i * 0.055) + 's';
           });
+          initPermalinks();
         }
       })
       .catch(err => console.error('ToolboxWaze fetchCampos erro:', err))
@@ -251,6 +236,19 @@
         dinamicos.classList.remove('loading');
       });
   }
+
+  /* ── Bloqueia submit se permalink inválido ───────────── */
+  document.getElementById('form-solicitacao')
+    ?.addEventListener('submit', e => {
+      let ok = true;
+      e.target.querySelectorAll('[data-permalink]').forEach(input => {
+        if (!input.value.trim()) return;
+        const r = checkPermalink(input.value);
+        applyPermalinkFeedback(input, r);
+        if (!r.ok && ok) { ok = false; input.focus(); }
+      });
+      if (!ok) e.preventDefault();
+    });
 })();
 </script>
 {% endblock %}

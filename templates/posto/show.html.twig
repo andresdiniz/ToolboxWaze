@@ -4,6 +4,7 @@
 
 {% block body %}
 
+{# ── Breadcrumb ── #}
 <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="{{ path('posto_index') }}">Postos</a></li>
@@ -15,81 +16,121 @@
 {% for type, messages in app.flashes %}
     {% for msg in messages %}
         <div class="alert alert-{{ type == 'success' ? 'success' : 'danger' }} alert-dismissible fade show" role="alert">
-            {{ msg }}
+            <i class="bi bi-{{ type == 'success' ? 'check-circle' : 'exclamation-triangle' }} me-2"></i>{{ msg }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     {% endfor %}
 {% endfor %}
 
-{# ── Cabeçalho ── #}
-<div class="d-flex align-items-start justify-content-between mb-4">
-    <div>
-        <h1 class="h4 mb-1 fw-bold">
-            <i class="bi bi-fuel-pump text-success me-2"></i>
-            {{ posto.razao_social }}
-        </h1>
-        {% if posto.nome_fantasia and posto.nome_fantasia != posto.razao_social %}
-            <div class="text-muted">{{ posto.nome_fantasia }}</div>
-        {% endif %}
-        <div class="mt-1">
-            <span class="badge badge-uf me-1">{{ posto.uf }}</span>
-            {% if posto.bandeira %}
-                <span class="badge bg-light text-dark border">{{ posto.bandeira }}</span>
-            {% endif %}
+{# ══════════════════════════════════════════
+   HERO HEADER
+══════════════════════════════════════════ #}
+<div class="posto-hero card mb-4 border-0">
+    <div class="card-body p-4">
+        <div class="d-flex flex-column flex-sm-row align-items-sm-start justify-content-sm-between gap-3">
+            <div class="flex-grow-1">
+                {# Badges topo #}
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <span class="badge badge-uf fs-6 px-3 py-2">{{ posto.uf }}</span>
+                    {% if posto.bandeira %}
+                        <span class="badge bg-white text-dark border px-3 py-2 fs-6">{{ posto.bandeira }}</span>
+                    {% endif %}
+                    {% if wazeLink %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fs-6">
+                            <i class="bi bi-check-circle me-1"></i>Waze vinculado
+                        </span>
+                    {% else %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2 fs-6">
+                            <i class="bi bi-exclamation-circle me-1"></i>Sem vínculo Waze
+                        </span>
+                    {% endif %}
+                </div>
+
+                {# Nome #}
+                <h1 class="h3 fw-bold mb-1">
+                    <i class="bi bi-fuel-pump text-success me-2"></i>{{ posto.razao_social }}
+                </h1>
+                {% if posto.nome_fantasia and posto.nome_fantasia != posto.razao_social %}
+                    <p class="text-muted mb-2">{{ posto.nome_fantasia }}</p>
+                {% endif %}
+
+                {# Endereço resumido #}
+                <p class="mb-0 text-muted small">
+                    <i class="bi bi-geo-alt me-1"></i>
+                    {{ posto.endereco }}{% if posto.complemento %}, {{ posto.complemento }}{% endif %} — {{ posto.municipio }}/{{ posto.uf }}{% if posto.cep %} · {{ posto.cep }}{% endif %}
+                </p>
+            </div>
+
+            {# CNPJ destaque #}
+            <div class="posto-cnpj-box text-center text-sm-end flex-shrink-0">
+                <div class="text-muted" style="font-size:.7rem;letter-spacing:.08em">CNPJ</div>
+                <code class="fs-6 fw-semibold">{{ posto.cnpj }}</code>
+            </div>
         </div>
     </div>
-    <code class="fs-6 text-muted">{{ posto.cnpj }}</code>
 </div>
 
+{# ══════════════════════════════════════════
+   CORPO 2 COLUNAS
+══════════════════════════════════════════ #}
 <div class="row g-4">
 
-    {# ── Coluna esquerda ── #}
-    <div class="col-lg-6">
+    {# ─────────────────────────────
+       COLUNA ESQUERDA
+    ───────────────────────────── #}
+    <div class="col-xl-6">
 
-        {# Endereço #}
+        {# ── Localização ── #}
         <div class="card mb-4">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-geo-alt me-2"></i>Localização
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-geo-alt-fill text-danger"></i>
+                <span class="fw-semibold">Localização</span>
             </div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-12">
                         <div class="detail-label">Endereço</div>
                         <div class="detail-value">
-                            {{ posto.endereco }}
-                            {% if posto.complemento %}, {{ posto.complemento }}{% endif %}
+                            {{ posto.endereco }}{% if posto.complemento %}, {{ posto.complemento }}{% endif %}
                         </div>
                     </div>
-                    <div class="col-sm-6">
+                    <div class="col-sm-5">
                         <div class="detail-label">Bairro</div>
                         <div class="detail-value">{{ posto.bairro ?? '—' }}</div>
                     </div>
-                    <div class="col-sm-6">
+                    <div class="col-sm-4">
+                        <div class="detail-label">Município</div>
+                        <div class="detail-value fw-semibold">{{ posto.municipio ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-1">
+                        <div class="detail-label">UF</div>
+                        <div class="detail-value fw-bold">{{ posto.uf ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-2">
                         <div class="detail-label">CEP</div>
                         <div class="detail-value">{{ posto.cep ?? '—' }}</div>
                     </div>
-                    <div class="col-sm-8">
-                        <div class="detail-label">Município</div>
-                        <div class="detail-value">{{ posto.municipio ?? '—' }}</div>
-                    </div>
-                    <div class="col-sm-4">
-                        <div class="detail-label">UF</div>
-                        <div class="detail-value">{{ posto.uf ?? '—' }}</div>
-                    </div>
-                    <div class="col-12">
+                    <div class="col-12 pt-1">
                         <a href="https://www.google.com/maps/search/{{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
-                           target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-google me-1"></i>Ver no Google Maps
+                           target="_blank" rel="noopener"
+                           class="btn btn-sm btn-outline-secondary me-2">
+                            <i class="bi bi-google me-1"></i>Google Maps
+                        </a>
+                        <a href="https://waze.com/ul?q={{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
+                           target="_blank" rel="noopener"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-waze me-1"></i>Buscar no Waze
                         </a>
                     </div>
                 </div>
             </div>
         </div>
 
-        {# Dados cadastrais #}
+        {# ── Dados Cadastrais ── #}
         <div class="card mb-4">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-card-text me-2"></i>Dados Cadastrais
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-card-text text-secondary"></i>
+                <span class="fw-semibold">Dados Cadastrais</span>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -121,137 +162,165 @@
             </div>
         </div>
 
-        {# Consultas Externas #}
+        {# ── Consultas Externas ── #}
         <div class="card mb-4">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-box-arrow-up-right me-2"></i>Consultas Externas
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-box-arrow-up-right text-secondary"></i>
+                <span class="fw-semibold">Consultas Externas</span>
             </div>
             <div class="card-body d-flex flex-column gap-2">
                 {% set cnpj_limpo = posto.cnpj|replace({'.': '', '/': '', '-': ''}) %}
 
-                {# Receita Federal #}
                 <a href="https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/Cnpjreva_Solicitacao.asp?cnpj={{ cnpj_limpo }}"
                    target="_blank" rel="noopener"
                    class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
                     <i class="bi bi-building flex-shrink-0"></i>
-                    <div>
+                    <div class="flex-grow-1">
                         <div class="fw-semibold lh-sm">Receita Federal</div>
                         <div class="text-muted" style="font-size:.78rem">Situação cadastral do CNPJ</div>
                     </div>
-                    <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
+                    <i class="bi bi-arrow-up-right flex-shrink-0 opacity-50"></i>
                 </a>
 
-                {# ANP — CDP (Consulta de Dados Públicos) - sistema oficial #}
                 <a href="https://cdp.anp.gov.br/ords/r/cdp_apex/consulta-dados-publicos-cdp/consulta-de-postos-lista?P3_CNPJ={{ cnpj_limpo }}"
                    target="_blank" rel="noopener"
                    class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
                     <i class="bi bi-fuel-pump flex-shrink-0"></i>
-                    <div>
+                    <div class="flex-grow-1">
                         <div class="fw-semibold lh-sm">ANP — Consulta CDP</div>
-                        <div class="text-muted" style="font-size:.78rem">Situação, interdicção e autorização do posto</div>
+                        <div class="text-muted" style="font-size:.78rem">Situação, interdição e autorização do posto</div>
                     </div>
-                    <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
+                    <i class="bi bi-arrow-up-right flex-shrink-0 opacity-50"></i>
                 </a>
 
-                {# ANP — Atos Oficiais #}
                 <a href="https://atosoficiais.com.br/anp?q={{ cnpj_limpo }}"
                    target="_blank" rel="noopener"
                    class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
                     <i class="bi bi-file-earmark-text flex-shrink-0"></i>
-                    <div>
+                    <div class="flex-grow-1">
                         <div class="fw-semibold lh-sm">ANP — Atos de Autorização</div>
                         <div class="text-muted" style="font-size:.78rem">Publicações no Diário Oficial pelo CNPJ</div>
                     </div>
-                    <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
+                    <i class="bi bi-arrow-up-right flex-shrink-0 opacity-50"></i>
                 </a>
             </div>
         </div>
 
     </div>
 
-    {# ── Coluna direita ── #}
-    <div class="col-lg-6">
+    {# ─────────────────────────────
+       COLUNA DIREITA
+    ───────────────────────────── #}
+    <div class="col-xl-6">
 
-        {# ── WAZE LINK ── #}
-        <div class="card mb-4" id="waze-card">
-            <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
-                <span><i class="bi bi-waze me-2 text-primary"></i>Link Waze</span>
+        {# ══ WAZE CARD ══ #}
+        <div class="card mb-4 {{ wazeLink ? 'border-primary border-opacity-25' : 'border-warning border-opacity-25' }}" id="waze-card">
+            <div class="card-header d-flex align-items-center justify-content-between
+                        {{ wazeLink ? 'bg-primary-subtle' : 'bg-warning-subtle' }}">
+                <span class="fw-semibold d-flex align-items-center gap-2">
+                    <i class="bi bi-waze {{ wazeLink ? 'text-primary' : 'text-warning-emphasis' }}"></i>
+                    Vínculo Waze
+                </span>
                 {% if wazeLink %}
                     <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener"
-                       class="btn btn-sm btn-outline-primary">
+                       class="btn btn-sm btn-primary">
                         <i class="bi bi-box-arrow-up-right me-1"></i>Abrir Editor
                     </a>
                 {% endif %}
             </div>
 
             {% if wazeLink %}
-            <div class="card-body pb-2">
+            <div class="card-body">
+
+                {# Venue ID destaque #}
+                <div class="venue-id-box p-3 mb-3 rounded-3 bg-body-secondary d-flex align-items-center gap-3">
+                    <div class="flex-grow-1">
+                        <div class="detail-label mb-1">Venue ID</div>
+                        <code class="fs-6 fw-bold text-primary">{{ wazeLink.permanent_hazard_id }}</code>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary copy-btn flex-shrink-0"
+                            data-copy="{{ wazeLink.permanent_hazard_id }}"
+                            title="Copiar ID">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+
+                {# URL #}
+                <div class="mb-3">
+                    <div class="detail-label">URL cadastrada</div>
+                    <div class="detail-value small text-break">
+                        <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener">{{ wazeLink.waze_link }}</a>
+                    </div>
+                </div>
+
+                {# Meta: cadastro e atualização #}
                 <div class="row g-2">
-                    <div class="col-12">
-                        <div class="detail-label">URL cadastrada</div>
-                        <div class="detail-value text-break small">
-                            <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener">{{ wazeLink.waze_link }}</a>
-                        </div>
-                    </div>
-                    <div class="col-sm-6">
-                        <div class="detail-label">Venue ID</div>
-                        <div class="detail-value"><code>{{ wazeLink.permanent_hazard_id }}</code></div>
-                    </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Cadastrado por</div>
-                        <div class="detail-value small">{{ wazeLink.inserted_by_email }}<br><span class="text-muted">{{ wazeLink.inserted_at|date('d/m/Y H:i') }}</span></div>
+                        <div class="detail-value small">
+                            <i class="bi bi-person me-1 opacity-50"></i>{{ wazeLink.inserted_by_email }}<br>
+                            <span class="text-muted">{{ wazeLink.inserted_at|date('d/m/Y H:i') }}</span>
+                        </div>
                     </div>
                     {% if wazeLink.updated_by_email %}
-                    <div class="col-12">
+                    <div class="col-sm-6">
                         <div class="detail-label">Última atualização</div>
-                        <div class="detail-value small">{{ wazeLink.updated_by_email }}<br><span class="text-muted">{{ wazeLink.updated_at|date('d/m/Y H:i') }}</span></div>
+                        <div class="detail-value small">
+                            <i class="bi bi-pencil me-1 opacity-50"></i>{{ wazeLink.updated_by_email }}<br>
+                            <span class="text-muted">{{ wazeLink.updated_at|date('d/m/Y H:i') }}</span>
+                        </div>
                     </div>
                     {% endif %}
                     {% if wazeLink.observacao %}
                     <div class="col-12">
                         <div class="detail-label">Observação</div>
-                        <div class="detail-value small fst-italic">{{ wazeLink.observacao }}</div>
+                        <div class="detail-value small fst-italic text-muted">"{{ wazeLink.observacao }}"</div>
                     </div>
                     {% endif %}
                 </div>
             </div>
             {% else %}
-            <div class="card-body text-muted fst-italic small">
-                Nenhum link cadastrado para este posto.
+            <div class="card-body py-4 text-center">
+                <i class="bi bi-waze text-muted" style="font-size:2.5rem"></i>
+                <p class="text-muted mt-2 mb-0">Nenhum link Waze cadastrado para este posto.</p>
             </div>
             {% endif %}
 
+            {# ── Formulário ── #}
             {% if is_granted('IS_AUTHENTICATED_REMEMBERED') %}
             <div class="card-footer p-0">
                 <div class="accordion accordion-flush" id="wazeFormAccordion">
-                    <div class="accordion-item border-0">
+                    <div class="accordion-item border-0 bg-transparent">
                         <h2 class="accordion-header">
-                            <button class="accordion-button collapsed py-2 px-3 fw-semibold small"
+                            <button class="accordion-button collapsed py-2 px-3 fw-semibold small bg-transparent"
                                     type="button" data-bs-toggle="collapse"
                                     data-bs-target="#waze-form-collapse"
                                     aria-expanded="{% if wazeErrors is not empty %}true{% else %}false{% endif %}">
                                 <i class="bi bi-pencil-square me-2"></i>
-                                {{ wazeLink ? 'Editar link' : 'Cadastrar link' }}
+                                {{ wazeLink ? 'Editar link Waze' : 'Cadastrar link Waze' }}
                             </button>
                         </h2>
                         <div id="waze-form-collapse"
                              class="accordion-collapse collapse{% if wazeErrors is not empty %} show{% endif %}">
-                            <div class="accordion-body">
-                                <form method="post"
-                                      action="{{ path('posto_waze_save', {id: posto.id}) }}">
+                            <div class="accordion-body pt-2">
+                                <form method="post" action="{{ path('posto_waze_save', {id: posto.id}) }}">
                                     <input type="hidden" name="_token"
                                            value="{{ csrf_token('posto_waze_save_' ~ posto.id) }}">
 
                                     <div class="mb-3">
-                                        <label class="form-label fw-semibold" for="waze_link_posto">Link do Editor Waze</label>
+                                        <label class="form-label fw-semibold" for="waze_link_posto">
+                                            <i class="bi bi-link-45deg me-1"></i>Link do Editor Waze
+                                        </label>
                                         <input type="url" id="waze_link_posto" name="waze_link"
                                                class="form-control form-control-sm{% if wazeErrors.waze_link is defined %} is-invalid{% endif %}"
-                                               placeholder="https://waze.com/pt-BR/editor?...&venues=123456"
+                                               placeholder="https://waze.com/pt-BR/editor?...&venues=207160888.2071412273.41231195"
                                                value="{{ wazeFormData.waze_link ?? wazeLink.waze_link ?? '' }}">
                                         {% if wazeErrors.waze_link is defined %}
                                             <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
                                         {% else %}
-                                            <div class="form-text">Deve conter o parâmetro <code>venues=NÚMERO</code>.</div>
+                                            <div class="form-text">
+                                                Deve conter o parâmetro <code>venues=ID</code> (ex: <code>207160888.2071412273.41231195</code>).
+                                            </div>
                                         {% endif %}
                                     </div>
 
@@ -283,53 +352,84 @@
             {% endif %}
         </div>
 
-        {# ── HISTÓRICO WAZE ── #}
+        {# ══ HISTÓRICO WAZE ══ #}
         {% if wazeLog is not empty %}
         <div class="card mb-4">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-clock-history me-2"></i>Histórico de Alterações — Waze
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-clock-history text-secondary"></i>
+                <span class="fw-semibold">Histórico de Alterações</span>
+                <span class="badge bg-secondary ms-auto">{{ wazeLog|length }}</span>
             </div>
-            <div class="list-group list-group-flush">
+            <div class="list-group list-group-flush" style="max-height:280px;overflow-y:auto">
                 {% for log in wazeLog %}
                 <div class="list-group-item px-3 py-2">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <span class="badge bg-secondary me-2">{{ log.campo_alterado }}</span>
-                        <small class="text-muted ms-auto">{{ log.changed_at|date('d/m/Y H:i') }} — {{ log.changed_by_email }}</small>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="badge
+                            {% if log.campo_alterado == 'waze_link' %}bg-primary-subtle text-primary border border-primary-subtle
+                            {% else %}bg-secondary-subtle text-secondary border border-secondary-subtle{% endif %}
+                            ">
+                            <i class="bi bi-{{ log.campo_alterado == 'waze_link' ? 'link-45deg' : 'chat-left-text' }} me-1"></i>
+                            {{ log.campo_alterado|replace({'_': ' '})|title }}
+                        </span>
+                        <small class="text-muted">
+                            <i class="bi bi-person me-1"></i>{{ log.changed_by_email }}
+                            · {{ log.changed_at|date('d/m/Y H:i') }}
+                        </small>
                     </div>
-                    <div class="small mt-1">
-                        {% if log.valor_anterior %}
-                        <div class="text-danger"><i class="bi bi-arrow-left me-1"></i>{{ log.valor_anterior }}</div>
-                        {% endif %}
-                        {% if log.valor_novo %}
-                        <div class="text-success"><i class="bi bi-arrow-right me-1"></i>{{ log.valor_novo }}</div>
-                        {% endif %}
+                    {% if log.valor_anterior %}
+                    <div class="small text-danger-emphasis bg-danger-subtle rounded px-2 py-1 mb-1 text-break">
+                        <i class="bi bi-dash-circle me-1"></i>{{ log.valor_anterior }}
                     </div>
+                    {% endif %}
+                    {% if log.valor_novo %}
+                    <div class="small text-success-emphasis bg-success-subtle rounded px-2 py-1 text-break">
+                        <i class="bi bi-plus-circle me-1"></i>{{ log.valor_novo }}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
 
-        {# Metadados #}
+        {# ══ METADADOS ══ #}
         <div class="card">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-database me-2"></i>Metadados
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-database text-secondary"></i>
+                <span class="fw-semibold">Metadados</span>
             </div>
             <div class="card-body">
                 <div class="row g-2">
-                    <div class="col-12">
+                    <div class="col-sm-6">
                         <div class="detail-label">Importado em</div>
                         <div class="detail-value small">{{ posto.imported_at ?? '—' }}</div>
                     </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">ID interno</div>
+                        <div class="detail-value small"><code>{{ posto.id }}</code></div>
+                    </div>
                     <div class="col-12">
                         <div class="detail-label">Row Hash</div>
-                        <div class="detail-value"><code style="font-size:.7rem">{{ posto.row_hash }}</code></div>
+                        <div class="detail-value"><code style="font-size:.68rem">{{ posto.row_hash }}</code></div>
                     </div>
                 </div>
             </div>
         </div>
 
-    </div>
-</div>
+    </div>{# /col-xl-6 #}
+</div>{# /row #}
+
+{# ── Copy-to-clipboard ── #}
+<script>
+document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(btn.dataset.copy).then(() => {
+            const icon = btn.querySelector('i');
+            icon.className = 'bi bi-check2 text-success';
+            setTimeout(() => icon.className = 'bi bi-clipboard', 1500);
+        });
+    });
+});
+</script>
 
 {% endblock %}

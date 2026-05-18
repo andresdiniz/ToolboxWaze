@@ -125,13 +125,14 @@
           {% elseif valor is iterable %}
             {# array — junta com vírgula usando labels quando possível #}
             {{ valor|map(v => LABELS[v] ?? v)|join(', ') }}
-          {% elseif valor == true or valor == '1' %}
-            <span class="text-success">✓ Sim</span>
-          {% elseif valor == false or valor == '0' %}
-            <span class="text-danger">✗ Não</span>
           {% elseif LABELS[valor] is defined %}
-            {# choice com label mapeado #}
+            {# choice com label mapeado — DEVE vir antes dos booleanos #}
+            {# para evitar que '1_5', '6_10' etc. sejam lidos como true #}
             {{ LABELS[valor] }}
+          {% elseif valor == true or valor === true or (valor is same as(true)) %}
+            <span class="text-success">✓ Sim</span>
+          {% elseif valor == false or valor === false or (valor is same as(false)) %}
+            <span class="text-danger">✗ Não</span>
           {% elseif valor is not empty %}
             {{ valor }}
           {% else %}

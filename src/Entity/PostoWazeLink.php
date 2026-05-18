@@ -15,6 +15,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  *
  * Espelha RadarWazeLink, porém referencia fuel_reseller_raw.
  * Histórico completo de alterações fica em PostoWazeLinkLog (OneToMany).
+ *
+ * NOTA: postos usam o parâmetro venues= (não permanentHazards= dos radares).
  */
 #[ORM\Entity(repositoryClass: PostoWazeLinkRepository::class)]
 #[ORM\Table(name: 'posto_waze_link')]
@@ -33,20 +35,20 @@ class PostoWazeLink
 
     /**
      * URL completa do Editor de Mapas do Waze.
-     * Deve conter o parâmetro permanentHazards=<número>.
+     * Deve conter o parâmetro venues=<número>.
      */
     #[ORM\Column(name: 'waze_link', type: 'string', length: 1000)]
     #[Assert\NotBlank(message: 'O link do Waze é obrigatório.')]
     #[Assert\Url(message: 'Informe uma URL válida.')]
     #[Assert\Regex(
-        pattern: '/[?&]permanentHazards=\d+/',
-        message: 'O link deve conter o parâmetro permanentHazards com valor numérico (ex: &permanentHazards=272464).'
+        pattern: '/[?&]venues=\d+/',
+        message: 'O link deve conter o parâmetro venues com valor numérico (ex: &venues=207160888).'
     )]
     private string $wazeLink;
 
-    /** ID numérico extraído de permanentHazards — indexado para buscas */
-    #[ORM\Column(name: 'permanent_hazard_id', type: 'integer', options: ['unsigned' => true])]
-    private int $permanentHazardId;
+    /** ID numérico extraído de venues= — indexado para buscas */
+    #[ORM\Column(name: 'venue_id', type: 'integer', options: ['unsigned' => true])]
+    private int $venueId;
 
     /** Usuário que inseriu o link */
     #[ORM\ManyToOne(targetEntity: User::class)]
@@ -95,7 +97,7 @@ class PostoWazeLink
     public function getId(): ?int                              { return $this->id; }
     public function getPosto(): FuelResellerRaw                 { return $this->posto; }
     public function getWazeLink(): string                       { return $this->wazeLink; }
-    public function getPermanentHazardId(): int                 { return $this->permanentHazardId; }
+    public function getVenueId(): int                           { return $this->venueId; }
     public function getInsertedBy(): User                       { return $this->insertedBy; }
     public function getInsertedAt(): \DateTimeImmutable          { return $this->insertedAt; }
     public function getUpdatedBy(): ?User                       { return $this->updatedBy; }
@@ -117,22 +119,22 @@ class PostoWazeLink
     public function setObservacao(?string $v): static           { $this->observacao = $v; return $this; }
 
     /**
-     * Valida e seta o link, extraindo permanentHazardId automaticamente.
+     * Valida e seta o link, extraindo venueId automaticamente.
      *
-     * @throws \InvalidArgumentException se o link não contiver permanentHazards.
+     * @throws \InvalidArgumentException se o link não contiver venues=.
      */
     public function setWazeLink(string $url): static
     {
-        $hazardId = self::extractPermanentHazardId($url);
+        $venueId = self::extractVenueId($url);
 
-        if ($hazardId === null) {
+        if ($venueId === null) {
             throw new \InvalidArgumentException(
-                'O link do Waze deve conter o parâmetro permanentHazards com valor numérico.'
+                'O link do Waze deve conter o parâmetro venues com valor numérico (ex: &venues=207160888).'
             );
         }
 
-        $this->wazeLink          = $url;
-        $this->permanentHazardId = $hazardId;
+        $this->wazeLink = $url;
+        $this->venueId  = $venueId;
 
         return $this;
     }
@@ -141,9 +143,9 @@ class PostoWazeLink
     // Helper estático
     // -------------------------------------------------------------------------
 
-    public static function extractPermanentHazardId(string $url): ?int
+    public static function extractVenueId(string $url): ?int
     {
-        if (preg_match('/[?&]permanentHazards=(\d+)/', $url, $m)) {
+        if (preg_match('/[?&]venues=(\d+)/', $url, $m)) {
             return (int) $m[1];
         }
 

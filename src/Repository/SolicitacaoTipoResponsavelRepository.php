@@ -1,8 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Repository;
 
 use App\Entity\SolicitacaoTipoResponsavel;
+use App\Entity\TipoSolicitacaoConfig;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -16,24 +20,44 @@ class SolicitacaoTipoResponsavelRepository extends ServiceEntityRepository
         parent::__construct($registry, SolicitacaoTipoResponsavel::class);
     }
 
-    /** Retorna o registro para o tipo, criando se nao existir. */
-    public function findOrCreateByTipo(string $tipo): SolicitacaoTipoResponsavel
+    /**
+     * Verifica se o usuário é responsável pelo tipo de solicitação informado.
+     *
+     * @param TipoSolicitacaoConfig|string|int|null $tipo Entidade, slug ou id
+     */
+    public function isResponsavel(User $user, mixed $tipo): bool
     {
-        $obj = $this->findOneBy(['tipo' => $tipo]);
-        if (!$obj) {
-            $obj = new SolicitacaoTipoResponsavel($tipo);
-            $this->getEntityManager()->persist($obj);
+        if ($tipo === null) {
+            return false;
         }
-        return $obj;
+
+        $qb = $this->createQueryBuilder('r')
+            ->select('COUNT(r.id)')
+            ->where('r.usuario = :user')
+            ->setParameter('user', $user);
+
+        if ($tipo instanceof TipoSolicitacaoConfig) {
+            $qb->andWhere('r.tipo = :tipo')->setParameter('tipo', $tipo);
+        } else {
+            // aceita id numérico
+            $qb->join('r.tipo', 't')
+               ->andWhere('t.id = :tipo')
+               ->setParameter('tipo', (int) $tipo);
+        }
+
+        return (int) $qb->getQuery()->getSingleScalarResult() > 0;
     }
 
-    /** Indexado por tipo => SolicitacaoTipoResponsavel */
-    public function findAllIndexed(): array
+    /**
+     * Retorna todos os responsáveis de um tipo, hidratados como User.
+     *
+     * @return User[]
+     */
+    public function findUsersByTipo(TipoSolicitacaoConfig $tipo): array
     {
-        $result = [];
-        foreach ($this->findAll() as $item) {
-            $result[$item->getTipo()] = $item;
-        }
-        return $result;
+        return array_map(
+            fn (SolicitacaoTipoResponsavel $r) => $r->getUsuario(),
+            $this->findBy(['tipo' => $tipo])
+        );
     }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Repository\RadarWazeLinkRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -16,7 +18,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  *   «permanentHazards» com valor numérico.
  *   Ex.: https://waze.com/pt-BR/editor?env=row&lat=-20.59714&lon=-43.79811&zoomLevel=16&permanentHazards=272464
  *
- * Histórico de alterações fica em RadarWazeLinkLog.
+ * Histórico completo de alterações fica em RadarWazeLinkLog (OneToMany).
  */
 #[ORM\Entity(repositoryClass: RadarWazeLinkRepository::class)]
 #[ORM\Table(name: 'radar_waze_link')]
@@ -70,6 +72,26 @@ class RadarWazeLink
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $observacao = null;
 
+    /**
+     * Histórico completo de alterações deste link.
+     *
+     * @var Collection<int, RadarWazeLinkLog>
+     */
+    #[ORM\OneToMany(
+        targetEntity: RadarWazeLinkLog::class,
+        mappedBy: 'radarWazeLink',
+        cascade: ['persist'],
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY',
+    )]
+    #[ORM\OrderBy(['changedAt' => 'DESC'])]
+    private Collection $logs;
+
+    public function __construct()
+    {
+        $this->logs = new ArrayCollection();
+    }
+
     // -------------------------------------------------------------------------
     // Getters
     // -------------------------------------------------------------------------
@@ -83,6 +105,9 @@ class RadarWazeLink
     public function getUpdatedBy(): ?User                       { return $this->updatedBy; }
     public function getUpdatedAt(): ?\DateTimeImmutable          { return $this->updatedAt; }
     public function getObservacao(): ?string                    { return $this->observacao; }
+
+    /** @return Collection<int, RadarWazeLinkLog> */
+    public function getLogs(): Collection                       { return $this->logs; }
 
     // -------------------------------------------------------------------------
     // Setters

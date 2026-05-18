@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Entity\RadarWazeLink;
 use App\Entity\RadarWazeLinkLog;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -18,12 +19,17 @@ class RadarWazeLinkLogRepository extends ServiceEntityRepository
         parent::__construct($registry, RadarWazeLinkLog::class);
     }
 
-    /** Retorna o histórico de um link ordenado do mais recente ao mais antigo. */
-    public function findByLink(int $linkId): array
+    /**
+     * Retorna todos os logs de um RadarWazeLink, ordenados do mais recente
+     * para o mais antigo.
+     *
+     * @return RadarWazeLinkLog[]
+     */
+    public function findByLink(RadarWazeLink $link): array
     {
         return $this->createQueryBuilder('l')
-            ->where('l.radarWazeLink = :id')
-            ->setParameter('id', $linkId)
+            ->where('l.radarWazeLink = :link')
+            ->setParameter('link', $link)
             ->orderBy('l.changedAt', 'DESC')
             ->getQuery()
             ->getResult();

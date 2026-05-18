@@ -10,8 +10,9 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Histórico de alterações de um RadarWazeLink.
  *
- * Cada vez que o link é alterado, o valor anterior é gravado aqui
- * junto com quem alterou, quando e qual foi a mudança (campo alterado).
+ * Cada vez que o link (ou a observação) é alterado, o valor anterior
+ * é gravado aqui junto com quem alterou, quando e qual campo mudou.
+ * A relação inversa (OneToMany) está em RadarWazeLink::$logs.
  */
 #[ORM\Entity(repositoryClass: RadarWazeLinkLogRepository::class)]
 #[ORM\Table(name: 'radar_waze_link_log')]
@@ -23,7 +24,11 @@ class RadarWazeLinkLog
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true])]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: RadarWazeLink::class)]
+    /**
+     * Link ao qual este registro pertence.
+     * mappedBy espelha RadarWazeLink::$logs.
+     */
+    #[ORM\ManyToOne(targetEntity: RadarWazeLink::class, inversedBy: 'logs')]
     #[ORM\JoinColumn(name: 'radar_waze_link_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private RadarWazeLink $radarWazeLink;
 
@@ -47,6 +52,10 @@ class RadarWazeLinkLog
     #[ORM\Column(name: 'valor_novo', type: 'text', nullable: true)]
     private ?string $valorNovo = null;
 
+    /** Observação opcional do operador ao realizar a alteração */
+    #[ORM\Column(name: 'observacao', type: 'text', nullable: true)]
+    private ?string $observacao = null;
+
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -57,6 +66,7 @@ class RadarWazeLinkLog
         string $campoAlterado,
         ?string $valorAnterior,
         ?string $valorNovo,
+        ?string $observacao = null,
     ): self {
         $log = new self();
         $log->radarWazeLink  = $link;
@@ -65,6 +75,7 @@ class RadarWazeLinkLog
         $log->campoAlterado  = $campoAlterado;
         $log->valorAnterior  = $valorAnterior;
         $log->valorNovo      = $valorNovo;
+        $log->observacao     = $observacao;
 
         return $log;
     }
@@ -80,4 +91,5 @@ class RadarWazeLinkLog
     public function getCampoAlterado(): string                  { return $this->campoAlterado; }
     public function getValorAnterior(): ?string                 { return $this->valorAnterior; }
     public function getValorNovo(): ?string                     { return $this->valorNovo; }
+    public function getObservacao(): ?string                    { return $this->observacao; }
 }

@@ -1,9 +1,8 @@
 /*
- * Bootstrap CSS — gerenciado pelo AssetMapper.
+ * Bootstrap CSS — carregado via <link> no base.html.twig (evita bloqueio CSP font-src).
  * Bootstrap Icons: removido do CDN (causava bloqueio CSP font-src).
  * Ícones agora são SVG inline nos templates — zero dependência de fonte externa.
  */
-@import 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css';
 
 /* =========================================================
    Tipografia — Inter via Google Fonts

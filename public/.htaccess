@@ -1,47 +1,67 @@
-# This file is managed by Symfony and should not be manually modified.
-# @see https://symfony.com/doc/current/setup/web_server_configuration.html
-
+# Use the front controller as index file. It serves as a fallback solution when
+# every other rewrite/redirect fails (e.g. in an aliased environment without
+# mod_rewrite). Additionally, this reduces the matching process for the
+# start page (path "/") because otherwise Apache will apply the rewriting rules
+# to each configured DirectoryIndex file (e.g. index.php, index.html, index.pl).
 DirectoryIndex index.php
 
-<IfModule mod_negotiation.c>
-    Options -MultiViews
-</IfModule>
+# By default, Apache does not evaluate symbolic links if you did not enable this
+# temporary add another rule set.
+# UnsetEnv no-gzip
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Determine the RewriteBase automatically and set it as environment variable.
+    # If you are using Apache aliases or installing Symfony in a subdirectory,
+    # the resolver closes the RewriteBase automatically.
     RewriteCond %{REQUEST_URI}::$0 ^(/.+)/(.*)::\2$
     RewriteRule .* - [E=BASE:%1]
 
+    # Sets the HTTP_AUTHORIZATION header removed by Apache
     RewriteCond %{HTTP:Authorization} .+
     RewriteRule ^ - [E=HTTP_AUTHORIZATION:%0]
 
-    RewriteCond %{ENV:REDIRECT_STATUS} ^\.?
+    # Redirect to URI without front controller to prevent duplicate content
+    # (with and without `/index.php`). Only do this redirect on the initial
+    # rewrite by Apache and not on subsequent cycles. Otherwise we would get an
+    # endless redirect loop (request -> rewrite to front controller ->
+    # redirect -> request -> .....).
+    # So in case you get a "too many redirects" error or you always get redirected
+    # to the starting page because your Apache does not expose the
+    # temporary environment variable `REDIRECT_STATUS`, you have two choices:
+    # - disable this feature by commenting the following two lines or
+    # - use Apache >= 2.3.9 and replace all L flags by END flags and remove the
+    #   temporary environment variable
+    RewriteCond %{ENV:REDIRECT_STATUS} ^\/?
     RewriteRule ^index\.php(?:/(.*)|$) %{ENV:BASE}/$1 [R=301,L]
 
-    RewriteCond %{REQUEST_FILENAME} !-f
+    # If the requested filename exists, simply serve it.
+    # We only want to let Apache serve files and not directories.
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Rewrite all other queries to the front controller.
     RewriteRule ^ %{ENV:BASE}/index.php [L]
 </IfModule>
 
 <IfModule !mod_rewrite.c>
     <IfModule mod_alias.c>
+        # When mod_rewrite is not available, we instruct a temporary redirect of
+        # the start page to the front controller explicitly so that the website
+        # and the generated links can still be used.
         RedirectMatch 307 ^/$ /index.php/
+        # RedirectMatch 307 ^/$ /index.php/
+        # RedirectMatch 307 ^/$ /index.php/
     </IfModule>
 </IfModule>
 
-# ── Content Security Policy ──────────────────────────────────────────────────
-# Permite Bootstrap Icons (CDN), Bootstrap CSS/JS (cdn.jsdelivr.net),
-# fontes do Google (fonts.googleapis.com, fonts.gstatic.com),
-# fontes do Fontshare (api.fontshare.com) e ícones via data:.
 <IfModule mod_headers.c>
-    Header always set Content-Security-Policy "\
-        default-src 'self'; \
-        script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; \
-        style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com fonts.googleapis.com api.fontshare.com; \
-        font-src 'self' fonts.gstatic.com api.fontshare.com data:; \
-        img-src 'self' data: blob:; \
-        connect-src 'self' cdn.jsdelivr.net; \
-        frame-ancestors 'none'; \
-        base-uri 'self'; \
-        form-action 'self'"
+    # Content Security Policy — alinhada com todos os recursos usados na aplicação
+    # font-src:    fonts.gstatic.com (Inter), data: (SVG inline)
+    # style-src:   cdn.jsdelivr.net (Bootstrap CSS), fonts.googleapis.com (Inter CSS)
+    # script-src:  cdn.jsdelivr.net (Bootstrap JS), unsafe-inline (Symfony/Twig inline scripts)
+    # connect-src: cdn.jsdelivr.net (sourcemaps Bootstrap), self
+    # img-src:     self, data:, blob:, gstatic.com (Google OAuth avatar)
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src 'self' fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://lh3.googleusercontent.com; connect-src 'self' cdn.jsdelivr.net; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 </IfModule>

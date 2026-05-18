@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login — ToolboxWaze</title>
+    {# Inter via Google Fonts — font-src: fonts.gstatic.com já está na CSP #}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
+    {# Sem Bootstrap Icons CDN — ícones via SVG inline abaixo #}
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -46,7 +47,7 @@
 
         body {
             min-height: 100dvh;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 1rem;
             color: var(--text);
             display: grid;
@@ -79,13 +80,13 @@
         .panel-left-logo svg { width: 36px; height: 36px; }
         .panel-left-body { position: relative; }
         .panel-left-body .tagline {
-            font-family: 'Instrument Serif', serif;
             font-size: clamp(2rem, 3.5vw, 2.75rem);
             color: #fff;
             line-height: 1.2;
             margin-bottom: 1.25rem;
+            font-weight: 300;
         }
-        .panel-left-body .tagline em { font-style: italic; opacity: .85; }
+        .panel-left-body .tagline strong { font-weight: 700; }
         .panel-left-body p {
             color: rgba(255,255,255,.7);
             font-size: .9375rem;
@@ -124,16 +125,13 @@
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; color: var(--text-muted);
             transition: background var(--transition), color var(--transition);
-            font-size: 1rem;
         }
         .theme-toggle:hover { background: var(--tw-light); color: var(--tw); }
 
-        .auth-box {
-            width: 100%; max-width: 420px;
-        }
+        .auth-box { width: 100%; max-width: 420px; }
         .auth-box h2 {
-            font-family: 'Instrument Serif', serif;
             font-size: 1.875rem;
+            font-weight: 700;
             color: var(--text);
             margin-bottom: .375rem;
         }
@@ -142,7 +140,6 @@
             margin-bottom: 2rem;
         }
 
-        /* Alerts */
         .alert {
             border-radius: .625rem;
             padding: .75rem 1rem;
@@ -159,7 +156,6 @@
         [data-theme="dark"] .alert-success { background: #132a1e; color: #6fd6a0; }
         [data-theme="dark"] .alert-info    { background: var(--tw-light); color: var(--tw); }
 
-        /* Google button */
         .btn-google {
             width: 100%; padding: .75rem 1rem;
             border-radius: .625rem;
@@ -171,6 +167,7 @@
             display: flex; align-items: center; justify-content: center; gap: .625rem;
             text-decoration: none;
             transition: background var(--transition), box-shadow var(--transition), border-color var(--transition);
+            font-family: inherit;
         }
         .btn-google:hover {
             background: var(--surface-2);
@@ -179,7 +176,6 @@
         }
         .btn-google img { width: 20px; height: 20px; }
 
-        /* Divider */
         .divider {
             display: flex; align-items: center; gap: .75rem;
             margin: 1.25rem 0; color: var(--text-faint); font-size: .8125rem;
@@ -188,7 +184,6 @@
             content: ''; flex: 1; height: 1px; background: var(--border);
         }
 
-        /* Form */
         .form-group { margin-bottom: 1.125rem; }
         .form-group label {
             display: block; font-size: .8125rem; font-weight: 600;
@@ -198,8 +193,10 @@
         .input-wrap { position: relative; }
         .input-wrap .icon {
             position: absolute; left: .875rem; top: 50%; transform: translateY(-50%);
-            color: var(--text-faint); font-size: 1rem; pointer-events: none;
+            color: var(--text-faint); pointer-events: none;
+            display: flex; align-items: center;
         }
+        .input-wrap .icon svg { width: 16px; height: 16px; }
         .input-wrap input {
             width: 100%; padding: .75rem .875rem .75rem 2.5rem;
             border: 1.5px solid var(--border);
@@ -207,6 +204,7 @@
             background: var(--surface-2);
             color: var(--text);
             font-size: .9375rem;
+            font-family: inherit;
             transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
             outline: none;
         }
@@ -218,11 +216,13 @@
         .input-wrap input::placeholder { color: var(--text-faint); }
         .input-wrap .toggle-pw {
             position: absolute; right: .875rem; top: 50%; transform: translateY(-50%);
-            color: var(--text-faint); cursor: pointer; font-size: 1rem;
+            color: var(--text-faint); cursor: pointer;
             background: none; border: none; padding: 0;
             transition: color var(--transition);
+            display: flex; align-items: center;
         }
         .input-wrap .toggle-pw:hover { color: var(--tw); }
+        .input-wrap .toggle-pw svg { width: 16px; height: 16px; }
         .input-wrap input.has-toggle { padding-right: 2.75rem; }
 
         .row-between { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: 1rem; }
@@ -231,12 +231,12 @@
         .link { color: var(--tw); text-decoration: none; font-size: .875rem; font-weight: 500; }
         .link:hover { text-decoration: underline; }
 
-        /* Primary button */
         .btn-primary {
             width: 100%; padding: .8125rem 1.25rem;
             border-radius: .625rem; border: none;
             background: var(--tw); color: #fff;
             font-size: 1rem; font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
             display: flex; align-items: center; justify-content: center; gap: .5rem;
             transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
@@ -244,7 +244,8 @@
         .btn-primary:hover { background: var(--tw-d); box-shadow: 0 4px 16px rgba(1,105,111,.35); transform: translateY(-1px); }
         .btn-primary:active { transform: translateY(0); box-shadow: none; }
 
-        /* Footer links */
+        .btn-primary svg { width: 18px; height: 18px; }
+
         .auth-footer-links {
             margin-top: 1.75rem;
             padding-top: 1.75rem;
@@ -253,12 +254,9 @@
             gap: .375rem; font-size: .9rem; color: var(--text-muted);
         }
 
-        /* ── MOBILE ── */
         @media (max-width: 768px) {
             body { grid-template-columns: 1fr; }
-            .panel-left {
-                display: none;
-            }
+            .panel-left { display: none; }
             .panel-right { padding: 2rem 1.25rem; }
             .auth-box { max-width: 100%; }
         }
@@ -269,7 +267,7 @@
 {# ── LEFT PANEL ── #}
 <div class="panel-left" aria-hidden="true">
     <a href="#" class="panel-left-logo">
-        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 36 36" fill="none">
             <rect width="36" height="36" rx="9" fill="rgba(255,255,255,.15)"/>
             <path d="M18 7C13.03 7 9 11.03 9 16c0 7.5 9 14 9 14s9-6.5 9-14c0-4.97-4.03-9-9-9z" fill="#fff" opacity=".9"/>
             <circle cx="18" cy="16" r="3.5" fill="#01696f"/>
@@ -278,7 +276,7 @@
     </a>
 
     <div class="panel-left-body">
-        <h1 class="tagline">Dados que <em>guiam</em><br>decisões inteligentes</h1>
+        <h1 class="tagline">Dados que <strong>guiam</strong><br>decisões inteligentes</h1>
         <p>Acesse radares, postos de combustível, dados estaduais e muito mais — tudo integrado com a plataforma Waze for Cities.</p>
         <ul class="feature-list">
             <li><span class="icon">📡</span> Monitoramento de radares em tempo real</li>
@@ -294,47 +292,43 @@
 {# ── RIGHT PANEL ── #}
 <div class="panel-right">
     <button class="theme-toggle" data-theme-toggle aria-label="Alternar tema">
-        <i class="bi bi-moon" id="themeIcon"></i>
+        <svg id="themeIcon" viewBox="0 0 16 16" width="18" height="18" fill="currentColor">
+            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+        </svg>
     </button>
 
     <div class="auth-box">
         <h2>Bem-vindo de volta</h2>
         <p class="subtitle">Entre com sua conta para acessar a plataforma</p>
 
-        {# Flash messages #}
         {% for label, messages in app.flashes(['success','warning','danger','info']) %}
             {% for msg in messages %}
-                <div class="alert alert-{{ label }}" role="alert">
-                    <i class="bi bi-{% if label == 'danger' %}exclamation-triangle{% elseif label == 'success' %}check-circle{% elseif label == 'warning' %}exclamation-circle{% else %}info-circle{% endif %}-fill"></i>
-                    {{ msg }}
-                </div>
+                <div class="alert alert-{{ label }}" role="alert">{{ msg }}</div>
             {% endfor %}
         {% endfor %}
 
-        {# Erro de autenticação #}
         {% if error %}
             <div class="alert alert-danger" role="alert">
-                <i class="bi bi-exclamation-triangle-fill"></i>
                 {{ error.messageKey|trans(error.messageData, 'security') }}
             </div>
         {% endif %}
 
-        {# Botão Google #}
         <a href="{{ path('app_google_connect') }}" class="btn-google">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" loading="lazy">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" loading="lazy" width="20" height="20">
             Continuar com Google
         </a>
 
         <div class="divider">ou entre com e-mail</div>
 
-        {# Formulário #}
         <form method="post" action="{{ path('app_login') }}" novalidate>
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
 
             <div class="form-group">
                 <label for="email">E-mail</label>
                 <div class="input-wrap">
-                    <i class="bi bi-envelope icon"></i>
+                    <span class="icon">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1zm13 2.383-4.708 2.825L15 11.105zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741M1 11.105l4.708-2.897L1 5.383z"/></svg>
+                    </span>
                     <input type="email" id="email" name="email"
                            value="{{ last_username }}"
                            placeholder="seu@email.com"
@@ -348,13 +342,15 @@
                     <a href="{{ path('app_forgot_password') }}" class="link" style="font-size:.8125rem;text-transform:none;letter-spacing:0">Esqueceu a senha?</a>
                 </label>
                 <div class="input-wrap">
-                    <i class="bi bi-lock icon"></i>
+                    <span class="icon">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2"/></svg>
+                    </span>
                     <input type="password" id="password" name="password"
                            class="has-toggle"
                            placeholder="Sua senha"
                            autocomplete="current-password" required>
                     <button type="button" class="toggle-pw" onclick="togglePw()" aria-label="Mostrar/ocultar senha">
-                        <i class="bi bi-eye" id="eyeIcon"></i>
+                        <svg id="eyeIcon" viewBox="0 0 16 16" fill="currentColor"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/></svg>
                     </button>
                 </div>
             </div>
@@ -367,7 +363,7 @@
             </div>
 
             <button type="submit" class="btn-primary">
-                <i class="bi bi-box-arrow-in-right"></i>
+                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M6 3.5a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 0-1 0v2A1.5 1.5 0 0 0 6.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-8A1.5 1.5 0 0 0 5 3.5v2a.5.5 0 0 0 1 0z"/><path fill-rule="evenodd" d="M11.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L10.293 7.5H1.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>
                 Entrar na plataforma
             </button>
         </form>
@@ -384,10 +380,12 @@
     const root = document.documentElement;
     const btn  = document.querySelector('[data-theme-toggle]');
     const icon = document.getElementById('themeIcon');
+    const moonPath = '<path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>';
+    const sunPath = '<path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6m0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>';
     let dark = window.matchMedia('(prefers-color-scheme:dark)').matches;
     function apply(d) {
         root.setAttribute('data-theme', d ? 'dark' : 'light');
-        icon.className = d ? 'bi bi-sun' : 'bi bi-moon';
+        icon.innerHTML = d ? sunPath : moonPath;
     }
     apply(dark);
     btn.addEventListener('click', () => { dark = !dark; apply(dark); });
@@ -396,12 +394,14 @@
 function togglePw() {
     const inp = document.getElementById('password');
     const ico = document.getElementById('eyeIcon');
+    const eyePath = '<path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>';
+    const eyeSlashPath = '<path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7 7 0 0 0 2.79-.588M5.21 3.088A7 7 0 0 1 8 2.5c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474z"/><path d="M5.525 7.646a2.5 2.5 0 0 0 2.829 2.829zm4.95.708-2.829-2.83a2.5 2.5 0 0 1 2.829 2.829zm3.171 6-12-12 .708-.708 12 12z"/>';
     if (inp.type === 'password') {
         inp.type = 'text';
-        ico.className = 'bi bi-eye-slash';
+        ico.innerHTML = eyeSlashPath;
     } else {
         inp.type = 'password';
-        ico.className = 'bi bi-eye';
+        ico.innerHTML = eyePath;
     }
 }
 </script>

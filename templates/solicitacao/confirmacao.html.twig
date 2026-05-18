@@ -1,14 +1,21 @@
 {% extends 'base.html.twig' %}
 {% block title %}Solicitação Enviada{% endblock %}
 {% block body %}
-<div class="container py-5 text-center" style="max-width:560px">
-  <div class="mb-3 text-success fs-1">✓</div>
-  <h2>Solicitação recebida!</h2>
-  <p class="text-muted mt-2">
+<div class="sol-confirmacao">
+  <div class="sol-check-icon">✓</div>
+  <h2 class="mb-2" style="font-size:1.3rem;font-weight:700;color:var(--tw-dark)">Solicitação recebida!</h2>
+  <p class="text-muted mt-2" style="max-width:40ch;margin:0 auto">
     Sua solicitação de <strong>{{ solicitacao.tipoLabel }}</strong>
     foi registrada com o número <strong>#{{ solicitacao.id }}</strong>.<br>
     Você receberá um e-mail de confirmação em breve.
   </p>
-  <a href="{{ path('solicitacao_nova') }}" class="btn btn-outline-primary mt-3">Nova solicitação</a>
+  <div class="mt-4 d-flex gap-2 justify-content-center flex-wrap">
+    <a href="{{ path('solicitacao_hub', {aba: 'nova'}) }}" class="btn btn-outline-primary">
+      Nova solicitação
+    </a>
+    <a href="{{ path('solicitacao_hub', {aba: 'historico'}) }}" class="btn btn-primary">
+      Ver minhas solicitações
+    </a>
+  </div>
 </div>
 {% endblock %}

@@ -1,8 +1,28 @@
 /*
- * Bootstrap CSS + Bootstrap Icons — gerenciados pelo AssetMapper.
+ * Bootstrap CSS — gerenciado pelo AssetMapper.
+ * Bootstrap Icons: removido do CDN (causava bloqueio CSP font-src).
+ * Ícones agora são SVG inline nos templates — zero dependência de fonte externa.
  */
 @import 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css';
-@import 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
+
+/* =========================================================
+   Tipografia — Inter via Google Fonts
+   fonts.googleapis.com / fonts.gstatic.com já estão na CSP
+   ========================================================= */
+body, button, input, select, textarea {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* =========================================================
+   Ícones SVG na navbar
+   ========================================================= */
+.nav-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: .3rem;
+    vertical-align: -.2em;
+    flex-shrink: 0;
+}
 
 /* =========================================================
    Design tokens — ToolboxWaze
@@ -45,11 +65,16 @@
 /* =========================================================
    Base
    ========================================================= */
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
     background: var(--tw-surface);
     font-size: .9375rem;
     -webkit-font-smoothing: antialiased;
+    color: #1e2a2b;
 }
+
+img, picture, video, canvas, svg { display: block; max-width: 100%; }
 
 /* =========================================================
    Navbar
@@ -58,12 +83,16 @@ body {
 .navbar-brand,
 .nav-link { color: #fff !important; }
 
+.nav-link {
+    display: flex;
+    align-items: center;
+    transition: background var(--t-fast), opacity var(--t-fast);
+}
 .nav-link:hover {
     background: rgba(0,0,0,.15);
     border-radius: .375rem;
     opacity: 1;
 }
-
 .nav-link.active {
     background: rgba(0,0,0,.20);
     border-radius: .375rem;
@@ -193,14 +222,10 @@ body {
     gap: .5rem;
     margin: 0;
 }
-.sol-hub-header h4 i {
-    color: var(--tw);
-    font-size: 1.1rem;
-}
 .sol-hub-header p {
     color: #64748b;
     font-size: .85rem;
-    margin: .25rem 0 0 1.6rem;
+    margin: .25rem 0 0 0;
 }
 
 /* ---------------------------------------------------------
@@ -232,21 +257,14 @@ body {
     transition: color var(--t-fast), border-color var(--t-fast);
     position: relative;
 }
-.hub-tab i {
-    font-size: .95rem;
-    opacity: .7;
-    transition: opacity var(--t-fast);
-}
 .hub-tab:hover {
     color: var(--tw);
     text-decoration: none;
 }
-.hub-tab:hover i { opacity: 1; }
 .hub-tab.active {
     color: var(--tw);
     border-bottom-color: var(--tw);
 }
-.hub-tab.active i { opacity: 1; }
 
 .tab-badge {
     background: #ef4444;
@@ -289,10 +307,6 @@ body {
     align-items: center;
     gap: .45rem;
 }
-.sol-card-header i {
-    color: var(--tw);
-    font-size: .85rem;
-}
 
 .sol-card-body {
     padding: 1.15rem 1.25rem;
@@ -334,7 +348,6 @@ body {
 .sol-card-body .invalid-feedback { font-size: .8rem; }
 .sol-card-body textarea.form-control { min-height: 90px; resize: vertical; }
 
-/* Form radio/checkbox inline */
 .sol-card-body .form-check-input:checked {
     background-color: var(--tw);
     border-color: var(--tw);
@@ -346,10 +359,7 @@ body {
 
 /* ---------------------------------------------------------
    Campos gerados pelo sol_theme.html.twig
-   Cada form_row() vira um .sol-field com .sol-label + .sol-input
    --------------------------------------------------------- */
-
-/* Wrapper de cada campo */
 .sol-field {
     display: flex;
     flex-direction: column;
@@ -358,7 +368,6 @@ body {
 }
 .sol-field:last-child { margin-bottom: 0; }
 
-/* Label */
 .sol-label {
     display: block;
     font-size: .875rem;
@@ -373,7 +382,6 @@ body {
     font-weight: 700;
 }
 
-/* Input / Textarea / Select genérico */
 .sol-input {
     display: block;
     width: 100%;
@@ -402,7 +410,6 @@ body {
     box-shadow: 0 0 0 3px rgba(16,185,129,.1);
 }
 
-/* Select — seta customizada */
 .sol-select {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
@@ -412,13 +419,8 @@ body {
     cursor: pointer;
 }
 
-/* Textarea */
-.sol-textarea {
-    min-height: 90px;
-    resize: vertical;
-}
+.sol-textarea { min-height: 90px; resize: vertical; }
 
-/* Texto de ajuda */
 .sol-help {
     font-size: .78rem;
     color: #6b7280;
@@ -426,7 +428,6 @@ body {
     line-height: 1.45;
 }
 
-/* Mensagem de erro */
 .sol-error {
     font-size: .8rem;
     color: #dc2626;
@@ -435,7 +436,6 @@ body {
     align-items: center;
     gap: .3rem;
 }
-.sol-error i { flex-shrink: 0; }
 
 /* ---------------------------------------------------------
    Checkbox customizado (.sol-check)
@@ -532,22 +532,15 @@ body {
     transform: scale(0);
     transition: transform var(--t-fast);
 }
-.sol-radio input:checked ~ .sol-radio__dot {
-    border-color: var(--tw);
-}
-.sol-radio input:checked ~ .sol-radio__dot::after {
-    transform: scale(1);
-}
+.sol-radio input:checked ~ .sol-radio__dot { border-color: var(--tw); }
+.sol-radio input:checked ~ .sol-radio__dot::after { transform: scale(1); }
 .sol-radio input:focus-visible ~ .sol-radio__dot {
     box-shadow: 0 0 0 3px rgba(1,105,111,.2);
 }
-.sol-radio__label {
-    font-size: .875rem;
-    color: #374151;
-}
+.sol-radio__label { font-size: .875rem; color: #374151; }
 
 /* ---------------------------------------------------------
-   Grupo de choices expandidas (.sol-choices)
+   Grupo de choices
    --------------------------------------------------------- */
 .sol-choices {
     display: flex;
@@ -697,11 +690,9 @@ body {
 }
 
 /* ---------------------------------------------------------
-   Permalink — feedback visual + botão copiar
+   Permalink
    --------------------------------------------------------- */
-.permalink-wrapper {
-    position: relative;
-}
+.permalink-wrapper { position: relative; }
 .permalink-wrapper .sol-input,
 .permalink-wrapper .form-control {
     padding-right: 2.5rem;
@@ -735,17 +726,11 @@ body {
     border-radius: 999px;
     transition: all var(--t-fast);
 }
-.permalink-zoom-badge.zoom-ok {
-    background: #ecfdf5;
-    color: #065f46;
-}
-.permalink-zoom-badge.zoom-bad {
-    background: #fef2f2;
-    color: #991b1b;
-}
+.permalink-zoom-badge.zoom-ok  { background: #ecfdf5; color: #065f46; }
+.permalink-zoom-badge.zoom-bad { background: #fef2f2; color: #991b1b; }
 
 /* ---------------------------------------------------------
-   Status badges (histórico + gestão)
+   Status badges
    --------------------------------------------------------- */
 .badge-status {
     display: inline-flex;
@@ -764,20 +749,11 @@ body {
     border-radius: 50%;
     flex-shrink: 0;
 }
-.badge-status.pendente {
-    background: var(--status-pendente-bg);
-    color: var(--status-pendente-text);
-}
+.badge-status.pendente  { background: var(--status-pendente-bg);  color: var(--status-pendente-text); }
 .badge-status.pendente::before  { background: var(--status-pendente-dot); }
-.badge-status.resolvida {
-    background: var(--status-resolvida-bg);
-    color: var(--status-resolvida-text);
-}
+.badge-status.resolvida { background: var(--status-resolvida-bg); color: var(--status-resolvida-text); }
 .badge-status.resolvida::before { background: var(--status-resolvida-dot); }
-.badge-status.cancelada {
-    background: var(--status-cancelada-bg);
-    color: var(--status-cancelada-text);
-}
+.badge-status.cancelada { background: var(--status-cancelada-bg); color: var(--status-cancelada-text); }
 .badge-status.cancelada::before { background: var(--status-cancelada-dot); }
 
 /* ---------------------------------------------------------
@@ -1047,15 +1023,11 @@ body {
 }
 
 /* ---------------------------------------------------------
-   Responsivo — mobile (375px)
+   Responsivo — mobile
    --------------------------------------------------------- */
 @media (max-width: 575px) {
-    .tipo-grid {
-        grid-template-columns: 1fr 1fr;
-    }
-    .gestao-row {
-        flex-wrap: wrap;
-    }
+    .tipo-grid { grid-template-columns: 1fr 1fr; }
+    .gestao-row { flex-wrap: wrap; }
     .gestao-row .gr-user,
     .gestao-row .gr-data { display: none; }
     .gestao-row .gr-actions { margin-left: 0; width: 100%; justify-content: flex-end; }

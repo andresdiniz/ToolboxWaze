@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ToolboxWaze{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    {# Fontes: Inter do Google Fonts — fonts.gstatic.com já está na CSP font-src #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+    {# Bootstrap Icons SVG sprite self-hosted via AssetMapper — sem font CDN externo #}
     {{ importmap('app') }}
     {% block stylesheets %}{% endblock %}
 </head>
@@ -32,26 +36,30 @@
                 <li class="nav-item">
                     <a class="nav-link {% if app.request.pathInfo starts with '/radares' %}active{% endif %}"
                        href="{{ path('radar_index') }}">
-                        <i class="bi bi-camera-video me-1"></i>Radares
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1zm.5 1.638A4.5 4.5 0 1 0 10.867 12.5 4.5 4.5 0 0 0 10.232 2.64zm.5 3.86A1 1 0 1 1 8.5 7.5a1 1 0 0 1 2.232-1z"/></svg>
+                        Radares
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if app.request.pathInfo starts with '/postos' %}active{% endif %}"
                        href="{{ path('posto_index') }}">
-                        <i class="bi bi-fuel-pump me-1"></i>Postos
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5zm1 .5v4h4V3z"/><path d="M0 1.5A.5.5 0 0 1 .5 1H8a.5.5 0 0 1 .5.5V8H9a1.5 1.5 0 0 1 1.5 1.5V12a.5.5 0 0 0 1 0V8.354l-.853-.853a.5.5 0 1 1 .707-.707l1.5 1.5A.5.5 0 0 1 13 8.5V12a1.5 1.5 0 0 1-3 0V9.5A.5.5 0 0 0 9.5 9H9V15.5a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5zm1 0v13h7v-13z"/></svg>
+                        Postos
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}"
                        href="{{ path('solicitacao_hub') }}">
-                        <i class="bi bi-send me-1"></i>Solicitações
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/><path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0m-3.5-2a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1a.5.5 0 0 0-.5-.5"/></svg>
+                        Solicitações
                     </a>
                 </li>
                 {% if is_granted('ROLE_ADMIN') %}
                 <li class="nav-item">
                     <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active{% endif %}"
                        href="{{ path('admin_users_index') }}">
-                        <i class="bi bi-people me-1"></i>Usuários
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.088.179-.943.753-1.664C2.293 10.62 3.088 10 5 10c-.08 0-.16.005-.238.015A6 6 0 0 0 4.92 10zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>
+                        Usuários
                     </a>
                 </li>
                 {% endif %}
@@ -71,7 +79,7 @@
                             </div>
                         {% endif %}
                         <span class="d-none d-md-inline">{{ app.user.name|split(' ')|first }}</span>
-                        <i class="bi bi-chevron-down" style="font-size:.7rem"></i>
+                        <svg class="nav-icon" style="font-size:.7rem;width:10px;height:10px" viewBox="0 0 16 16" fill="currentColor"><path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow">
                         <li>
@@ -83,7 +91,8 @@
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <a class="dropdown-item text-danger" href="{{ path('app_logout') }}">
-                                <i class="bi bi-box-arrow-right me-2"></i>Sair
+                                <svg style="width:16px;height:16px;margin-right:.4rem;vertical-align:-.2em" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>
+                                Sair
                             </a>
                         </li>
                     </ul>

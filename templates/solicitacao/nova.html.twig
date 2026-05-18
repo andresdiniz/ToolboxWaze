@@ -79,7 +79,7 @@
                   'data-permalink': '1',
                   'autocomplete':   'off',
                   'spellcheck':     'false',
-                  'placeholder':    'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46'
+                  'placeholder':    'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'
                 }}) }}
                 <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
                   <i class="bi bi-clipboard"></i>
@@ -136,9 +136,15 @@
     });
   });
 
-  /* ── Validação de permalink (zoom ≥15) ─────────────────── */
-  const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com\/editor\//i;
-  const ZOOM_RE = /[?&]zoom=(\d+)/i;
+  /* ── Validação de permalink (zoom ≥ 15) ────────────────────
+   * WAZE_RE: aceita waze.com/editor/ e waze.com/{locale}/editor
+   *   ex: waze.com/pt-BR/editor   waze.com/en-US/editor   www.waze.com/editor/
+   * ZOOM_RE: aceita zoom= e zoomLevel= (novo formato da URL do Waze)
+   *   ex: ?zoom=15  ?zoomLevel=15  &zoomLevel=16
+   * ──────────────────────────────────────────────────────── */
+  const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor/i;
+  const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
+
   function checkPermalink(val) {
     const v = val.trim();
     if (!v) return { ok: true };

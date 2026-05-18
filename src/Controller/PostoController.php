@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -18,6 +19,7 @@ final class PostoController extends AbstractController
 
     public function __construct(
         private readonly Connection $db,
+        private readonly Security $security,
     ) {}
 
     #[Route('', name: 'index')]
@@ -34,7 +36,6 @@ final class PostoController extends AbstractController
         $page      = max(1, (int) $req->query->get('page', 1));
         $offset    = ($page - 1) * self::PER_PAGE;
 
-        // Bloqueia filtro manual de UF não permitida
         if ($uf !== '' && $allowedUfs !== null && !in_array($uf, $allowedUfs, true)) {
             $uf = '';
         }
@@ -57,7 +58,6 @@ final class PostoController extends AbstractController
             $params
         );
 
-        // UFs do filtro = apenas as permitidas ao usuário
         $ufsQuery  = 'SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL';
         $ufsParams = [];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
@@ -74,9 +74,8 @@ final class PostoController extends AbstractController
             'SELECT DISTINCT bandeira FROM fuel_reseller_raw WHERE bandeira IS NOT NULL ORDER BY bandeira'
         ), 'bandeira');
 
-        // Stats filtradas
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
-            $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
+            $ph    = implode(',', array_fill(0, count($allowedUfs), '?'));
             $stats = $this->db->fetchAssociative(
                 "SELECT COUNT(*) AS total,
                         COUNT(DISTINCT uf) AS estados,
@@ -109,29 +108,179 @@ final class PostoController extends AbstractController
         ]);
     }
 
+    // =========================================================================
+    // SHOW
+    // =========================================================================
+
     #[Route('/{id}', name: 'show', requirements: ['id' => '\\d+'])]
-    public function show(int $id): Response
+    public function show(int $id, Request $req): Response
     {
         /** @var User|null $user */
         $user  = $this->getUser();
         $posto = $this->db->fetchAssociative('SELECT * FROM fuel_reseller_raw WHERE id = ?', [$id]);
 
         if (!$posto) {
-            throw $this->createNotFoundException('Posto não encontrado.');
+            throw $this->createNotFoundException('Posto n\u00e3o encontrado.');
         }
 
         if ($user && !$user->canAccessUf((string) ($posto['uf'] ?? ''))) {
-            throw $this->createAccessDeniedException('Você não tem acesso a dados deste estado.');
+            throw $this->createAccessDeniedException('Voc\u00ea n\u00e3o tem acesso a dados deste estado.');
         }
 
         if (is_string($posto['raw_data'])) {
             $posto['raw_data'] = json_decode($posto['raw_data'], true) ?? [];
         }
 
-        return $this->render('posto/show.html.twig', ['posto' => $posto]);
+        // Waze link atual
+        $wazeLink = $this->db->fetchAssociative(
+            'SELECT wl.*, ui.email AS inserted_by_email, uu.email AS updated_by_email
+             FROM posto_waze_link wl
+             JOIN user ui ON ui.id = wl.inserted_by
+             LEFT JOIN user uu ON uu.id = wl.updated_by
+             WHERE wl.posto_id = ?',
+            [$id]
+        ) ?: null;
+
+        // Hist\u00f3rico de altera\u00e7\u00f5es do link Waze
+        $wazeLog = [];
+        if ($wazeLink) {
+            $wazeLog = $this->db->fetchAllAssociative(
+                'SELECT wll.*, u.email AS changed_by_email
+                 FROM posto_waze_link_log wll
+                 JOIN user u ON u.id = wll.changed_by
+                 WHERE wll.posto_waze_link_id = ?
+                 ORDER BY wll.changed_at DESC',
+                [$wazeLink['id']]
+            );
+        }
+
+        $session      = $req->getSession();
+        $wazeErrors   = $session->remove('_posto_waze_errors_' . $id) ?? [];
+        $wazeFormData = $session->remove('_posto_waze_form_'   . $id) ?? [];
+
+        return $this->render('posto/show.html.twig', [
+            'posto'        => $posto,
+            'wazeLink'     => $wazeLink,
+            'wazeLog'      => $wazeLog,
+            'wazeErrors'   => $wazeErrors,
+            'wazeFormData' => $wazeFormData,
+        ]);
     }
 
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // WAZE SAVE
+    // =========================================================================
+
+    #[Route('/{id}/waze-salvar', name: 'waze_save', requirements: ['id' => '\\d+'], methods: ['POST'])]
+    public function wazeSave(int $id, Request $req): Response
+    {
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
+
+        if (!$this->isCsrfTokenValid('posto_waze_save_' . $id, $req->request->get('_token'))) {
+            $this->addFlash('error', 'Token de seguran\u00e7a inv\u00e1lido.');
+            return $this->redirectToRoute('posto_show', ['id' => $id]);
+        }
+
+        $posto = $this->db->fetchAssociative('SELECT id, uf FROM fuel_reseller_raw WHERE id = ?', [$id]);
+        if (!$posto) {
+            throw $this->createNotFoundException('Posto n\u00e3o encontrado.');
+        }
+
+        /** @var User $user */
+        $user   = $this->getUser();
+
+        if (!$user->canAccessUf((string) ($posto['uf'] ?? ''))) {
+            throw $this->createAccessDeniedException('Acesso negado a este estado.');
+        }
+
+        $userId = $user->getId();
+        $now    = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        $wazeLink      = trim((string) $req->request->get('waze_link', ''));
+        $motivoRevisao = trim((string) $req->request->get('motivo_revisao', ''));
+
+        $errors = [];
+
+        if ($wazeLink === '') {
+            $errors['waze_link'] = 'O link do Waze \u00e9 obrigat\u00f3rio.';
+        } elseif (!filter_var($wazeLink, FILTER_VALIDATE_URL)) {
+            $errors['waze_link'] = 'Informe uma URL v\u00e1lida.';
+        } elseif (!preg_match('/[?&]permanentHazards=(\d+)/', $wazeLink, $m)) {
+            $errors['waze_link'] = 'A URL deve conter o par\u00e2metro permanentHazards=N\u00daMERO.';
+        }
+
+        $existing = $this->db->fetchAssociative(
+            'SELECT * FROM posto_waze_link WHERE posto_id = ?', [$id]
+        ) ?: null;
+
+        if ($existing && $motivoRevisao === '') {
+            $errors['motivo_revisao'] = 'Informe o motivo da revis\u00e3o.';
+        }
+
+        if ($errors !== []) {
+            $req->getSession()->set('_posto_waze_errors_' . $id, $errors);
+            $req->getSession()->set('_posto_waze_form_'   . $id, [
+                'waze_link'      => $wazeLink,
+                'motivo_revisao' => $motivoRevisao,
+            ]);
+            return $this->redirectToRoute('posto_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
+        }
+
+        $hazardId = (int) $m[1];
+
+        if ($existing) {
+            if ($wazeLink !== $existing['waze_link']) {
+                $this->db->executeStatement(
+                    'INSERT INTO posto_waze_link_log
+                     (posto_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, changed_at)
+                     VALUES (?, ?, ?, ?, ?, ?)',
+                    [$existing['id'], $userId, 'waze_link', $existing['waze_link'], $wazeLink, $now]
+                );
+            }
+
+            if (($existing['observacao'] ?? '') !== $motivoRevisao) {
+                $this->db->executeStatement(
+                    'INSERT INTO posto_waze_link_log
+                     (posto_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, changed_at)
+                     VALUES (?, ?, ?, ?, ?, ?)',
+                    [$existing['id'], $userId, 'motivo_revisao', $existing['observacao'] ?? null, $motivoRevisao, $now]
+                );
+            }
+
+            $this->db->executeStatement(
+                'UPDATE posto_waze_link
+                 SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
+                 WHERE id = ?',
+                [$wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
+            );
+
+            $this->addFlash('success', 'Link Waze atualizado com sucesso.');
+        } else {
+            $this->db->executeStatement(
+                'INSERT INTO posto_waze_link
+                 (posto_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
+                 VALUES (?, ?, ?, ?, ?, ?)',
+                [$id, $wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now]
+            );
+
+            $newId = (int) $this->db->lastInsertId();
+
+            $this->db->executeStatement(
+                'INSERT INTO posto_waze_link_log
+                 (posto_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, changed_at)
+                 VALUES (?, ?, ?, ?, ?, ?)',
+                [$newId, $userId, 'waze_link', null, $wazeLink, $now]
+            );
+
+            $this->addFlash('success', 'Link Waze cadastrado com sucesso.');
+        }
+
+        return $this->redirectToRoute('posto_show', ['id' => $id]);
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
 
     private function buildWhere(
         string $uf,

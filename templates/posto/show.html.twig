@@ -11,6 +11,16 @@
     </ol>
 </nav>
 
+{# ── Flash messages ── #}
+{% for type, messages in app.flashes %}
+    {% for msg in messages %}
+        <div class="alert alert-{{ type == 'success' ? 'success' : 'danger' }} alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+{% endfor %}
+
 {# ── Cabeçalho ── #}
 <div class="d-flex align-items-start justify-content-between mb-4">
     <div>
@@ -111,11 +121,6 @@
             </div>
         </div>
 
-    </div>
-
-    {# ── Coluna direita ── #}
-    <div class="col-lg-6">
-
         {# Links úteis #}
         <div class="card mb-4">
             <div class="card-header fw-semibold">
@@ -132,6 +137,157 @@
                 </a>
             </div>
         </div>
+
+    </div>
+
+    {# ── Coluna direita ── #}
+    <div class="col-lg-6">
+
+        {# ── WAZE LINK ── #}
+        <div class="card mb-4" id="waze-card">
+            <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-waze me-2 text-primary"></i>Link Waze</span>
+                {% if wazeLink %}
+                    <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener"
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Abrir Editor
+                    </a>
+                {% endif %}
+            </div>
+
+            {% if wazeLink %}
+            <div class="card-body pb-2">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <div class="detail-label">URL cadastrada</div>
+                        <div class="detail-value text-break small">
+                            <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener">{{ wazeLink.waze_link }}</a>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Permanent Hazard ID</div>
+                        <div class="detail-value"><code>{{ wazeLink.permanent_hazard_id }}</code></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Cadastrado por</div>
+                        <div class="detail-value small">{{ wazeLink.inserted_by_email }}<br><span class="text-muted">{{ wazeLink.inserted_at|date('d/m/Y H:i') }}</span></div>
+                    </div>
+                    {% if wazeLink.updated_by_email %}
+                    <div class="col-12">
+                        <div class="detail-label">Última atualização</div>
+                        <div class="detail-value small">{{ wazeLink.updated_by_email }}<br><span class="text-muted">{{ wazeLink.updated_at|date('d/m/Y H:i') }}</span></div>
+                    </div>
+                    {% endif %}
+                    {% if wazeLink.observacao %}
+                    <div class="col-12">
+                        <div class="detail-label">Observação</div>
+                        <div class="detail-value small fst-italic">{{ wazeLink.observacao }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="card-body text-muted fst-italic small">
+                Nenhum link cadastrado para este posto.
+            </div>
+            {% endif %}
+
+            {# ── Formulário (collapse) ── #}
+            {% if is_granted('IS_AUTHENTICATED_REMEMBERED') %}
+            <div class="card-footer p-0">
+                <div class="accordion accordion-flush" id="wazeFormAccordion">
+                    <div class="accordion-item border-0">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed py-2 px-3 fw-semibold small"
+                                    type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#waze-form-collapse"
+                                    aria-expanded="{% if wazeErrors is not empty %}true{% else %}false{% endif %}">
+                                <i class="bi bi-pencil-square me-2"></i>
+                                {{ wazeLink ? 'Editar link' : 'Cadastrar link' }}
+                            </button>
+                        </h2>
+                        <div id="waze-form-collapse"
+                             class="accordion-collapse collapse{% if wazeErrors is not empty %} show{% endif %}">
+                            <div class="accordion-body">
+                                <form method="post"
+                                      action="{{ path('posto_waze_save', {id: posto.id}) }}">
+                                    <input type="hidden" name="_token"
+                                           value="{{ csrf_token('posto_waze_save_' ~ posto.id) }}">
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold" for="waze_link_posto">Link do Editor Waze</label>
+                                        <input type="url" id="waze_link_posto" name="waze_link"
+                                               class="form-control form-control-sm{% if wazeErrors.waze_link is defined %} is-invalid{% endif %}"
+                                               placeholder="https://waze.com/pt-BR/editor?...&permanentHazards=123456"
+                                               value="{{ wazeFormData.waze_link ?? wazeLink.waze_link ?? '' }}">
+                                        {% if wazeErrors.waze_link is defined %}
+                                            <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
+                                        {% else %}
+                                            <div class="form-text">Deve conter o parâmetro <code>permanentHazards=NÚMERO</code>.</div>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if wazeLink %}
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold" for="motivo_revisao_posto">
+                                            Motivo da revisão <span class="text-danger">*</span>
+                                        </label>
+                                        <input type="text" id="motivo_revisao_posto" name="motivo_revisao"
+                                               class="form-control form-control-sm{% if wazeErrors.motivo_revisao is defined %} is-invalid{% endif %}"
+                                               placeholder="Ex: corrigir coordenadas, atualizar hazard ID…"
+                                               value="{{ wazeFormData.motivo_revisao ?? '' }}">
+                                        {% if wazeErrors.motivo_revisao is defined %}
+                                            <div class="invalid-feedback">{{ wazeErrors.motivo_revisao }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-floppy me-1"></i>
+                                        {{ wazeLink ? 'Atualizar link' : 'Salvar link' }}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ── HISTÓRICO DE ALTERAÇÕES WAZE ── #}
+        {% if wazeLog is not empty %}
+        <div class="card mb-4">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-clock-history me-2"></i>Histórico de Alterações — Waze
+            </div>
+            <div class="list-group list-group-flush">
+                {% for log in wazeLog %}
+                <div class="list-group-item px-3 py-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <span class="badge bg-secondary me-2">{{ log.campo_alterado }}</span>
+                        <small class="text-muted ms-auto">{{ log.changed_at|date('d/m/Y H:i') }} — {{ log.changed_by_email }}</small>
+                    </div>
+                    {% if log.valor_anterior is not null or log.valor_novo is not null %}
+                    <div class="small mt-1">
+                        {% if log.valor_anterior %}
+                        <div class="text-danger"><i class="bi bi-arrow-left me-1"></i>{{ log.valor_anterior }}</div>
+                        {% endif %}
+                        {% if log.valor_novo %}
+                        <div class="text-success"><i class="bi bi-arrow-right me-1"></i>{{ log.valor_novo }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if log.observacao is defined and log.observacao %}
+                    <div class="small text-muted fst-italic mt-1">
+                        <i class="bi bi-sticky me-1"></i>{{ log.observacao }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         {# Metadados #}
         <div class="card">

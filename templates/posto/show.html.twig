@@ -165,8 +165,8 @@
                         </div>
                     </div>
                     <div class="col-sm-6">
-                        <div class="detail-label">Permanent Hazard ID</div>
-                        <div class="detail-value"><code>{{ wazeLink.permanent_hazard_id }}</code></div>
+                        <div class="detail-label">Venue ID</div>
+                        <div class="detail-value"><code>{{ wazeLink.venue_id }}</code></div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Cadastrado por</div>
@@ -218,12 +218,12 @@
                                         <label class="form-label fw-semibold" for="waze_link_posto">Link do Editor Waze</label>
                                         <input type="url" id="waze_link_posto" name="waze_link"
                                                class="form-control form-control-sm{% if wazeErrors.waze_link is defined %} is-invalid{% endif %}"
-                                               placeholder="https://waze.com/pt-BR/editor?...&permanentHazards=123456"
+                                               placeholder="https://waze.com/pt-BR/editor?...&venues=123456"
                                                value="{{ wazeFormData.waze_link ?? wazeLink.waze_link ?? '' }}">
                                         {% if wazeErrors.waze_link is defined %}
                                             <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
                                         {% else %}
-                                            <div class="form-text">Deve conter o parâmetro <code>permanentHazards=NÚMERO</code>.</div>
+                                            <div class="form-text">Deve conter o parâmetro <code>venues=NÚMERO</code>.</div>
                                         {% endif %}
                                     </div>
 
@@ -234,7 +234,7 @@
                                         </label>
                                         <input type="text" id="motivo_revisao_posto" name="motivo_revisao"
                                                class="form-control form-control-sm{% if wazeErrors.motivo_revisao is defined %} is-invalid{% endif %}"
-                                               placeholder="Ex: corrigir coordenadas, atualizar hazard ID…"
+                                               placeholder="Ex: corrigir endereço, atualizar venue ID…"
                                                value="{{ wazeFormData.motivo_revisao ?? '' }}">
                                         {% if wazeErrors.motivo_revisao is defined %}
                                             <div class="invalid-feedback">{{ wazeErrors.motivo_revisao }}</div>
@@ -276,11 +276,6 @@
                         {% if log.valor_novo %}
                         <div class="text-success"><i class="bi bi-arrow-right me-1"></i>{{ log.valor_novo }}</div>
                         {% endif %}
-                    </div>
-                    {% endif %}
-                    {% if log.observacao is defined and log.observacao %}
-                    <div class="small text-muted fst-italic mt-1">
-                        <i class="bi bi-sticky me-1"></i>{{ log.observacao }}
                     </div>
                     {% endif %}
                 </div>

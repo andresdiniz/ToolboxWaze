@@ -187,7 +187,7 @@ final class PostoController extends AbstractController
         }
 
         /** @var User $user */
-        $user   = $this->getUser();
+        $user = $this->getUser();
 
         if (!$user->canAccessUf((string) ($posto['uf'] ?? ''))) {
             throw $this->createAccessDeniedException('Acesso negado a este estado.');
@@ -205,8 +205,8 @@ final class PostoController extends AbstractController
             $errors['waze_link'] = 'O link do Waze \u00e9 obrigat\u00f3rio.';
         } elseif (!filter_var($wazeLink, FILTER_VALIDATE_URL)) {
             $errors['waze_link'] = 'Informe uma URL v\u00e1lida.';
-        } elseif (!preg_match('/[?&]permanentHazards=(\d+)/', $wazeLink, $m)) {
-            $errors['waze_link'] = 'A URL deve conter o par\u00e2metro permanentHazards=N\u00daMERO.';
+        } elseif (!preg_match('/[?&]venues=(\d+)/', $wazeLink, $m)) {
+            $errors['waze_link'] = 'A URL deve conter o par\u00e2metro venues=N\u00daMERO.';
         }
 
         $existing = $this->db->fetchAssociative(
@@ -226,7 +226,7 @@ final class PostoController extends AbstractController
             return $this->redirectToRoute('posto_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
         }
 
-        $hazardId = (int) $m[1];
+        $venueId = (int) $m[1];
 
         if ($existing) {
             if ($wazeLink !== $existing['waze_link']) {
@@ -249,18 +249,18 @@ final class PostoController extends AbstractController
 
             $this->db->executeStatement(
                 'UPDATE posto_waze_link
-                 SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
+                 SET waze_link = ?, venue_id = ?, observacao = ?, updated_by = ?, updated_at = ?
                  WHERE id = ?',
-                [$wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
+                [$wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
             );
 
             $this->addFlash('success', 'Link Waze atualizado com sucesso.');
         } else {
             $this->db->executeStatement(
                 'INSERT INTO posto_waze_link
-                 (posto_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
+                 (posto_id, waze_link, venue_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now]
+                [$id, $wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now]
             );
 
             $newId = (int) $this->db->lastInsertId();

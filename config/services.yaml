@@ -9,6 +9,9 @@ services:
     _defaults:
         autowire: true
         autoconfigure: true
+        bind:
+            # Usado por: App\Controller\RegistrationController
+            string $mailFrom: '%app.mailer_from%'
 
     App\:
         resource: '../src/'

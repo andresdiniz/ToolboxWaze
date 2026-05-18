@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Entity\SolicitacaoTipoResponsavel;
-use App\Entity\TipoSolicitacaoConfig;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -23,41 +22,40 @@ class SolicitacaoTipoResponsavelRepository extends ServiceEntityRepository
     /**
      * Verifica se o usuário é responsável pelo tipo de solicitação informado.
      *
-     * @param TipoSolicitacaoConfig|string|int|null $tipo Entidade, slug ou id
+     * SolicitacaoTipoResponsavel#tipo é uma coluna string simples
+     * (ex: 'gerente_estado_pais'), não uma associação ORM.
+     * A comparação é feita diretamente sem JOIN.
+     *
+     * @param string|null $tipo Slug do tipo (ex: 'oops', 'nivel', ...)
      */
-    public function isResponsavel(User $user, mixed $tipo): bool
+    public function isResponsavel(User $user, ?string $tipo): bool
     {
-        if ($tipo === null) {
+        if ($tipo === null || $tipo === '') {
             return false;
         }
 
-        $qb = $this->createQueryBuilder('r')
+        $count = $this->createQueryBuilder('r')
             ->select('COUNT(r.id)')
-            ->where('r.usuario = :user')
-            ->setParameter('user', $user);
+            ->join('r.responsaveis', 'u')
+            ->where('u = :user')
+            ->andWhere('r.tipo = :tipo')
+            ->setParameter('user', $user)
+            ->setParameter('tipo', $tipo)
+            ->getQuery()
+            ->getSingleScalarResult();
 
-        if ($tipo instanceof TipoSolicitacaoConfig) {
-            $qb->andWhere('r.tipo = :tipo')->setParameter('tipo', $tipo);
-        } else {
-            // aceita id numérico
-            $qb->join('r.tipo', 't')
-               ->andWhere('t.id = :tipo')
-               ->setParameter('tipo', (int) $tipo);
-        }
-
-        return (int) $qb->getQuery()->getSingleScalarResult() > 0;
+        return (int) $count > 0;
     }
 
     /**
-     * Retorna todos os responsáveis de um tipo, hidratados como User.
+     * Retorna os Users responsáveis por um tipo.
      *
      * @return User[]
      */
-    public function findUsersByTipo(TipoSolicitacaoConfig $tipo): array
+    public function findUsersByTipo(string $tipo): array
     {
-        return array_map(
-            fn (SolicitacaoTipoResponsavel $r) => $r->getUsuario(),
-            $this->findBy(['tipo' => $tipo])
-        );
+        $row = $this->findOneBy(['tipo' => $tipo]);
+
+        return $row ? $row->getResponsaveis()->toArray() : [];
     }
 }

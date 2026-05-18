@@ -145,16 +145,14 @@
         </div>
         {% endif %}
 
-    </div>
+    </div>{# /col-lg-7 #}
 
     {# ── Coluna direita ── #}
     <div class="col-lg-5">
 
-        {# ══════════════════════════════════════════
+        {# ===================================================
            CARD: EDITOR WAZE
-           Sempre visível para usuários logados.
-           Formulario aberto por padrão (sem link) ou recolhível (com link).
-        ══════════════════════════════════════════ #}
+        =================================================== #}
         {% if app.user %}
         <div class="card mb-4 border-primary" id="card-waze">
             <div class="card-header fw-semibold bg-primary text-white d-flex justify-content-between align-items-center">
@@ -188,7 +186,7 @@
 
                     {% if wazeLink.observacao %}
                     <div class="detail-label mt-2">Motivo última revisão</div>
-                    <div class="small">{{ wazeLink.observacao }}</div>
+                    <div class="small fst-italic">{{ wazeLink.observacao }}</div>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -199,13 +197,12 @@
                         type="button"
                         data-bs-toggle="collapse"
                         data-bs-target="#waze-form-wrap"
-                        aria-expanded="false"
+                        aria-expanded="{% if wazeErrors is not empty %}true{% else %}false{% endif %}"
                         aria-controls="waze-form-wrap">
                     <i class="bi bi-pencil me-1"></i>Alterar link / motivo
                 </button>
-                <div class="collapse" id="waze-form-wrap">
+                <div class="collapse{% if wazeErrors is not empty %} show{% endif %}" id="waze-form-wrap">
                 {% else %}
-                {# Sem link: formulário sempre expandido #}
                 <div id="waze-form-wrap">
                 {% endif %}
 
@@ -215,7 +212,6 @@
                         <input type="hidden" name="_token"
                                value="{{ csrf_token('waze_save_' ~ radar.id) }}">
 
-                        {# Link do Waze #}
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">
                                 Link do Editor Waze <span class="text-danger">*</span>
@@ -234,12 +230,10 @@
                             {% endif %}
                         </div>
 
-                        {# Preview do Hazard ID em tempo real #}
                         <div id="waze-hazard-preview" class="alert alert-info py-1 px-2 mb-3 d-none small">
                             Hazard ID: <strong id="waze-hazard-id"></strong>
                         </div>
 
-                        {# Motivo da revisão #}
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">
                                 Motivo da revisão
@@ -254,22 +248,17 @@
                             {% endif %}
                         </div>
 
-                        {# Usuário e Data — preenchidos automaticamente, somente exibição #}
                         <div class="row g-2 mb-3">
                             <div class="col-7">
                                 <label class="form-label fw-semibold small">Usuário (auto)</label>
-                                <input type="text"
-                                       class="form-control form-control-sm"
-                                       value="{{ app.user.email }}"
-                                       disabled
+                                <input type="text" class="form-control form-control-sm"
+                                       value="{{ app.user.email }}" disabled
                                        style="background:#f8f9fa;font-style:italic">
                             </div>
                             <div class="col-5">
                                 <label class="form-label fw-semibold small">Data/Hora (auto)</label>
-                                <input type="text"
-                                       class="form-control form-control-sm"
-                                       value="Agora"
-                                       disabled
+                                <input type="text" class="form-control form-control-sm"
+                                       value="Agora" disabled
                                        style="background:#f8f9fa;font-style:italic">
                             </div>
                         </div>
@@ -282,8 +271,103 @@
 
                 </div>{# /waze-form-wrap #}
 
+                {# ===================================================
+                   TIMELINE DE HISTÓRICO DO LINK WAZE
+                   Exibe TODOS os registros de radar_waze_link_log,
+                   não apenas o último.
+                =================================================== #}
+                {% if wazeLog is not empty %}
+                <hr class="my-3">
+                <button class="btn btn-outline-secondary btn-sm w-100 mb-2"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#waze-historico-wrap"
+                        aria-expanded="false"
+                        aria-controls="waze-historico-wrap">
+                    <i class="bi bi-clock-history me-1"></i>
+                    Histórico de alterações ({{ wazeLog|length }})
+                </button>
+                <div class="collapse" id="waze-historico-wrap">
+                    <div class="waze-timeline mt-2">
+                        {% for log in wazeLog %}
+                        <div class="waze-timeline-item">
+                            {# Bolinha + linha vertical #}
+                            <div class="waze-timeline-dot
+                                {{ log.campo_alterado == 'waze_link' ? 'dot-link' : 'dot-obs' }}"></div>
+
+                            <div class="waze-timeline-content">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <span class="badge
+                                        {{ log.campo_alterado == 'waze_link' ? 'bg-primary' : 'bg-secondary' }}
+                                        badge-sm">
+                                        {% if log.campo_alterado == 'waze_link' %}
+                                            <i class="bi bi-link-45deg me-1"></i>Link alterado
+                                        {% elseif log.campo_alterado == 'motivo_revisao' %}
+                                            <i class="bi bi-chat-text me-1"></i>Motivo
+                                        {% else %}
+                                            <i class="bi bi-pencil me-1"></i>{{ log.campo_alterado }}
+                                        {% endif %}
+                                    </span>
+                                    <small class="text-muted ms-2" style="white-space:nowrap">
+                                        {{ log.changed_at|date('d/m/Y H:i') }}
+                                    </small>
+                                </div>
+
+                                <div class="small mb-1">
+                                    <i class="bi bi-person me-1 text-muted"></i>
+                                    <span class="fw-semibold">{{ log.changed_by_email }}</span>
+                                </div>
+
+                                {% if log.campo_alterado == 'waze_link' %}
+                                    {% if log.valor_anterior %}
+                                    <div class="small text-muted">
+                                        <span class="text-danger"><i class="bi bi-dash-circle me-1"></i>Anterior:</span>
+                                        <a href="{{ log.valor_anterior }}" target="_blank" rel="noopener"
+                                           class="font-monospace text-decoration-none text-muted"
+                                           style="word-break:break-all;font-size:.7rem">
+                                            {{ log.valor_anterior|slice(0, 60) }}{% if log.valor_anterior|length > 60 %}…{% endif %}
+                                        </a>
+                                    </div>
+                                    {% else %}
+                                    <div class="small text-success">
+                                        <i class="bi bi-plus-circle me-1"></i>Primeiro cadastro
+                                    </div>
+                                    {% endif %}
+                                    <div class="small">
+                                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Novo:</span>
+                                        <a href="{{ log.valor_novo }}" target="_blank" rel="noopener"
+                                           class="font-monospace text-decoration-none"
+                                           style="word-break:break-all;font-size:.7rem">
+                                            {{ log.valor_novo|slice(0, 60) }}{% if log.valor_novo|length > 60 %}…{% endif %}
+                                        </a>
+                                    </div>
+                                {% else %}
+                                    {% if log.valor_anterior %}
+                                    <div class="small text-muted">
+                                        <i class="bi bi-dash me-1 text-danger"></i><em>{{ log.valor_anterior }}</em>
+                                    </div>
+                                    {% endif %}
+                                    {% if log.valor_novo %}
+                                    <div class="small">
+                                        <i class="bi bi-arrow-right me-1 text-success"></i>{{ log.valor_novo }}
+                                    </div>
+                                    {% endif %}
+                                {% endif %}
+
+                                {% if log.observacao %}
+                                <div class="small text-muted fst-italic mt-1">
+                                    <i class="bi bi-sticky me-1"></i>{{ log.observacao }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>{# /waze-historico-wrap #}
+                {% endif %}{# wazeLog #}
+
             </div>{# /card-body #}
-        </div>{# /card #}
+        </div>{# /card editor waze #}
         {% endif %}{# app.user #}
 
         {# Histórico de verificações #}
@@ -339,8 +423,54 @@
             </div>
         </div>
 
-    </div>
+    </div>{# /col-lg-5 #}
 </div>
+
+{# ===================================================
+   CSS INLINE — Timeline Waze
+=================================================== #}
+<style>
+.waze-timeline {
+    position: relative;
+    padding-left: 1.5rem;
+}
+.waze-timeline::before {
+    content: '';
+    position: absolute;
+    left: .45rem;
+    top: .5rem;
+    bottom: .5rem;
+    width: 2px;
+    background: #dee2e6;
+    border-radius: 2px;
+}
+.waze-timeline-item {
+    position: relative;
+    margin-bottom: 1rem;
+}
+.waze-timeline-item:last-child {
+    margin-bottom: 0;
+}
+.waze-timeline-dot {
+    position: absolute;
+    left: -1.5rem;
+    top: .3rem;
+    width: .7rem;
+    height: .7rem;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px currentColor;
+}
+.waze-timeline-dot.dot-link  { color: var(--bs-primary, #0d6efd); }
+.waze-timeline-dot.dot-obs   { color: var(--bs-secondary, #6c757d); }
+.waze-timeline-content {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: .4rem;
+    padding: .5rem .75rem;
+}
+.badge-sm { font-size: .7rem; padding: .2em .5em; }
+</style>
 
 <script>
 (function () {
@@ -354,7 +484,7 @@
         else   { preview.classList.add('d-none'); }
     }
     input.addEventListener('input', update);
-    update(); // roda ao carregar página (se já tem valor)
+    update();
 }());
 </script>
 

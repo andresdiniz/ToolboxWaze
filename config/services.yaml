@@ -9,10 +9,6 @@ services:
     _defaults:
         autowire: true
         autoconfigure: true
-        bind:
-            # Injetar o endereço-remetente em qualquer serviço que declare:
-            #   string $appBaseUrl no construtor
-            string $appBaseUrl: '%app.base_url%'
 
     App\:
         resource: '../src/'

@@ -2,52 +2,40 @@
 {% block title %}Solicitação #{{ solicitacao.id }}{% endblock %}
 
 {% block body %}
-{# ─── Mapeamentos de choice → label legível ─────────────────────────────── #}
+
 {% set LABELS = {
-
-  {# imagem_satelite #}
-  'muito_antiga'   : 'A imagem com maior resolução é muito antiga',
-  'baixa_qualidade': 'A imagem está com qualidade/resolução baixa',
-  'alteracoes'     : 'Alterações significativas na área',
-  'ruins_nubladas' : 'As imagens estão ruins ou nubladas',
-  '1_ano'   : '1 ano',
-  '6_meses' : '6 meses',
-  '1_mes'   : '1 mês',
-  '1_semana': '1 semana',
-
-  {# gerente_estado_pais / gerente_area #}
+  'muito_antiga'    : 'A imagem com maior resolução é muito antiga',
+  'baixa_qualidade' : 'A imagem está com qualidade/resolução baixa',
+  'alteracoes'      : 'Alterações significativas na área',
+  'ruins_nubladas'  : 'As imagens estão ruins ou nubladas',
+  '1_ano'           : '1 ano',
+  '6_meses'         : '6 meses',
+  '1_mes'           : '1 mês',
+  '1_semana'        : '1 semana',
   'incluir'         : 'Incluir',
   'excluir'         : 'Excluir',
   'gerente_estado'  : 'Gerente de Estado',
   'gerente_pais'    : 'Gerente de País',
-
-  {# nivel #}
-  'upgrade'   : 'Upgrade',
-  'downgrade' : 'Downgrade',
-  '1_5'     : 'Entre 1 e 5',
-  '6_10'    : 'Entre 6 e 10',
-  '11_20'   : 'Entre 11 e 20',
-  '21_50'   : 'Entre 21 e 50',
-  '50_mais' : 'Mais de 50',
-  'nenhuma' : 'Nenhuma',
-
-  {# bandeira_posto #}
-  'adicionar': 'Adicionar',
-  'remover'  : 'Remover',
-
-  {# genéricos #}
-  'sim' : 'Sim',
-  'nao' : 'Não',
+  'upgrade'         : 'Upgrade',
+  'downgrade'       : 'Downgrade',
+  '1_5'             : 'Entre 1 e 5',
+  '6_10'            : 'Entre 6 e 10',
+  '11_20'           : 'Entre 11 e 20',
+  '21_50'           : 'Entre 21 e 50',
+  '50_mais'         : 'Mais de 50',
+  'nenhuma'         : 'Nenhuma',
+  'adicionar'       : 'Adicionar',
+  'remover'         : 'Remover',
+  'sim'             : 'Sim',
+  'nao'             : 'Não'
 } %}
 
-{# ─── Campos que devem mostrar o texto exato digitado (não são choices) ─── #}
 {% set CAMPOS_TEXTO = [
   'mentor', 'recomendadores', 'motivacao', 'descricao',
   'editorNome', 'poligono', 'comentarios', 'permalink',
   'nomeBandeira', 'cnpj', 'nomeSegmento', 'idSegmento'
 ] %}
 
-{# ─── Labels das chaves (campo → título legível) ──────────────────────────── #}
 {% set CAMPO_LABELS = {
   'tipoNivel'        : 'Tipo de pedido',
   'mentor'           : 'Mentor',
@@ -72,12 +60,11 @@
   'nomeBandeira'     : 'Nome da bandeira',
   'cnpj'             : 'CNPJ do posto',
   'nomeSegmento'     : 'Nome do segmento',
-  'idSegmento'       : 'ID do segmento',
+  'idSegmento'       : 'ID do segmento'
 } %}
 
 <div class="container py-4" style="max-width:780px">
 
-  {# ── Cabeçalho ─────────────────────────────────────────────────────────── #}
   <div class="d-flex justify-content-between align-items-start mb-3">
     <div>
       <h2 class="mb-0">{{ solicitacao.tipoLabel }}</h2>
@@ -88,7 +75,6 @@
     </span>
   </div>
 
-  {# ── Solicitante ────────────────────────────────────────────────────────── #}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Solicitante</div>
     <div class="card-body">
@@ -103,35 +89,29 @@
     </div>
   </div>
 
-  {# ── Dados da solicitação ──────────────────────────────────────────────── #}
   {% if solicitacao.dados %}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Detalhes da solicitação</div>
     <div class="card-body">
       <dl class="row mb-0">
       {% for chave, valor in solicitacao.dados %}
-        {# título do campo #}
         <dt class="col-sm-4">
           {{ CAMPO_LABELS[chave] ?? chave|replace({'_': ' '})|capitalize }}
         </dt>
         <dd class="col-sm-8">
           {% if chave in CAMPOS_TEXTO %}
-            {# campo de texto livre — mostra o que o usuário digitou #}
             {% if valor is not empty %}
               {{ valor|nl2br }}
             {% else %}
               <span class="text-muted fst-italic">Não informado</span>
             {% endif %}
           {% elseif valor is iterable %}
-            {# array — junta com vírgula usando labels quando possível #}
             {{ valor|map(v => LABELS[v] ?? v)|join(', ') }}
           {% elseif LABELS[valor] is defined %}
-            {# choice com label mapeado — DEVE vir antes dos booleanos #}
-            {# para evitar que '1_5', '6_10' etc. sejam lidos como true #}
             {{ LABELS[valor] }}
-          {% elseif valor == true or valor === true or (valor is same as(true)) %}
+          {% elseif valor == true %}
             <span class="text-success">✓ Sim</span>
-          {% elseif valor == false or valor === false or (valor is same as(false)) %}
+          {% elseif valor == false %}
             <span class="text-danger">✗ Não</span>
           {% elseif valor is not empty %}
             {{ valor }}
@@ -145,7 +125,6 @@
   </div>
   {% endif %}
 
-  {# ── Arquivos anexos (oops) ────────────────────────────────────────────── #}
   {% if solicitacao.arquivos %}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Arquivos anexados</div>
@@ -161,15 +140,12 @@
   </div>
   {% endif %}
 
-  {# ── Histórico de status ───────────────────────────────────────────────── #}
   {% if solicitacao.historicos is not empty %}
     {% include 'solicitacao/_historico.html.twig' %}
   {% endif %}
 
-  {# ── Comentários / chat ────────────────────────────────────────────────── #}
   {% include 'solicitacao/_chat.html.twig' %}
 
-  {# ── Painel de gestão (admin / responsável) ───────────────────────────── #}
   {% if is_granted('SOLICITACAO_RESOLVER', solicitacao) and not solicitacao.isFinal() %}
   <div class="card border-warning mt-4">
     <div class="card-header fw-semibold text-warning-emphasis bg-warning-subtle">
@@ -177,10 +153,8 @@
     </div>
     <div class="card-body">
 
-      {# ── Mudar status ── #}
       {% include 'solicitacao/_status_form.html.twig' %}
 
-      {# ── Resolver / Negar / Cancelar ── #}
       <hr class="my-3">
       <form method="post" action="{{ path('solicitacao_resolver', {id: solicitacao.id}) }}">
         <input type="hidden" name="_token" value="{{ csrf_token('resolver_' ~ solicitacao.id) }}">
@@ -218,7 +192,6 @@
   </div>
   {% endif %}
 
-  {# ── Resultado final ───────────────────────────────────────────────────── #}
   {% if solicitacao.isFinal() %}
   <div class="alert alert-{{ solicitacao.statusCor }} mt-4 mb-0">
     <strong>{{ solicitacao.statusLabel }}</strong>

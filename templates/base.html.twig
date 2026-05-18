@@ -107,9 +107,6 @@
     </div>
 </nav>
 
-{# Bootstrap JS via CDN — necessário para navbar toggler, dropdowns, etc. #}
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
-
 <div class="container-xl pb-5">
     {% for label, messages in app.flashes(['success','warning','danger','info','error']) %}
         {% for msg in messages %}
@@ -123,5 +120,9 @@
 </div>
 
 {% block javascripts %}{% endblock %}
+
+{# Bootstrap JS no final do body, SEM defer — garante que dropdown e navbar toggler
+   funcionem imediatamente após o DOM estar pronto, inclusive no mobile #}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

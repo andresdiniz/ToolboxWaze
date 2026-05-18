@@ -1,5 +1,6 @@
 {% extends 'base.html.twig' %}
 {% block title %}Solicitações{% endblock %}
+{% form_theme form 'form/sol_theme.html.twig' %}
 
 {% block body %}
 <div class="container py-4" style="max-width:900px">
@@ -57,7 +58,7 @@
     <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
     <div class="sol-card-body">
       {{ form_widget(form.tipo,   {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
-      {{ form_widget(form.estado, {attr: {'data-estado-select': '1'}}) }}
+      {{ form_widget(form.estado, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-estado-select': '1'}}) }}
       {{ form_errors(form.tipo) }}
       <div class="tipo-grid mt-3" id="tipo-pills">
         {% set iconMap = {
@@ -92,7 +93,7 @@
         <div class="sol-card campo-animado">
           <div class="sol-card-body">
             {% if field.vars.name == 'dados_permalink' %}
-              <label class="form-label" for="{{ field.vars.id }}">{{ field.vars.label }}</label>
+              <label class="sol-label" for="{{ field.vars.id }}">{{ field.vars.label }}</label>
               <div class="permalink-wrapper">
                 {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46'}}) }}
                 <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
@@ -100,7 +101,7 @@
                 </button>
               </div>
               {% if field.vars.help is defined and field.vars.help %}
-                <div class="form-text">{{ field.vars.help }}</div>
+                <p class="sol-help">{{ field.vars.help }}</p>
               {% endif %}
               {{ form_errors(field) }}
             {% else %}
@@ -113,8 +114,8 @@
     <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
       <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
       <div class="sol-card-body">
-        <label class="form-label">Compartilhe provas <span class="text-muted fw-normal">(até 5 imagens, 1 MB cada)</span></label>
-        <input type="file" name="arquivos_oops[]" class="form-control" accept="image/*" multiple>
+        <label class="sol-label">Compartilhe provas <span class="text-muted fw-normal">(até 5 imagens, 1 MB cada)</span></label>
+        <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
       </div>
     </div>
   </div>
@@ -258,8 +259,8 @@
             <input type="hidden" name="_token" id="resolver-token" value="">
             <div class="modal-body">
               <p class="text-muted" style="font-size:.85rem" id="resolver-label"></p>
-              <label class="form-label fw-semibold">Nota de resolução <span class="text-muted fw-normal">(opcional)</span></label>
-              <textarea name="nota" class="form-control" rows="3" placeholder="Descreva como foi tratado…" style="border-radius:8px"></textarea>
+              <label class="sol-label fw-semibold">Nota de resolução <span class="text-muted fw-normal">(opcional)</span></label>
+              <textarea name="nota" class="sol-input sol-textarea" rows="3" placeholder="Descreva como foi tratado…"></textarea>
             </div>
             <div class="modal-footer" style="border-top:1.5px solid var(--sol-border)">
               <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -332,14 +333,12 @@
     input.classList.toggle('is-invalid', !result.ok);
     input.classList.toggle('is-valid',    result.ok && input.value.trim().length > 0);
 
-    /* Mensagem de erro */
     let fb = parent.querySelector('.permalink-feedback');
     if (!result.ok) {
-      if (!fb) { fb = document.createElement('div'); fb.className = 'invalid-feedback permalink-feedback'; wrap.insertAdjacentElement('afterend', fb); }
-      fb.textContent = result.msg;
+      if (!fb) { fb = document.createElement('p'); fb.className = 'sol-error permalink-feedback'; wrap.insertAdjacentElement('afterend', fb); }
+      fb.innerHTML = '<i class="bi bi-exclamation-circle"></i> ' + result.msg;
     } else if (fb) { fb.remove(); }
 
-    /* Zoom badge */
     let badge = parent.querySelector('.permalink-zoom-badge');
     if (result.ok && result.zoom) {
       if (!badge) { badge = document.createElement('span'); badge.className = 'permalink-zoom-badge zoom-ok'; wrap.insertAdjacentElement('afterend', badge); }
@@ -431,7 +430,7 @@
         if (!input.value.trim()) return;
         const r = checkPermalink(input.value);
         applyPermalinkFeedback(input, r);
-        if (!r.ok) { ok = false; if (ok === false) input.focus(); }
+        if (!r.ok && ok) { ok = false; input.focus(); }
       });
       if (!ok) e.preventDefault();
     });

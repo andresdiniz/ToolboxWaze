@@ -36,66 +36,110 @@ final class AuditoriaController extends AbstractController
         $page        = max(1, (int) $req->query->get('page', 1));
         $offset      = ($page - 1) * self::PER_PAGE;
 
-        $parts  = [];
-        $params = [];
+        // -----------------------------------------------------------------
+        // Monta os filtros compartilhados entre as duas branches do UNION
+        // -----------------------------------------------------------------
+        $postoParts  = [];
+        $postoParams = [];
+        $radarParts  = [];
+        $radarParams = [];
 
+        // Filtro de UFs restritas (aplicado separadamente porque o campo difere)
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
             $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
-            $parts[] = "frr.uf IN ($ph)";
+            $postoParts[]  = "frr.uf IN ($ph)";
+            $radarParts[]  = "rm.sigla_uf IN ($ph)";
             foreach ($allowedUfs as $uf) {
-                $params[] = $uf;
+                $postoParams[] = $uf;
+                $radarParams[] = $uf;
             }
         } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
-            $parts[] = '1=0';
+            // Sem acesso a nenhum estado: retorna nada
+            $postoParts[] = '1=0';
+            $radarParts[] = '1=0';
         }
 
         if ($filtroUser !== '') {
-            $parts[]  = 'u.email LIKE ?';
-            $params[] = "%$filtroUser%";
+            $postoParts[]  = 'u.email LIKE ?';
+            $postoParams[] = "%$filtroUser%";
+            $radarParts[]  = 'u.email LIKE ?';
+            $radarParams[] = "%$filtroUser%";
         }
         if ($filtroCampo !== '') {
-            $parts[]  = 'wll.campo_alterado = ?';
-            $params[] = $filtroCampo;
+            $postoParts[]  = 'wll.campo_alterado = ?';
+            $postoParams[] = $filtroCampo;
+            $radarParts[]  = 'wll.campo_alterado = ?';
+            $radarParams[] = $filtroCampo;
         }
         if ($dataInicio !== '') {
-            $parts[]  = 'wll.changed_at >= ?';
-            $params[] = $dataInicio . ' 00:00:00';
+            $postoParts[]  = 'wll.changed_at >= ?';
+            $postoParams[] = $dataInicio . ' 00:00:00';
+            $radarParts[]  = 'wll.changed_at >= ?';
+            $radarParams[] = $dataInicio . ' 00:00:00';
         }
         if ($dataFim !== '') {
-            $parts[]  = 'wll.changed_at <= ?';
-            $params[] = $dataFim . ' 23:59:59';
+            $postoParts[]  = 'wll.changed_at <= ?';
+            $postoParams[] = $dataFim . ' 23:59:59';
+            $radarParts[]  = 'wll.changed_at <= ?';
+            $radarParams[] = $dataFim . ' 23:59:59';
         }
 
-        $where = $parts ? 'WHERE ' . implode(' AND ', $parts) : '';
+        $postoWhere = $postoParts ? 'WHERE ' . implode(' AND ', $postoParts) : '';
+        $radarWhere = $radarParts ? 'WHERE ' . implode(' AND ', $radarParts) : '';
+
+        // Parâmetros unidos na ordem certa para COUNT e para SELECT
+        $allParams = array_merge($postoParams, $radarParams);
+
+        // -----------------------------------------------------------------
+        // CTE / UNION para contar e paginar os dois tipos juntos
+        // -----------------------------------------------------------------
+        $unionSql = "
+            SELECT
+                wll.id, wll.campo_alterado, wll.valor_anterior, wll.valor_novo, wll.changed_at,
+                u.email AS changed_by_email,
+                frr.id AS objeto_id, frr.razao_social AS objeto_nome, frr.municipio, frr.uf,
+                'posto' AS tipo
+            FROM posto_waze_link_log wll
+            JOIN user u ON u.id = wll.changed_by
+            JOIN posto_waze_link pwl ON pwl.id = wll.posto_waze_link_id
+            JOIN fuel_reseller_raw frr ON frr.id = pwl.posto_id
+            $postoWhere
+
+            UNION ALL
+
+            SELECT
+                wll.id, wll.campo_alterado, wll.valor_anterior, wll.valor_novo, wll.changed_at,
+                u.email AS changed_by_email,
+                rm.id AS objeto_id, rm.local_verificacao AS objeto_nome, rm.municipio, rm.sigla_uf AS uf,
+                'radar' AS tipo
+            FROM radar_waze_link_log wll
+            JOIN user u ON u.id = wll.changed_by
+            JOIN radar_waze_link rwl ON rwl.id = wll.radar_waze_link_id
+            JOIN radar_medidor rm ON rm.id = rwl.radar_medidor_id
+            $radarWhere
+        ";
 
         $total = (int) $this->db->fetchOne(
-            "SELECT COUNT(*)
-             FROM posto_waze_link_log wll
-             JOIN user u ON u.id = wll.changed_by
-             JOIN posto_waze_link pwl ON pwl.id = wll.posto_waze_link_id
-             JOIN fuel_reseller_raw frr ON frr.id = pwl.posto_id
-             $where",
-            $params
+            "SELECT COUNT(*) FROM ($unionSql) AS combined",
+            $allParams
         );
 
         $logs = $this->db->fetchAllAssociative(
-            "SELECT
-                wll.id, wll.campo_alterado, wll.valor_anterior, wll.valor_novo, wll.changed_at,
-                u.email AS changed_by_email,
-                frr.id AS posto_id, frr.razao_social, frr.municipio, frr.uf
-             FROM posto_waze_link_log wll
-             JOIN user u ON u.id = wll.changed_by
-             JOIN posto_waze_link pwl ON pwl.id = wll.posto_waze_link_id
-             JOIN fuel_reseller_raw frr ON frr.id = pwl.posto_id
-             $where
-             ORDER BY wll.changed_at DESC
+            "SELECT * FROM ($unionSql) AS combined
+             ORDER BY changed_at DESC
              LIMIT " . self::PER_PAGE . " OFFSET $offset",
-            $params
+            $allParams
         );
 
         $usuarios = $this->db->fetchAllAssociative(
-            "SELECT DISTINCT u.email FROM posto_waze_link_log wll
-             JOIN user u ON u.id = wll.changed_by ORDER BY u.email"
+            "SELECT DISTINCT u.email
+             FROM (
+                SELECT changed_by FROM posto_waze_link_log
+                UNION
+                SELECT changed_by FROM radar_waze_link_log
+             ) all_logs
+             JOIN user u ON u.id = all_logs.changed_by
+             ORDER BY u.email"
         );
 
         return $this->render('auditoria/index.html.twig', [

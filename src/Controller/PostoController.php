@@ -120,11 +120,11 @@ final class PostoController extends AbstractController
         $posto = $this->db->fetchAssociative('SELECT * FROM fuel_reseller_raw WHERE id = ?', [$id]);
 
         if (!$posto) {
-            throw $this->createNotFoundException('Posto n\u00e3o encontrado.');
+            throw $this->createNotFoundException('Posto não encontrado.');
         }
 
         if ($user && !$user->canAccessUf((string) ($posto['uf'] ?? ''))) {
-            throw $this->createAccessDeniedException('Voc\u00ea n\u00e3o tem acesso a dados deste estado.');
+            throw $this->createAccessDeniedException('Você não tem acesso a dados deste estado.');
         }
 
         if (is_string($posto['raw_data'] ?? null)) {
@@ -176,13 +176,13 @@ final class PostoController extends AbstractController
         $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
 
         if (!$this->isCsrfTokenValid('posto_waze_save_' . $id, $req->request->get('_token'))) {
-            $this->addFlash('error', 'Token de seguran\u00e7a inv\u00e1lido.');
+            $this->addFlash('error', 'Token de segurança inválido.');
             return $this->redirectToRoute('posto_show', ['id' => $id]);
         }
 
         $posto = $this->db->fetchAssociative('SELECT id, uf FROM fuel_reseller_raw WHERE id = ?', [$id]);
         if (!$posto) {
-            throw $this->createNotFoundException('Posto n\u00e3o encontrado.');
+            throw $this->createNotFoundException('Posto não encontrado.');
         }
 
         /** @var User $user */
@@ -201,12 +201,11 @@ final class PostoController extends AbstractController
         $errors = [];
 
         if ($wazeLink === '') {
-            $errors['waze_link'] = 'O link do Waze \u00e9 obrigat\u00f3rio.';
+            $errors['waze_link'] = 'O link do Waze é obrigatório.';
         } elseif (!filter_var($wazeLink, FILTER_VALIDATE_URL)) {
-            $errors['waze_link'] = 'Informe uma URL v\u00e1lida.';
+            $errors['waze_link'] = 'Informe uma URL válida.';
         } elseif (!preg_match('/[?&]venues=([\d.]+)/', $wazeLink, $m)) {
-            // Captura o ID completo do place no Waze, ex: 207160888.2071412273.41231195
-            $errors['waze_link'] = 'A URL deve conter o par\u00e2metro venues=ID.';
+            $errors['waze_link'] = 'A URL deve conter o parâmetro venues=ID.';
         }
 
         $existing = $this->db->fetchAssociative(
@@ -214,7 +213,7 @@ final class PostoController extends AbstractController
         ) ?: null;
 
         if ($existing && $motivoRevisao === '') {
-            $errors['motivo_revisao'] = 'Informe o motivo da revis\u00e3o.';
+            $errors['motivo_revisao'] = 'Informe o motivo da revisão.';
         }
 
         if ($errors !== []) {
@@ -226,8 +225,11 @@ final class PostoController extends AbstractController
             return $this->redirectToRoute('posto_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
         }
 
-        // ID completo do place no Waze (string com pontos, ex: "207160888.2071412273.41231195")
-        $venueId = $m[1];
+        // O parâmetro venues= no Waze pode ser composto (ex: "207160888.2071412273.41231195").
+        // A coluna permanent_hazard_id é INT UNSIGNED, então armazenamos apenas
+        // o primeiro segmento numérico antes do ponto — o ID principal do local.
+        $venueRaw = $m[1]; // string capturada, pode conter pontos
+        $permanentHazardId = (int) explode('.', $venueRaw)[0];
 
         if ($existing) {
             if ($wazeLink !== $existing['waze_link']) {
@@ -252,7 +254,7 @@ final class PostoController extends AbstractController
                 'UPDATE posto_waze_link
                  SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
                  WHERE id = ?',
-                [$wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
+                [$wazeLink, $permanentHazardId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
             );
 
             $this->addFlash('success', 'Link Waze atualizado com sucesso.');
@@ -261,7 +263,7 @@ final class PostoController extends AbstractController
                 'INSERT INTO posto_waze_link
                  (posto_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now]
+                [$id, $wazeLink, $permanentHazardId, $motivoRevisao ?: null, $userId, $now]
             );
 
             $newId = (int) $this->db->lastInsertId();

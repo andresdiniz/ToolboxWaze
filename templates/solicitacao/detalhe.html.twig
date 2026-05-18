@@ -1,41 +1,142 @@
 {% extends 'base.html.twig' %}
 {% block title %}Solicitação #{{ solicitacao.id }}{% endblock %}
+
 {% block body %}
+{# ─── Mapeamentos de choice → label legível ─────────────────────────────── #}
+{% set LABELS = {
+
+  {# imagem_satelite #}
+  'muito_antiga'   : 'A imagem com maior resolução é muito antiga',
+  'baixa_qualidade': 'A imagem está com qualidade/resolução baixa',
+  'alteracoes'     : 'Alterações significativas na área',
+  'ruins_nubladas' : 'As imagens estão ruins ou nubladas',
+  '1_ano'   : '1 ano',
+  '6_meses' : '6 meses',
+  '1_mes'   : '1 mês',
+  '1_semana': '1 semana',
+
+  {# gerente_estado_pais / gerente_area #}
+  'incluir'         : 'Incluir',
+  'excluir'         : 'Excluir',
+  'gerente_estado'  : 'Gerente de Estado',
+  'gerente_pais'    : 'Gerente de País',
+
+  {# nivel #}
+  'upgrade'   : 'Upgrade',
+  'downgrade' : 'Downgrade',
+  '1_5'     : 'Entre 1 e 5',
+  '6_10'    : 'Entre 6 e 10',
+  '11_20'   : 'Entre 11 e 20',
+  '21_50'   : 'Entre 21 e 50',
+  '50_mais' : 'Mais de 50',
+  'nenhuma' : 'Nenhuma',
+
+  {# bandeira_posto #}
+  'adicionar': 'Adicionar',
+  'remover'  : 'Remover',
+
+  {# genéricos #}
+  'sim' : 'Sim',
+  'nao' : 'Não',
+} %}
+
+{# ─── Campos que devem mostrar o texto exato digitado (não são choices) ─── #}
+{% set CAMPOS_TEXTO = [
+  'mentor', 'recomendadores', 'motivacao', 'descricao',
+  'editorNome', 'poligono', 'comentarios', 'permalink',
+  'nomeBandeira', 'cnpj', 'nomeSegmento', 'idSegmento'
+] %}
+
+{# ─── Labels das chaves (campo → título legível) ──────────────────────────── #}
+{% set CAMPO_LABELS = {
+  'tipoNivel'        : 'Tipo de pedido',
+  'mentor'           : 'Mentor',
+  'recomendadores'   : 'Editores recomendadores',
+  'nivelAtual'       : 'Nível atual',
+  'nivelDesejado'    : 'Nível desejado',
+  'ativo'            : 'Ativo na comunidade',
+  'postagens'        : 'Postagens no Discuss (último ano)',
+  'motivacao'        : 'Motivação',
+  'cumpriuRequisitos': 'Cumpriu os requisitos',
+  'motivo'           : 'Motivo',
+  'idadeImagem'      : 'Idade máxima da imagem atualizada',
+  'urgente'          : 'Urgente',
+  'permalink'        : 'Permalink',
+  'acao'             : 'Ação',
+  'cargo'            : 'Cargo desejado',
+  'comentarios'      : 'Comentários',
+  'comunicouIntencao': 'Comunicou intenção no Discuss',
+  'poligono'         : 'Polígono da área',
+  'editorNome'       : 'Editor que cometeu o Oops',
+  'descricao'        : 'Descrição / Regras infringidas',
+  'nomeBandeira'     : 'Nome da bandeira',
+  'cnpj'             : 'CNPJ do posto',
+  'nomeSegmento'     : 'Nome do segmento',
+  'idSegmento'       : 'ID do segmento',
+} %}
+
 <div class="container py-4" style="max-width:780px">
+
+  {# ── Cabeçalho ─────────────────────────────────────────────────────────── #}
   <div class="d-flex justify-content-between align-items-start mb-3">
     <div>
       <h2 class="mb-0">{{ solicitacao.tipoLabel }}</h2>
       <small class="text-muted">#{{ solicitacao.id }} · {{ solicitacao.criadaEm|date('d/m/Y H:i') }}</small>
     </div>
-    {% if solicitacao.status == 'pendente' %}<span class="badge bg-warning text-dark fs-6">Pendente</span>
-    {% elseif solicitacao.status == 'resolvida' %}<span class="badge bg-success fs-6">Resolvida</span>
-    {% else %}<span class="badge bg-danger fs-6">Cancelada</span>{% endif %}
+    <span class="badge fs-6 bg-{{ solicitacao.statusCor }}{% if solicitacao.status == 'pendente' %} text-dark{% endif %}">
+      {{ solicitacao.statusLabel }}
+    </span>
   </div>
 
+  {# ── Solicitante ────────────────────────────────────────────────────────── #}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Solicitante</div>
     <div class="card-body">
       <dl class="row mb-0">
-        <dt class="col-sm-3">Nome</dt>      <dd class="col-sm-9">{{ solicitacao.solicitanteNome }}</dd>
-        <dt class="col-sm-3">Usuário</dt>   <dd class="col-sm-9">{{ solicitacao.solicitanteUsuario }}</dd>
-        <dt class="col-sm-3">E-mail</dt>    <dd class="col-sm-9">{{ solicitacao.solicitanteEmail }}</dd>
-        {% if solicitacao.estado %}<dt class="col-sm-3">Estado</dt><dd class="col-sm-9">{{ solicitacao.estado }}</dd>{% endif %}
+        <dt class="col-sm-3">Nome</dt>    <dd class="col-sm-9">{{ solicitacao.solicitanteNome }}</dd>
+        <dt class="col-sm-3">Usuário</dt> <dd class="col-sm-9">{{ solicitacao.solicitanteUsuario }}</dd>
+        <dt class="col-sm-3">E-mail</dt>  <dd class="col-sm-9">{{ solicitacao.solicitanteEmail }}</dd>
+        {% if solicitacao.estado %}
+          <dt class="col-sm-3">Estado</dt><dd class="col-sm-9">{{ solicitacao.estado }}</dd>
+        {% endif %}
       </dl>
     </div>
   </div>
 
+  {# ── Dados da solicitação ──────────────────────────────────────────────── #}
   {% if solicitacao.dados %}
   <div class="card mb-3">
     <div class="card-header fw-semibold">Detalhes da solicitação</div>
     <div class="card-body">
       <dl class="row mb-0">
       {% for chave, valor in solicitacao.dados %}
-        <dt class="col-sm-4 text-capitalize">{{ chave|replace({'_': ' '}) }}</dt>
+        {# título do campo #}
+        <dt class="col-sm-4">
+          {{ CAMPO_LABELS[chave] ?? chave|replace({'_': ' '})|capitalize }}
+        </dt>
         <dd class="col-sm-8">
-          {% if valor is iterable %}{{ valor|join(', ') }}
-          {% elseif valor == true or valor == 'sim' %}<span class="text-success">✓ Sim</span>
-          {% elseif valor == false or valor == 'nao' %}<span class="text-danger">✗ Não</span>
-          {% else %}{{ valor }}{% endif %}
+          {% if chave in CAMPOS_TEXTO %}
+            {# campo de texto livre — mostra o que o usuário digitou #}
+            {% if valor is not empty %}
+              {{ valor|nl2br }}
+            {% else %}
+              <span class="text-muted fst-italic">Não informado</span>
+            {% endif %}
+          {% elseif valor is iterable %}
+            {# array — junta com vírgula usando labels quando possível #}
+            {{ valor|map(v => LABELS[v] ?? v)|join(', ') }}
+          {% elseif valor == true or valor == '1' %}
+            <span class="text-success">✓ Sim</span>
+          {% elseif valor == false or valor == '0' %}
+            <span class="text-danger">✗ Não</span>
+          {% elseif LABELS[valor] is defined %}
+            {# choice com label mapeado #}
+            {{ LABELS[valor] }}
+          {% elseif valor is not empty %}
+            {{ valor }}
+          {% else %}
+            <span class="text-muted fst-italic">Não informado</span>
+          {% endif %}
         </dd>
       {% endfor %}
       </dl>
@@ -43,33 +144,92 @@
   </div>
   {% endif %}
 
-  {% if solicitacao.isPendente() and is_granted('SOLICITACAO_RESOLVER', solicitacao) %}
-  <div class="card border-warning">
-    <div class="card-header fw-semibold text-warning-emphasis bg-warning-subtle">Resolver esta solicitação</div>
+  {# ── Arquivos anexos (oops) ────────────────────────────────────────────── #}
+  {% if solicitacao.arquivos %}
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Arquivos anexados</div>
     <div class="card-body">
+      <div class="d-flex flex-wrap gap-2">
+      {% for arquivo in solicitacao.arquivos %}
+        <a href="/uploads/oops/{{ arquivo }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+          📎 {{ arquivo }}
+        </a>
+      {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Histórico de status ───────────────────────────────────────────────── #}
+  {% if solicitacao.historicos is not empty %}
+    {% include 'solicitacao/_historico.html.twig' %}
+  {% endif %}
+
+  {# ── Comentários / chat ────────────────────────────────────────────────── #}
+  {% include 'solicitacao/_chat.html.twig' %}
+
+  {# ── Painel de gestão (admin / responsável) ───────────────────────────── #}
+  {% if is_granted('SOLICITACAO_RESOLVER', solicitacao) and not solicitacao.isFinal() %}
+  <div class="card border-warning mt-4">
+    <div class="card-header fw-semibold text-warning-emphasis bg-warning-subtle">
+      Gerenciar solicitação
+    </div>
+    <div class="card-body">
+
+      {# ── Mudar status ── #}
+      {% include 'solicitacao/_status_form.html.twig' %}
+
+      {# ── Resolver / Negar / Cancelar ── #}
+      <hr class="my-3">
       <form method="post" action="{{ path('solicitacao_resolver', {id: solicitacao.id}) }}">
         <input type="hidden" name="_token" value="{{ csrf_token('resolver_' ~ solicitacao.id) }}">
+
         <div class="mb-3">
-          <label class="form-label">Nota de resolução (opcional)</label>
-          <textarea name="nota" class="form-control" rows="3" placeholder="Descreva como foi tratado…"></textarea>
+          <label class="form-label fw-semibold">Encerrar com…</label>
+          <div class="d-flex gap-2 flex-wrap">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="desfecho" id="des_resolvida" value="resolvida" checked>
+              <label class="form-check-label text-success" for="des_resolvida">✓ Resolvida</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="desfecho" id="des_negada" value="negada">
+              <label class="form-check-label text-danger" for="des_negada">✗ Negada</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="desfecho" id="des_cancelada" value="cancelada">
+              <label class="form-check-label text-secondary" for="des_cancelada">⊘ Cancelada</label>
+            </div>
+          </div>
         </div>
+
+        <div class="mb-3">
+          <label class="form-label">Nota de encerramento <span class="text-muted">(opcional)</span></label>
+          <textarea name="nota" class="form-control" rows="3"
+                    placeholder="Descreva como foi tratado, motivo da negativa…"></textarea>
+        </div>
+
         <button type="submit" class="btn btn-warning"
-                onclick="return confirm('Marcar como resolvida? Isso irá remover esta pendência para TODOS os responsáveis.')">
-          ✓ Marcar como resolvida
+                onclick="return confirm('Encerrar esta solicitação? A ação não pode ser desfeita.')">
+          Encerrar solicitação
         </button>
       </form>
     </div>
   </div>
   {% endif %}
 
-  {% if not solicitacao.isPendente() and solicitacao.resolvidaPor %}
-  <div class="alert alert-success mt-3">
-    Resolvida por <strong>{{ solicitacao.resolvidaPor.username ?? solicitacao.resolvidaPor.email }}</strong>
-    em {{ solicitacao.resolvidaEm|date('d/m/Y H:i') }}.
+  {# ── Resultado final ───────────────────────────────────────────────────── #}
+  {% if solicitacao.isFinal() %}
+  <div class="alert alert-{{ solicitacao.statusCor }} mt-4 mb-0">
+    <strong>{{ solicitacao.statusLabel }}</strong>
+    {% if solicitacao.resolvidaPor %}
+      por <strong>{{ solicitacao.resolvidaPor.username ?? solicitacao.resolvidaPor.email }}</strong>
+      em {{ solicitacao.resolvidaEm|date('d/m/Y H:i') }}
+    {% endif %}.
     {% if solicitacao.notaResolucao %}<br><em>{{ solicitacao.notaResolucao }}</em>{% endif %}
   </div>
   {% endif %}
 
-  <a href="{{ path('solicitacao_pendencias') }}" class="btn btn-link ps-0 mt-3">← Voltar para pendências</a>
+  <a href="{{ path('solicitacao_hub', {aba: 'gestao'}) }}" class="btn btn-link ps-0 mt-3">← Voltar para gestão</a>
+
 </div>
 {% endblock %}

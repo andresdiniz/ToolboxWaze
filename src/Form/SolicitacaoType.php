@@ -31,22 +31,25 @@ class SolicitacaoType extends AbstractType
      *   https://www.waze.com/editor/?zoom=15&...
      *   https://beta.waze.com/editor/?zoom=15&...
      *   https://waze.com/pt-BR/editor?env=row&lat=...&zoomLevel=15
-     *   https://waze.com/editor?zoomLevel=15&...
+     *   https://waze.com/en-US/editor?zoomLevel=16&...
      *
-     * Aceita tanto `zoom=` quanto `zoomLevel=` (novo formato da URL do Waze).
-     * Aceita locale no path (ex: /pt-BR/, /en-US/).
-     * Aceita com ou sem barra antes do `?`.
+     * Estrutura do path:
+     *   waze.com/editor          (sem locale)
+     *   waze.com/{locale}/editor (com locale ex: pt-BR, en-US, es-419)
+     *
+     * ATENÇÃO: o locale é opcional e fica ANTES de /editor num único bloco.
+     * Versão anterior tinha (?:\/locale\/)?\/editor que gerava barra dupla.
      */
     private const PERMALINK_PATTERN = '/
-        https?:\/\/                        # protocolo
-        (?:www\.|beta\.)?                  # subdomínio opcional (www. ou beta.)
-        waze\.com                          # domínio
-        (?:\/[a-z]{2}(?:-[A-Z]{2})?\/)?   # locale opcional: /pt-BR/ /en-US/ etc.
-        \/editor\/?                        # caminho /editor com barra opcional
-        [^"\s]*                            # query string e fragmentos
-        [?&]zoom(?:Level)?=               # param: zoom= OU zoomLevel=
-        (1[5-9]|[2-9]\d|\d{3,})           # valor >= 15
-        [^"\s]*                            # restante da URL
+        https?:\/\/                             # protocolo
+        (?:www\.|beta\.)?                       # subdomínio opcional
+        waze\.com                               # domínio
+        (?:\/[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})?)?  # locale opcional: pt-BR, en-US, es-419 …
+        \/editor                                # /editor (uma única barra, sem duplicar)
+        [^"\s]*                                 # query string: ?env=row&lat=...
+        [?&]zoom(?:Level)?=                    # zoom= ou zoomLevel=
+        (1[5-9]|[2-9]\d|\d{3,})               # valor >= 15
+        [^"\s]*                                 # restante da URL
     /xi';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -114,8 +117,7 @@ class SolicitacaoType extends AbstractType
             new Assert\Regex([
                 'pattern' => self::PERMALINK_PATTERN,
                 'message' => 'O permalink deve ser do editor Waze com zoom ≥15. '
-                           . 'Exemplos: https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46 '
-                           . 'ou https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
+                           . 'Ex: https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
             ]),
         ];
         if ($required) {

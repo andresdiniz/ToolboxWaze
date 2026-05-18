@@ -24,6 +24,26 @@ class SolicitacaoType extends AbstractType
         'SP'=>'SP','TO'=>'TO',
     ];
 
+    /**
+     * Regex de permalink WME com zoom ≥15.
+     *
+     * Formato aceito (ambos os domínios, ambas as ordens de parâmetros):
+     *   https://www.waze.com/editor/?zoom=15&...
+     *   https://www.waze.com/editor/?...&zoom=16...
+     *   https://beta.waze.com/editor/?zoom=15...
+     *
+     * Captura o zoom como \d{2,} para garantir zoom ≥15:
+     *   zoom=(1[5-9]|[2-9]\d|\d{3,})
+     */
+    private const PERMALINK_PATTERN = '/
+        https?:\/\/               # protocolo
+        (?:www\.|beta\.)?         # subdomínio opcional
+        waze\.com\/editor\/       # domínio + caminho
+        [^"\s]*                   # demais parâmetros
+        [?&]zoom=(1[5-9]|[2-9]\d|\d{3,})  # zoom ≥15
+        [^"\s]*                   # restante da URL
+    /xi';
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
@@ -82,6 +102,21 @@ class SolicitacaoType extends AbstractType
         };
     }
 
+    /** Constraints reutilizáveis para permalink obrigatório com zoom ≥15 */
+    private function permalinkConstraints(bool $required = true): array
+    {
+        $constraints = [
+            new Assert\Regex([
+                'pattern' => self::PERMALINK_PATTERN,
+                'message' => 'O permalink deve ser do editor Waze (waze.com/editor) com zoom ≥15. Exemplo: https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46',
+            ]),
+        ];
+        if ($required) {
+            array_unshift($constraints, new Assert\NotBlank(message: 'O permalink é obrigatório.'));
+        }
+        return $constraints;
+    }
+
     private function addCamposImagemSatelite(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
@@ -106,11 +141,16 @@ class SolicitacaoType extends AbstractType
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_permalink', TextType::class, [
-                'label' => 'Permalink (zoom ≥ 15)', 'mapped' => false,
-                'constraints' => [
-                    new Assert\NotBlank(),
-                    new Assert\Regex(['pattern' => '/waze\.com|wazle\.com/i', 'message' => 'Insira um permalink válido do WME']),
+                'label'       => 'Permalink (zoom ≥15)',
+                'mapped'      => false,
+                'attr'        => [
+                    'placeholder'      => 'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46',
+                    'data-permalink'   => '1',
+                    'autocomplete'     => 'off',
+                    'spellcheck'       => 'false',
                 ],
+                'help'        => 'Abra o WME, navegue até a área desejada com zoom ≥15 e copie a URL completa.',
+                'constraints' => $this->permalinkConstraints(required: true),
             ]);
     }
 
@@ -207,7 +247,19 @@ class SolicitacaoType extends AbstractType
                 'label' => 'Nome do editor que cometeu o Oops', 'mapped' => false,
                 'constraints' => [new Assert\NotBlank()],
             ])
-            ->add('dados_permalink', TextType::class, ['label' => 'Permalink do WME', 'mapped' => false, 'required' => false])
+            ->add('dados_permalink', TextType::class, [
+                'label'    => 'Permalink (zoom ≥15)',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => [
+                    'placeholder'    => 'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46',
+                    'data-permalink' => '1',
+                    'autocomplete'   => 'off',
+                    'spellcheck'     => 'false',
+                ],
+                'help'       => 'Opcional, mas recomendado. Se informar, deve ter zoom ≥15.',
+                'constraints' => $this->permalinkConstraints(required: false),
+            ])
             ->add('dados_descricao', TextareaType::class, [
                 'label' => 'Fundamente as regras infringidas e descreva os fatos', 'mapped' => false, 'attr' => ['rows' => 5],
                 'constraints' => [new Assert\NotBlank(), new Assert\Length(['min' => 30])],

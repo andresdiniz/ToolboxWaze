@@ -1,30 +1,15 @@
-# Use the front controller as index file. It serves as a fallback solution when
-# every other rewrite/redirect fails (e.g. in an aliased environment without
-# mod_rewrite). Additionally, this reduces the matching process for the
-# start page (path "/") because otherwise Apache will apply the rewriting rules
-# to each configured DirectoryIndex file (e.g. index.php, index.html, index.pl).
 DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-
-    # Determine the RewriteBase automatically and set it as environment variable.
     RewriteCond %{REQUEST_URI}::$0 ^(/.+)/(.*)::\2$
     RewriteRule .* - [E=BASE:%1]
-
-    # Sets the HTTP_AUTHORIZATION header removed by Apache
     RewriteCond %{HTTP:Authorization} .+
     RewriteRule ^ - [E=HTTP_AUTHORIZATION:%0]
-
-    # Redirect to URI without front controller to prevent duplicate content
     RewriteCond %{ENV:REDIRECT_STATUS} ^\/?
     RewriteRule ^index\.php(?:/(.*)|$) %{ENV:BASE}/$1 [R=301,L]
-
-    # If the requested filename exists, simply serve it.
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]
-
-    # Rewrite all other queries to the front controller.
     RewriteRule ^ %{ENV:BASE}/index.php [L]
 </IfModule>
 
@@ -35,42 +20,24 @@ DirectoryIndex index.php
 </IfModule>
 
 <IfModule mod_headers.c>
-    # ==========================================================================
-    # Content Security Policy — ToolboxWaze
-    # ==========================================================================
-    #
-    # Recursos externos utilizados:
-    #   CDN JS/CSS/fontes : cdn.jsdelivr.net  → Bootstrap 5.3 CSS + JS
-    #                                           Bootstrap CSS pode emitir @font-face
-    #                                           apontando para o próprio CDN
-    #   Fontes CSS        : fonts.googleapis.com → Google Fonts stylesheet (Inter)
-    #   Fontes woff2      : fonts.gstatic.com    → arquivos .woff2 do Inter
-    #   Imagens           : gstatic.com, lh3.googleusercontent.com → avatares OAuth
-    #
-    # script-src inclui 'unsafe-inline' para scripts inline do Symfony/Twig
-    #   (importmap, flash messages, etc.) e 'data:' para os módulos ES que o
-    #   importmap do Symfony gera como data:application/javascript.
-    #
-    # connect-src inclui cdn.jsdelivr.net para evitar o erro do sourcemap
-    #   do Bootstrap CSS no DevTools (bootstrap.min.css.map).
-    # ==========================================================================
+    # ------------------------------------------------------------------
+    # CSP — ToolboxWaze
+    # font-src usa wildcard (*) para cobrir qualquer CDN de fonte
+    # (Google Fonts, jsDelivr, Fontshare, etc.) sem precisar listar
+    # cada subdomínio individualmente.
+    # ------------------------------------------------------------------
     Header always set Content-Security-Policy "\
  default-src 'self'; \
  script-src  'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net data:; \
- style-src   'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; \
- font-src    'self' cdn.jsdelivr.net fonts.gstatic.com data:; \
+ style-src   'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com api.fontshare.com; \
+ font-src    *; \
  img-src     'self' data: blob: https://www.gstatic.com https://lh3.googleusercontent.com; \
  connect-src 'self' cdn.jsdelivr.net; \
  frame-ancestors 'none'; \
  base-uri    'self'; \
  form-action 'self'"
 
-    # Remove X-Powered-By para não expor versão do PHP
     Header always unset X-Powered-By
-
-    # Impede clickjacking
     Header always set X-Frame-Options "DENY"
-
-    # Impede sniffing de MIME type
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>

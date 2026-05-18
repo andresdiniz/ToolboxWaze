@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"><title>Solicitação tratada</title></head>
+<head><meta charset="UTF-8"><title>Atualização na sua solicitação</title></head>
 <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">
 
   <div style="background:#0d6efd;padding:16px 24px;border-radius:6px 6px 0 0">
@@ -10,7 +10,7 @@
   <div style="border:1px solid #dee2e6;border-top:none;padding:24px;border-radius:0 0 6px 6px">
     <p style="margin-top:0">Olá, <strong>{{ solicitacao.solicitanteNome }}</strong>!</p>
 
-    <p>Sua solicitação foi tratada pela nossa equipe.</p>
+    <p>O status da sua solicitação foi atualizado:</p>
 
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
       <tr>
@@ -22,33 +22,20 @@
         <td style="padding:8px 12px;border:1px solid #dee2e6">#{{ solicitacao.id }}</td>
       </tr>
       <tr>
-        <td style="padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;font-weight:bold">Desfecho</td>
+        <td style="padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;font-weight:bold">Novo status</td>
         <td style="padding:8px 12px;border:1px solid #dee2e6">
           <strong>{{ solicitacao.statusLabel }}</strong>
         </td>
       </tr>
-      {% if solicitacao.resolvidaEm %}
-      <tr>
-        <td style="padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;font-weight:bold">Tratada em</td>
-        <td style="padding:8px 12px;border:1px solid #dee2e6">{{ solicitacao.resolvidaEm|date('d/m/Y H:i') }}</td>
-      </tr>
-      {% endif %}
     </table>
 
-    {% if solicitacao.notaResolucao %}
-    <p><strong>Nota da equipe:</strong></p>
-    <blockquote style="border-left:4px solid #0d6efd;margin:0 0 16px;padding:8px 16px;background:#f0f4ff;border-radius:0 4px 4px 0">
-      {{ solicitacao.notaResolucao|nl2br }}
-    </blockquote>
-    {% endif %}
+    <p>Acompanhe o andamento pelo link abaixo:</p>
 
-    {% if url is defined %}
     <p style="text-align:center;margin:24px 0">
       <a href="{{ url }}" style="background:#0d6efd;color:#fff;padding:12px 28px;border-radius:4px;text-decoration:none;font-weight:bold">
-        Ver detalhes
+        Ver solicitação
       </a>
     </p>
-    {% endif %}
 
     <hr style="border:none;border-top:1px solid #dee2e6;margin:24px 0">
     <p style="font-size:12px;color:#6c757d;margin-bottom:0">

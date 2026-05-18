@@ -1,12 +1,50 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><title>Solicitação recebida</title></head>
-<body style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px">
-  <h2 style="color:#1a1a1a">Sua solicitação foi recebida ✓</h2>
-  <p>Olá, <strong>{{ solicitacao.solicitanteNome }}</strong>!</p>
-  <p>Recebemos sua solicitação do tipo <strong>{{ solicitacao.tipoLabel }}</strong> (protocolo <strong>#{{ solicitacao.id }}</strong>).</p>
-  <p>Nossa equipe irá analisar em breve. Você será notificado quando ela for tratada.</p>
-  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
-  <p style="font-size:12px;color:#999">ToolboxWaze — Gerentes do Brasil</p>
+<body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">
+
+  <div style="background:#0d6efd;padding:16px 24px;border-radius:6px 6px 0 0">
+    <h1 style="color:#fff;margin:0;font-size:20px">ToolboxWaze</h1>
+  </div>
+
+  <div style="border:1px solid #dee2e6;border-top:none;padding:24px;border-radius:0 0 6px 6px">
+    <p style="margin-top:0">Olá, <strong>{{ solicitacao.solicitanteNome }}</strong>!</p>
+
+    <p>Sua solicitação foi recebida com sucesso e está em análise pela nossa equipe.</p>
+
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">
+      <tr>
+        <td style="padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;width:40%;font-weight:bold">Tipo</td>
+        <td style="padding:8px 12px;border:1px solid #dee2e6">{{ solicitacao.tipoLabel }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;font-weight:bold">Protocolo</td>
+        <td style="padding:8px 12px;border:1px solid #dee2e6">#{{ solicitacao.id }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;font-weight:bold">Status</td>
+        <td style="padding:8px 12px;border:1px solid #dee2e6">{{ solicitacao.statusLabel }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;font-weight:bold">Data</td>
+        <td style="padding:8px 12px;border:1px solid #dee2e6">{{ solicitacao.criadaEm|date('d/m/Y H:i') }}</td>
+      </tr>
+    </table>
+
+    {% if url is defined %}
+    <p>Acompanhe o status da sua solicitação:</p>
+    <p style="text-align:center;margin:24px 0">
+      <a href="{{ url }}" style="background:#0d6efd;color:#fff;padding:12px 28px;border-radius:4px;text-decoration:none;font-weight:bold">
+        Ver minha solicitação
+      </a>
+    </p>
+    {% endif %}
+
+    <hr style="border:none;border-top:1px solid #dee2e6;margin:24px 0">
+    <p style="font-size:12px;color:#6c757d;margin-bottom:0">
+      Este e-mail foi gerado automaticamente pelo ToolboxWaze. Não responda a esta mensagem.
+    </p>
+  </div>
+
 </body>
 </html>

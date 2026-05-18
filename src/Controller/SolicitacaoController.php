@@ -41,7 +41,6 @@ class SolicitacaoController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
 
-            // Coleta campos dados_* não mapeados
             $dados = [];
             foreach ($form->all() as $fieldName => $field) {
                 if (str_starts_with($fieldName, 'dados_')) {
@@ -50,7 +49,6 @@ class SolicitacaoController extends AbstractController
             }
             $solicitacao->setDados($dados);
 
-            // Upload de arquivos (apenas tipo oops)
             if ($tipoAtual === Solicitacao::TIPO_OOPS) {
                 $arquivos = $request->files->get('arquivos_oops', []);
                 $nomes    = [];
@@ -73,12 +71,9 @@ class SolicitacaoController extends AbstractController
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
-        // Form inválido: volta para aba nova e mantém tipo selecionado
         if ($form->isSubmitted() && !$form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) { $tipoAtual = null; }
             $abaAtual = 'nova';
-
-            // Coleta erros para exibir flash informando o usuário
             $erros = [];
             foreach ($form->getErrors(true) as $erro) {
                 $erros[] = $erro->getMessage();
@@ -88,13 +83,11 @@ class SolicitacaoController extends AbstractController
             }
         }
 
-        // Aba histórico
         $historico = [];
         if ($user && $abaAtual === 'historico') {
             $historico = $this->solicitacaoRepo->findByEmail($user->getEmail());
         }
 
-        // Aba gestão (admin)
         $gestaoLista  = [];
         $contadores   = [];
         $filtroStatus = null;
@@ -141,16 +134,37 @@ class SolicitacaoController extends AbstractController
         return $this->render('solicitacao/detalhe.html.twig', ['solicitacao' => $solicitacao]);
     }
 
+    /**
+     * Muda o status de uma solicitação.
+     * Quando o desfecho é final (resolvida/negada/cancelada) o service
+     * preenche resolvidaPor, resolvidaEm e notaResolucao automaticamente.
+     */
     #[Route('/{id}/resolver', name: 'solicitacao_resolver', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
     public function resolver(Solicitacao $solicitacao, Request $request): Response
     {
         $this->denyAccessUnlessGranted('SOLICITACAO_RESOLVER', $solicitacao);
+
         if (!$this->isCsrfTokenValid('resolver_' . $solicitacao->getId(), $request->request->get('_token'))) {
-            throw $this->createAccessDeniedException('Token inválido.');
+            throw $this->createAccessDeniedException('Token CSRF inválido.');
         }
-        $this->solicitacaoService->resolver($solicitacao, $this->getUser(), $request->request->get('nota'));
-        $this->addFlash('success', 'Solicitação marcada como resolvida.');
+
+        // Aceita tanto o campo 'desfecho' (card de encerramento) quanto 'status' (mudar status intermediário)
+        $novoStatus = $request->request->get('desfecho')
+                   ?? $request->request->get('status');
+
+        if (!$novoStatus || !array_key_exists($novoStatus, Solicitacao::STATUS_LABELS)) {
+            $this->addFlash('danger', 'Status inválido.');
+            return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
+        }
+
+        $nota = trim((string) $request->request->get('nota', '')) ?: null;
+
+        $this->solicitacaoService->mudarStatus($solicitacao, $novoStatus, $this->getUser(), $nota);
+
+        $label = Solicitacao::STATUS_LABELS[$novoStatus] ?? $novoStatus;
+        $this->addFlash('success', "Solicitação atualizada para: $label.");
+
         return $this->redirectToRoute('solicitacao_hub', ['aba' => 'gestao']);
     }
 }

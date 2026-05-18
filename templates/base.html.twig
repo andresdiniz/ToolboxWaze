@@ -4,15 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ToolboxWaze{% endblock %}</title>
-    {# Bootstrap CSS via <link> — evita que o browser faça @font-face fetch de woff2
-       via cdn.jsdelivr.net bloqueado pelo font-src da CSP. Um <link> de stylesheet
-       é controlado por style-src, não por font-src. #}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    {# Fontes: Inter do Google Fonts — fonts.gstatic.com já está na CSP font-src #}
+
+    {#
+      CSP via <meta> como fallback para servidores sem mod_headers (Nginx, shared hosting).
+      Quando o servidor já envia o header HTTP Content-Security-Policy (via .htaccess),
+      o browser usa o header e ignora este meta — sem conflito.
+      Manter sincronizado com a diretiva do .htaccess.
+    #}
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src  'self' 'unsafe-inline' cdn.jsdelivr.net;
+        style-src   'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com;
+        font-src    'self' fonts.gstatic.com data:;
+        img-src     'self' data: blob: https://www.gstatic.com https://lh3.googleusercontent.com;
+        connect-src 'self';
+        frame-ancestors 'none';
+        base-uri 'self';
+        form-action 'self'">
+
+    {# Bootstrap CSS — style-src cdn.jsdelivr.net #}
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+          crossorigin="anonymous">
+
+    {# Inter — font-src fonts.gstatic.com #}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
-    {# Ícones via SVG inline nos templates — zero dependência de fonte externa #}
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap"
+          rel="stylesheet">
+
+    {# Todos os ícones são SVG inline nos templates — zero dependência de fonte externa #}
     {{ importmap('app') }}
     {% block stylesheets %}{% endblock %}
 </head>
@@ -83,7 +105,7 @@
                             </div>
                         {% endif %}
                         <span class="d-none d-md-inline">{{ app.user.name|split(' ')|first }}</span>
-                        <svg class="nav-icon" style="font-size:.7rem;width:10px;height:10px" viewBox="0 0 16 16" fill="currentColor"><path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>
+                        <svg class="nav-icon" style="width:10px;height:10px" viewBox="0 0 16 16" fill="currentColor"><path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow">
                         <li>
@@ -121,8 +143,15 @@
 
 {% block javascripts %}{% endblock %}
 
-{# Bootstrap JS no final do body, SEM defer — garante que dropdown e navbar toggler
-   funcionem imediatamente após o DOM estar pronto, inclusive no mobile #}
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{#
+  Bootstrap JS no final do body — script-src cdn.jsdelivr.net
+  integrity + crossorigin para Subresource Integrity (SRI): o browser verifica
+  o hash antes de executar, eliminando o risco de CDN comprometido.
+  Não usar defer/async: Bootstrap precisa estar pronto antes de
+  qualquer interação (dropdown, collapse, modal).
+#}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmm75deLZHVOD9pCfR3aaUGlb4JH"
+        crossorigin="anonymous"></script>
 </body>
 </html>

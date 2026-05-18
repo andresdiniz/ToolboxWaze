@@ -24,32 +24,15 @@ class SolicitacaoType extends AbstractType
         'SP'=>'SP','TO'=>'TO',
     ];
 
-    /**
-     * Regex de permalink WME com zoom >= 15.
-     *
-     * Formatos aceitos:
-     *   https://www.waze.com/editor/?zoom=15&...
-     *   https://beta.waze.com/editor/?zoom=15&...
-     *   https://waze.com/pt-BR/editor?env=row&lat=...&zoomLevel=15
-     *   https://waze.com/en-US/editor?zoomLevel=16&...
-     *
-     * Estrutura do path:
-     *   waze.com/editor          (sem locale)
-     *   waze.com/{locale}/editor (com locale ex: pt-BR, en-US, es-419)
-     *
-     * ATENÇÃO: o locale é opcional e fica ANTES de /editor num único bloco.
-     * Versão anterior tinha (?:\/locale\/)?\/editor que gerava barra dupla.
-     */
     private const PERMALINK_PATTERN = '/
-        https?:\/\/                             # protocolo
-        (?:www\.|beta\.)?                       # subdomínio opcional
-        waze\.com                               # domínio
-        (?:\/[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})?)?  # locale opcional: pt-BR, en-US, es-419 …
-        \/editor                                # /editor (uma única barra, sem duplicar)
-        [^"\s]*                                 # query string: ?env=row&lat=...
-        [?&]zoom(?:Level)?=                    # zoom= ou zoomLevel=
-        (1[5-9]|[2-9]\d|\d{3,})               # valor >= 15
-        [^"\s]*                                 # restante da URL
+        https?:\/\/
+        (?:www\.|beta\.)?waze\.com
+        (?:\/[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})?)?
+        \/editor
+        [^"\s]*
+        [?&]zoom(?:Level)?=
+        (1[5-9]|[2-9]\d|\d{3,})
+        [^"\s]*
     /xi';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -110,7 +93,6 @@ class SolicitacaoType extends AbstractType
         };
     }
 
-    /** Constraints reutilizáveis para permalink com zoom >= 15 */
     private function permalinkConstraints(bool $required = true): array
     {
         $constraints = [
@@ -237,8 +219,26 @@ class SolicitacaoType extends AbstractType
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_motivacao', TextareaType::class, [
-                'label' => 'O que te motiva a subir de nível?', 'mapped' => false,
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['min' => 20])],
+                'label' => 'O que te motiva a subir de nível?',
+                'mapped' => false,
+                'attr'  => [
+                    'rows'      => 4,
+                    'minlength' => 20,
+                    'maxlength' => 2000,
+                    'placeholder' => 'Descreva sua motivação (mínimo 20 caracteres)',
+                    'data-char-counter' => 'true',
+                    'data-char-min'     => '20',
+                ],
+                'help' => 'Mínimo de 20 caracteres.',
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Preencha sua motivação.'),
+                    new Assert\Length([
+                        'min'            => 20,
+                        'minMessage'     => 'Sua motivação deve ter pelo menos {{ limit }} caracteres.',
+                        'max'            => 2000,
+                        'maxMessage'     => 'Sua motivação não pode ultrapassar {{ limit }} caracteres.',
+                    ]),
+                ],
             ])
             ->add('dados_cumpriuRequisitos', ChoiceType::class, [
                 'label' => 'Você cumpre os requisitos para essa promoção?', 'mapped' => false,
@@ -272,8 +272,26 @@ class SolicitacaoType extends AbstractType
                 'constraints' => $this->permalinkConstraints(required: false),
             ])
             ->add('dados_descricao', TextareaType::class, [
-                'label' => 'Fundamente as regras infringidas e descreva os fatos', 'mapped' => false, 'attr' => ['rows' => 5],
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['min' => 30])],
+                'label'  => 'Fundamente as regras infringidas e descreva os fatos',
+                'mapped' => false,
+                'attr'   => [
+                    'rows'      => 5,
+                    'minlength' => 30,
+                    'maxlength' => 5000,
+                    'placeholder' => 'Descreva detalhadamente os fatos e as regras infringidas (mínimo 30 caracteres)',
+                    'data-char-counter' => 'true',
+                    'data-char-min'     => '30',
+                ],
+                'help' => 'Mínimo de 30 caracteres.',
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Preencha a descrição.'),
+                    new Assert\Length([
+                        'min'        => 30,
+                        'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
+                        'max'        => 5000,
+                        'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
+                    ]),
+                ],
             ]);
     }
 

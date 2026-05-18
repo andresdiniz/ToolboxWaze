@@ -20,9 +20,6 @@ class SolicitacaoController extends AbstractController
         private readonly SolicitacaoRepository $solicitacaoRepo,
     ) {}
 
-    /**
-     * Hub principal — abas: Nova Solicitação | Meu Histórico | Gestão (admin)
-     */
     #[Route('', name: 'solicitacao_hub', methods: ['GET', 'POST'])]
     public function hub(Request $request): Response
     {
@@ -30,7 +27,6 @@ class SolicitacaoController extends AbstractController
         $user      = $this->getUser();
         $abaAtual  = $request->query->get('aba', 'nova');
 
-        // ── Aba NOVA (formulário) ───────────────────────────────────────
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
@@ -45,6 +41,7 @@ class SolicitacaoController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
 
+            // Coleta campos dados_* não mapeados
             $dados = [];
             foreach ($form->all() as $fieldName => $field) {
                 if (str_starts_with($fieldName, 'dados_')) {
@@ -53,13 +50,17 @@ class SolicitacaoController extends AbstractController
             }
             $solicitacao->setDados($dados);
 
+            // Upload de arquivos (apenas tipo oops)
             if ($tipoAtual === Solicitacao::TIPO_OOPS) {
                 $arquivos = $request->files->get('arquivos_oops', []);
                 $nomes    = [];
                 foreach ((array) $arquivos as $file) {
                     if ($file && $file->isValid()) {
                         $nome = uniqid('oops_') . '.' . $file->guessExtension();
-                        $file->move($this->getParameter('kernel.project_dir') . '/public/uploads/oops', $nome);
+                        $file->move(
+                            $this->getParameter('kernel.project_dir') . '/public/uploads/oops',
+                            $nome
+                        );
                         $nomes[] = $nome;
                     }
                 }
@@ -67,22 +68,33 @@ class SolicitacaoController extends AbstractController
             }
 
             $this->solicitacaoService->criar($solicitacao);
-            $this->addFlash('success', 'Solicitação enviada com sucesso! Você receberá uma confirmação por e-mail.');
+
+            $this->addFlash('success', 'Solicitação enviada com sucesso! Você receberá uma confirmação por e-mail em breve.');
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
+        // Form inválido: volta para aba nova e mantém tipo selecionado
         if ($form->isSubmitted() && !$form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) { $tipoAtual = null; }
             $abaAtual = 'nova';
+
+            // Coleta erros para exibir flash informando o usuário
+            $erros = [];
+            foreach ($form->getErrors(true) as $erro) {
+                $erros[] = $erro->getMessage();
+            }
+            if (!empty($erros)) {
+                $this->addFlash('danger', 'Corrija os erros no formulário: ' . implode(' | ', array_unique($erros)));
+            }
         }
 
-        // ── Aba HISTÓRICO (usuário logado) ──────────────────────────────
+        // Aba histórico
         $historico = [];
         if ($user && $abaAtual === 'historico') {
             $historico = $this->solicitacaoRepo->findByEmail($user->getEmail());
         }
 
-        // ── Aba GESTÃO (admin) ──────────────────────────────────────────
+        // Aba gestão (admin)
         $gestaoLista  = [];
         $contadores   = [];
         $filtroStatus = null;
@@ -96,15 +108,15 @@ class SolicitacaoController extends AbstractController
         }
 
         return $this->render('solicitacao/hub.html.twig', [
-            'form'          => $form,
-            'tipoAtual'     => $tipoAtual,
-            'abaAtual'      => $abaAtual,
-            'isAdmin'       => $isAdmin,
-            'historico'     => $historico,
-            'gestaoLista'   => $gestaoLista,
-            'contadores'    => $contadores,
-            'filtroStatus'  => $filtroStatus,
-            'filtroTipo'    => $filtroTipo,
+            'form'         => $form,
+            'tipoAtual'    => $tipoAtual,
+            'abaAtual'     => $abaAtual,
+            'isAdmin'      => $isAdmin,
+            'historico'    => $historico,
+            'gestaoLista'  => $gestaoLista,
+            'contadores'   => $contadores,
+            'filtroStatus' => $filtroStatus,
+            'filtroTipo'   => $filtroTipo,
         ]);
     }
 
@@ -114,7 +126,6 @@ class SolicitacaoController extends AbstractController
         return $this->render('solicitacao/confirmacao.html.twig', ['solicitacao' => $solicitacao]);
     }
 
-    /** Rota legada — redireciona para o hub */
     #[Route('/minhas-pendencias', name: 'solicitacao_pendencias')]
     #[IsGranted('ROLE_USER')]
     public function minhasPendencias(): Response

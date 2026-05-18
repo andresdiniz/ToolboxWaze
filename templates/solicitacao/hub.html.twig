@@ -1,0 +1,492 @@
+{% extends 'base.html.twig' %}
+{% block title %}Solicitações{% endblock %}
+
+{% block stylesheets %}
+<style>
+/* ── Hub tabs ──────────────────────────────────────────────────────── */
+.hub-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e2e5ea;
+  margin-bottom: 1.5rem;
+}
+.hub-tab {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .65rem 1.25rem;
+  font-size: .875rem;
+  font-weight: 600;
+  color: #5a6478;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.hub-tab:hover { color: #0077b5; }
+.hub-tab.active { color: #0077b5; border-bottom-color: #0077b5; }
+.hub-tab .tab-badge {
+  background: #e84545;
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+/* ── Status badges ─────────────────────────────────────────────────── */
+.badge-pendente  { background:#fff3cd; color:#856404; }
+.badge-resolvida { background:#d1e7dd; color:#0a5d36; }
+.badge-cancelada { background:#f8d7da; color:#842029; }
+/* ── Sol card ──────────────────────────────────────────────────────── */
+.sol-card {
+  background:#fff; border:1px solid #e2e5ea; border-radius:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,.06); margin-bottom:1.25rem; overflow:hidden;
+}
+.sol-card-header {
+  background:#f8f9fb; border-bottom:1px solid #e2e5ea;
+  padding:.7rem 1.1rem; font-weight:600; font-size:.85rem;
+  text-transform:uppercase; letter-spacing:.04em; color:#5a6478;
+  display:flex; align-items:center; gap:.45rem;
+}
+.sol-card-header i { color:#0077b5; }
+.sol-card-body { padding:1.1rem 1.25rem; }
+/* ── Gestão counters ───────────────────────────────────────────────── */
+.gestao-counters {
+  display:flex; gap:.75rem; margin-bottom:1.25rem; flex-wrap:wrap;
+}
+.gestao-counter {
+  display:flex; flex-direction:column; align-items:center;
+  padding:.6rem 1.1rem; border-radius:8px; cursor:pointer;
+  border:2px solid transparent; transition:border-color .15s;
+  text-decoration:none;
+  min-width:90px;
+}
+.gestao-counter:hover { border-color: currentColor; }
+.gestao-counter.ativo { border-color: currentColor; }
+.gestao-counter .gc-num { font-size:1.5rem; font-weight:700; line-height:1; }
+.gestao-counter .gc-lbl { font-size:.72rem; font-weight:500; margin-top:.2rem; }
+.gc-pendente  { background:#fff8e1; color:#b45309; }
+.gc-resolvida { background:#ecfdf5; color:#065f46; }
+.gc-cancelada { background:#fef2f2; color:#991b1b; }
+/* ── Lista gestão ──────────────────────────────────────────────────── */
+.gestao-row {
+  display:flex; align-items:center; gap:.75rem;
+  padding:.75rem 1rem; border-radius:8px;
+  border:1px solid #e5e7eb; background:#fff;
+  margin-bottom:.5rem; transition:box-shadow .15s;
+}
+.gestao-row:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); }
+.gestao-row .gr-id   { font-size:.75rem; color:#9ca3af; min-width:32px; }
+.gestao-row .gr-tipo { flex:1; font-weight:500; font-size:.875rem; }
+.gestao-row .gr-user { font-size:.8rem; color:#6b7280; }
+.gestao-row .gr-data { font-size:.75rem; color:#9ca3af; white-space:nowrap; }
+/* ── Histórico ─────────────────────────────────────────────────────── */
+.hist-row {
+  display:flex; align-items:center; gap:.75rem;
+  padding:.7rem 1rem; border-radius:8px;
+  border:1px solid #e5e7eb; background:#fff;
+  margin-bottom:.5rem; transition:box-shadow .15s;
+  text-decoration:none; color:inherit;
+}
+.hist-row:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); color:inherit; }
+/* ── Form tipo pills ───────────────────────────────────────────────── */
+.tipo-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:.65rem; margin-top:.35rem;
+}
+.tipo-pill {
+  display:flex; align-items:center; gap:.6rem;
+  padding:.65rem .85rem; border:2px solid #dee2e8; border-radius:8px;
+  cursor:pointer; transition:border-color .18s,background .18s,box-shadow .18s;
+  user-select:none; background:#fff;
+}
+.tipo-pill:hover  { border-color:#0077b5; background:#f0f7ff; }
+.tipo-pill.active { border-color:#0077b5; background:#e8f3fb; box-shadow:0 0 0 3px rgba(0,119,181,.12); }
+.tipo-pill .tipo-icon {
+  width:32px; height:32px; border-radius:7px; background:#e8f3fb;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; font-size:.95rem; color:#0077b5; transition:background .18s;
+}
+.tipo-pill.active .tipo-icon { background:#0077b5; color:#fff; }
+.tipo-pill .tipo-label { font-size:.82rem; font-weight:500; color:#374151; line-height:1.3; }
+.tipo-pill.active .tipo-label { color:#0055a0; font-weight:600; }
+#campos-dinamicos { transition:opacity .22s ease; }
+#campos-dinamicos.loading { opacity:.4; pointer-events:none; }
+#campos-spinner { display:none; justify-content:center; align-items:center;
+  padding:1.5rem 0; gap:.6rem; color:#0077b5; font-size:.9rem; }
+#campos-spinner.show { display:flex; }
+.sol-card-body .form-label { font-weight:500; font-size:.875rem; margin-bottom:.3rem; }
+.sol-card-body .form-control,
+.sol-card-body .form-select {
+  border-color:#d1d5db; border-radius:7px; font-size:.875rem;
+  transition:border-color .18s,box-shadow .18s;
+}
+.sol-card-body .form-control:focus,
+.sol-card-body .form-select:focus {
+  border-color:#0077b5; box-shadow:0 0 0 3px rgba(0,119,181,.15);
+}
+.btn-enviar {
+  background:#0077b5; color:#fff; border:none; border-radius:8px;
+  padding:.6rem 2rem; font-weight:600; font-size:.9rem;
+  transition:background .18s,box-shadow .18s;
+}
+.btn-enviar:hover { background:#005c8e; box-shadow:0 3px 10px rgba(0,119,181,.25); }
+.btn-enviar:disabled { background:#a0c4d8; cursor:not-allowed; }
+@keyframes fadeSlideIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.campo-animado { animation:fadeSlideIn .28s ease both; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width:900px">
+
+  {# ══ Cabeçalho ══════════════════════════════════════════════════════ #}
+  <div class="mb-3">
+    <h4 class="fw-bold mb-0"><i class="bi bi-send me-2"></i>Solicitações</h4>
+    <p class="text-muted small mt-1">Envie pedidos ao time Waze Brasil e acompanhe o andamento.</p>
+  </div>
+
+  {# ══ Tabs ════════════════════════════════════════════════════════════ #}
+  <div class="hub-tabs" role="tablist">
+    <a href="{{ path('solicitacao_hub', {aba: 'nova'}) }}"
+       class="hub-tab{{ abaAtual == 'nova' ? ' active' : '' }}"
+       role="tab" aria-selected="{{ abaAtual == 'nova' ? 'true' : 'false' }}">
+      <i class="bi bi-plus-circle"></i> Nova solicitação
+    </a>
+    {% if app.user %}
+    <a href="{{ path('solicitacao_hub', {aba: 'historico'}) }}"
+       class="hub-tab{{ abaAtual == 'historico' ? ' active' : '' }}"
+       role="tab" aria-selected="{{ abaAtual == 'historico' ? 'true' : 'false' }}">
+      <i class="bi bi-clock-history"></i> Meu histórico
+    </a>
+    {% endif %}
+    {% if isAdmin %}
+    <a href="{{ path('solicitacao_hub', {aba: 'gestao'}) }}"
+       class="hub-tab{{ abaAtual == 'gestao' ? ' active' : '' }}"
+       role="tab" aria-selected="{{ abaAtual == 'gestao' ? 'true' : 'false' }}">
+      <i class="bi bi-sliders"></i> Gestão
+      {% if contadores.pendente is defined and contadores.pendente > 0 %}
+        <span class="tab-badge">{{ contadores.pendente }}</span>
+      {% endif %}
+    </a>
+    {% endif %}
+  </div>
+
+  {# ══ ABA: NOVA SOLICITAÇÃO ══════════════════════════════════════════ #}
+  {% if abaAtual == 'nova' %}
+
+  {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
+  {{ form_errors(form) }}
+
+  <div class="sol-card">
+    <div class="sol-card-header"><i class="bi bi-person"></i> Seus dados</div>
+    <div class="sol-card-body">
+      <div class="row g-3">
+        <div class="col-md-6">{{ form_row(form.solicitanteNome) }}</div>
+        <div class="col-md-6">{{ form_row(form.solicitanteUsuario) }}</div>
+        <div class="col-12">{{ form_row(form.solicitanteEmail) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sol-card">
+    <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
+    <div class="sol-card-body">
+      {{ form_widget(form.tipo,   {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
+      {{ form_widget(form.estado, {attr: {'data-estado-select': '1'}}) }}
+      {{ form_errors(form.tipo) }}
+      <div class="tipo-grid mt-3" id="tipo-pills">
+        {% set iconMap = {
+          'imagem_satelite':     {'icon': 'bi-globe',                'label': 'Imagem de Satélite'},
+          'gerente_area':        {'icon': 'bi-map',                  'label': 'Gerente de Área'},
+          'gerente_estado_pais': {'icon': 'bi-flag',                 'label': 'Gerente de Estado/País'},
+          'nivel':               {'icon': 'bi-bar-chart',            'label': 'Nível (Upgrade/Downgrade)'},
+          'oops':                {'icon': 'bi-exclamation-triangle', 'label': 'Oops de Editor'},
+          'bandeira_posto':      {'icon': 'bi-fuel-pump',            'label': 'Bandeira de Posto de Gasolina'},
+          'id_segmento':         {'icon': 'bi-signpost-2',           'label': 'Cadastro de ID de Segmento'}
+        } %}
+        {% for valor, info in iconMap %}
+          <div class="tipo-pill{% if tipoAtual == valor %} active{% endif %}"
+               data-value="{{ valor }}" tabindex="0" role="button"
+               aria-pressed="{{ tipoAtual == valor ? 'true' : 'false' }}">
+            <span class="tipo-icon"><i class="bi {{ info.icon }}"></i></span>
+            <span class="tipo-label">{{ info.label }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div id="campos-spinner">
+    <div class="spinner-border spinner-border-sm" role="status"></div> Carregando campos…
+  </div>
+  <div id="campos-dinamicos">
+    {% for field in form %}
+      {% if field.vars.name starts with 'dados_' %}
+        <div class="sol-card campo-animado">
+          <div class="sol-card-body">{{ form_row(field) }}</div>
+        </div>
+      {% endif %}
+    {% endfor %}
+    <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
+      <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
+      <div class="sol-card-body">
+        <label class="form-label">Compartilhe provas <span class="text-muted">(até 5 imagens, 1 MB cada)</span></label>
+        <input type="file" name="arquivos_oops[]" class="form-control" accept="image/*" multiple>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-end mt-2 mb-4">
+    <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
+      <i class="bi bi-send me-1"></i> Enviar solicitação
+    </button>
+  </div>
+  {{ form_end(form) }}
+
+  {% endif %}
+
+  {# ══ ABA: MEU HISTÓRICO ════════════════════════════════════════════ #}
+  {% if abaAtual == 'historico' %}
+    {% if not app.user %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-lock fs-1 d-block mb-2"></i>
+        <p>Faça login para ver seu histórico de solicitações.</p>
+        <a href="{{ path('app_login') }}" class="btn btn-primary btn-sm">Entrar</a>
+      </div>
+    {% elseif historico is empty %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+        <p class="mb-3">Você ainda não enviou nenhuma solicitação.</p>
+        <a href="{{ path('solicitacao_hub', {aba: 'nova'}) }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus-circle me-1"></i> Criar primeira solicitação
+        </a>
+      </div>
+    {% else %}
+      <div class="mb-3">
+        <span class="text-muted small">{{ historico|length }} solicitação(ões) encontrada(s)</span>
+      </div>
+      {% for s in historico %}
+        <a href="{{ path('solicitacao_detalhe', {id: s.id}) }}" class="hist-row">
+          <span class="text-muted small" style="min-width:36px">#{{ s.id }}</span>
+          <span class="badge rounded-pill
+            {% if s.status == 'pendente' %}badge-pendente
+            {% elseif s.status == 'resolvida' %}badge-resolvida
+            {% else %}badge-cancelada{% endif %}">
+            {{ s.status|capitalize }}
+          </span>
+          <span style="flex:1;font-weight:500;font-size:.875rem">{{ s.tipoLabel }}</span>
+          {% if s.estado %}<span class="badge bg-light text-secondary border">{{ s.estado }}</span>{% endif %}
+          <span class="text-muted" style="font-size:.75rem;white-space:nowrap">
+            {{ s.criadaEm|date('d/m/Y H:i') }}
+          </span>
+          <i class="bi bi-chevron-right text-muted"></i>
+        </a>
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+
+  {# ══ ABA: GESTÃO (admin) ════════════════════════════════════════════ #}
+  {% if abaAtual == 'gestao' and isAdmin %}
+
+    {# Contadores clicáveis #}
+    <div class="gestao-counters">
+      <a href="{{ path('solicitacao_hub', {aba: 'gestao'}) }}"
+         class="gestao-counter gc-pendente{{ filtroStatus is null and filtroTipo is null ? ' ativo' : '' }}">
+        <span class="gc-num">{{ contadores.pendente ?? 0 }}</span>
+        <span class="gc-lbl">Pendentes</span>
+      </a>
+      <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'resolvida'}) }}"
+         class="gestao-counter gc-resolvida{{ filtroStatus == 'resolvida' ? ' ativo' : '' }}">
+        <span class="gc-num">{{ contadores.resolvida ?? 0 }}</span>
+        <span class="gc-lbl">Resolvidas</span>
+      </a>
+      <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'cancelada'}) }}"
+         class="gestao-counter gc-cancelada{{ filtroStatus == 'cancelada' ? ' ativo' : '' }}">
+        <span class="gc-num">{{ contadores.cancelada ?? 0 }}</span>
+        <span class="gc-lbl">Canceladas</span>
+      </a>
+    </div>
+
+    {# Filtro por tipo #}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: filtroStatus}) }}"
+         class="btn btn-sm {{ filtroTipo is null ? 'btn-secondary' : 'btn-outline-secondary' }}">
+        Todos os tipos
+      </a>
+      {% set tipoLabels = {
+        'imagem_satelite':     'Imagem de Satélite',
+        'gerente_area':        'Gerente de Área',
+        'gerente_estado_pais': 'Gerente de Estado/País',
+        'nivel':               'Nível',
+        'oops':                'Oops',
+        'bandeira_posto':      'Bandeira Posto',
+        'id_segmento':         'ID Segmento'
+      } %}
+      {% for val, lbl in tipoLabels %}
+        <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: filtroStatus, tipo: val}) }}"
+           class="btn btn-sm {{ filtroTipo == val ? 'btn-primary' : 'btn-outline-primary' }}">
+          {{ lbl }}
+        </a>
+      {% endfor %}
+    </div>
+
+    {# Lista #}
+    {% if gestaoLista is empty %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-check2-all fs-1 d-block mb-2"></i>
+        <p>Nenhuma solicitação encontrada com esses filtros.</p>
+      </div>
+    {% else %}
+      <div class="mb-2">
+        <span class="text-muted small">{{ gestaoLista|length }} registro(s)</span>
+      </div>
+      {% for s in gestaoLista %}
+        <div class="gestao-row">
+          <span class="gr-id">#{{ s.id }}</span>
+          <span class="badge rounded-pill
+            {% if s.status == 'pendente' %}badge-pendente
+            {% elseif s.status == 'resolvida' %}badge-resolvida
+            {% else %}badge-cancelada{% endif %}">
+            {{ s.status|capitalize }}
+          </span>
+          <span class="gr-tipo">{{ s.tipoLabel }}</span>
+          <span class="gr-user">
+            {{ s.solicitanteUsuario }}
+            {% if s.estado %}<span class="badge bg-light text-secondary border ms-1">{{ s.estado }}</span>{% endif %}
+          </span>
+          <span class="gr-data">{{ s.criadaEm|date('d/m/Y H:i') }}</span>
+          <div class="d-flex gap-2 ms-auto">
+            <a href="{{ path('solicitacao_detalhe', {id: s.id}) }}"
+               class="btn btn-sm btn-outline-secondary" title="Ver detalhes">
+              <i class="bi bi-eye"></i>
+            </a>
+            {% if s.isPendente() %}
+              <button type="button"
+                      class="btn btn-sm btn-outline-success"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modal-resolver"
+                      data-id="{{ s.id }}"
+                      data-label="{{ s.tipoLabel }} · {{ s.solicitanteUsuario }}"
+                      data-token="{{ csrf_token('resolver_' ~ s.id) }}">
+                <i class="bi bi-check-lg"></i> Resolver
+              </button>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {# Modal resolver — abre inline sem mudar de página #}
+    <div class="modal fade" id="modal-resolver" tabindex="-1" aria-labelledby="modal-resolver-label" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modal-resolver-label">Resolver solicitação</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="form-resolver" method="post" action="">
+            <input type="hidden" name="_token" id="resolver-token" value="">
+            <div class="modal-body">
+              <p class="text-muted small mb-3" id="resolver-label"></p>
+              <label class="form-label fw-semibold">Nota de resolução <span class="text-muted fw-normal">(opcional)</span></label>
+              <textarea name="nota" class="form-control" rows="3" placeholder="Descreva como foi tratado…"></textarea>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Confirmar resolução</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  {% elseif abaAtual == 'gestao' and not isAdmin %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-shield-lock fs-1 d-block mb-2"></i>
+      <p>Acesso restrito a administradores.</p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block javascripts %}
+<script>
+(function () {
+  // ── Modal resolver ─────────────────────────────────────────────────
+  const modalEl = document.getElementById('modal-resolver');
+  if (modalEl) {
+    modalEl.addEventListener('show.bs.modal', function (e) {
+      const btn   = e.relatedTarget;
+      document.getElementById('resolver-label').textContent = btn.dataset.label;
+      document.getElementById('resolver-token').value       = btn.dataset.token;
+      document.getElementById('form-resolver').action       =
+        '/solicitacoes/' + btn.dataset.id + '/resolver';
+    });
+  }
+
+  // ── Formulário nova solicitação ────────────────────────────────────
+  const tipoSelect = document.querySelector('[data-tipo-select]');
+  if (!tipoSelect) return;
+
+  const estadoSel = document.querySelector('[data-estado-select]');
+  const pills     = document.querySelectorAll('.tipo-pill');
+  const dinamicos = document.getElementById('campos-dinamicos');
+  const spinner   = document.getElementById('campos-spinner');
+  const btnEnviar = document.getElementById('btn-enviar');
+
+  pills.forEach(pill => {
+    pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
+    pill.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); }
+    });
+  });
+
+  function chooseTipo(valor) {
+    if (tipoSelect.value === valor) return;
+    tipoSelect.value = valor;
+    activatePill(valor);
+    fetchCampos(valor);
+  }
+
+  function activatePill(valor) {
+    pills.forEach(p => {
+      const on = p.dataset.value === valor;
+      p.classList.toggle('active', on);
+      p.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (btnEnviar) btnEnviar.disabled = !valor;
+  }
+
+  function fetchCampos(tipo) {
+    spinner.classList.add('show');
+    dinamicos.classList.add('loading');
+    const url = new URL(window.location.href);
+    url.searchParams.set('aba', 'nova');
+    url.searchParams.set('_ajax_tipo', tipo);
+    if (estadoSel) url.searchParams.set('_ajax_estado', estadoSel.value ?? '');
+    fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(html => {
+        const doc  = new DOMParser().parseFromString(html, 'text/html');
+        const novo = doc.getElementById('campos-dinamicos');
+        if (novo) {
+          dinamicos.innerHTML = novo.innerHTML;
+          dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
+            el.style.animationDelay = (i * 0.05) + 's';
+            el.classList.add('campo-animado');
+          });
+        }
+      })
+      .catch(err => console.error('ToolboxWaze fetchCampos erro:', err))
+      .finally(() => {
+        spinner.classList.remove('show');
+        dinamicos.classList.remove('loading');
+      });
+  }
+})();
+</script>
+{% endblock %}

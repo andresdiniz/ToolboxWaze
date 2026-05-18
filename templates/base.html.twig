@@ -4,13 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ToolboxWaze{% endblock %}</title>
-
-    {#
-      Bootstrap CSS + Bootstrap Icons são importados via assets/styles/app.css
-      gerenciado pelo Symfony AssetMapper — sem dependência de CDN externa.
-    #}
     {{ importmap('app') }}
-
     {% block stylesheets %}{% endblock %}
 </head>
 <body>
@@ -18,7 +12,6 @@
 <nav class="navbar navbar-expand-lg mb-4 shadow-sm">
     <div class="container-xl">
         <a class="navbar-brand fw-bold" href="{{ path('app_dashboard') }}">
-            {# SVG logo inline — funciona em qualquer ambiente sem CDN #}
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2"
                  aria-label="ToolboxWaze" style="vertical-align:-.25em;margin-right:.35em">
@@ -47,8 +40,14 @@
                         <i class="bi bi-fuel-pump me-1"></i>Postos
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}"
+                       href="{{ path('solicitacao_hub') }}">
+                        <i class="bi bi-send me-1"></i>Solicitações
+                    </a>
+                </li>
                 {% if is_granted('ROLE_ADMIN') %}
-                <li class="nav-item position-relative">
+                <li class="nav-item">
                     <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active{% endif %}"
                        href="{{ path('admin_users_index') }}">
                         <i class="bi bi-people me-1"></i>Usuários

@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Solicitacao;
 use App\Form\SolicitacaoType;
+use App\Repository\SolicitacaoRepository;
 use App\Service\SolicitacaoService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,22 +16,27 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class SolicitacaoController extends AbstractController
 {
     public function __construct(
-        private readonly SolicitacaoService $solicitacaoService,
+        private readonly SolicitacaoService    $solicitacaoService,
+        private readonly SolicitacaoRepository $solicitacaoRepo,
     ) {}
 
-    #[Route('/nova', name: 'solicitacao_nova', methods: ['GET', 'POST'])]
-    public function nova(Request $request): Response
+    /**
+     * Hub principal — abas: Nova Solicitação | Meu Histórico | Gestão (admin)
+     */
+    #[Route('', name: 'solicitacao_hub', methods: ['GET', 'POST'])]
+    public function hub(Request $request): Response
     {
+        $isAdmin   = $this->isGranted('ROLE_ADMIN');
+        $user      = $this->getUser();
+        $abaAtual  = $request->query->get('aba', 'nova');
+
+        // ── Aba NOVA (formulário) ───────────────────────────────────────
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
-        // Suporte ao AJAX de campos dinâmicos
         $ajaxTipo = $request->query->get('_ajax_tipo');
         if ($ajaxTipo) {
-            try {
-                $solicitacao->setTipo($ajaxTipo);
-                $tipoAtual = $ajaxTipo;
-            } catch (\Throwable) {}
+            try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
         }
 
         $form = $this->createForm(SolicitacaoType::class, $solicitacao);
@@ -49,7 +55,7 @@ class SolicitacaoController extends AbstractController
 
             if ($tipoAtual === Solicitacao::TIPO_OOPS) {
                 $arquivos = $request->files->get('arquivos_oops', []);
-                $nomes = [];
+                $nomes    = [];
                 foreach ((array) $arquivos as $file) {
                     if ($file && $file->isValid()) {
                         $nome = uniqid('oops_') . '.' . $file->guessExtension();
@@ -67,11 +73,38 @@ class SolicitacaoController extends AbstractController
 
         if ($form->isSubmitted() && !$form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) { $tipoAtual = null; }
+            $abaAtual = 'nova';
         }
 
-        return $this->render('solicitacao/nova.html.twig', [
-            'form'      => $form,
-            'tipoAtual' => $tipoAtual,
+        // ── Aba HISTÓRICO (usuário logado) ──────────────────────────────
+        $historico = [];
+        if ($user && $abaAtual === 'historico') {
+            $historico = $this->solicitacaoRepo->findByEmail($user->getEmail());
+        }
+
+        // ── Aba GESTÃO (admin) ──────────────────────────────────────────
+        $gestaoLista  = [];
+        $contadores   = [];
+        $filtroStatus = null;
+        $filtroTipo   = null;
+
+        if ($isAdmin && $abaAtual === 'gestao') {
+            $filtroStatus = $request->query->get('status') ?: null;
+            $filtroTipo   = $request->query->get('tipo')   ?: null;
+            $gestaoLista  = $this->solicitacaoRepo->findParaGestao($filtroStatus, $filtroTipo);
+            $contadores   = $this->solicitacaoRepo->countByStatus();
+        }
+
+        return $this->render('solicitacao/hub.html.twig', [
+            'form'          => $form,
+            'tipoAtual'     => $tipoAtual,
+            'abaAtual'      => $abaAtual,
+            'isAdmin'       => $isAdmin,
+            'historico'     => $historico,
+            'gestaoLista'   => $gestaoLista,
+            'contadores'    => $contadores,
+            'filtroStatus'  => $filtroStatus,
+            'filtroTipo'    => $filtroTipo,
         ]);
     }
 
@@ -81,15 +114,12 @@ class SolicitacaoController extends AbstractController
         return $this->render('solicitacao/confirmacao.html.twig', ['solicitacao' => $solicitacao]);
     }
 
+    /** Rota legada — redireciona para o hub */
     #[Route('/minhas-pendencias', name: 'solicitacao_pendencias')]
     #[IsGranted('ROLE_USER')]
     public function minhasPendencias(): Response
     {
-        $user = $this->getUser();
-        return $this->render('solicitacao/pendencias.html.twig', [
-            'pendencias' => $this->solicitacaoService->getPendenciasDoUsuario($user),
-            'total'      => $this->solicitacaoService->countPendencias($user),
-        ]);
+        return $this->redirectToRoute('solicitacao_hub', ['aba' => 'historico']);
     }
 
     #[Route('/{id}', name: 'solicitacao_detalhe')]
@@ -110,6 +140,6 @@ class SolicitacaoController extends AbstractController
         }
         $this->solicitacaoService->resolver($solicitacao, $this->getUser(), $request->request->get('nota'));
         $this->addFlash('success', 'Solicitação marcada como resolvida.');
-        return $this->redirectToRoute('solicitacao_pendencias');
+        return $this->redirectToRoute('solicitacao_hub', ['aba' => 'gestao']);
     }
 }

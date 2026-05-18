@@ -49,4 +49,46 @@ class SolicitacaoRepository extends ServiceEntityRepository
     {
         return $this->findBy(['tipo' => $tipo, 'status' => $status], ['criadaEm' => 'DESC']);
     }
+
+    /** Histórico do solicitante pelo e-mail informado no formulário */
+    public function findByEmail(string $email): array
+    {
+        return $this->createQueryBuilder('s')
+            ->where('LOWER(s.solicitanteEmail) = LOWER(:email)')
+            ->setParameter('email', $email)
+            ->orderBy('s.criadaEm', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /** Listagem para gestão admin com filtros opcionais */
+    public function findParaGestao(?string $status = null, ?string $tipo = null): array
+    {
+        $qb = $this->createQueryBuilder('s')
+            ->orderBy('s.criadaEm', 'DESC');
+
+        if ($status) {
+            $qb->andWhere('s.status = :status')->setParameter('status', $status);
+        }
+        if ($tipo) {
+            $qb->andWhere('s.tipo = :tipo')->setParameter('tipo', $tipo);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    public function countByStatus(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('s.status, COUNT(s.id) as total')
+            ->groupBy('s.status')
+            ->getQuery()
+            ->getResult();
+
+        $map = ['pendente' => 0, 'resolvida' => 0, 'cancelada' => 0];
+        foreach ($rows as $r) {
+            $map[$r['status']] = (int) $r['total'];
+        }
+        return $map;
+    }
 }

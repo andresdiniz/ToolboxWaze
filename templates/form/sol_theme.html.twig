@@ -47,24 +47,27 @@
 
 {%- block checkbox_widget -%}
   <label class="sol-check">
-    <input type="checkbox" id="{{ id }}" name="{{ full_name }}"{% if required %} required{% endif %}{% if value is defined %} value="{{ value }}"{% endif %}{% if checked %} checked{% endif %}{% for attrname, attrvalue in attr %} {{ attrname }}="{{ attrvalue }}"{% endfor %}>
+    <input type="checkbox" id="{{ id }}" name="{{ full_name }}"
+      {%- if required %} required{% endif %}
+      {%- if value is defined %} value="{{ value }}"{% endif %}
+      {%- if checked %} checked{% endif %}
+      {%- for attrname, attrvalue in attr %} {{ attrname }}="{{ attrvalue }}"{% endfor %}>
     <span class="sol-check__box"></span>
     <span class="sol-check__label">{{ label|default(form.vars.label)|trans({}, translation_domain) }}</span>
   </label>
 {%- endblock checkbox_widget -%}
 
-{%- block radio_widget -%}
-  <label class="sol-radio">
-    <input type="radio" id="{{ id }}" name="{{ full_name }}"{% if required %} required{% endif %} value="{{ value }}"{% if checked %} checked{% endif %}{% for attrname, attrvalue in attr %} {{ attrname }}="{{ attrvalue }}"{% endfor %}>
-    <span class="sol-radio__dot"></span>
-    <span class="sol-radio__label">{{ label|default(form.vars.label)|trans({}, translation_domain) }}</span>
-  </label>
-{%- endblock radio_widget -%}
+{#
+  NOTA: radio_widget não é sobrescrito aqui intencionalmente.
+  O bloco choice_widget_expanded abaixo já renderiza o <span> de label de cada opção.
+  Se radio_widget também renderizasse o label, o texto ficaria duplicado (ex: "SimSim").
+  Deixamos o radio_widget cair para o default do bootstrap_5_layout que gera apenas o <input>.
+#}
 
 {%- block choice_widget_expanded -%}
   <div class="sol-choices {{ multiple ? 'sol-choices--checkbox' : 'sol-choices--radio' }}">
     {%- for child in form -%}
-      <label class="sol-choice-item">
+      <label class="sol-choice-item" for="{{ child.vars.id }}">
         {{- form_widget(child) -}}
         <span class="sol-choice-label">{{ child.vars.label|trans({}, translation_domain) }}</span>
       </label>

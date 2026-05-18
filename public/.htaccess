@@ -1,0 +1,47 @@
+# This file is managed by Symfony and should not be manually modified.
+# @see https://symfony.com/doc/current/setup/web_server_configuration.html
+
+DirectoryIndex index.php
+
+<IfModule mod_negotiation.c>
+    Options -MultiViews
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteCond %{REQUEST_URI}::$0 ^(/.+)/(.*)::\2$
+    RewriteRule .* - [E=BASE:%1]
+
+    RewriteCond %{HTTP:Authorization} .+
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%0]
+
+    RewriteCond %{ENV:REDIRECT_STATUS} ^\.?
+    RewriteRule ^index\.php(?:/(.*)|$) %{ENV:BASE}/$1 [R=301,L]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ %{ENV:BASE}/index.php [L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    <IfModule mod_alias.c>
+        RedirectMatch 307 ^/$ /index.php/
+    </IfModule>
+</IfModule>
+
+# ── Content Security Policy ──────────────────────────────────────────────────
+# Permite Bootstrap Icons (CDN), Bootstrap CSS/JS (cdn.jsdelivr.net),
+# fontes do Google (fonts.googleapis.com, fonts.gstatic.com),
+# fontes do Fontshare (api.fontshare.com) e ícones via data:.
+<IfModule mod_headers.c>
+    Header always set Content-Security-Policy "\
+        default-src 'self'; \
+        script-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com; \
+        style-src 'self' 'unsafe-inline' cdn.jsdelivr.net cdnjs.cloudflare.com fonts.googleapis.com api.fontshare.com; \
+        font-src 'self' fonts.gstatic.com api.fontshare.com data:; \
+        img-src 'self' data: blob:; \
+        connect-src 'self' cdn.jsdelivr.net; \
+        frame-ancestors 'none'; \
+        base-uri 'self'; \
+        form-action 'self'"
+</IfModule>

@@ -166,7 +166,7 @@
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Venue ID</div>
-                        <div class="detail-value"><code>{{ wazeLink.venue_id }}</code></div>
+                        <div class="detail-value"><code>{{ wazeLink.permanent_hazard_id }}</code></div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Cadastrado por</div>
@@ -192,7 +192,6 @@
             </div>
             {% endif %}
 
-            {# ── Formulário (collapse) ── #}
             {% if is_granted('IS_AUTHENTICATED_REMEMBERED') %}
             <div class="card-footer p-0">
                 <div class="accordion accordion-flush" id="wazeFormAccordion">
@@ -255,7 +254,7 @@
             {% endif %}
         </div>
 
-        {# ── HISTÓRICO DE ALTERAÇÕES WAZE ── #}
+        {# ── HISTÓRICO WAZE ── #}
         {% if wazeLog is not empty %}
         <div class="card mb-4">
             <div class="card-header fw-semibold">
@@ -268,7 +267,6 @@
                         <span class="badge bg-secondary me-2">{{ log.campo_alterado }}</span>
                         <small class="text-muted ms-auto">{{ log.changed_at|date('d/m/Y H:i') }} — {{ log.changed_by_email }}</small>
                     </div>
-                    {% if log.valor_anterior is not null or log.valor_novo is not null %}
                     <div class="small mt-1">
                         {% if log.valor_anterior %}
                         <div class="text-danger"><i class="bi bi-arrow-left me-1"></i>{{ log.valor_anterior }}</div>
@@ -277,7 +275,6 @@
                         <div class="text-success"><i class="bi bi-arrow-right me-1"></i>{{ log.valor_novo }}</div>
                         {% endif %}
                     </div>
-                    {% endif %}
                 </div>
                 {% endfor %}
             </div>

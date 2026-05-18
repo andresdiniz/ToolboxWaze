@@ -127,7 +127,7 @@ final class PostoController extends AbstractController
             throw $this->createAccessDeniedException('Voc\u00ea n\u00e3o tem acesso a dados deste estado.');
         }
 
-        if (is_string($posto['raw_data'])) {
+        if (is_string($posto['raw_data'] ?? null)) {
             $posto['raw_data'] = json_decode($posto['raw_data'], true) ?? [];
         }
 
@@ -141,7 +141,6 @@ final class PostoController extends AbstractController
             [$id]
         ) ?: null;
 
-        // Hist\u00f3rico de altera\u00e7\u00f5es do link Waze
         $wazeLog = [];
         if ($wazeLink) {
             $wazeLog = $this->db->fetchAllAssociative(
@@ -226,7 +225,8 @@ final class PostoController extends AbstractController
             return $this->redirectToRoute('posto_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
         }
 
-        $venueId = (int) $m[1];
+        // O parâmetro da URL é venues= mas a coluna no banco é permanent_hazard_id
+        $hazardId = (int) $m[1];
 
         if ($existing) {
             if ($wazeLink !== $existing['waze_link']) {
@@ -249,18 +249,18 @@ final class PostoController extends AbstractController
 
             $this->db->executeStatement(
                 'UPDATE posto_waze_link
-                 SET waze_link = ?, venue_id = ?, observacao = ?, updated_by = ?, updated_at = ?
+                 SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
                  WHERE id = ?',
-                [$wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
+                [$wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now, $existing['id']]
             );
 
             $this->addFlash('success', 'Link Waze atualizado com sucesso.');
         } else {
             $this->db->executeStatement(
                 'INSERT INTO posto_waze_link
-                 (posto_id, waze_link, venue_id, observacao, inserted_by, inserted_at)
+                 (posto_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $wazeLink, $venueId, $motivoRevisao ?: null, $userId, $now]
+                [$id, $wazeLink, $hazardId, $motivoRevisao ?: null, $userId, $now]
             );
 
             $newId = (int) $this->db->lastInsertId();

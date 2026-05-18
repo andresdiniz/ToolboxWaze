@@ -121,21 +121,48 @@
             </div>
         </div>
 
-        {# Links úteis #}
+        {# Consultas Externas — layout melhorado com botões descritivos #}
         <div class="card mb-4">
             <div class="card-header fw-semibold">
-                <i class="bi bi-link-45deg me-2"></i>Consultas Externas
+                <i class="bi bi-box-arrow-up-right me-2"></i>Consultas Externas
             </div>
-            <div class="list-group list-group-flush">
-                {# CNPJ sem pontuação para a URL #}
+            <div class="card-body d-flex flex-column gap-2">
                 {% set cnpj_limpo = posto.cnpj|replace({'.': '', '/': '', '-': ''}) %}
+
+                {# Receita Federal #}
                 <a href="https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/Cnpjreva_Solicitacao.asp?cnpj={{ cnpj_limpo }}"
-                   target="_blank" rel="noopener" class="list-group-item list-group-item-action">
-                    <i class="bi bi-building me-2"></i>Consultar CNPJ — Receita Federal
+                   target="_blank" rel="noopener"
+                   class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
+                    <i class="bi bi-building flex-shrink-0"></i>
+                    <div>
+                        <div class="fw-semibold lh-sm">Receita Federal</div>
+                        <div class="text-muted" style="font-size:.78rem">Situação cadastral do CNPJ</div>
+                    </div>
+                    <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
                 </a>
-                <a href="https://postos.anp.gov.br/"
-                   target="_blank" rel="noopener" class="list-group-item list-group-item-action">
-                    <i class="bi bi-fuel-pump me-2"></i>Consulta Pública ANP
+
+                {# ANP — Consulta Posto Web (CPD) #}
+                <a href="https://sistemas.anp.gov.br/cpd/"
+                   target="_blank" rel="noopener"
+                   class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
+                    <i class="bi bi-fuel-pump flex-shrink-0"></i>
+                    <div>
+                        <div class="fw-semibold lh-sm">ANP — Consulta Posto Web</div>
+                        <div class="text-muted" style="font-size:.78rem">Situação de autorização e interdicção</div>
+                    </div>
+                    <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
+                </a>
+
+                {# ANP — Legislação / Atos Oficiais #}
+                <a href="https://atosoficiais.com.br/anp?q={{ cnpj_limpo }}"
+                   target="_blank" rel="noopener"
+                   class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
+                    <i class="bi bi-file-earmark-text flex-shrink-0"></i>
+                    <div>
+                        <div class="fw-semibold lh-sm">ANP — Atos de Autorização</div>
+                        <div class="text-muted" style="font-size:.78rem">Publicações no Diário Oficial pelo CNPJ</div>
+                    </div>
+                    <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
                 </a>
             </div>
         </div>

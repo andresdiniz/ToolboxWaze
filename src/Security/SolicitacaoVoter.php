@@ -12,10 +12,13 @@ use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 
 /**
  * Attributes:
- *  - SOLICITACAO_COMENTAR  : pode postar mensagem no chat
- *  - SOLICITACAO_STATUS    : pode mudar o status
- *  - SOLICITACAO_VER       : pode ver a solicitação (e comentários não-internos)
+ *  - SOLICITACAO_COMENTAR    : pode postar mensagem no chat
+ *  - SOLICITACAO_STATUS      : pode mudar o status
+ *  - SOLICITACAO_VER         : pode ver a solicitação (e comentários não-internos)
  *  - SOLICITACAO_VER_INTERNO : pode ver comentários marcados como internos
+ *
+ * Nota: Solicitacao armazena o solicitante como strings (email, nome, usuario),
+ * não como relação com User. A comparação é feita pelo e-mail do usuário logado.
  */
 class SolicitacaoVoter extends Voter
 {
@@ -48,12 +51,14 @@ class SolicitacaoVoter extends Voter
             return false;
         }
 
-        $eSolicitante   = $solicitacao->getSolicitante()?->getId() === $user->getId();
-        $eResponsavel   = $this->responsavelRepo->isResponsavel($user, $solicitacao->getTipo());
-        $eAdmin         = in_array('ROLE_ADMIN', $user->getRoles(), true);
+        // Solicitacao guarda o solicitante como e-mail (string), não como FK para User.
+        // Comparamos o e-mail do usuário logado com o campo solicitanteEmail.
+        $eSolicitante = $solicitacao->getSolicitanteEmail() === $user->getUserIdentifier();
+        $eResponsavel = $this->responsavelRepo->isResponsavel($user, $solicitacao->getTipo());
+        $eAdmin       = in_array('ROLE_ADMIN', $user->getRoles(), true);
 
         return match ($attribute) {
-            // Solicitante E responsáveis do tipo podem comentar
+            // Solicitante e responsáveis do tipo podem comentar
             self::COMENTAR     => $eSolicitante || $eResponsavel || $eAdmin,
 
             // Apenas responsáveis do tipo e admins podem mudar status

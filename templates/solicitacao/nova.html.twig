@@ -2,11 +2,21 @@
 {% block title %}Nova Solicitação{% endblock %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
+{#
+  Ícones: todos SVG inline (Bootstrap Icons SVG path).
+  Não usa classes 'bi bi-*' para não depender da fonte Bootstrap Icons
+  (bloqueada pela CSP font-src no servidor de produção).
+#}
+
 {% block body %}
 <div class="container py-4" style="max-width:800px">
 
   <div class="sol-hub-header">
-    <h4><i class="bi bi-send"></i> Nova Solicitação</h4>
+    <h4>
+      {# send icon #}
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align:-.2em;margin-right:.35em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/><path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0m-3.5-2a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1a.5.5 0 0 0-.5-.5"/></svg>
+      Nova Solicitação
+    </h4>
     <p>Escolha o tipo, preencha os dados e envie. Responderemos por e-mail.</p>
   </div>
 
@@ -15,7 +25,11 @@
 
   {# ── 1. Dados do solicitante ─────────────────────────────── #}
   <div class="sol-card">
-    <div class="sol-card-header"><i class="bi bi-person"></i> Seus dados</div>
+    <div class="sol-card-header">
+      {# person icon #}
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.294 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
+      Seus dados
+    </div>
     <div class="sol-card-body">
       <div class="row g-3">
         <div class="col-md-6">{{ form_row(form.solicitanteNome) }}</div>
@@ -27,27 +41,60 @@
 
   {# ── 2. Tipo (pills visuais) ──────────────────────────────── #}
   <div class="sol-card">
-    <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
+    <div class="sol-card-header">
+      {# list-check icon #}
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3.854 2.146a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 3.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 7.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0"/></svg>
+      Tipo de solicitação
+    </div>
     <div class="sol-card-body">
       {{ form_widget(form.tipo,   {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
       {{ form_widget(form.estado, {attr: {'data-estado-select': '1', class: 'd-none', 'aria-hidden': 'true'}}) }}
       {{ form_errors(form.tipo) }}
 
+      {#
+        Mapa de ícones: SVG inline por tipo.
+        Cada entrada: {'svg': '<path ...>', 'label': '...'}
+        viewBox padrão 0 0 16 16, fill currentColor.
+      #}
       <div class="tipo-grid" id="tipo-pills">
         {% set iconMap = {
-          'imagem_satelite':     {'icon': 'bi-globe',                'label': 'Imagem de Satélite'},
-          'gerente_area':        {'icon': 'bi-map',                  'label': 'Gerente de Área'},
-          'gerente_estado_pais': {'icon': 'bi-flag',                 'label': 'Gerente de Estado/País'},
-          'nivel':               {'icon': 'bi-bar-chart',            'label': 'Nível (Upgrade/Downgrade)'},
-          'oops':                {'icon': 'bi-exclamation-triangle', 'label': 'Oops de Editor'},
-          'bandeira_posto':      {'icon': 'bi-fuel-pump',            'label': 'Bandeira de Posto de Gasolina'},
-          'id_segmento':         {'icon': 'bi-signpost-2',           'label': 'Cadastro de ID de Segmento'}
+          'imagem_satelite': {
+            'label': 'Imagem de Satélite',
+            'svg': '<path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1zm.5 1.638A4.5 4.5 0 1 0 10.867 12.5 4.5 4.5 0 0 0 10.232 2.64zm.5 3.86A1 1 0 1 1 8.5 7.5a1 1 0 0 1 2.232-1z"/>'
+          },
+          'gerente_area': {
+            'label': 'Gerente de Área',
+            'svg': '<path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>'
+          },
+          'gerente_estado_pais': {
+            'label': 'Gerente de Estado/País',
+            'svg': '<path d="M14.778.085A.5.5 0 0 1 15 .5V8a.5.5 0 0 1-.314.464L14.5 8l.186.464-.003.001-.006.003-.023.009a12 12 0 0 1-.397.15c-.264.095-.631.223-1.047.35-.816.252-1.879.523-2.71.523-.847 0-1.548-.28-2.158-.525l-.028-.01C7.68 8.71 7.14 8.5 6.5 8.5c-.7 0-1.638.23-2.437.477A20 20 0 0 0 3 9.342V15.5a.5.5 0 0 1-1 0V.5a.5.5 0 0 1 1 0v.282c.226-.079.496-.17.79-.26C4.606.272 5.67 0 6.5 0c.84 0 1.524.277 2.121.519l.043.018C9.286.788 9.828 1 10.5 1c.7 0 1.638-.23 2.437-.477a20 20 0 0 0 1.061-.34z"/>'
+          },
+          'nivel': {
+            'label': 'Nível (Upgrade/Downgrade)',
+            'svg': '<path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z"/>'
+          },
+          'oops': {
+            'label': 'Oops de Editor',
+            'svg': '<path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.15.15 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.2.2 0 0 1-.054.06.1.1 0 0 1-.066.017H1.146a.1.1 0 0 1-.066-.017.2.2 0 0 1-.054-.06.18.18 0 0 1 .002-.183L7.884 2.073a.15.15 0 0 1 .054-.057m1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767z"/><path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>'
+          },
+          'bandeira_posto': {
+            'label': 'Bandeira de Posto de Gasolina',
+            'svg': '<path d="M3 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5zm1 .5v4h4V3z"/><path d="M0 1.5A.5.5 0 0 1 .5 1H8a.5.5 0 0 1 .5.5V8H9a1.5 1.5 0 0 1 1.5 1.5V12a.5.5 0 0 0 1 0V8.354l-.853-.853a.5.5 0 1 1 .707-.707l1.5 1.5A.5.5 0 0 1 13 8.5V12a1.5 1.5 0 0 1-3 0V9.5A.5.5 0 0 0 9.5 9H9V15.5a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5zm1 0v13h7v-13z"/>'
+          },
+          'id_segmento': {
+            'label': 'Cadastro de ID de Segmento',
+            'svg': '<path d="M7 7V1.414a1 1 0 0 1 2 0V7h5.586a1 1 0 0 1 0 2H9v5.586a1 1 0 0 1-2 0V9H1.414a1 1 0 0 1 0-2z"/><path fill-rule="evenodd" d="M.5 1h15a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3V2H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3A.5.5 0 0 1 .5 1m0 9h3a.5.5 0 0 1 0 1H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m11.5 0h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3v-2h-3a.5.5 0 0 1 0-1"/>'
+          }
         } %}
+
         {% for valor, info in iconMap %}
           <div class="tipo-pill{% if tipoAtual == valor %} active{% endif %}"
                data-value="{{ valor }}" tabindex="0" role="button"
                aria-pressed="{{ tipoAtual == valor ? 'true' : 'false' }}">
-            <span class="tipo-icon"><i class="bi {{ info.icon }}"></i></span>
+            <span class="tipo-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">{{ info.svg|raw }}</svg>
+            </span>
             <span class="tipo-label">{{ info.label }}</span>
           </div>
         {% endfor %}
@@ -69,7 +116,6 @@
           <div class="sol-card-body">
 
             {% if isPermalink %}
-              {# Permalink com botão copiar embutido #}
               <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
                 {{ field.vars.label }}
                 {% if field.vars.required %}<span class="sol-required" aria-hidden="true">*</span>{% endif %}
@@ -82,7 +128,8 @@
                   'placeholder':    'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'
                 }}) }}
                 <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
-                  <i class="bi bi-clipboard"></i>
+                  {# clipboard icon #}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
                 </button>
               </div>
               {% if field.vars.help is defined and field.vars.help %}
@@ -101,7 +148,11 @@
 
     {# Bloco de provas Oops #}
     <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
-      <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
+      <div class="sol-card-header">
+        {# images icon #}
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
+        Provas (imagens)
+      </div>
       <div class="sol-card-body">
         <label class="sol-label">Compartilhe as provas <span class="text-muted fw-normal" style="font-size:.8rem">(até 5 imagens, 1 MB cada)</span></label>
         <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
@@ -111,7 +162,9 @@
 
   <div class="d-flex justify-content-end mt-2 mb-5">
     <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
-      <i class="bi bi-send"></i> Enviar solicitação
+      {# send icon #}
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" style="margin-right:.3em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/></svg>
+      Enviar solicitação
     </button>
   </div>
 
@@ -129,19 +182,18 @@
     const input = btn.closest('.permalink-wrapper')?.querySelector('input');
     if (!input || !input.value) return;
     navigator.clipboard.writeText(input.value).then(() => {
-      const icon = btn.querySelector('i');
-      icon.className = 'bi bi-clipboard-check';
+      const icon = btn.querySelector('svg');
+      // troca para ícone clipboard-check
+      icon.innerHTML = '<path d="M10.97 4.97a.235.235 0 0 0-.02.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-1.071-1.05"/><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/>';
       btn.style.color = 'var(--tw)';
-      setTimeout(() => { icon.className = 'bi bi-clipboard'; btn.style.color = ''; }, 1800);
+      setTimeout(() => {
+        icon.innerHTML = '<path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/>';
+        btn.style.color = '';
+      }, 1800);
     });
   });
 
-  /* ── Validação de permalink (zoom ≥ 15) ────────────────────
-   * WAZE_RE: aceita waze.com/editor/ e waze.com/{locale}/editor
-   *   ex: waze.com/pt-BR/editor   waze.com/en-US/editor   www.waze.com/editor/
-   * ZOOM_RE: aceita zoom= e zoomLevel= (novo formato da URL do Waze)
-   *   ex: ?zoom=15  ?zoomLevel=15  &zoomLevel=16
-   * ──────────────────────────────────────────────────────── */
+  /* ── Validação de permalink ──────────────────────────── */
   const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor/i;
   const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
 
@@ -163,13 +215,13 @@
     let fb = parent.querySelector('.permalink-feedback');
     if (!result.ok) {
       if (!fb) { fb = document.createElement('p'); fb.className = 'sol-error permalink-feedback'; wrap.insertAdjacentElement('afterend', fb); }
-      fb.innerHTML = '<i class="bi bi-exclamation-circle"></i> ' + result.msg;
+      fb.textContent = result.msg;
     } else if (fb) { fb.remove(); }
     let badge = parent.querySelector('.permalink-zoom-badge');
     if (result.ok && result.zoom) {
       if (!badge) { badge = document.createElement('span'); badge.className = 'permalink-zoom-badge zoom-ok'; wrap.insertAdjacentElement('afterend', badge); }
       badge.className = 'permalink-zoom-badge zoom-ok';
-      badge.innerHTML = `<i class="bi bi-check-circle-fill"></i> Zoom ${result.zoom} — válido`;
+      badge.textContent = `Zoom ${result.zoom} — válido`;
     } else if (badge) { badge.remove(); }
   }
   function initPermalinks() {

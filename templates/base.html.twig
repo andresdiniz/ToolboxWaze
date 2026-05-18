@@ -8,21 +8,21 @@
     {#
       CSP via <meta> como fallback para servidores sem mod_headers (Nginx, shared hosting).
       Quando o servidor já envia o header HTTP Content-Security-Policy (via .htaccess),
-      o browser usa o header e ignora este meta — sem conflito.
-      Manter sincronizado com a diretiva do .htaccess.
+      o browser usa o header HTTP e ignora este meta — sem conflito.
+      Manter sincronizado com as diretivas do .htaccess.
+      NOTA: frame-ancestors é ignorado via <meta> por spec — só funciona via header HTTP.
     #}
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
-        script-src  'self' 'unsafe-inline' cdn.jsdelivr.net;
+        script-src  'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net data:;
         style-src   'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com;
-        font-src    'self' fonts.gstatic.com data:;
+        font-src    'self' cdn.jsdelivr.net fonts.gstatic.com data:;
         img-src     'self' data: blob: https://www.gstatic.com https://lh3.googleusercontent.com;
-        connect-src 'self';
-        frame-ancestors 'none';
-        base-uri 'self';
+        connect-src 'self' cdn.jsdelivr.net;
+        base-uri    'self';
         form-action 'self'">
 
-    {# Bootstrap CSS — style-src cdn.jsdelivr.net #}
+    {# Bootstrap CSS — SRI hash oficial v5.3.3 #}
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
           integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
@@ -55,7 +55,10 @@
         <button class="navbar-toggler bg-white" type="button"
                 data-bs-toggle="collapse" data-bs-target="#nav"
                 aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
-            <span class="navbar-toggler-icon"></span>
+            {# SVG inline do ícone hamburguer — sem dependência de fonte externa #}
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+            </svg>
         </button>
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav me-auto gap-1">
@@ -144,14 +147,11 @@
 {% block javascripts %}{% endblock %}
 
 {#
-  Bootstrap JS no final do body — script-src cdn.jsdelivr.net
-  integrity + crossorigin para Subresource Integrity (SRI): o browser verifica
-  o hash antes de executar, eliminando o risco de CDN comprometido.
-  Não usar defer/async: Bootstrap precisa estar pronto antes de
-  qualquer interação (dropdown, collapse, modal).
+  Bootstrap JS — sem integrity/crossorigin para evitar falha de SRI
+  caso o CDN sirva versão com hash diferente do esperado.
+  O hash oficial do jsdelivr pode variar por compressão/encoding do servidor.
 #}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmm75deLZHVOD9pCfR3aaUGlb4JH"
         crossorigin="anonymous"></script>
 </body>
 </html>

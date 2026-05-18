@@ -40,26 +40,27 @@ DirectoryIndex index.php
     # ==========================================================================
     #
     # Recursos externos utilizados:
-    #   CDN JS/CSS : cdn.jsdelivr.net   → Bootstrap 5.3 CSS + JS
-    #   Fontes CSS : fonts.googleapis.com → Google Fonts (Inter)
-    #   Fontes woff: fonts.gstatic.com  → arquivos .woff2 do Inter
-    #   Imagens    : gstatic.com, lh3.googleusercontent.com → avatares Google OAuth
+    #   CDN JS/CSS/fontes : cdn.jsdelivr.net  → Bootstrap 5.3 CSS + JS
+    #                                           Bootstrap CSS pode emitir @font-face
+    #                                           apontando para o próprio CDN
+    #   Fontes CSS        : fonts.googleapis.com → Google Fonts stylesheet (Inter)
+    #   Fontes woff2      : fonts.gstatic.com    → arquivos .woff2 do Inter
+    #   Imagens           : gstatic.com, lh3.googleusercontent.com → avatares OAuth
     #
-    # NB: connect-src não inclui cdn.jsdelivr.net porque sourcemaps não devem
-    #     ser carregados em produção. Bootstrap prod build não emite sourceMappingURL.
-    #     Se você usar a build de desenvolvimento, adicione cdn.jsdelivr.net aqui.
+    # script-src inclui 'unsafe-inline' para scripts inline do Symfony/Twig
+    #   (importmap, flash messages, etc.) e 'data:' para os módulos ES que o
+    #   importmap do Symfony gera como data:application/javascript.
     #
-    # NB: script-src 'unsafe-inline' é necessário para os blocos <script> inline
-    #     gerados pelo Symfony/Twig (flash messages, importmap, etc.).
-    #     Para removê-lo no futuro, migrar para nonces via Symfony CSP Bundle.
+    # connect-src inclui cdn.jsdelivr.net para evitar o erro do sourcemap
+    #   do Bootstrap CSS no DevTools (bootstrap.min.css.map).
     # ==========================================================================
     Header always set Content-Security-Policy "\
  default-src 'self'; \
- script-src  'self' 'unsafe-inline' cdn.jsdelivr.net; \
+ script-src  'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net data:; \
  style-src   'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; \
- font-src    'self' fonts.gstatic.com data:; \
+ font-src    'self' cdn.jsdelivr.net fonts.gstatic.com data:; \
  img-src     'self' data: blob: https://www.gstatic.com https://lh3.googleusercontent.com; \
- connect-src 'self'; \
+ connect-src 'self' cdn.jsdelivr.net; \
  frame-ancestors 'none'; \
  base-uri    'self'; \
  form-action 'self'"

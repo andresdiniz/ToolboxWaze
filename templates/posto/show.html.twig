@@ -121,7 +121,7 @@
             </div>
         </div>
 
-        {# Consultas Externas — layout melhorado com botões descritivos #}
+        {# Consultas Externas #}
         <div class="card mb-4">
             <div class="card-header fw-semibold">
                 <i class="bi bi-box-arrow-up-right me-2"></i>Consultas Externas
@@ -141,19 +141,19 @@
                     <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
                 </a>
 
-                {# ANP — Consulta Posto Web (CPD) #}
-                <a href="https://sistemas.anp.gov.br/cpd/"
+                {# ANP — CDP (Consulta de Dados Públicos) - sistema oficial #}
+                <a href="https://cdp.anp.gov.br/ords/r/cdp_apex/consulta-dados-publicos-cdp/consulta-de-postos-lista?P3_CNPJ={{ cnpj_limpo }}"
                    target="_blank" rel="noopener"
                    class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
                     <i class="bi bi-fuel-pump flex-shrink-0"></i>
                     <div>
-                        <div class="fw-semibold lh-sm">ANP — Consulta Posto Web</div>
-                        <div class="text-muted" style="font-size:.78rem">Situação de autorização e interdicção</div>
+                        <div class="fw-semibold lh-sm">ANP — Consulta CDP</div>
+                        <div class="text-muted" style="font-size:.78rem">Situação, interdicção e autorização do posto</div>
                     </div>
                     <i class="bi bi-arrow-up-right ms-auto flex-shrink-0 opacity-50"></i>
                 </a>
 
-                {# ANP — Legislação / Atos Oficiais #}
+                {# ANP — Atos Oficiais #}
                 <a href="https://atosoficiais.com.br/anp?q={{ cnpj_limpo }}"
                    target="_blank" rel="noopener"
                    class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">

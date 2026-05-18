@@ -25,23 +25,28 @@ class SolicitacaoType extends AbstractType
     ];
 
     /**
-     * Regex de permalink WME com zoom ≥15.
+     * Regex de permalink WME com zoom >= 15.
      *
-     * Formato aceito (ambos os domínios, ambas as ordens de parâmetros):
+     * Formatos aceitos:
      *   https://www.waze.com/editor/?zoom=15&...
-     *   https://www.waze.com/editor/?...&zoom=16...
-     *   https://beta.waze.com/editor/?zoom=15...
+     *   https://beta.waze.com/editor/?zoom=15&...
+     *   https://waze.com/pt-BR/editor?env=row&lat=...&zoomLevel=15
+     *   https://waze.com/editor?zoomLevel=15&...
      *
-     * Captura o zoom como \d{2,} para garantir zoom ≥15:
-     *   zoom=(1[5-9]|[2-9]\d|\d{3,})
+     * Aceita tanto `zoom=` quanto `zoomLevel=` (novo formato da URL do Waze).
+     * Aceita locale no path (ex: /pt-BR/, /en-US/).
+     * Aceita com ou sem barra antes do `?`.
      */
     private const PERMALINK_PATTERN = '/
-        https?:\/\/               # protocolo
-        (?:www\.|beta\.)?         # subdomínio opcional
-        waze\.com\/editor\/       # domínio + caminho
-        [^"\s]*                   # demais parâmetros
-        [?&]zoom=(1[5-9]|[2-9]\d|\d{3,})  # zoom ≥15
-        [^"\s]*                   # restante da URL
+        https?:\/\/                        # protocolo
+        (?:www\.|beta\.)?                  # subdomínio opcional (www. ou beta.)
+        waze\.com                          # domínio
+        (?:\/[a-z]{2}(?:-[A-Z]{2})?\/)?   # locale opcional: /pt-BR/ /en-US/ etc.
+        \/editor\/?                        # caminho /editor com barra opcional
+        [^"\s]*                            # query string e fragmentos
+        [?&]zoom(?:Level)?=               # param: zoom= OU zoomLevel=
+        (1[5-9]|[2-9]\d|\d{3,})           # valor >= 15
+        [^"\s]*                            # restante da URL
     /xi';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -102,13 +107,15 @@ class SolicitacaoType extends AbstractType
         };
     }
 
-    /** Constraints reutilizáveis para permalink obrigatório com zoom ≥15 */
+    /** Constraints reutilizáveis para permalink com zoom >= 15 */
     private function permalinkConstraints(bool $required = true): array
     {
         $constraints = [
             new Assert\Regex([
                 'pattern' => self::PERMALINK_PATTERN,
-                'message' => 'O permalink deve ser do editor Waze (waze.com/editor) com zoom ≥15. Exemplo: https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46',
+                'message' => 'O permalink deve ser do editor Waze com zoom ≥15. '
+                           . 'Exemplos: https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46 '
+                           . 'ou https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
             ]),
         ];
         if ($required) {
@@ -126,7 +133,7 @@ class SolicitacaoType extends AbstractType
                     'A imagem com maior resolução é muito antiga' => 'muito_antiga',
                     'A imagem está com qualidade/resolução baixa' => 'baixa_qualidade',
                     'Alterações significativas na área'           => 'alteracoes',
-                    'As imagens estão ruins ou nubladas'           => 'ruins_nubladas',
+                    'As imagens estão ruins ou nubladas'          => 'ruins_nubladas',
                 ],
                 'constraints' => [new Assert\NotBlank()],
             ])
@@ -141,15 +148,15 @@ class SolicitacaoType extends AbstractType
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_permalink', TextType::class, [
-                'label'       => 'Permalink (zoom ≥15)',
-                'mapped'      => false,
-                'attr'        => [
-                    'placeholder'      => 'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46',
-                    'data-permalink'   => '1',
-                    'autocomplete'     => 'off',
-                    'spellcheck'       => 'false',
+                'label'  => 'Permalink (zoom ≥15)',
+                'mapped' => false,
+                'attr'   => [
+                    'placeholder'    => 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15',
+                    'data-permalink' => '1',
+                    'autocomplete'   => 'off',
+                    'spellcheck'     => 'false',
                 ],
-                'help'        => 'Abra o WME, navegue até a área desejada com zoom ≥15 e copie a URL completa.',
+                'help'        => 'Abra o WME, navegue até a área com zoom ≥15 e copie a URL completa do navegador.',
                 'constraints' => $this->permalinkConstraints(required: true),
             ]);
     }
@@ -170,7 +177,9 @@ class SolicitacaoType extends AbstractType
                 ],
             ])
             ->add('dados_comunicouIntencao', CheckboxType::class, [
-                'label' => 'Comuniquei minha intenção no Discuss do Estado', 'mapped' => false, 'required' => true,
+                'label'    => 'Comuniquei minha intenção no Discuss do Estado',
+                'mapped'   => false,
+                'required' => true,
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
             ])
             ->add('dados_comentarios', TextareaType::class, ['label' => 'Comentários', 'mapped' => false, 'required' => false]);
@@ -252,12 +261,12 @@ class SolicitacaoType extends AbstractType
                 'mapped'   => false,
                 'required' => false,
                 'attr'     => [
-                    'placeholder'    => 'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46',
+                    'placeholder'    => 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15',
                     'data-permalink' => '1',
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'       => 'Opcional, mas recomendado. Se informar, deve ter zoom ≥15.',
+                'help'        => 'Opcional, mas recomendado. Se informar, deve ter zoom ≥15.',
                 'constraints' => $this->permalinkConstraints(required: false),
             ])
             ->add('dados_descricao', TextareaType::class, [

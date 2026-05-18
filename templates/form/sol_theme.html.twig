@@ -1,7 +1,6 @@
 {#
   Tema Twig para formulários de solicitação.
   Uso: {% form_theme form 'form/sol_theme.html.twig' %}
-  Garante: label em cima do input, classes corretas, mensagens de erro inline.
 #}
 {% use 'bootstrap_5_layout.html.twig' %}
 
@@ -58,11 +57,21 @@
 {%- endblock checkbox_widget -%}
 
 {#
-  NOTA: radio_widget não é sobrescrito aqui intencionalmente.
-  O bloco choice_widget_expanded abaixo já renderiza o <span> de label de cada opção.
-  Se radio_widget também renderizasse o label, o texto ficaria duplicado (ex: "SimSim").
-  Deixamos o radio_widget cair para o default do bootstrap_5_layout que gera apenas o <input>.
+  radio_widget: emite APENAS o <input type="radio"> sem nenhum <label>.
+  O label de cada opção é responsabilidade exclusiva do choice_widget_expanded
+  abaixo, que envolve o widget num <label class="sol-choice-item">.
+  Sem essa sobrescrita o bootstrap_5_layout emitiria <input>+<label> dentro
+  do nosso <label> externo, duplicando o texto ("SimSim", "NãoNão" etc).
 #}
+{%- block radio_widget -%}
+  <input type="radio"
+    id="{{ id }}"
+    name="{{ full_name }}"
+    value="{{ value }}"
+    {%- if required %} required{% endif %}
+    {%- if checked %} checked{% endif %}
+    {%- for attrname, attrvalue in attr %} {{ attrname }}="{{ attrvalue }}"{% endfor %}>
+{%- endblock radio_widget -%}
 
 {%- block choice_widget_expanded -%}
   <div class="sol-choices {{ multiple ? 'sol-choices--checkbox' : 'sol-choices--radio' }}">

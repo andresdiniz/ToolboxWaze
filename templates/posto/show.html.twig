@@ -127,11 +127,13 @@
                 <i class="bi bi-link-45deg me-2"></i>Consultas Externas
             </div>
             <div class="list-group list-group-flush">
-                <a href="https://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/cnpjrevaresultado.asp?txtCNPJ={{ posto.cnpj|replace({'.': '', '/': '', '-': ''}) }}"
+                {# CNPJ sem pontuação para a URL #}
+                {% set cnpj_limpo = posto.cnpj|replace({'.': '', '/': '', '-': ''}) %}
+                <a href="https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/Cnpjreva_Solicitacao.asp?cnpj={{ cnpj_limpo }}"
                    target="_blank" rel="noopener" class="list-group-item list-group-item-action">
                     <i class="bi bi-building me-2"></i>Consultar CNPJ — Receita Federal
                 </a>
-                <a href="https://consultapublica.anp.gov.br/pages/postos/index.xhtml"
+                <a href="https://postos.anp.gov.br/"
                    target="_blank" rel="noopener" class="list-group-item list-group-item-action">
                     <i class="bi bi-fuel-pump me-2"></i>Consulta Pública ANP
                 </a>

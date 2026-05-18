@@ -1,0 +1,103 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Auditoria — ToolboxWaze{% endblock %}
+
+{% block body %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h4 fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Auditoria de Alterações</h1>
+    <span class="badge bg-secondary fs-6">{{ total }} registros</span>
+</div>
+
+{# ── Filtros ── #}
+<form method="get" class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold small">Usuário</label>
+                <input type="text" name="user" class="form-control form-control-sm"
+                       value="{{ filtros.filtroUser }}" placeholder="filtrar por e-mail">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small">Campo alterado</label>
+                <select name="campo" class="form-select form-select-sm">
+                    <option value="">— todos —</option>
+                    <option value="waze_link" {{ filtros.filtroCampo == 'waze_link' ? 'selected' }}>waze_link</option>
+                    <option value="motivo_revisao" {{ filtros.filtroCampo == 'motivo_revisao' ? 'selected' }}>motivo_revisao</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small">Data início</label>
+                <input type="date" name="inicio" class="form-control form-control-sm" value="{{ filtros.dataInicio }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small">Data fim</label>
+                <input type="date" name="fim" class="form-control form-control-sm" value="{{ filtros.dataFim }}">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+{# ── Tabela ── #}
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Data/Hora</th>
+                    <th>Usuário</th>
+                    <th>Posto</th>
+                    <th>Campo</th>
+                    <th>Anterior</th>
+                    <th>Novo</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for log in logs %}
+                <tr>
+                    <td class="text-muted small text-nowrap">{{ log.changed_at|date('d/m/Y H:i') }}</td>
+                    <td class="small">{{ log.changed_by_email }}</td>
+                    <td>
+                        <a href="{{ path('posto_show', {id: log.posto_id}) }}" class="text-decoration-none">
+                            <span class="badge badge-uf me-1">{{ log.uf }}</span>
+                            <span class="small">{{ log.razao_social|slice(0,35) }}{% if log.razao_social|length > 35 %}…{% endif %}</span>
+                        </a>
+                    </td>
+                    <td><span class="badge bg-secondary">{{ log.campo_alterado }}</span></td>
+                    <td class="small text-danger text-break" style="max-width:180px">
+                        {{ log.valor_anterior ? log.valor_anterior|slice(0,80) : '—' }}{% if log.valor_anterior|length > 80 %}…{% endif %}
+                    </td>
+                    <td class="small text-success text-break" style="max-width:180px">
+                        {{ log.valor_novo ? log.valor_novo|slice(0,80) : '—' }}{% if log.valor_novo|length > 80 %}…{% endif %}
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-4">Nenhum registro encontrado.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if pages > 1 %}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <span class="text-muted small">Página {{ page }} de {{ pages }}</span>
+        <div class="btn-group btn-group-sm">
+            {% if page > 1 %}
+                <a href="?{{ app.request.query.all|merge({page: page - 1})|url_encode }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            {% endif %}
+            {% if page < pages %}
+                <a href="?{{ app.request.query.all|merge({page: page + 1})|url_encode }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

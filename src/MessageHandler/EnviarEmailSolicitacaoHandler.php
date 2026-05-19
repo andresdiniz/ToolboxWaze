@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\MessageHandler;
 
 use App\Entity\Solicitacao;
@@ -22,16 +24,18 @@ class EnviarEmailSolicitacaoHandler
         private readonly Environment           $twig,
         private readonly SolicitacaoRepository $solicitacaoRepo,
         private readonly UserRepository        $userRepo,
-        private readonly LoggerInterface       $logger,
-        #[Autowire('%env(MAILER_FROM)%')]   private readonly string $mailerFrom,
-        #[Autowire('%env(APP_BASE_URL)%')]  private readonly string $appBaseUrl,
+        // Canal dedicado: todos os eventos de e-mail gravados em email_queue.log
+        #[Autowire(service: 'monolog.logger.email_queue')]
+        private readonly LoggerInterface       $emailQueueLogger,
+        #[Autowire('%env(MAILER_FROM)%')]  private readonly string $mailerFrom,
+        #[Autowire('%env(APP_BASE_URL)%')] private readonly string $appBaseUrl,
     ) {}
 
     public function __invoke(EnviarEmailSolicitacao $message): void
     {
         $sol = $this->solicitacaoRepo->find($message->solicitacaoId);
         if (!$sol) {
-            $this->logger->warning('EnviarEmailHandler: solicitação não encontrada', [
+            $this->emailQueueLogger->warning('EnviarEmailSolicitacao: solicitação não encontrada', [
                 'id' => $message->solicitacaoId,
             ]);
             return;
@@ -44,18 +48,17 @@ class EnviarEmailSolicitacaoHandler
                 'resolucao'       => $this->enviarResolucao($sol),
                 'status_alterado' => $this->enviarStatusAlterado($sol),
                 'comentario'      => $this->enviarComentario($sol, $message->destinatarioId),
-                default           => $this->logger->warning('EnviarEmailHandler: tipo desconhecido', [
+                default           => $this->emailQueueLogger->warning('EnviarEmailSolicitacao: tipo desconhecido', [
                                          'tipo' => $message->tipo,
                                      ]),
             };
         } catch (\Throwable $e) {
-            $this->logger->error('EnviarEmailHandler: falha no envio', [
+            $this->emailQueueLogger->error('EnviarEmailSolicitacao: falha no envio', [
                 'tipo'  => $message->tipo,
                 'id'    => $message->solicitacaoId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            // Re-lança para retry automático do Messenger
             throw $e;
         }
     }
@@ -64,14 +67,8 @@ class EnviarEmailSolicitacaoHandler
     // Helpers
     // ------------------------------------------------------------------
 
-    /**
-     * Retorna um Address garantindo que MAILER_FROM possa ser:
-     *   - "noreply@site.com"
-     *   - "ToolboxWaze <noreply@site.com>"
-     */
     private function fromAddress(): Address
     {
-        // Tenta parse "Nome <email@exemplo.com>"
         if (preg_match('/^(.+)\s<([^>]+)>$/', trim($this->mailerFrom), $m)) {
             return new Address(trim($m[2]), trim($m[1]));
         }
@@ -83,15 +80,19 @@ class EnviarEmailSolicitacaoHandler
         return rtrim($this->appBaseUrl, '/') . '/solicitacoes/' . $s->getId();
     }
 
-    private function send(string $to, string $subject, string $html): void
+    private function send(string $to, string $toName, string $subject, string $html): void
     {
         $this->mailer->send(
             (new Email())
                 ->from($this->fromAddress())
-                ->to($to)
+                ->to(new Address($to, $toName))
                 ->subject($subject)
                 ->html($html)
         );
+        $this->emailQueueLogger->info('Email enviado', [
+            'destinatario' => $to,
+            'assunto'      => $subject,
+        ]);
     }
 
     // ------------------------------------------------------------------
@@ -105,6 +106,7 @@ class EnviarEmailSolicitacaoHandler
         ]);
         $this->send(
             $s->getSolicitanteEmail(),
+            $s->getSolicitanteNome() ?? $s->getSolicitanteEmail(),
             '[ToolboxWaze] Solicitação recebida: ' . $s->getTipoLabel(),
             $html
         );
@@ -116,14 +118,14 @@ class EnviarEmailSolicitacaoHandler
     private function enviarResponsavel(Solicitacao $s, ?int $responsavelId): void
     {
         if (!$responsavelId) {
-            $this->logger->warning('EnviarEmailHandler: enviarResponsavel chamado sem responsavelId', [
+            $this->emailQueueLogger->warning('EnviarEmailSolicitacao: enviarResponsavel sem responsavelId', [
                 'solicitacao_id' => $s->getId(),
             ]);
             return;
         }
         $responsavel = $this->userRepo->find($responsavelId);
         if (!$responsavel) {
-            $this->logger->warning('EnviarEmailHandler: responsável não encontrado', [
+            $this->emailQueueLogger->warning('EnviarEmailSolicitacao: responsável não encontrado', [
                 'responsavel_id' => $responsavelId,
             ]);
             return;
@@ -136,13 +138,14 @@ class EnviarEmailSolicitacaoHandler
         ]);
         $this->send(
             $responsavel->getEmail(),
+            $responsavel->getNome() ?? $responsavel->getEmail(),
             sprintf('[ToolboxWaze] Nova pendência: %s (#%d)', $s->getTipoLabel(), $s->getId()),
             $html
         );
     }
 
     // ------------------------------------------------------------------
-    // Resolução final (resolvida / negada / cancelada) ao solicitante
+    // Resolução final ao solicitante
     // ------------------------------------------------------------------
     private function enviarResolucao(Solicitacao $s): void
     {
@@ -152,13 +155,14 @@ class EnviarEmailSolicitacaoHandler
         ]);
         $this->send(
             $s->getSolicitanteEmail(),
+            $s->getSolicitanteNome() ?? $s->getSolicitanteEmail(),
             '[ToolboxWaze] Sua solicitação foi tratada: ' . $s->getTipoLabel(),
             $html
         );
     }
 
     // ------------------------------------------------------------------
-    // Status intermediário alterado — informa o solicitante do andamento
+    // Status intermediário alterado
     // ------------------------------------------------------------------
     private function enviarStatusAlterado(Solicitacao $s): void
     {
@@ -168,6 +172,7 @@ class EnviarEmailSolicitacaoHandler
         ]);
         $this->send(
             $s->getSolicitanteEmail(),
+            $s->getSolicitanteNome() ?? $s->getSolicitanteEmail(),
             '[ToolboxWaze] Atualização na sua solicitação #' . $s->getId(),
             $html
         );
@@ -175,29 +180,18 @@ class EnviarEmailSolicitacaoHandler
 
     // ------------------------------------------------------------------
     // Novo comentário público
-    //
-    // Regras:
-    //   autorId == null  → comentário do solicitante externo (sem login)
-    //                      → avisa todos os responsáveis
-    //   autorId != null  → comentário de um responsável/admin logado
-    //                      → avisa o solicitante
-    //                      → avisa demais responsáveis (exceto o autor)
-    //
-    // IMPORTANTE: comentários internos (interno=true) NUNCA chegam aqui —
-    // o SolicitacaoService só faz dispatch quando interno=false.  Esta
-    // verificação é apenas uma camada de defesa extra.
     // ------------------------------------------------------------------
     private function enviarComentario(Solicitacao $s, ?int $autorId): void
     {
         $url = $this->buildUrl($s);
 
         if ($autorId === null) {
-            // Solicitante (anônimo / sem login) comentou → avisa responsáveis
+            // Comentário do solicitante → avisa todos os responsáveis
             $responsaveis = $s->getResponsaveis();
 
             if ($responsaveis->isEmpty()) {
-                $this->logger->info(
-                    'EnviarEmailHandler: solicitação sem responsáveis cadastrados — comentário sem destinatário',
+                $this->emailQueueLogger->info(
+                    'EnviarEmailSolicitacao: sem responsáveis para notificar (comentário solicitante)',
                     ['solicitacao_id' => $s->getId()]
                 );
                 return;
@@ -211,23 +205,25 @@ class EnviarEmailSolicitacaoHandler
                 ]);
                 $this->send(
                     $r->getEmail(),
+                    $r->getNome() ?? $r->getEmail(),
                     '[ToolboxWaze] Novo comentário em #' . $s->getId(),
                     $html
                 );
             }
         } else {
-            // Responsável/admin comentou → avisa o solicitante
+            // Comentário de responsável → avisa o solicitante
             $html = $this->twig->render('emails/solicitacao_comentario_solicitante.html.twig', [
                 'solicitacao' => $s,
                 'url'         => $url,
             ]);
             $this->send(
                 $s->getSolicitanteEmail(),
+                $s->getSolicitanteNome() ?? $s->getSolicitanteEmail(),
                 '[ToolboxWaze] Resposta na sua solicitação #' . $s->getId(),
                 $html
             );
 
-            // Avisa outros responsáveis (exceto o autor do comentário)
+            // Avisa demais responsáveis (exceto o autor)
             foreach ($s->getResponsaveis() as $r) {
                 if ($r->getId() === $autorId) {
                     continue;
@@ -239,6 +235,7 @@ class EnviarEmailSolicitacaoHandler
                 ]);
                 $this->send(
                     $r->getEmail(),
+                    $r->getNome() ?? $r->getEmail(),
                     '[ToolboxWaze] Novo comentário em #' . $s->getId(),
                     $html2
                 );

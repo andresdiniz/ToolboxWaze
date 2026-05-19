@@ -50,7 +50,6 @@ final class RadarController extends AbstractController
             $params
         );
 
-        // DBAL 3.x/4.x: não passar PDO::PARAM_* como terceiro argumento — usa string por padrão
         $rows = $this->db->fetchAllAssociative(
             "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
                     rm.local_verificacao, rm.data_ultima_verificacao,
@@ -63,12 +62,12 @@ final class RadarController extends AbstractController
             $params
         );
 
-        $ufsQuery = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';
+        $ufsQuery  = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';
         $ufsParams = [];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
             $placeholders = implode(',', array_fill(0, count($allowedUfs), '?'));
-            $ufsQuery .= " AND sigla_uf IN ($placeholders)";
-            $ufsParams = $allowedUfs;
+            $ufsQuery    .= " AND sigla_uf IN ($placeholders)";
+            $ufsParams    = $allowedUfs;
         } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
             $ufsQuery .= ' AND 1=0';
         }
@@ -86,28 +85,35 @@ final class RadarController extends AbstractController
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
 
+        // ── Stats ──────────────────────────────────────────────────────────────
+        // ATENÇÃO: a ordem dos ? na query deve ser respeitada.
+        // Na SQL: SUM(data_validade < ?)         → $hoje
+        //         SUM(data_validade BETWEEN ? AND ?) → $hoje, $em30
+        //         WHERE sigla_uf IN (?,?,...)     → $allowedUfs
+        // Portanto os params de data vêm ANTES dos UFs.
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
-            $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
+            $ph         = implode(',', array_fill(0, count($allowedUfs), '?'));
             $statsWhere = " WHERE sigla_uf IN ($ph)";
-            $stats = $this->db->fetchAssociative(
+            $stats      = $this->db->fetchAssociative(
                 "SELECT COUNT(*) AS total,
-                        SUM(ultimo_resultado = 'APROVADO') AS aprovados,
+                        SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
                         SUM(ultimo_resultado = 'REPROVADO') AS reprovados,
-                        SUM(data_validade < ?) AS vencidos,
-                        SUM(data_validade BETWEEN ? AND ?) AS vencendo,
+                        SUM(data_validade IS NOT NULL AND data_validade < ?)           AS vencidos,
+                        SUM(data_validade IS NOT NULL AND data_validade >= ? AND data_validade <= ?) AS vencendo,
                         COUNT(DISTINCT sigla_uf) AS estados
                  FROM radar_medidor $statsWhere",
-                array_merge($allowedUfs, [$hoje, $hoje, $em30])
+                // data params primeiro, depois os UFs do WHERE
+                array_merge([$hoje, $hoje, $em30], $allowedUfs)
             );
         } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
             $stats = ['total' => 0, 'aprovados' => 0, 'reprovados' => 0, 'vencidos' => 0, 'vencendo' => 0, 'estados' => 0];
         } else {
             $stats = $this->db->fetchAssociative(
                 "SELECT COUNT(*) AS total,
-                        SUM(ultimo_resultado = 'APROVADO') AS aprovados,
+                        SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
                         SUM(ultimo_resultado = 'REPROVADO') AS reprovados,
-                        SUM(data_validade < :hoje) AS vencidos,
-                        SUM(data_validade BETWEEN :hoje AND :em30) AS vencendo,
+                        SUM(data_validade IS NOT NULL AND data_validade < :hoje)                         AS vencidos,
+                        SUM(data_validade IS NOT NULL AND data_validade >= :hoje AND data_validade <= :em30) AS vencendo,
                         COUNT(DISTINCT sigla_uf) AS estados
                  FROM radar_medidor",
                 ['hoje' => $hoje, 'em30' => $em30]
@@ -115,19 +121,19 @@ final class RadarController extends AbstractController
         }
 
         return $this->render('radar/index.html.twig', [
-            'rows'        => $rows,
-            'total'       => $total,
-            'page'        => $page,
-            'per_page'    => self::PER_PAGE,
-            'pages'       => (int) ceil($total / self::PER_PAGE),
-            'filters'     => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
-            'ufs'         => $ufs,
-            'resultados'  => $resultados,
-            'tipos'       => $tipos,
-            'stats'       => $stats,
-            'hoje'        => $hoje,
-            'em30'        => $em30,
-            'allowedUfs'  => $allowedUfs,
+            'rows'       => $rows,
+            'total'      => $total,
+            'page'       => $page,
+            'per_page'   => self::PER_PAGE,
+            'pages'      => (int) ceil($total / self::PER_PAGE),
+            'filters'    => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
+            'ufs'        => $ufs,
+            'resultados' => $resultados,
+            'tipos'      => $tipos,
+            'stats'      => $stats,
+            'hoje'       => $hoje,
+            'em30'       => $em30,
+            'allowedUfs' => $allowedUfs,
         ]);
     }
 
@@ -351,7 +357,7 @@ final class RadarController extends AbstractController
             $parts[]  = 'rm.data_validade >= ?';
             $params[] = $hoje;
         } elseif ($validade === '30dias') {
-            $parts[]  = 'rm.data_validade BETWEEN ? AND ?';
+            $parts[]  = 'rm.data_validade >= ? AND rm.data_validade <= ?';
             $params[] = $hoje;
             $params[] = $em30;
         }

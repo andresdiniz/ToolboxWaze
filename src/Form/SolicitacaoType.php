@@ -319,9 +319,9 @@ class SolicitacaoType extends AbstractType
                 ],
                 // O JS substitui SEU_NICK pelo nick digitado no campo solicitanteUsuario
                 'help'      => 'Você pode achar essa resposta aqui: '
-                             . '<a href="https://www.waze.com/discuss/u/SEU_NICK/activity" '
+                             . '<a href="https://www.waze.com/discuss/u/SEU_NICK/summary" '
                              . 'target="_blank" rel="noopener" data-discuss-link>'
-                             . 'https://www.waze.com/discuss/u/SEU_NICK/activity</a>',
+                             . 'https://www.waze.com/discuss/u/SEU_NICK/summary</a>',
                 'help_html'  => true,
                 'attr'       => ['data-discuss-help' => '1'],
                 'constraints' => [new Assert\NotBlank()],

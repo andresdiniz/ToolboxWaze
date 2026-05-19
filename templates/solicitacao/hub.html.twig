@@ -550,9 +550,10 @@
   /* ══════════════════════════════════════════════════════════════
      Link do Discuss atualiza com o nick digitado no campo usuário
      Substitui SEU_NICK em href e texto do <a data-discuss-link>
+     URL: https://www.waze.com/discuss/u/NICK/summary
   ══════════════════════════════════════════════════════════════ */
-  const DISCUSS_BASE = 'https://www.waze.com/discuss/u/';
-  const DISCUSS_SUFFIX = '/activity';
+  const DISCUSS_BASE   = 'https://www.waze.com/discuss/u/';
+  const DISCUSS_SUFFIX = '/summary';
 
   function updateDiscussLinks(nick) {
     const encoded = nick ? encodeURIComponent(nick) : 'SEU_NICK';
@@ -565,7 +566,6 @@
 
   const nickInput = document.querySelector('input[name="solicitacao[solicitanteUsuario]"]');
   if (nickInput) {
-    // Inicializa com valor já preenchido (ex: ao voltar na página)
     updateDiscussLinks(nickInput.value.trim());
     nickInput.addEventListener('input', () => updateDiscussLinks(nickInput.value.trim()));
   }

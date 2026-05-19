@@ -1,6 +1,6 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ posto.razao_social }} — Posto{% endblock %}
+{% block title %}{{ posto.razaoSocial }} — Posto{% endblock %}
 
 {% block body %}
 
@@ -8,7 +8,7 @@
 <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="{{ path('posto_index') }}">Postos</a></li>
-        <li class="breadcrumb-item active">{{ posto.nome_fantasia ?? posto.razao_social }}</li>
+        <li class="breadcrumb-item active">{{ posto.nomeFantasia ?? posto.razaoSocial }}</li>
     </ol>
 </nav>
 
@@ -48,10 +48,10 @@
 
                 {# Nome #}
                 <h1 class="h3 fw-bold mb-1">
-                    <i class="bi bi-fuel-pump text-success me-2"></i>{{ posto.razao_social }}
+                    <i class="bi bi-fuel-pump text-success me-2"></i>{{ posto.razaoSocial }}
                 </h1>
-                {% if posto.nome_fantasia and posto.nome_fantasia != posto.razao_social %}
-                    <p class="text-muted mb-2">{{ posto.nome_fantasia }}</p>
+                {% if posto.nomeFantasia and posto.nomeFantasia != posto.razaoSocial %}
+                    <p class="text-muted mb-2">{{ posto.nomeFantasia }}</p>
                 {% endif %}
 
                 {# Endereço resumido #}
@@ -144,7 +144,7 @@
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Código ISIMP</div>
-                        <div class="detail-value"><code>{{ posto.codigo_isimp ?? '—' }}</code></div>
+                        <div class="detail-value"><code>{{ posto.codigoIsimp ?? '—' }}</code></div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Autorização ANP</div>
@@ -152,11 +152,11 @@
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Data Publicação</div>
-                        <div class="detail-value">{{ posto.data_publicacao ?? '—' }}</div>
+                        <div class="detail-value">{{ posto.dataPublicacao ?? '—' }}</div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Data Vinculação</div>
-                        <div class="detail-value">{{ posto.data_vinculacao ?? '—' }}</div>
+                        <div class="detail-value">{{ posto.dataVinculacao ?? '—' }}</div>
                     </div>
                 </div>
             </div>
@@ -222,7 +222,7 @@
                     Vínculo Waze
                 </span>
                 {% if wazeLink %}
-                    <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener"
+                    <a href="{{ wazeLink.wazeLink }}" target="_blank" rel="noopener"
                        class="btn btn-sm btn-primary">
                         <i class="bi bi-box-arrow-up-right me-1"></i>Abrir Editor
                     </a>
@@ -236,10 +236,10 @@
                 <div class="venue-id-box p-3 mb-3 rounded-3 bg-body-secondary d-flex align-items-center gap-3">
                     <div class="flex-grow-1">
                         <div class="detail-label mb-1">Venue ID</div>
-                        <code class="fs-6 fw-bold text-primary">{{ wazeLink.permanent_hazard_id }}</code>
+                        <code class="fs-6 fw-bold text-primary">{{ wazeLink.venueId }}</code>
                     </div>
                     <button class="btn btn-sm btn-outline-secondary copy-btn flex-shrink-0"
-                            data-copy="{{ wazeLink.permanent_hazard_id }}"
+                            data-copy="{{ wazeLink.venueId }}"
                             title="Copiar ID">
                         <i class="bi bi-clipboard"></i>
                     </button>
@@ -249,7 +249,7 @@
                 <div class="mb-3">
                     <div class="detail-label">URL cadastrada</div>
                     <div class="detail-value small text-break">
-                        <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener">{{ wazeLink.waze_link }}</a>
+                        <a href="{{ wazeLink.wazeLink }}" target="_blank" rel="noopener">{{ wazeLink.wazeLink }}</a>
                     </div>
                 </div>
 
@@ -258,16 +258,16 @@
                     <div class="col-sm-6">
                         <div class="detail-label">Cadastrado por</div>
                         <div class="detail-value small">
-                            <i class="bi bi-person me-1 opacity-50"></i>{{ wazeLink.inserted_by_email }}<br>
-                            <span class="text-muted">{{ wazeLink.inserted_at|date('d/m/Y H:i') }}</span>
+                            <i class="bi bi-person me-1 opacity-50"></i>{{ wazeLink.insertedBy }}<br>
+                            <span class="text-muted">{{ wazeLink.insertedAt|date('d/m/Y H:i') }}</span>
                         </div>
                     </div>
-                    {% if wazeLink.updated_by_email %}
+                    {% if wazeLink.updatedBy %}
                     <div class="col-sm-6">
                         <div class="detail-label">Última atualização</div>
                         <div class="detail-value small">
-                            <i class="bi bi-pencil me-1 opacity-50"></i>{{ wazeLink.updated_by_email }}<br>
-                            <span class="text-muted">{{ wazeLink.updated_at|date('d/m/Y H:i') }}</span>
+                            <i class="bi bi-pencil me-1 opacity-50"></i>{{ wazeLink.updatedBy }}<br>
+                            <span class="text-muted">{{ wazeLink.updatedAt|date('d/m/Y H:i') }}</span>
                         </div>
                     </div>
                     {% endif %}
@@ -314,7 +314,7 @@
                                         <input type="url" id="waze_link_posto" name="waze_link"
                                                class="form-control form-control-sm{% if wazeErrors.waze_link is defined %} is-invalid{% endif %}"
                                                placeholder="https://waze.com/pt-BR/editor?...&venues=207160888.2071412273.41231195"
-                                               value="{{ wazeFormData.waze_link ?? wazeLink.waze_link ?? '' }}">
+                                               value="{{ wazeFormData.waze_link ?? (wazeLink ? wazeLink.wazeLink : '') }}">
                                         {% if wazeErrors.waze_link is defined %}
                                             <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
                                         {% else %}
@@ -365,25 +365,25 @@
                 <div class="list-group-item px-3 py-2">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="badge
-                            {% if log.campo_alterado == 'waze_link' %}bg-primary-subtle text-primary border border-primary-subtle
+                            {% if log.campoAlterado == 'waze_link' %}bg-primary-subtle text-primary border border-primary-subtle
                             {% else %}bg-secondary-subtle text-secondary border border-secondary-subtle{% endif %}
                             ">
-                            <i class="bi bi-{{ log.campo_alterado == 'waze_link' ? 'link-45deg' : 'chat-left-text' }} me-1"></i>
-                            {{ log.campo_alterado|replace({'_': ' '})|title }}
+                            <i class="bi bi-{{ log.campoAlterado == 'waze_link' ? 'link-45deg' : 'chat-left-text' }} me-1"></i>
+                            {{ log.campoAlterado|replace({'_': ' '})|title }}
                         </span>
                         <small class="text-muted">
-                            <i class="bi bi-person me-1"></i>{{ log.changed_by_email }}
-                            · {{ log.changed_at|date('d/m/Y H:i') }}
+                            <i class="bi bi-person me-1"></i>{{ log.changedBy }}
+                            · {{ log.changedAt|date('d/m/Y H:i') }}
                         </small>
                     </div>
-                    {% if log.valor_anterior %}
+                    {% if log.valorAnterior %}
                     <div class="small text-danger-emphasis bg-danger-subtle rounded px-2 py-1 mb-1 text-break">
-                        <i class="bi bi-dash-circle me-1"></i>{{ log.valor_anterior }}
+                        <i class="bi bi-dash-circle me-1"></i>{{ log.valorAnterior }}
                     </div>
                     {% endif %}
-                    {% if log.valor_novo %}
+                    {% if log.valorNovo %}
                     <div class="small text-success-emphasis bg-success-subtle rounded px-2 py-1 text-break">
-                        <i class="bi bi-plus-circle me-1"></i>{{ log.valor_novo }}
+                        <i class="bi bi-plus-circle me-1"></i>{{ log.valorNovo }}
                     </div>
                     {% endif %}
                 </div>
@@ -402,7 +402,7 @@
                 <div class="row g-2">
                     <div class="col-sm-6">
                         <div class="detail-label">Importado em</div>
-                        <div class="detail-value small">{{ posto.imported_at ?? '—' }}</div>
+                        <div class="detail-value small">{{ posto.importedAt|date('d/m/Y H:i') }}</div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">ID interno</div>
@@ -410,7 +410,7 @@
                     </div>
                     <div class="col-12">
                         <div class="detail-label">Row Hash</div>
-                        <div class="detail-value"><code style="font-size:.68rem">{{ posto.row_hash }}</code></div>
+                        <div class="detail-value"><code style="font-size:.68rem">{{ posto.rowHash }}</code></div>
                     </div>
                 </div>
             </div>

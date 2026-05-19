@@ -47,6 +47,30 @@ class SolicitacaoController extends AbstractController
         $form = $this->createForm(SolicitacaoType::class, $solicitacao);
         $form->handleRequest($request);
 
+        // ── Resposta AJAX: retorna apenas o fragmento #campos-dinamicos ────────
+        // O JS faz fetch com header X-Requested-With: XMLHttpRequest e parâmetro
+        // _ajax_tipo. Renderizamos o hub normalmente e extraímos só o fragmento,
+        // evitando duplicar templates ou criar rotas extras.
+        if ($ajaxTipo && $request->isXmlHttpRequest()) {
+            $html = $this->renderView('solicitacao/hub.html.twig', [
+                'form'         => $form,
+                'tipoAtual'    => $tipoAtual,
+                'abaAtual'     => 'nova',
+                'isAdmin'      => $isAdmin,
+                'historico'    => [],
+                'gestaoLista'  => [],
+                'contadores'   => [],
+                'filtroStatus' => null,
+                'filtroTipo'   => null,
+            ]);
+            // Extrai o conteúdo do div#campos-dinamicos via regex simples
+            if (preg_match('/<div id="campos-dinamicos">(.*?)<\/div>\s*<div class="d-flex justify/s', $html, $m)) {
+                return new Response('<div id="campos-dinamicos">' . $m[1] . '</div>');
+            }
+            // Fallback: retorna o HTML completo e o JS extrai via DOMParser
+            return new Response($html);
+        }
+
         if ($form->isSubmitted() && $form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
 

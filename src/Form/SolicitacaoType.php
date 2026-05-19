@@ -5,7 +5,7 @@ namespace App\Form;
 use App\Entity\Solicitacao;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\{
-    ChoiceType, EmailType, FileType, TextareaType, TextType, CheckboxType
+    ChoiceType, EmailType, TextareaType, TextType, CheckboxType
 };
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
@@ -234,9 +234,6 @@ class SolicitacaoType extends AbstractType
                 'attr'     => ['data-cargo-select' => '1'],
             ]);
 
-        // Campo UF só aparece (e é obrigatório) quando o cargo submetido é gerente_estado.
-        // No PRE_SET_DATA ($cargo === null) não é adicionado — o JS no frontend
-        // exibe/esconde o campo via data-cargo-select sem precisar de reload.
         if ($cargo === 'gerente_estado') {
             $form->add('dados_uf', ChoiceType::class, [
                 'label'       => 'Estado',
@@ -363,7 +360,8 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // OOPS DE EDITOR
-    // Ordem: Nome do editor > Provas (upload) > Permalink > Descrição
+    // Upload de provas é tratado pelo input nativo no template (arquivos_oops[])
+    // Ordem: Nome do editor > Permalink > Descrição
     // -------------------------------------------------------------------------
     private function addCamposOops(\Symfony\Component\Form\FormInterface $form): void
     {
@@ -373,27 +371,6 @@ class SolicitacaoType extends AbstractType
                 'mapped'      => false,
                 'help'        => 'Digite o nome do usuário.',
                 'constraints' => [new Assert\NotBlank()],
-            ])
-            ->add('dados_provas', FileType::class, [
-                'label'    => 'Compartilhe provas',
-                'mapped'   => false,
-                'required' => false,
-                'multiple' => true,
-                'help'     => 'Envie até 5 imagens, com tamanho máximo de 1 MB cada.',
-                'attr'     => ['accept' => 'image/*', 'data-max-files' => '5'],
-                'constraints' => [
-                    new Assert\All([
-                        'constraints' => [
-                            new Assert\File([
-                                'maxSize'          => '1M',
-                                'maxSizeMessage'   => 'Cada imagem deve ter no máximo 1 MB.',
-                                'mimeTypes'        => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-                                'mimeTypesMessage' => 'Envie apenas imagens (JPG, PNG, GIF ou WebP).',
-                            ]),
-                        ],
-                    ]),
-                    new Assert\Count(['max' => 5, 'maxMessage' => 'Envie no máximo 5 imagens.']),
-                ],
             ])
             ->add('dados_permalink', TextType::class, [
                 'label'    => 'Compartilhe permalink',

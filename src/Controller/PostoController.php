@@ -46,7 +46,7 @@ class PostoController extends AbstractController
         }
 
         if ($uf !== '') {
-            $where[]  = 'r.estado = ?';
+            $where[]  = 'r.uf = ?';
             $params[] = $uf;
         }
 
@@ -59,7 +59,7 @@ class PostoController extends AbstractController
         );
 
         $rows = $this->db->fetchAllAssociative(
-            "SELECT r.id, r.nome_fantasia, r.razao_social, r.cnpj, r.estado, r.municipio,
+            "SELECT r.id, r.nome_fantasia, r.razao_social, r.cnpj, r.uf, r.municipio,
                     pwl.id AS link_id, pwl.waze_link, pwl.permanent_hazard_id
              FROM fuel_reseller_raw r
              LEFT JOIN posto_waze_link pwl ON pwl.posto_id = r.id

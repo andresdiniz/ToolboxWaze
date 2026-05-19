@@ -63,12 +63,41 @@
   'idSegmento'       : 'ID do segmento'
 } %}
 
+{# Mapa de ícones por tipo — consistente com o hub #}
+{% set TIPO_ICON = {
+  'imagem_satelite':     'bi-image-fill',
+  'gerente_area':        'bi-pin-map-fill',
+  'gerente_estado_pais': 'bi-flag-fill',
+  'nivel':               'bi-graph-up-arrow',
+  'oops':                'bi-bug-fill',
+  'bandeira_posto':      'bi-fuel-pump-fill',
+  'id_segmento':         'bi-signpost-split-fill'
+} %}
+
 <div class="container py-4" style="max-width:780px">
+
+  {# Flash messages #}
+  {% for label, messages in app.flashes %}
+    {% for message in messages %}
+      <div class="alert alert-{{ label == 'success' ? 'success' : (label == 'danger' ? 'danger' : 'warning') }} alert-dismissible fade show py-2" role="alert">
+        <i class="bi bi-{{ label == 'success' ? 'check-circle-fill' : (label == 'danger' ? 'exclamation-octagon-fill' : 'exclamation-triangle-fill') }} me-2"></i>
+        {{ message }}
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endfor %}
 
   <div class="d-flex justify-content-between align-items-start mb-3">
     <div>
-      <h2 class="mb-0">{{ solicitacao.tipoLabel }}</h2>
-      <small class="text-muted">#{{ solicitacao.id }} · {{ solicitacao.criadaEm|date('d/m/Y H:i') }}</small>
+      <h2 class="mb-0">
+        <i class="bi {{ TIPO_ICON[solicitacao.tipo] ?? 'bi-send' }} me-2 text-muted" style="font-size:1.1em"></i>
+        {{ solicitacao.tipoLabel }}
+      </h2>
+      <small class="text-muted">
+        <i class="bi bi-hash"></i>{{ solicitacao.id }}
+        &nbsp;·&nbsp;
+        <i class="bi bi-calendar3 me-1"></i>{{ solicitacao.criadaEm|date('d/m/Y H:i') }}
+      </small>
     </div>
     <span class="badge fs-6 bg-{{ solicitacao.statusCor }}{% if solicitacao.status == 'pendente' %} text-dark{% endif %}">
       {{ solicitacao.statusLabel }}
@@ -76,14 +105,29 @@
   </div>
 
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Solicitante</div>
+    <div class="card-header fw-semibold">
+      <i class="bi bi-person-fill me-2 text-muted"></i>Solicitante
+    </div>
     <div class="card-body">
       <dl class="row mb-0">
-        <dt class="col-sm-3">Nome</dt>    <dd class="col-sm-9">{{ solicitacao.solicitanteNome }}</dd>
-        <dt class="col-sm-3">Usuário</dt> <dd class="col-sm-9">{{ solicitacao.solicitanteUsuario }}</dd>
-        <dt class="col-sm-3">E-mail</dt>  <dd class="col-sm-9">{{ solicitacao.solicitanteEmail }}</dd>
+        <dt class="col-sm-3">Nome</dt>
+        <dd class="col-sm-9">{{ solicitacao.solicitanteNome }}</dd>
+        <dt class="col-sm-3">Usuário</dt>
+        <dd class="col-sm-9">
+          <i class="bi bi-waze me-1 text-muted" style="font-size:.9em"></i>
+          {{ solicitacao.solicitanteUsuario }}
+        </dd>
+        <dt class="col-sm-3">E-mail</dt>
+        <dd class="col-sm-9">
+          <a href="mailto:{{ solicitacao.solicitanteEmail }}" class="text-decoration-none">
+            <i class="bi bi-envelope me-1"></i>{{ solicitacao.solicitanteEmail }}
+          </a>
+        </dd>
         {% if solicitacao.estado %}
-          <dt class="col-sm-3">Estado</dt><dd class="col-sm-9">{{ solicitacao.estado }}</dd>
+          <dt class="col-sm-3">Estado</dt>
+          <dd class="col-sm-9">
+            <i class="bi bi-geo-alt me-1 text-muted"></i>{{ solicitacao.estado }}
+          </dd>
         {% endif %}
       </dl>
     </div>
@@ -91,7 +135,9 @@
 
   {% if solicitacao.dados %}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Detalhes da solicitação</div>
+    <div class="card-header fw-semibold">
+      <i class="bi bi-card-list me-2 text-muted"></i>Detalhes da solicitação
+    </div>
     <div class="card-body">
       <dl class="row mb-0">
       {% for chave, valor in solicitacao.dados %}
@@ -101,7 +147,13 @@
         <dd class="col-sm-8">
           {% if chave in CAMPOS_TEXTO %}
             {% if valor is not empty %}
-              {{ valor|nl2br }}
+              {% if chave == 'permalink' %}
+                <a href="{{ valor }}" target="_blank" rel="noopener" class="text-break">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>{{ valor|slice(0,60) }}{{ valor|length > 60 ? '…' : '' }}
+                </a>
+              {% else %}
+                {{ valor|nl2br }}
+              {% endif %}
             {% else %}
               <span class="text-muted fst-italic">Não informado</span>
             {% endif %}
@@ -110,9 +162,9 @@
           {% elseif LABELS[valor] is defined %}
             {{ LABELS[valor] }}
           {% elseif valor == true %}
-            <span class="text-success">✓ Sim</span>
+            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Sim</span>
           {% elseif valor == false %}
-            <span class="text-danger">✗ Não</span>
+            <span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Não</span>
           {% elseif valor is not empty %}
             {{ valor }}
           {% else %}
@@ -127,12 +179,15 @@
 
   {% if solicitacao.arquivos %}
   <div class="card mb-3">
-    <div class="card-header fw-semibold">Arquivos anexados</div>
+    <div class="card-header fw-semibold">
+      <i class="bi bi-images me-2 text-muted"></i>Arquivos anexados
+    </div>
     <div class="card-body">
       <div class="d-flex flex-wrap gap-2">
       {% for arquivo in solicitacao.arquivos %}
-        <a href="{{ asset('uploads/oops/' ~ arquivo) }}" target="_blank" class="btn btn-outline-secondary btn-sm">
-          📎 {{ arquivo }}
+        <a href="{{ asset('uploads/oops/' ~ arquivo) }}" target="_blank" rel="noopener"
+           class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-file-image me-1"></i>{{ arquivo }}
         </a>
       {% endfor %}
       </div>
@@ -149,30 +204,40 @@
   {% if is_granted('SOLICITACAO_RESOLVER', solicitacao) and not solicitacao.isFinal() %}
   <div class="card border-warning mt-4">
     <div class="card-header fw-semibold text-warning-emphasis bg-warning-subtle">
-      Gerenciar solicitação
+      <i class="bi bi-sliders2 me-2"></i>Gerenciar solicitação
     </div>
     <div class="card-body">
 
       {% include 'solicitacao/_status_form.html.twig' %}
 
       <hr class="my-3">
-      <form method="post" action="{{ path('solicitacao_resolver', {id: solicitacao.id}) }}">
+      <form method="post" action="{{ path('solicitacao_resolver', {id: solicitacao.id}) }}"
+            id="form-detalhe-resolver">
         <input type="hidden" name="_token" value="{{ csrf_token('resolver_' ~ solicitacao.id) }}">
 
         <div class="mb-3">
           <label class="form-label fw-semibold">Encerrar com…</label>
-          <div class="d-flex gap-2 flex-wrap">
+          <div class="d-flex gap-3 flex-wrap">
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="desfecho" id="des_resolvida" value="resolvida" checked>
-              <label class="form-check-label text-success" for="des_resolvida">✓ Resolvida</label>
+              <input class="form-check-input" type="radio" name="desfecho"
+                     id="des_resolvida" value="resolvida" checked>
+              <label class="form-check-label text-success fw-semibold" for="des_resolvida">
+                <i class="bi bi-check-circle-fill me-1"></i>Resolvida
+              </label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="desfecho" id="des_negada" value="negada">
-              <label class="form-check-label text-danger" for="des_negada">✗ Negada</label>
+              <input class="form-check-input" type="radio" name="desfecho"
+                     id="des_negada" value="negada">
+              <label class="form-check-label text-danger fw-semibold" for="des_negada">
+                <i class="bi bi-x-circle-fill me-1"></i>Negada
+              </label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="desfecho" id="des_cancelada" value="cancelada">
-              <label class="form-check-label text-secondary" for="des_cancelada">⊘ Cancelada</label>
+              <input class="form-check-input" type="radio" name="desfecho"
+                     id="des_cancelada" value="cancelada">
+              <label class="form-check-label text-secondary fw-semibold" for="des_cancelada">
+                <i class="bi bi-slash-circle-fill me-1"></i>Cancelada
+              </label>
             </div>
           </div>
         </div>
@@ -183,9 +248,8 @@
                     placeholder="Descreva como foi tratado, motivo da negativa…"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-warning"
-                onclick="return confirm('Encerrar esta solicitação? A ação não pode ser desfeita.')">
-          Encerrar solicitação
+        <button type="submit" class="btn btn-warning" id="btn-encerrar">
+          <i class="bi bi-check2-square me-1"></i>Encerrar solicitação
         </button>
       </form>
     </div>
@@ -194,18 +258,40 @@
 
   {% if solicitacao.isFinal() %}
   <div class="alert alert-{{ solicitacao.statusCor }} mt-4 mb-0">
+    <i class="bi bi-{{ solicitacao.status == 'resolvida' ? 'check-circle-fill' : (solicitacao.status == 'negada' ? 'x-circle-fill' : 'slash-circle-fill') }} me-2"></i>
     <strong>{{ solicitacao.statusLabel }}</strong>
     {% if solicitacao.resolvidaPor %}
       por <strong>{{ solicitacao.resolvidaPor.username ?? solicitacao.resolvidaPor.email }}</strong>
       em {{ solicitacao.resolvidaEm|date('d/m/Y H:i') }}
     {% endif %}.
-    {% if solicitacao.notaResolucao %}<br><em>{{ solicitacao.notaResolucao }}</em>{% endif %}
+    {% if solicitacao.notaResolucao %}<br><em class="mt-1 d-block">{{ solicitacao.notaResolucao }}</em>{% endif %}
   </div>
   {% endif %}
 
-  {# Botão Voltar: admin vai para gestão, usuário comum vai para histórico #}
   <a href="{{ path('solicitacao_hub', {aba: is_granted('ROLE_ADMIN') ? 'gestao' : 'historico'}) }}"
-     class="btn btn-link ps-0 mt-3">← Voltar</a>
+     class="btn btn-link ps-0 mt-3">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
 
 </div>
+{% endblock %}
+
+{% block javascripts %}
+<script>
+(function(){
+  'use strict';
+  // Confirmação antes de encerrar
+  const btnEncerrar = document.getElementById('btn-encerrar');
+  if (btnEncerrar) {
+    document.getElementById('form-detalhe-resolver')
+      ?.addEventListener('submit', function(e) {
+        const desfecho = this.querySelector('input[name="desfecho"]:checked')?.value ?? 'encerrar';
+        const labels = { resolvida: 'Resolvida', negada: 'Negada', cancelada: 'Cancelada' };
+        if (!confirm(`Encerrar como "${labels[desfecho] ?? desfecho}"?\nEsta ação não pode ser desfeita.`)) {
+          e.preventDefault();
+        }
+      });
+  }
+})();
+</script>
 {% endblock %}

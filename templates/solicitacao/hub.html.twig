@@ -7,16 +7,27 @@
 
   {# ══ Cabeçalho ══════════════════════════════════════════════════════ #}
   <div class="sol-hub-header">
-    <h4><i class="bi bi-send"></i> Solicitações</h4>
+    <h4><i class="bi bi-send-fill"></i> Solicitações</h4>
     <p>Envie pedidos ao time Waze Brasil e acompanhe o andamento.</p>
   </div>
+
+  {# ══ Flash messages ══════════════════════════════════════════════════ #}
+  {% for label, messages in app.flashes %}
+    {% for message in messages %}
+      <div class="alert alert-{{ label == 'success' ? 'success' : (label == 'danger' ? 'danger' : 'warning') }} alert-dismissible fade show py-2" role="alert">
+        <i class="bi bi-{{ label == 'success' ? 'check-circle-fill' : (label == 'danger' ? 'exclamation-octagon-fill' : 'exclamation-triangle-fill') }} me-2"></i>
+        {{ message }}
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endfor %}
 
   {# ══ Tabs ════════════════════════════════════════════════════════════ #}
   <div class="hub-tabs" role="tablist">
     <a href="{{ path('solicitacao_hub', {aba: 'nova'}) }}"
        class="hub-tab{{ abaAtual == 'nova' ? ' active' : '' }}"
        role="tab" aria-selected="{{ abaAtual == 'nova' ? 'true' : 'false' }}">
-      <i class="bi bi-plus-circle"></i> Nova solicitação
+      <i class="bi bi-plus-circle-fill"></i> Nova solicitação
     </a>
     {% if app.user %}
     <a href="{{ path('solicitacao_hub', {aba: 'historico'}) }}"
@@ -29,9 +40,10 @@
     <a href="{{ path('solicitacao_hub', {aba: 'gestao'}) }}"
        class="hub-tab{{ abaAtual == 'gestao' ? ' active' : '' }}"
        role="tab" aria-selected="{{ abaAtual == 'gestao' ? 'true' : 'false' }}">
-      <i class="bi bi-sliders"></i> Gestão
-      {% if contadores.pendente is defined and contadores.pendente > 0 %}
-        <span class="tab-badge">{{ contadores.pendente }}</span>
+      <i class="bi bi-sliders2"></i> Gestão
+      {% set totalAberto = (contadores.pendente ?? 0) + (contadores.em_andamento ?? 0) %}
+      {% if totalAberto > 0 %}
+        <span class="tab-badge">{{ totalAberto }}</span>
       {% endif %}
     </a>
     {% endif %}
@@ -44,31 +56,32 @@
   {{ form_errors(form) }}
 
   <div class="sol-card">
-    <div class="sol-card-header"><i class="bi bi-person"></i> Seus dados</div>
+    <div class="sol-card-header"><i class="bi bi-person-fill"></i> Seus dados</div>
     <div class="sol-card-body">
       <div class="row g-3">
-        <div class="col-md-6">{{ form_row(form.solicitanteNome) }}</div>
-        <div class="col-md-6">{{ form_row(form.solicitanteUsuario) }}</div>
-        <div class="col-12">{{ form_row(form.solicitanteEmail) }}</div>
+        <div class="col-md-6" id="wrap-solicitanteNome">{{ form_row(form.solicitanteNome) }}</div>
+        <div class="col-md-6" id="wrap-solicitanteUsuario">{{ form_row(form.solicitanteUsuario) }}</div>
+        <div class="col-12"   id="wrap-solicitanteEmail">{{ form_row(form.solicitanteEmail) }}</div>
       </div>
     </div>
   </div>
 
   <div class="sol-card">
-    <div class="sol-card-header"><i class="bi bi-list-check"></i> Tipo de solicitação</div>
+    <div class="sol-card-header"><i class="bi bi-grid-1x2-fill"></i> Tipo de solicitação</div>
     <div class="sol-card-body">
       {{ form_widget(form.tipo,   {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
       {{ form_widget(form.estado, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-estado-select': '1'}}) }}
       {{ form_errors(form.tipo) }}
       <div class="tipo-grid mt-3" id="tipo-pills">
+        {# Ícones revisados para representar cada tipo com mais precisão #}
         {% set iconMap = {
-          'imagem_satelite':     {'icon': 'bi-globe',                'label': 'Imagem de Satélite'},
-          'gerente_area':        {'icon': 'bi-map',                  'label': 'Gerente de Área'},
-          'gerente_estado_pais': {'icon': 'bi-flag',                 'label': 'Gerente de Estado/País'},
-          'nivel':               {'icon': 'bi-bar-chart',            'label': 'Nível (Upgrade/Downgrade)'},
-          'oops':                {'icon': 'bi-exclamation-triangle', 'label': 'Oops de Editor'},
-          'bandeira_posto':      {'icon': 'bi-fuel-pump',            'label': 'Bandeira de Posto de Gasolina'},
-          'id_segmento':         {'icon': 'bi-signpost-2',           'label': 'Cadastro de ID de Segmento'}
+          'imagem_satelite':     {'icon': 'bi-image-fill',            'label': 'Imagem de Satélite'},
+          'gerente_area':        {'icon': 'bi-pin-map-fill',          'label': 'Gerente de Área'},
+          'gerente_estado_pais': {'icon': 'bi-flag-fill',             'label': 'Gerente de Estado/País'},
+          'nivel':               {'icon': 'bi-graph-up-arrow',        'label': 'Nível (Upgrade/Downgrade)'},
+          'oops':                {'icon': 'bi-bug-fill',              'label': 'Oops de Editor'},
+          'bandeira_posto':      {'icon': 'bi-fuel-pump-fill',        'label': 'Bandeira de Posto'},
+          'id_segmento':         {'icon': 'bi-signpost-split-fill',   'label': 'ID de Segmento'}
         } %}
         {% for valor, info in iconMap %}
           <div class="tipo-pill{% if tipoAtual == valor %} active{% endif %}"
@@ -78,6 +91,9 @@
             <span class="tipo-label">{{ info.label }}</span>
           </div>
         {% endfor %}
+      </div>
+      <div id="tipo-error-msg" class="sol-error d-none mt-2">
+        <i class="bi bi-exclamation-circle"></i> Selecione o tipo de solicitação antes de enviar.
       </div>
     </div>
   </div>
@@ -115,14 +131,19 @@
       <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
       <div class="sol-card-body">
         <label class="sol-label">Compartilhe provas <span class="text-muted fw-normal">(até 5 imagens, 1 MB cada)</span></label>
-        <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
+        <input type="file" name="arquivos_oops[]" id="input-oops-files" class="sol-input" accept="image/*" multiple>
+        <div id="oops-file-preview" class="d-flex flex-wrap gap-2 mt-2"></div>
+        <p id="oops-file-error" class="sol-error d-none mt-1"><i class="bi bi-exclamation-circle"></i> <span></span></p>
       </div>
     </div>
   </div>
 
   <div class="d-flex justify-content-end mt-2 mb-5">
     <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
-      <i class="bi bi-send"></i> Enviar solicitação
+      <span id="btn-enviar-text"><i class="bi bi-send-fill"></i> Enviar solicitação</span>
+      <span id="btn-enviar-loading" class="d-none">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando…
+      </span>
     </button>
   </div>
   {{ form_end(form) }}
@@ -133,26 +154,26 @@
   {% if abaAtual == 'historico' %}
     {% if not app.user %}
       <div class="sol-empty">
-        <i class="bi bi-lock sol-empty-icon"></i>
+        <i class="bi bi-lock-fill sol-empty-icon"></i>
         <p>Faça login para ver seu histórico de solicitações.</p>
         <a href="{{ path('app_login') }}" class="btn btn-primary btn-sm px-4">Entrar</a>
       </div>
     {% elseif historico is empty %}
       <div class="sol-empty">
-        <i class="bi bi-inbox sol-empty-icon"></i>
+        <i class="bi bi-inbox-fill sol-empty-icon"></i>
         <p>Você ainda não enviou nenhuma solicitação.</p>
         <a href="{{ path('solicitacao_hub', {aba: 'nova'}) }}" class="btn btn-primary btn-sm px-4">
-          <i class="bi bi-plus-circle me-1"></i> Criar primeira solicitação
+          <i class="bi bi-plus-circle-fill me-1"></i> Criar primeira solicitação
         </a>
       </div>
     {% else %}
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <span class="text-muted" style="font-size:.82rem">{{ historico|length }} solicitação(s)</span>
+        <span class="text-muted" style="font-size:.82rem"><i class="bi bi-list-ul me-1"></i>{{ historico|length }} solicitação(s)</span>
       </div>
       {% for s in historico %}
         <a href="{{ path('solicitacao_detalhe', {id: s.id}) }}" class="hist-row">
           <span class="hist-id">#{{ s.id }}</span>
-          <span class="badge-status {{ s.status }}">{{ s.status|capitalize }}</span>
+          <span class="badge-status {{ s.status }}">{{ s.statusLabel }}</span>
           <span class="hist-tipo">{{ s.tipoLabel }}</span>
           {% if s.estado %}<span class="hist-uf">{{ s.estado }}</span>{% endif %}
           <span class="hist-data">{{ s.criadaEm|date('d/m/Y H:i') }}</span>
@@ -168,56 +189,78 @@
     <div class="gestao-counters">
       <a href="{{ path('solicitacao_hub', {aba: 'gestao'}) }}"
          class="gestao-counter gc-pendente{{ filtroStatus is null and filtroTipo is null ? ' ativo' : '' }}">
+        <span class="gc-num">{{ (contadores.pendente ?? 0) + (contadores.em_andamento ?? 0) }}</span>
+        <span class="gc-lbl"><i class="bi bi-hourglass-split me-1"></i>Em aberto</span>
+      </a>
+      <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'pendente'}) }}"
+         class="gestao-counter gc-pendente{{ filtroStatus == 'pendente' ? ' ativo' : '' }}">
         <span class="gc-num">{{ contadores.pendente ?? 0 }}</span>
-        <span class="gc-lbl">Pendentes</span>
+        <span class="gc-lbl"><i class="bi bi-inbox me-1"></i>Pendentes</span>
+      </a>
+      <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'em_andamento'}) }}"
+         class="gestao-counter gc-andamento{{ filtroStatus == 'em_andamento' ? ' ativo' : '' }}">
+        <span class="gc-num">{{ contadores.em_andamento ?? 0 }}</span>
+        <span class="gc-lbl"><i class="bi bi-arrow-repeat me-1"></i>Em andamento</span>
       </a>
       <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'resolvida'}) }}"
          class="gestao-counter gc-resolvida{{ filtroStatus == 'resolvida' ? ' ativo' : '' }}">
         <span class="gc-num">{{ contadores.resolvida ?? 0 }}</span>
-        <span class="gc-lbl">Resolvidas</span>
+        <span class="gc-lbl"><i class="bi bi-check2-circle me-1"></i>Resolvidas</span>
+      </a>
+      <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'negada'}) }}"
+         class="gestao-counter gc-negada{{ filtroStatus == 'negada' ? ' ativo' : '' }}">
+        <span class="gc-num">{{ contadores.negada ?? 0 }}</span>
+        <span class="gc-lbl"><i class="bi bi-x-circle me-1"></i>Negadas</span>
       </a>
       <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'cancelada'}) }}"
          class="gestao-counter gc-cancelada{{ filtroStatus == 'cancelada' ? ' ativo' : '' }}">
         <span class="gc-num">{{ contadores.cancelada ?? 0 }}</span>
-        <span class="gc-lbl">Canceladas</span>
+        <span class="gc-lbl"><i class="bi bi-slash-circle me-1"></i>Canceladas</span>
       </a>
     </div>
 
     <div class="gestao-tipo-filters">
       <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: filtroStatus}) }}"
          class="btn btn-sm {{ filtroTipo is null ? 'btn-secondary' : 'btn-outline-secondary' }}">
-        Todos
+        <i class="bi bi-grid me-1"></i>Todos
       </a>
-      {% set tipoLabels = {
-        'imagem_satelite':     'Satélite',
-        'gerente_area':        'Ger. Área',
-        'gerente_estado_pais': 'Ger. Estado',
-        'nivel':               'Nível',
-        'oops':                'Oops',
-        'bandeira_posto':      'Bandeira',
-        'id_segmento':         'ID Segmento'
+      {% set tipoIconFilters = {
+        'imagem_satelite':     {'icon': 'bi-image',           'label': 'Satélite'},
+        'gerente_area':        {'icon': 'bi-pin-map',         'label': 'Ger. Área'},
+        'gerente_estado_pais': {'icon': 'bi-flag',            'label': 'Ger. Estado'},
+        'nivel':               {'icon': 'bi-graph-up-arrow',  'label': 'Nível'},
+        'oops':                {'icon': 'bi-bug',             'label': 'Oops'},
+        'bandeira_posto':      {'icon': 'bi-fuel-pump',       'label': 'Bandeira'},
+        'id_segmento':         {'icon': 'bi-signpost-split',  'label': 'ID Seg.'}
       } %}
-      {% for val, lbl in tipoLabels %}
+      {% for val, info in tipoIconFilters %}
         <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: filtroStatus, tipo: val}) }}"
            class="btn btn-sm {{ filtroTipo == val ? 'btn-primary' : 'btn-outline-primary' }}">
-          {{ lbl }}
+          <i class="bi {{ info.icon }} me-1"></i>{{ info.label }}
         </a>
       {% endfor %}
     </div>
 
     {% if gestaoLista is empty %}
       <div class="sol-empty">
-        <i class="bi bi-check2-all sol-empty-icon"></i>
+        <i class="bi bi-funnel sol-empty-icon"></i>
         <p>Nenhuma solicitação encontrada com esses filtros.</p>
+        <a href="{{ path('solicitacao_hub', {aba: 'gestao'}) }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar filtros
+        </a>
       </div>
     {% else %}
-      <div class="mb-2">
-        <span class="text-muted" style="font-size:.82rem">{{ gestaoLista|length }} registro(s)</span>
+      <div class="mb-2 d-flex justify-content-between align-items-center">
+        <span class="text-muted" style="font-size:.82rem">
+          <i class="bi bi-list-ul me-1"></i>{{ gestaoLista|length }} registro(s)
+          {% if filtroStatus %} · filtro: <strong>{{ filtroStatus|replace({'_': ' '})|capitalize }}</strong>{% endif %}
+          {% if filtroTipo %} · tipo: <strong>{{ filtroTipo|replace({'_': ' '})|capitalize }}</strong>{% endif %}
+        </span>
       </div>
       {% for s in gestaoLista %}
         <div class="gestao-row">
           <span class="gr-id">#{{ s.id }}</span>
-          <span class="badge-status {{ s.status }}">{{ s.status|capitalize }}</span>
+          <span class="badge-status {{ s.status }}">{{ s.statusLabel }}</span>
           <span class="gr-tipo">{{ s.tipoLabel }}</span>
           <span class="gr-user">
             {{ s.solicitanteUsuario }}
@@ -229,17 +272,18 @@
           <div class="gr-actions">
             <a href="{{ path('solicitacao_detalhe', {id: s.id}) }}"
                class="btn btn-sm btn-outline-secondary" title="Ver detalhes">
-              <i class="bi bi-eye"></i>
+              <i class="bi bi-eye-fill"></i>
             </a>
-            {% if s.isPendente() %}
+            {% if s.isPendente() or s.status == 'em_andamento' %}
               <button type="button"
                       class="btn btn-sm btn-outline-success"
                       data-bs-toggle="modal"
                       data-bs-target="#modal-resolver"
                       data-id="{{ s.id }}"
                       data-label="{{ s.tipoLabel }} · {{ s.solicitanteUsuario }}"
-                      data-token="{{ csrf_token('resolver_' ~ s.id) }}">
-                <i class="bi bi-check-lg"></i> Resolver
+                      data-token="{{ csrf_token('resolver_' ~ s.id) }}"
+                      title="Resolver solicitação">
+                <i class="bi bi-check2-square"></i> Resolver
               </button>
             {% endif %}
           </div>
@@ -247,23 +291,50 @@
       {% endfor %}
     {% endif %}
 
-    {# Modal resolver #}
+    {# Modal resolver — com seleção de desfecho #}
     <div class="modal fade" id="modal-resolver" tabindex="-1" aria-labelledby="modal-resolver-label" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius:12px;border:1.5px solid var(--sol-border)">
           <div class="modal-header" style="border-bottom:1.5px solid var(--sol-border)">
-            <h5 class="modal-title fw-semibold" id="modal-resolver-label">Resolver solicitação</h5>
+            <h5 class="modal-title fw-semibold" id="modal-resolver-label">
+              <i class="bi bi-check2-square me-2 text-success"></i>Resolver solicitação
+            </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <form id="form-resolver" method="post" action="">
             <input type="hidden" name="_token" id="resolver-token" value="">
             <div class="modal-body">
-              <p class="text-muted" style="font-size:.85rem" id="resolver-label"></p>
+              <p class="text-muted mb-3" style="font-size:.85rem" id="resolver-label"></p>
+
+              <label class="sol-label fw-semibold mb-2">Desfecho</label>
+              <div class="d-flex gap-3 mb-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="desfecho" id="modal-des-resolvida" value="resolvida" checked>
+                  <label class="form-check-label text-success fw-semibold" for="modal-des-resolvida">
+                    <i class="bi bi-check-circle-fill me-1"></i>Resolvida
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="desfecho" id="modal-des-negada" value="negada">
+                  <label class="form-check-label text-danger fw-semibold" for="modal-des-negada">
+                    <i class="bi bi-x-circle-fill me-1"></i>Negada
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="desfecho" id="modal-des-cancelada" value="cancelada">
+                  <label class="form-check-label text-secondary fw-semibold" for="modal-des-cancelada">
+                    <i class="bi bi-slash-circle-fill me-1"></i>Cancelada
+                  </label>
+                </div>
+              </div>
+
               <label class="sol-label fw-semibold">Nota de resolução <span class="text-muted fw-normal">(opcional)</span></label>
-              <textarea name="nota" class="sol-input sol-textarea" rows="3" placeholder="Descreva como foi tratado…"></textarea>
+              <textarea name="nota" class="sol-input sol-textarea" rows="3" placeholder="Descreva como foi tratado, motivo da negativa…"></textarea>
             </div>
             <div class="modal-footer" style="border-top:1.5px solid var(--sol-border)">
-              <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                <i class="bi bi-x-lg me-1"></i>Cancelar
+              </button>
               <button type="submit" class="btn btn-success btn-sm px-4">
                 <i class="bi bi-check-lg me-1"></i>Confirmar
               </button>
@@ -275,7 +346,7 @@
 
   {% elseif abaAtual == 'gestao' and not isAdmin %}
     <div class="sol-empty">
-      <i class="bi bi-shield-lock sol-empty-icon"></i>
+      <i class="bi bi-shield-lock-fill sol-empty-icon"></i>
       <p>Acesso restrito a administradores.</p>
     </div>
   {% endif %}
@@ -286,7 +357,11 @@
 {% block javascripts %}
 <script>
 (function () {
-  /* ── Modal resolver ─────────────────────────────────────────── */
+  'use strict';
+
+  /* ══════════════════════════════════════════════════════════════
+     Modal resolver
+  ══════════════════════════════════════════════════════════════ */
   const modalEl = document.getElementById('modal-resolver');
   if (modalEl) {
     modalEl.addEventListener('show.bs.modal', function (e) {
@@ -295,10 +370,68 @@
       document.getElementById('resolver-token').value       = btn.dataset.token;
       document.getElementById('form-resolver').action       =
         '/solicitacoes/' + btn.dataset.id + '/resolver';
+      // reset radio para Resolvida
+      const r = modalEl.querySelector('#modal-des-resolvida');
+      if (r) r.checked = true;
+      // limpa textarea
+      const ta = modalEl.querySelector('textarea[name="nota"]');
+      if (ta) ta.value = '';
     });
   }
 
-  /* ── Permalink copy btn ──────────────────────────────────────── */
+  /* ══════════════════════════════════════════════════════════════
+     Preview de arquivos Oops
+  ══════════════════════════════════════════════════════════════ */
+  const oopsInput   = document.getElementById('input-oops-files');
+  const oopsPreview = document.getElementById('oops-file-preview');
+  const oopsError   = document.getElementById('oops-file-error');
+
+  if (oopsInput) {
+    oopsInput.addEventListener('change', function () {
+      oopsPreview.innerHTML = '';
+      oopsError.classList.add('d-none');
+      const files = Array.from(this.files);
+
+      // Validações
+      if (files.length > 5) {
+        oopsError.querySelector('span').textContent = 'Máximo de 5 imagens por envio.';
+        oopsError.classList.remove('d-none');
+        this.value = '';
+        return;
+      }
+      const grandes = files.filter(f => f.size > 1024 * 1024);
+      if (grandes.length > 0) {
+        oopsError.querySelector('span').textContent =
+          `${grandes.length} arquivo(s) superam 1 MB: ${grandes.map(f => f.name).join(', ')}`;
+        oopsError.classList.remove('d-none');
+        this.value = '';
+        return;
+      }
+
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const thumb = document.createElement('div');
+          thumb.style.cssText = 'position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1.5px solid var(--sol-border)';
+          const img = document.createElement('img');
+          img.src   = ev.target.result;
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+          img.alt   = file.name;
+          const lbl = document.createElement('span');
+          lbl.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:9px;padding:2px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+          lbl.textContent = file.name;
+          thumb.appendChild(img);
+          thumb.appendChild(lbl);
+          oopsPreview.appendChild(thumb);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     Permalink copy btn
+  ══════════════════════════════════════════════════════════════ */
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('.permalink-copy-btn');
     if (!btn) return;
@@ -306,13 +439,15 @@
     if (!input || !input.value) return;
     navigator.clipboard.writeText(input.value).then(() => {
       const icon = btn.querySelector('i');
-      icon.className = 'bi bi-clipboard-check';
+      icon.className = 'bi bi-clipboard-check-fill';
       btn.style.color = 'var(--tw)';
       setTimeout(() => { icon.className = 'bi bi-clipboard'; btn.style.color = ''; }, 1800);
     });
   });
 
-  /* ── Validação de permalink (zoom ≥15) ─────────────────────── */
+  /* ══════════════════════════════════════════════════════════════
+     Validação de permalink (zoom ≥ 15)
+  ══════════════════════════════════════════════════════════════ */
   const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com\/editor\//i;
   const ZOOM_RE = /[?&]zoom=(\d+)/i;
 
@@ -323,7 +458,7 @@
     const m = ZOOM_RE.exec(v);
     if (!m)            return { ok: false, msg: 'URL sem parâmetro zoom. Copie a URL completa do editor.' };
     const z = parseInt(m[1], 10);
-    if (z < 15)        return { ok: false, msg: `Zoom ${z} é insuficiente — mínimo exigido: 15.` };
+    if (z < 15)        return { ok: false, msg: `Zoom ${z} insuficiente — mínimo exigido: 15.` };
     return { ok: true, zoom: z };
   }
 
@@ -362,15 +497,56 @@
   }
   initPermalinks();
 
-  /* ── Formulário nova solicitação ───────────────────────────────── */
+  /* ══════════════════════════════════════════════════════════════
+     Validação dos dados pessoais (nome, usuario, email)
+  ══════════════════════════════════════════════════════════════ */
+  function validateField(input, rule) {
+    const val = input.value.trim();
+    let msg = null;
+    if (rule === 'required' && !val) {
+      msg = 'Este campo é obrigatório.';
+    } else if (rule === 'email' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      msg = 'Informe um e-mail válido.';
+    }
+    const hasError = msg !== null;
+    input.classList.toggle('is-invalid', hasError);
+    input.classList.toggle('is-valid',   !hasError && val.length > 0);
+
+    let fb = input.parentElement.querySelector('.client-feedback');
+    if (hasError) {
+      if (!fb) { fb = document.createElement('div'); fb.className = 'invalid-feedback client-feedback'; input.insertAdjacentElement('afterend', fb); }
+      fb.textContent = msg;
+    } else if (fb) { fb.remove(); }
+    return !hasError;
+  }
+
+  // Associa validação a cada campo de dados pessoais
+  const fieldRules = [
+    { selector: 'input[name="solicitacao[solicitanteNome]"]',    rule: 'required' },
+    { selector: 'input[name="solicitacao[solicitanteUsuario]"]', rule: 'required' },
+    { selector: 'input[name="solicitacao[solicitanteEmail]"]',   rule: 'email'    },
+  ];
+  fieldRules.forEach(({ selector, rule }) => {
+    const input = document.querySelector(selector);
+    if (!input) return;
+    input.addEventListener('blur',  () => validateField(input, rule));
+    input.addEventListener('input', () => {
+      if (input.classList.contains('is-invalid')) validateField(input, rule);
+    });
+  });
+
+  /* ══════════════════════════════════════════════════════════════
+     Formulário — tipo selector
+  ══════════════════════════════════════════════════════════════ */
   const tipoSelect = document.querySelector('[data-tipo-select]');
   if (!tipoSelect) return;
 
-  const estadoSel = document.querySelector('[data-estado-select]');
-  const pills     = document.querySelectorAll('.tipo-pill');
-  const dinamicos = document.getElementById('campos-dinamicos');
-  const spinner   = document.getElementById('campos-spinner');
-  const btnEnviar = document.getElementById('btn-enviar');
+  const estadoSel  = document.querySelector('[data-estado-select]');
+  const pills      = document.querySelectorAll('.tipo-pill');
+  const dinamicos  = document.getElementById('campos-dinamicos');
+  const spinner    = document.getElementById('campos-spinner');
+  const btnEnviar  = document.getElementById('btn-enviar');
+  const tipoErrMsg = document.getElementById('tipo-error-msg');
 
   pills.forEach(pill => {
     pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
@@ -383,6 +559,7 @@
     if (tipoSelect.value === valor) return;
     tipoSelect.value = valor;
     activatePill(valor);
+    if (tipoErrMsg) tipoErrMsg.classList.add('d-none');
     fetchCampos(valor);
   }
 
@@ -413,6 +590,9 @@
             el.style.animationDelay = (i * 0.055) + 's';
           });
           initPermalinks();
+          // reinit oops preview
+          const newOopsInput = document.getElementById('input-oops-files');
+          if (newOopsInput) newOopsInput.dispatchEvent(new Event('change'));
         }
       })
       .catch(err => console.error('ToolboxWaze fetchCampos erro:', err))
@@ -422,18 +602,49 @@
       });
   }
 
-  /* Bloqueia submit se permalink inválido */
+  /* ══════════════════════════════════════════════════════════════
+     Submit — validação completa + loading state
+  ══════════════════════════════════════════════════════════════ */
   document.getElementById('form-solicitacao')
     ?.addEventListener('submit', e => {
-      let ok = true;
+      let allOk = true;
+
+      // 1. Tipo selecionado?
+      if (!tipoSelect.value) {
+        if (tipoErrMsg) tipoErrMsg.classList.remove('d-none');
+        allOk = false;
+      }
+
+      // 2. Dados pessoais
+      fieldRules.forEach(({ selector, rule }) => {
+        const input = document.querySelector(selector);
+        if (input && !validateField(input, rule)) allOk = false;
+      });
+
+      // 3. Permalink
       e.target.querySelectorAll('[data-permalink]').forEach(input => {
         if (!input.value.trim()) return;
         const r = checkPermalink(input.value);
         applyPermalinkFeedback(input, r);
-        if (!r.ok && ok) { ok = false; input.focus(); }
+        if (!r.ok && allOk) { allOk = false; input.focus(); }
       });
-      if (!ok) e.preventDefault();
+
+      if (!allOk) {
+        e.preventDefault();
+        // Scroll para o primeiro erro
+        const firstErr = document.querySelector('.is-invalid, .sol-error:not(.d-none)');
+        if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      // Loading state
+      if (btnEnviar) {
+        document.getElementById('btn-enviar-text').classList.add('d-none');
+        document.getElementById('btn-enviar-loading').classList.remove('d-none');
+        btnEnviar.disabled = true;
+      }
     });
+
 })();
 </script>
 {% endblock %}

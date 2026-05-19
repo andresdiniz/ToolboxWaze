@@ -61,7 +61,7 @@ final class CreateAdminUserCommand extends Command
 
         // --- Coletar dados (opções CLI ou prompt interativo) ---
         $email = $input->getOption('email')
-            ?? $io->ask('E-mail do administrador', 'admin@toolboxwaze.com');
+            ?? $io->ask('E-mail do administrador', 'admin@wazetoolbox.com');
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $io->error("E-mail inválido: {$email}");

@@ -36,7 +36,6 @@ class PostoController extends AbstractController
         $bandeira  = trim((string) $request->query->get('bandeira', ''));
         $offset    = ($page - 1) * self::PER_PAGE;
 
-        // ── filtros ──────────────────────────────────────────────────────────
         $where  = ['1=1'];
         $params = [];
 
@@ -61,7 +60,6 @@ class PostoController extends AbstractController
 
         $whereClause = implode(' AND ', $where);
 
-        // ── total + páginas ────────────────────────────────────────────────────
         $total = (int) $this->db->fetchOne(
             "SELECT COUNT(*) FROM fuel_reseller_raw r WHERE $whereClause",
             $params
@@ -69,7 +67,6 @@ class PostoController extends AbstractController
         $pages = max(1, (int) ceil($total / self::PER_PAGE));
         $page  = min($page, $pages);
 
-        // ── linhas ────────────────────────────────────────────────────────────
         $rows = $this->db->fetchAllAssociative(
             "SELECT r.id, r.nome_fantasia, r.razao_social, r.cnpj,
                     r.uf, r.municipio, r.bandeira,
@@ -83,7 +80,6 @@ class PostoController extends AbstractController
             $params
         );
 
-        // ── stats (somente sem filtros, para não pesar toda vez) ──────────────
         $stats = null;
         if ($busca === '' && $uf === '' && $municipio === '' && $bandeira === '') {
             $stats = $this->db->fetchAssociative(
@@ -95,7 +91,6 @@ class PostoController extends AbstractController
             ) ?: null;
         }
 
-        // ── listas para os selects ────────────────────────────────────────────
         $ufs = array_column(
             $this->db->fetchAllAssociative(
                 "SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL ORDER BY uf"
@@ -111,15 +106,15 @@ class PostoController extends AbstractController
         );
 
         return $this->render('posto/index.html.twig', [
-            'rows'     => $rows,
-            'page'     => $page,
-            'pages'    => $pages,
-            'total'    => $total,
-            'perPage'  => self::PER_PAGE,
-            'stats'    => $stats,
-            'ufs'      => $ufs,
-            'bandeiras'=> $bandeiras,
-            'filters'  => [
+            'rows'      => $rows,
+            'page'      => $page,
+            'pages'     => $pages,
+            'total'     => $total,
+            'perPage'   => self::PER_PAGE,
+            'stats'     => $stats,
+            'ufs'       => $ufs,
+            'bandeiras' => $bandeiras,
+            'filters'   => [
                 'busca'     => $busca,
                 'uf'        => $uf,
                 'municipio' => $municipio,
@@ -132,64 +127,66 @@ class PostoController extends AbstractController
     public function show(int $id): Response
     {
         $posto = $this->postoRepo->find($id)
-            ?? throw $this->createNotFoundException("Posto #$id não encontrado.");
+            ?? throw $this->createNotFoundException("Posto #$id n\u00e3o encontrado.");
 
-        $link = $this->linkRepo->findOneBy(['posto' => $posto]);
+        $wazeLink = $this->linkRepo->findOneBy(['posto' => $posto]);
+
+        // Histórico de alterações
+        $wazeLog = $wazeLink ? $wazeLink->getLogs()->toArray() : [];
 
         return $this->render('posto/show.html.twig', [
-            'posto' => $posto,
-            'link'  => $link,
+            'posto'        => $posto,
+            'wazeLink'     => $wazeLink,
+            'wazeLog'      => $wazeLog,
+            'wazeErrors'   => [],
+            'wazeFormData' => [],
         ]);
     }
 
     #[Route('/{id}/waze-save', name: 'posto_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
-        if (!$this->isCsrfTokenValid('waze_posto_' . $id, $request->request->get('_token'))) {
-            throw new AccessDeniedException('Token CSRF inválido.');
+        // Valida o token CSRF usando a chave correta do template
+        if (!$this->isCsrfTokenValid('posto_waze_save_' . $id, $request->request->get('_token'))) {
+            throw new AccessDeniedException('Token CSRF inv\u00e1lido.');
         }
 
         $posto = $this->postoRepo->find($id)
-            ?? throw $this->createNotFoundException("Posto #$id não encontrado.");
+            ?? throw $this->createNotFoundException("Posto #$id n\u00e3o encontrado.");
 
-        $wazeLink   = trim((string) $request->request->get('waze_link', ''));
+        $wazeUrl    = trim((string) $request->request->get('waze_link', ''));
         $observacao = trim((string) $request->request->get('observacao', '')) ?: null;
         $user       = $this->getUser();
-        $now        = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $now        = new \DateTimeImmutable();
 
-        $venueId = PostoWazeLink::extractVenueId($wazeLink);
+        $venueId = PostoWazeLink::extractVenueId($wazeUrl);
 
         if ($venueId === null) {
-            $this->addFlash('danger', 'O link deve conter o parâmetro venues com valor numérico (ex: &venues=207160888).');
+            $this->addFlash('danger', 'O link deve conter o par\u00e2metro venues com valor num\u00e9rico (ex: &venues=207160888).');
             return $this->redirectToRoute('posto_show', [
                 'id'        => $id,
                 '_fragment' => 'waze-form-collapse',
             ]);
         }
 
-        $existing = $this->db->fetchAssociative(
-            'SELECT id, waze_link FROM posto_waze_link WHERE posto_id = ?',
-            [$id]
-        );
+        $existing = $this->linkRepo->findOneBy(['posto' => $posto]);
 
-        if ($existing === false) {
-            $this->db->executeStatement(
-                'INSERT INTO posto_waze_link (posto_id, waze_link, venue_id, observacao, inserted_by, inserted_at)
-                 VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $wazeLink, $venueId, $observacao, $user->getId(), $now]
-            );
+        if ($existing === null) {
+            $link = new PostoWazeLink();
+            $link->setPosto($posto);
+            $link->setWazeLink($wazeUrl);
+            $link->setInsertedBy($user);
+            $link->setInsertedAt($now);
+            $link->setObservacao($observacao);
+            $this->linkRepo->getEntityManager()->persist($link);
         } else {
-            $this->db->executeStatement(
-                'INSERT INTO posto_waze_link_log (posto_waze_link_id, waze_link_anterior, changed_by, changed_at)
-                 VALUES (?, ?, ?, ?)',
-                [$existing['id'], $existing['waze_link'], $user->getId(), $now]
-            );
-            $this->db->executeStatement(
-                'UPDATE posto_waze_link SET waze_link = ?, venue_id = ?, observacao = ?, updated_by = ?, updated_at = ?
-                 WHERE posto_id = ?',
-                [$wazeLink, $venueId, $observacao, $user->getId(), $now, $id]
-            );
+            $existing->setWazeLink($wazeUrl);
+            $existing->setUpdatedBy($user);
+            $existing->setUpdatedAt($now);
+            $existing->setObservacao($observacao);
         }
+
+        $this->linkRepo->getEntityManager()->flush();
 
         $this->addFlash('success', 'Link Waze salvo com sucesso.');
 
@@ -203,13 +200,18 @@ class PostoController extends AbstractController
     public function wazeDelete(int $id, Request $request): Response
     {
         if (!$this->isCsrfTokenValid('waze_posto_delete_' . $id, $request->request->get('_token'))) {
-            throw new AccessDeniedException('Token CSRF inválido.');
+            throw new AccessDeniedException('Token CSRF inv\u00e1lido.');
         }
 
-        $this->db->executeStatement(
-            'DELETE FROM posto_waze_link WHERE posto_id = ?',
-            [$id]
-        );
+        $posto = $this->postoRepo->find($id)
+            ?? throw $this->createNotFoundException("Posto #$id n\u00e3o encontrado.");
+
+        $link = $this->linkRepo->findOneBy(['posto' => $posto]);
+
+        if ($link !== null) {
+            $this->linkRepo->getEntityManager()->remove($link);
+            $this->linkRepo->getEntityManager()->flush();
+        }
 
         $this->addFlash('success', 'Link Waze removido.');
 

@@ -73,7 +73,6 @@
       {{ form_widget(form.estado, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-estado-select': '1'}}) }}
       {{ form_errors(form.tipo) }}
       <div class="tipo-grid mt-3" id="tipo-pills">
-        {# Ícones revisados para representar cada tipo com mais precisão #}
         {% set iconMap = {
           'imagem_satelite':     {'icon': 'bi-image-fill',            'label': 'Imagem de Satélite'},
           'gerente_area':        {'icon': 'bi-pin-map-fill',          'label': 'Gerente de Área'},
@@ -111,7 +110,7 @@
             {% if field.vars.name == 'dados_permalink' %}
               <label class="sol-label" for="{{ field.vars.id }}">{{ field.vars.label }}</label>
               <div class="permalink-wrapper">
-                {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://www.waze.com/editor/?zoom=15&lat=-23&lon=-46'}}) }}
+                {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&zoom=15&lat=-23&lon=-46'}}) }}
                 <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
                   <i class="bi bi-clipboard"></i>
                 </button>
@@ -370,10 +369,8 @@
       document.getElementById('resolver-token').value       = btn.dataset.token;
       document.getElementById('form-resolver').action       =
         '/solicitacoes/' + btn.dataset.id + '/resolver';
-      // reset radio para Resolvida
       const r = modalEl.querySelector('#modal-des-resolvida');
       if (r) r.checked = true;
-      // limpa textarea
       const ta = modalEl.querySelector('textarea[name="nota"]');
       if (ta) ta.value = '';
     });
@@ -392,7 +389,6 @@
       oopsError.classList.add('d-none');
       const files = Array.from(this.files);
 
-      // Validações
       if (files.length > 5) {
         oopsError.querySelector('span').textContent = 'Máximo de 5 imagens por envio.';
         oopsError.classList.remove('d-none');
@@ -447,18 +443,29 @@
 
   /* ══════════════════════════════════════════════════════════════
      Validação de permalink (zoom ≥ 15)
+
+     Formatos aceitos:
+       https://waze.com/editor?zoom=15&...
+       https://www.waze.com/editor/?zoom=15&...
+       https://waze.com/pt-BR/editor?env=row&zoomLevel=16&...
+       https://beta.waze.com/en-US/editor?zoom=17&...
   ══════════════════════════════════════════════════════════════ */
-  const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com\/editor\//i;
-  const ZOOM_RE = /[?&]zoom=(\d+)/i;
+
+  // Aceita: waze.com[/locale]/editor[/][?...]
+  // Subdomínios: www, beta (e sem subdomínio)
+  const WAZE_RE = /^https?:\/\/(?:(?:www|beta)\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor(?:\/|\?|$)/i;
+
+  // Aceita tanto zoom= quanto zoomLevel= (Waze usa os dois dependendo da versão)
+  const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
 
   function checkPermalink(val) {
     const v = val.trim();
     if (!v) return { ok: true };
     if (!WAZE_RE.test(v)) return { ok: false, msg: 'A URL deve ser do editor Waze (waze.com/editor).' };
     const m = ZOOM_RE.exec(v);
-    if (!m)            return { ok: false, msg: 'URL sem parâmetro zoom. Copie a URL completa do editor.' };
+    if (!m)       return { ok: false, msg: 'URL sem parâmetro zoom. Copie a URL completa do editor.' };
     const z = parseInt(m[1], 10);
-    if (z < 15)        return { ok: false, msg: `Zoom ${z} insuficiente — mínimo exigido: 15.` };
+    if (z < 15)   return { ok: false, msg: `Zoom ${z} insuficiente — mínimo exigido: 15.` };
     return { ok: true, zoom: z };
   }
 
@@ -520,7 +527,6 @@
     return !hasError;
   }
 
-  // Associa validação a cada campo de dados pessoais
   const fieldRules = [
     { selector: 'input[name="solicitacao[solicitanteNome]"]',    rule: 'required' },
     { selector: 'input[name="solicitacao[solicitanteUsuario]"]', rule: 'required' },
@@ -590,7 +596,6 @@
             el.style.animationDelay = (i * 0.055) + 's';
           });
           initPermalinks();
-          // reinit oops preview
           const newOopsInput = document.getElementById('input-oops-files');
           if (newOopsInput) newOopsInput.dispatchEvent(new Event('change'));
         }
@@ -609,19 +614,16 @@
     ?.addEventListener('submit', e => {
       let allOk = true;
 
-      // 1. Tipo selecionado?
       if (!tipoSelect.value) {
         if (tipoErrMsg) tipoErrMsg.classList.remove('d-none');
         allOk = false;
       }
 
-      // 2. Dados pessoais
       fieldRules.forEach(({ selector, rule }) => {
         const input = document.querySelector(selector);
         if (input && !validateField(input, rule)) allOk = false;
       });
 
-      // 3. Permalink
       e.target.querySelectorAll('[data-permalink]').forEach(input => {
         if (!input.value.trim()) return;
         const r = checkPermalink(input.value);
@@ -631,13 +633,11 @@
 
       if (!allOk) {
         e.preventDefault();
-        // Scroll para o primeiro erro
         const firstErr = document.querySelector('.is-invalid, .sol-error:not(.d-none)');
         if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
-      // Loading state
       if (btnEnviar) {
         document.getElementById('btn-enviar-text').classList.add('d-none');
         document.getElementById('btn-enviar-loading').classList.remove('d-none');

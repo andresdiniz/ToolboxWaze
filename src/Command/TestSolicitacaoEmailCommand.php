@@ -36,7 +36,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
  *   # Testa e-mail de comentário como se fosse de um responsável (com autorId)
  *   php bin/console app:test-solicitacao-email comentario 1 --autor=2
  *
- *   # Testa todos os tipos de uma vez (exceto responsavel e comentario que precisam de IDs extras)
+ *   # Testa todos os tipos de uma vez
  *   php bin/console app:test-solicitacao-email all 1
  *
  * OBSERVAÇÃO: o worker do Messenger precisa estar rodando para processar:
@@ -93,7 +93,7 @@ final class TestSolicitacaoEmailCommand extends Command
                 'autor',
                 null,
                 InputOption::VALUE_REQUIRED,
-                'ID do usuário autor do comentário (necessário para tipo=comentario com autor logado)',
+                'ID do usuário autor do comentário (para tipo=comentario com autor logado)',
             )
             ->setHelp(<<<'HELP'
 Testa cada tipo de e-mail de solicitação despachando via Messenger.
@@ -124,7 +124,7 @@ Exemplos:
   # Comentário do responsável → avisa solicitante e demais responsáveis
   php bin/console app:test-solicitacao-email comentario 1 --autor=2
 
-  # Dispara confirmacao + resolucao + status_alterado de uma só vez
+  # Dispara todos os tipos de uma só vez
   php bin/console app:test-solicitacao-email all 1
 HELP)
         ;
@@ -136,7 +136,6 @@ HELP)
         $tipo = $input->getArgument('tipo');
         $sid  = $input->getArgument('solicitacao_id');
 
-        // Sem argumentos → modo informativo
         if (!$tipo) {
             return $this->showHelp($io);
         }
@@ -176,10 +175,9 @@ HELP)
             return Command::FAILURE;
         }
 
-        $responsavelId = $input->getOption('responsavel') ? (int) $input->getOption('responsavel') : null;
-        $autorId       = $input->getOption('autor')       ? (int) $input->getOption('autor')       : null;
+        $responsavelId = $input->getOption('responsavel') !== null ? (int) $input->getOption('responsavel') : null;
+        $autorId       = $input->getOption('autor')       !== null ? (int) $input->getOption('autor')       : null;
 
-        // Validações específicas
         if ($tipo === 'responsavel') {
             if (!$responsavelId) {
                 $io->error('Para tipo=responsavel informe --responsavel=<user_id>');
@@ -193,31 +191,31 @@ HELP)
             }
         }
 
-        // Monta a mensagem
-        $destinatarioId = match ($tipo) {
-            'responsavel' => $responsavelId,
-            'comentario'  => $autorId,  // null = solicitante externo, int = responsável logado
-            default       => null,
-        };
+        // Monta destinatarioId conforme tipo
+        if ($tipo === 'responsavel') {
+            $destinatarioId = $responsavelId;
+        } elseif ($tipo === 'comentario') {
+            $destinatarioId = $autorId; // null = solicitante externo, int = responsável logado
+        } else {
+            $destinatarioId = null;
+        }
 
-        $mensagem = new EnviarEmailSolicitacao($tipo, $solicitacao->getId(), $destinatarioId);
-        $this->bus->dispatch($mensagem);
+        $this->bus->dispatch(new EnviarEmailSolicitacao($tipo, $solicitacao->getId(), $destinatarioId));
 
-        $destLabel = match ($tipo) {
-            'confirmacao', 'resolucao', 'status_alterado'
-                => $solicitacao->getSolicitanteEmail(),
-            'responsavel'
-                => $this->userRepo->find($responsavelId)?->getEmail() ?? "user #$responsavelId",
-            'comentario' when $destinatarioId !== null
-                => sprintf('solicitante + responsáveis (exceto autor #%d)', $destinatarioId),
-            'comentario'
-                => 'responsáveis (comentário do solicitante)',
-            default => '?',
-        };
+        // Monta label do destinatário para exibição
+        if ($tipo === 'confirmacao' || $tipo === 'resolucao' || $tipo === 'status_alterado') {
+            $destLabel = $solicitacao->getSolicitanteEmail();
+        } elseif ($tipo === 'responsavel') {
+            $resp = $this->userRepo->find($responsavelId);
+            $destLabel = $resp ? $resp->getEmail() : "user #$responsavelId";
+        } elseif ($tipo === 'comentario' && $destinatarioId !== null) {
+            $destLabel = sprintf('solicitante + responsáveis (exceto autor #%d)', $destinatarioId);
+        } else {
+            $destLabel = 'responsáveis (comentário do solicitante)';
+        }
 
         $io->success(sprintf(
-            "Mensagem '%s' despachada via Messenger para: %s\n" .
-            "Execute 'php bin/console messenger:consume async -vv' para processar.",
+            "Mensagem '%s' despachada via Messenger para: %s\nExecute 'php bin/console messenger:consume async -vv' para processar.",
             $tipo,
             $destLabel
         ));
@@ -226,7 +224,7 @@ HELP)
     }
 
     // ---------------------------------------------------------------
-    // Dispatch de todos os tipos simples de uma só vez
+    // Dispatch de todos os tipos de uma só vez
     // ---------------------------------------------------------------
 
     private function dispatchAll(
@@ -234,10 +232,10 @@ HELP)
         Solicitacao $solicitacao,
         InputInterface $input
     ): int {
-        $io->section('Despachando todos os tipos simples');
+        $io->section('Despachando todos os tipos');
 
-        $responsavelId = $input->getOption('responsavel') ? (int) $input->getOption('responsavel') : null;
-        $autorId       = $input->getOption('autor')       ? (int) $input->getOption('autor')       : null;
+        $responsavelId = $input->getOption('responsavel') !== null ? (int) $input->getOption('responsavel') : null;
+        $autorId       = $input->getOption('autor')       !== null ? (int) $input->getOption('autor')       : null;
 
         $tipos = self::TIPOS_SIMPLES;
 
@@ -247,20 +245,18 @@ HELP)
             $io->note('Pulando tipo=responsavel (use --responsavel=<id> para incluir)');
         }
 
-        if ($responsavelId || $autorId) {
-            $tipos[] = 'comentario';
-        } else {
-            // Dispara comentario sem autor (simula solicitante externo)
-            $tipos[] = 'comentario';
-        }
+        $tipos[] = 'comentario'; // dispara sempre (sem autor = simula solicitante externo)
 
         $rows = [];
         foreach ($tipos as $t) {
-            $destId = match ($t) {
-                'responsavel' => $responsavelId,
-                'comentario'  => $autorId,
-                default       => null,
-            };
+            if ($t === 'responsavel') {
+                $destId = $responsavelId;
+            } elseif ($t === 'comentario') {
+                $destId = $autorId;
+            } else {
+                $destId = null;
+            }
+
             try {
                 $this->bus->dispatch(new EnviarEmailSolicitacao($t, $solicitacao->getId(), $destId));
                 $rows[] = [$t, '✅ despachado'];
@@ -270,7 +266,7 @@ HELP)
         }
 
         $io->table(['Tipo', 'Resultado'], $rows);
-        $io->note("Execute: php bin/console messenger:consume async -vv");
+        $io->note('Execute: php bin/console messenger:consume async -vv');
 
         return Command::SUCCESS;
     }
@@ -331,14 +327,14 @@ HELP)
     {
         $io->title('app:test-solicitacao-email — Tipos disponíveis');
         $io->definitionList(
-            ['confirmacao'    => 'E-mail para o solicitante ao criar a solicitação'],
-            ['responsavel'    => 'Aviso ao responsável de nova pendência (use --responsavel=<id>)'],
-            ['resolucao'      => 'E-mail final ao solicitante (resolvida/negada/cancelada)'],
-            ['status_alterado'=> 'Atualização de status intermediário ao solicitante'],
-            ['comentario'     => 'Comentário público (sem --autor = solicitante; com --autor = responsável)'],
-            ['all'            => 'Despacha todos os tipos simples de uma vez'],
+            ['confirmacao'     => 'E-mail para o solicitante ao criar a solicitação'],
+            ['responsavel'     => 'Aviso ao responsável de nova pendência (use --responsavel=<id>)'],
+            ['resolucao'       => 'E-mail final ao solicitante (resolvida/negada/cancelada)'],
+            ['status_alterado' => 'Atualização de status intermediário ao solicitante'],
+            ['comentario'      => 'Comentário público (sem --autor = solicitante; com --autor = responsável)'],
+            ['all'             => 'Despacha todos os tipos de uma vez'],
         );
-        $io->note('Informe o tipo e o ID da solicitação: php bin/console app:test-solicitacao-email <tipo> <id>');
+        $io->note('Informe o tipo e o ID: php bin/console app:test-solicitacao-email <tipo> <id>');
         return $this->showRecentSolicitacoes($io);
     }
 }

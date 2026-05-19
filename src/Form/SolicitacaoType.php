@@ -37,6 +37,8 @@ class SolicitacaoType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
+        $isChamp = $options['is_champ'];
+
         $builder
             ->add('tipo', ChoiceType::class, [
                 'label'       => 'Tipo de solicitação',
@@ -64,29 +66,44 @@ class SolicitacaoType extends AbstractType
                 'required'    => false,
             ]);
 
-        $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) {
+        $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) use ($isChamp) {
             $solicitacao = $event->getData();
             $tipo = null;
             if ($solicitacao instanceof Solicitacao) {
                 try { $tipo = $solicitacao->getTipo(); } catch (\Error) { $tipo = null; }
             }
-            $this->addDadosDinamicos($event->getForm(), $tipo);
+            $this->addDadosDinamicos($event->getForm(), $tipo, null, null, $isChamp);
         });
 
-        $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) {
-            $tipo  = $event->getData()['tipo']        ?? null;
-            $cargo = $event->getData()['dados_cargo'] ?? null;
-            $this->addDadosDinamicos($event->getForm(), $tipo, $cargo);
+        $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($isChamp) {
+            $tipo      = $event->getData()['tipo']           ?? null;
+            $cargo     = $event->getData()['dados_cargo']    ?? null;
+            $tipoNivel = $event->getData()['dados_tipoNivel'] ?? null;
+            $this->addDadosDinamicos($event->getForm(), $tipo, $cargo, $tipoNivel, $isChamp);
         });
     }
 
-    private function addDadosDinamicos(\Symfony\Component\Form\FormInterface $form, ?string $tipo, ?string $cargo = null): void
+    public function configureOptions(OptionsResolver $resolver): void
     {
+        $resolver->setDefaults([
+            'data_class' => Solicitacao::class,
+            'is_champ'   => false,
+        ]);
+        $resolver->setAllowedTypes('is_champ', 'bool');
+    }
+
+    private function addDadosDinamicos(
+        \Symfony\Component\Form\FormInterface $form,
+        ?string $tipo,
+        ?string $cargo = null,
+        ?string $tipoNivel = null,
+        bool $isChamp = false
+    ): void {
         match ($tipo) {
             Solicitacao::TIPO_IMAGEM_SATELITE     => $this->addCamposImagemSatelite($form),
             Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form),
             Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $cargo),
-            Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form),
+            Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp),
             Solicitacao::TIPO_OOPS                => $this->addCamposOops($form),
             Solicitacao::TIPO_BANDEIRA_POSTO      => $this->addCamposBandeiraPosto($form),
             Solicitacao::TIPO_ID_SEGMENTO         => $this->addCamposIdSegmento($form),
@@ -257,17 +274,39 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // NÍVEL (UPGRADE / DOWNGRADE)
+    // Downgrade: campos referem-se ao editor-alvo; restrito a ROLE_CHAMP
     // -------------------------------------------------------------------------
-    private function addCamposNivel(\Symfony\Component\Form\FormInterface $form): void
+    private function addCamposNivel(
+        \Symfony\Component\Form\FormInterface $form,
+        ?string $tipoNivel = null,
+        bool $isChamp = false
+    ): void {
+        $form->add('dados_tipoNivel', ChoiceType::class, [
+            'label'    => 'É um pedido de…',
+            'mapped'   => false,
+            'choices'  => $isChamp
+                ? ['Upgrade' => 'upgrade', 'Downgrade' => 'downgrade']
+                : ['Upgrade' => 'upgrade'],
+            'expanded' => true,
+            'attr'     => ['data-tipo-nivel' => '1'],
+            'constraints' => [new Assert\NotBlank()],
+        ]);
+
+        // Se o tipo já foi escolhido como downgrade, renderiza o sub-formulário correto
+        if ($tipoNivel === 'downgrade') {
+            $this->addCamposDowngrade($form);
+        } else {
+            // Upgrade (default)
+            $this->addCamposUpgrade($form);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // UPGRADE — campos originais referem-se ao próprio solicitante
+    // -------------------------------------------------------------------------
+    private function addCamposUpgrade(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados_tipoNivel', ChoiceType::class, [
-                'label'    => 'É um pedido de…',
-                'mapped'   => false,
-                'choices'  => ['Upgrade' => 'upgrade', 'Downgrade' => 'downgrade'],
-                'expanded' => true,
-                'constraints' => [new Assert\NotBlank()],
-            ])
             ->add('dados_mentor', TextType::class, [
                 'label'       => 'Mentor',
                 'mapped'      => false,
@@ -317,7 +356,6 @@ class SolicitacaoType extends AbstractType
                     'Mais de 50 postagens'    => '50_mais',
                     'Nenhuma.'                => 'nenhuma',
                 ],
-                // O JS substitui SEU_NICK pelo nick digitado no campo solicitanteUsuario
                 'help'      => 'Você pode achar essa resposta aqui: '
                              . '<a href="https://www.waze.com/discuss/u/SEU_NICK/summary" '
                              . 'target="_blank" rel="noopener" data-discuss-link>'
@@ -366,6 +404,109 @@ class SolicitacaoType extends AbstractType
     }
 
     // -------------------------------------------------------------------------
+    // DOWNGRADE — campos referem-se ao editor-alvo; solicitante é o Champ
+    // -------------------------------------------------------------------------
+    private function addCamposDowngrade(\Symfony\Component\Form\FormInterface $form): void
+    {
+        $form
+            ->add('dados_champNome', TextType::class, [
+                'label'       => 'Seu nome de usuário (Champ solicitante)',
+                'mapped'      => false,
+                'attr'        => ['placeholder' => 'Seu nick no WME/Discuss'],
+                'help'        => 'Informe o seu próprio nick. Apenas Champs podem solicitar downgrade.',
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Informe seu nome de usuário como Champ solicitante.'),
+                    new Assert\Length(['max' => 255]),
+                ],
+            ])
+            ->add('dados_editorNome', TextType::class, [
+                'label'       => 'Nome de usuário do editor (alvo do downgrade)',
+                'mapped'      => false,
+                'attr'        => ['placeholder' => 'Nick do editor no WME/Discuss'],
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Informe o nome de usuário do editor a ser rebaixado.'),
+                    new Assert\Length(['max' => 255]),
+                ],
+            ])
+            ->add('dados_nivelAtual', TextType::class, [
+                'label'  => 'Nível atual do editor',
+                'mapped' => false,
+                'attr'   => ['placeholder' => 'Nível atual do editor (2 a 6)'],
+                'help'   => 'Nível atual do editor que receberá o downgrade.',
+                'constraints' => [
+                    new Assert\NotBlank(),
+                    new Assert\Range([
+                        'min'        => 2,
+                        'max'        => 6,
+                        'notInRangeMessage' => 'O nível atual deve estar entre 2 e 6.',
+                    ]),
+                ],
+            ])
+            ->add('dados_nivelDesejado', TextType::class, [
+                'label'  => 'Nível para o qual será rebaixado',
+                'mapped' => false,
+                'attr'   => ['placeholder' => 'Nível alvo (1 a 5)'],
+                'help'   => 'O nível resultante após o downgrade.',
+                'constraints' => [
+                    new Assert\NotBlank(),
+                    new Assert\Range([
+                        'min'        => 1,
+                        'max'        => 5,
+                        'notInRangeMessage' => 'O nível alvo deve estar entre 1 e 5.',
+                    ]),
+                ],
+            ])
+            ->add('dados_motivoDowngrade', ChoiceType::class, [
+                'label'  => 'Motivo do downgrade',
+                'mapped' => false,
+                'choices' => [
+                    'Inatividade prolongada'                   => 'inatividade',
+                    'Edições destrutivas recorrentes'          => 'edicoes_destrutivas',
+                    'Desrespeito às normas da comunidade'      => 'normas',
+                    'Solicitação do próprio editor'            => 'pedido_proprio',
+                    'Outro'                                    => 'outro',
+                ],
+                'placeholder' => 'Escolher',
+                'constraints' => [new Assert\NotBlank(message: 'Selecione o motivo do downgrade.')],
+            ])
+            ->add('dados_justificativa', TextareaType::class, [
+                'label'  => 'Justificativa detalhada',
+                'mapped' => false,
+                'attr'   => [
+                    'rows'              => 4,
+                    'minlength'         => 30,
+                    'maxlength'         => 2000,
+                    'placeholder'       => 'Descreva detalhadamente o motivo do downgrade (mínimo 30 caracteres)',
+                    'data-char-counter' => 'true',
+                    'data-char-min'     => '30',
+                ],
+                'help' => 'Apresente evidências ou descrição clara da situação que justifica o rebaixamento.',
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Preencha a justificativa.'),
+                    new Assert\Length([
+                        'min'        => 30,
+                        'minMessage' => 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
+                        'max'        => 2000,
+                        'maxMessage' => 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
+                    ]),
+                ],
+            ])
+            ->add('dados_recomendadores', TextType::class, [
+                'label'    => 'Champs ou editores que corroboram',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => ['placeholder' => 'Nicks separados por vírgula (opcional)'],
+                'help'     => 'Outros Champs ou editores de referência que concordam com a solicitação.',
+            ])
+            ->add('dados_comentarios', TextareaType::class, [
+                'label'    => 'Comentários adicionais',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => ['rows' => 3],
+            ]);
+    }
+
+    // -------------------------------------------------------------------------
     // OOPS DE EDITOR
     // Upload de provas é tratado pelo input nativo no template (arquivos_oops[])
     // -------------------------------------------------------------------------
@@ -373,42 +514,39 @@ class SolicitacaoType extends AbstractType
     {
         $form
             ->add('dados_editorNome', TextType::class, [
-                'label'       => 'Qual o nome do editor que cometeu o Oops?',
+                'label'       => 'Nome de usuário do editor',
                 'mapped'      => false,
-                'help'        => 'Digite o nome do usuário.',
-                'constraints' => [new Assert\NotBlank()],
+                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
             ])
             ->add('dados_permalink', TextType::class, [
-                'label'    => 'Compartilhe permalink',
-                'mapped'   => false,
-                'required' => false,
-                'attr'     => [
+                'label'  => 'Permalink (zoom ≥15)',
+                'mapped' => false,
+                'attr'   => [
                     'placeholder'    => 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15',
                     'data-permalink' => '1',
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'        => 'Acesse o Editor de Mapas (WME) e copie o Permalink.',
-                'constraints' => $this->permalinkConstraints(required: false),
+                'help'        => 'Abra o WME, navegue até a área afetada com zoom ≥15 e copie a URL.',
+                'constraints' => $this->permalinkConstraints(required: true),
             ])
             ->add('dados_descricao', TextareaType::class, [
-                'label'  => 'Fundamente as regras infringidas e descreva os fatos',
+                'label'  => 'Descrição do problema',
                 'mapped' => false,
                 'attr'   => [
-                    'rows'              => 5,
-                    'minlength'         => 30,
-                    'maxlength'         => 5000,
-                    'placeholder'       => 'Descreva detalhadamente os fatos e as regras infringidas (mínimo 30 caracteres)',
+                    'rows'              => 4,
+                    'minlength'         => 20,
+                    'maxlength'         => 2000,
+                    'placeholder'       => 'Descreva o problema detectado (mínimo 20 caracteres)',
                     'data-char-counter' => 'true',
-                    'data-char-min'     => '30',
+                    'data-char-min'     => '20',
                 ],
-                'help' => 'Inclua todas as informações e detalhes relevantes para facilitar a análise.',
                 'constraints' => [
-                    new Assert\NotBlank(message: 'Preencha a descrição.'),
+                    new Assert\NotBlank(message: 'Descreva o problema.'),
                     new Assert\Length([
-                        'min'        => 30,
+                        'min'        => 20,
                         'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 5000,
+                        'max'        => 2000,
                         'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
                     ]),
                 ],
@@ -416,61 +554,63 @@ class SolicitacaoType extends AbstractType
     }
 
     // -------------------------------------------------------------------------
-    // BANDEIRA DE POSTO DE GASOLINA
+    // BANDEIRA DE POSTO
     // -------------------------------------------------------------------------
     private function addCamposBandeiraPosto(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados_acao', ChoiceType::class, [
-                'label'    => 'Você deseja…',
-                'mapped'   => false,
-                'choices'  => ['Adicionar' => 'adicionar', 'Remover' => 'remover'],
-                'expanded' => true,
-                'constraints' => [new Assert\NotBlank()],
-            ])
-            ->add('dados_nomeBandeira', TextType::class, [
-                'label'       => 'Nome da bandeira',
+            ->add('dados_nomePosto', TextType::class, [
+                'label'       => 'Nome do posto',
                 'mapped'      => false,
-                'constraints' => [new Assert\NotBlank()],
+                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
             ])
-            ->add('dados_cnpj', TextType::class, [
-                'label'    => 'CNPJ de um posto ativo com cadastro atualizado',
+            ->add('dados_bandeira', TextType::class, [
+                'label'    => 'Bandeira',
                 'mapped'   => false,
                 'required' => false,
-                'constraints' => [
-                    new Assert\Regex(['pattern' => '/^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/', 'message' => 'CNPJ inválido']),
+                'attr'     => ['placeholder' => 'Ex: Petrobras, Shell, Ipiranga…'],
+            ])
+            ->add('dados_permalink', TextType::class, [
+                'label'  => 'Permalink (zoom ≥15)',
+                'mapped' => false,
+                'attr'   => [
+                    'placeholder'    => 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15',
+                    'data-permalink' => '1',
+                    'autocomplete'   => 'off',
+                    'spellcheck'     => 'false',
                 ],
+                'constraints' => $this->permalinkConstraints(required: true),
+            ])
+            ->add('dados_comentarios', TextareaType::class, [
+                'label'    => 'Comentários',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => ['rows' => 3],
             ]);
     }
 
     // -------------------------------------------------------------------------
-    // CADASTRO DE ID DE SEGMENTO
+    // ID DE SEGMENTO
     // -------------------------------------------------------------------------
     private function addCamposIdSegmento(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados_nomeSegmento', TextType::class, [
-                'label'       => 'Nome do segmento (conforme WME)',
-                'mapped'      => false,
-                'constraints' => [new Assert\NotBlank()],
-            ])
-            ->add('dados_idSegmento', TextType::class, [
-                'label'  => 'ID do segmento (sem permalink)',
+            ->add('dados_permalink', TextType::class, [
+                'label'  => 'Permalink (zoom ≥15)',
                 'mapped' => false,
-                'constraints' => [
-                    new Assert\NotBlank(),
-                    new Assert\Regex(['pattern' => '/^\d+$/', 'message' => 'Informe apenas o ID numérico, sem permalink']),
+                'attr'   => [
+                    'placeholder'    => 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15',
+                    'data-permalink' => '1',
+                    'autocomplete'   => 'off',
+                    'spellcheck'     => 'false',
                 ],
+                'constraints' => $this->permalinkConstraints(required: true),
+            ])
+            ->add('dados_comentarios', TextareaType::class, [
+                'label'    => 'Comentários',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => ['rows' => 3],
             ]);
-    }
-
-    public function configureOptions(OptionsResolver $resolver): void
-    {
-        $resolver->setDefaults([
-            'data_class'      => Solicitacao::class,
-            'csrf_protection' => true,
-            'csrf_field_name' => '_token',
-            'csrf_token_id'   => 'solicitacao',
-        ]);
     }
 }

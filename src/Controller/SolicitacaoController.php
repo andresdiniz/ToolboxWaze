@@ -24,6 +24,7 @@ class SolicitacaoController extends AbstractController
     public function hub(Request $request): Response
     {
         $isAdmin  = $this->isGranted('ROLE_ADMIN');
+        $isChamp  = $this->isGranted('ROLE_CHAMP');
         $user     = $this->getUser();
         $abaAtual = $request->query->get('aba', 'nova');
 
@@ -44,35 +45,43 @@ class SolicitacaoController extends AbstractController
             try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
         }
 
-        $form = $this->createForm(SolicitacaoType::class, $solicitacao);
+        $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
+            'is_champ' => $isChamp,
+        ]);
         $form->handleRequest($request);
 
         // ── Resposta AJAX: retorna apenas o fragmento #campos-dinamicos ────────
-        // O JS faz fetch com header X-Requested-With: XMLHttpRequest e parâmetro
-        // _ajax_tipo. Renderizamos o hub normalmente e extraímos só o fragmento,
-        // evitando duplicar templates ou criar rotas extras.
         if ($ajaxTipo && $request->isXmlHttpRequest()) {
             $html = $this->renderView('solicitacao/hub.html.twig', [
                 'form'         => $form,
                 'tipoAtual'    => $tipoAtual,
                 'abaAtual'     => 'nova',
                 'isAdmin'      => $isAdmin,
+                'isChamp'      => $isChamp,
                 'historico'    => [],
                 'gestaoLista'  => [],
                 'contadores'   => [],
                 'filtroStatus' => null,
                 'filtroTipo'   => null,
             ]);
-            // Extrai o conteúdo do div#campos-dinamicos via regex simples
             if (preg_match('/<div id="campos-dinamicos">(.*?)<\/div>\s*<div class="d-flex justify/s', $html, $m)) {
                 return new Response('<div id="campos-dinamicos">' . $m[1] . '</div>');
             }
-            // Fallback: retorna o HTML completo e o JS extrai via DOMParser
             return new Response($html);
         }
 
         if ($form->isSubmitted() && $form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
+
+            // Bloqueia downgrade para quem não é Champ (dupla verificação server-side)
+            $tipoNivelSubmetido = $form->has('dados_tipoNivel')
+                ? $form->get('dados_tipoNivel')->getData()
+                : null;
+
+            if ($tipoNivelSubmetido === 'downgrade' && !$isChamp) {
+                $this->addFlash('danger', 'Apenas Champs podem solicitar downgrade de nível.');
+                return $this->redirectToRoute('solicitacao_hub');
+            }
 
             $dados = [];
             foreach ($form->all() as $fieldName => $field) {
@@ -139,6 +148,7 @@ class SolicitacaoController extends AbstractController
             'tipoAtual'    => $tipoAtual,
             'abaAtual'     => $abaAtual,
             'isAdmin'      => $isAdmin,
+            'isChamp'      => $isChamp,
             'historico'    => $historico,
             'gestaoLista'  => $gestaoLista,
             'contadores'   => $contadores,
@@ -186,7 +196,6 @@ class SolicitacaoController extends AbstractController
             throw $this->createAccessDeniedException('Token CSRF inválido.');
         }
 
-        // Aceita tanto o campo 'desfecho' (card de encerramento) quanto 'status' (mudar status intermediário)
         $novoStatus = $request->request->get('desfecho')
                    ?? $request->request->get('status');
 

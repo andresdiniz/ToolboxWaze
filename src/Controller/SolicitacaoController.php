@@ -36,6 +36,9 @@ class SolicitacaoController extends AbstractController
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
+        // IMPORTANTE: setar o tipo ANTES de createForm para que o PRE_SET_DATA
+        // do SolicitacaoType já receba a entidade com tipo definido e adicione
+        // os campos dinâmicos corretos (usado pelo AJAX de campos dinâmicos).
         $ajaxTipo = $request->query->get('_ajax_tipo');
         if ($ajaxTipo) {
             try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}

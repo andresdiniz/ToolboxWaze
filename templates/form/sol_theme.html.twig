@@ -86,6 +86,7 @@
 
 {%- block form_help -%}
   {%- if help is not empty -%}
+    {%- set help_translation_domain = help_translation_domain|default(false) -%}
     <p class="sol-help" id="{{ id }}_help">{{ help|trans({}, help_translation_domain) }}</p>
   {%- endif -%}
 {%- endblock form_help -%}

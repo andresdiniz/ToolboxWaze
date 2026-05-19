@@ -294,7 +294,7 @@
                                             <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
                                         {% else %}
                                             <div class="form-text">
-                                                Deve conter o parâmetro <code>venues=ID</code> (ex: <code>207160888.2071412273.41231195</code>).
+                                                Deve conter o parâmetro <code>venues=ID</code>.
                                             </div>
                                         {% endif %}
                                     </div>
@@ -338,16 +338,26 @@
                 <div class="list-group-item px-3 py-2">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
-                            <i class="bi bi-link-45deg me-1"></i>Waze Link
+                            <i class="bi bi-pencil me-1"></i>{{ log.campoAlterado }}
                         </span>
                         <small class="text-muted">
                             <i class="bi bi-person me-1"></i>{{ log.changedBy.email }}
                             · {{ log.changedAt|date('d/m/Y H:i') }}
                         </small>
                     </div>
-                    {% if log.wazeLinkAnterior %}
+                    {% if log.valorAnterior %}
                     <div class="small text-danger-emphasis bg-danger-subtle rounded px-2 py-1 mb-1 text-break">
-                        <i class="bi bi-dash-circle me-1"></i>{{ log.wazeLinkAnterior }}
+                        <i class="bi bi-dash-circle me-1"></i>{{ log.valorAnterior }}
+                    </div>
+                    {% endif %}
+                    {% if log.valorNovo %}
+                    <div class="small text-success-emphasis bg-success-subtle rounded px-2 py-1 text-break">
+                        <i class="bi bi-plus-circle me-1"></i>{{ log.valorNovo }}
+                    </div>
+                    {% endif %}
+                    {% if log.observacao %}
+                    <div class="small text-muted fst-italic mt-1">
+                        <i class="bi bi-chat-text me-1"></i>{{ log.observacao }}
                     </div>
                     {% endif %}
                 </div>

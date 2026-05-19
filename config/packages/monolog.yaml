@@ -1,6 +1,7 @@
 monolog:
     channels:
-        - deprecation # Deprecations are logged in the dedicated "deprecation" channel when it exists
+        - deprecation  # Deprecations are logged in the dedicated "deprecation" channel when it exists
+        - email_queue  # Canal dedicado para todos os e-mails e fila do Messenger
 
 when@dev:
     monolog:
@@ -14,6 +15,12 @@ when@dev:
                 type: console
                 process_psr_3_messages: false
                 channels: ["!event", "!doctrine", "!console"]
+            # Log dedicado para e-mails e fila — facilita auditoria sem poluir o log principal
+            email_queue:
+                type: stream
+                path: "%kernel.logs_dir%/email_queue.log"
+                level: debug
+                channels: [email_queue]
 
 when@test:
     monolog:
@@ -28,6 +35,11 @@ when@test:
                 type: stream
                 path: "%kernel.logs_dir%/%kernel.environment%.log"
                 level: debug
+            email_queue:
+                type: stream
+                path: "%kernel.logs_dir%/email_queue.log"
+                level: debug
+                channels: [email_queue]
 
 when@prod:
     monolog:
@@ -38,7 +50,7 @@ when@prod:
                 handler: nested
                 excluded_http_codes: [404, 405]
                 channels: ["!deprecation"]
-                buffer_size: 50 # How many messages should be saved? Prevent memory leaks
+                buffer_size: 50
             nested:
                 type: stream
                 path: php://stderr
@@ -52,4 +64,11 @@ when@prod:
                 type: stream
                 channels: [deprecation]
                 path: php://stderr
+                formatter: monolog.formatter.json
+            # Em prod: arquivo dedicado para todos os eventos de e-mail/fila
+            email_queue:
+                type: stream
+                path: "%kernel.logs_dir%/email_queue.log"
+                level: info
+                channels: [email_queue]
                 formatter: monolog.formatter.json

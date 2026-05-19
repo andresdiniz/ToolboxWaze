@@ -177,13 +177,14 @@ class SolicitacaoType extends AbstractType
                 'help'     => 'Caso necessário, adicione informações relevantes para a sua solicitação.',
             ])
             ->add('dados_poligono', TextareaType::class, [
-                'label'  => 'Polígono da área',
-                'mapped' => false,
-                'attr'   => ['rows' => 4],
-                'help'   => 'Cole o polígono gerado por uma dessas ferramentas:<br>'
-                          . '• <a href="https://arthur-e.github.io/Wicket/sandbox-gmaps3.html" target="_blank" rel="noopener">arthur-e.github.io/Wicket</a><br>'
-                          . '• <a href="http://map.wazedev.com/" target="_blank" rel="noopener">map.wazedev.com</a><br>'
-                          . 'O valor deve iniciar com <strong>POLYGON((</strong> ou <strong>LINESTRING(</strong>.',
+                'label'     => 'Polígono da área',
+                'mapped'    => false,
+                'attr'      => ['rows' => 4],
+                'help'      => 'Cole o polígono gerado por uma dessas ferramentas:<br>'
+                             . '• <a href="https://arthur-e.github.io/Wicket/sandbox-gmaps3.html" target="_blank" rel="noopener">arthur-e.github.io/Wicket</a><br>'
+                             . '• <a href="http://map.wazedev.com/" target="_blank" rel="noopener">map.wazedev.com</a><br>'
+                             . 'O valor deve iniciar com <strong>POLYGON((</strong> ou <strong>LINESTRING(</strong>.',
+                'help_html' => true,
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Regex([
@@ -193,17 +194,18 @@ class SolicitacaoType extends AbstractType
                 ],
             ])
             ->add('dados_comunicouIntencao', CheckboxType::class, [
-                'label'    => 'Comuniquei minha intenção no Discuss do Estado',
-                'mapped'   => false,
-                'required' => true,
-                'help'     => 'Busque o seu Estado e em seguida no tópico \'Gerente de área ou candidato, se apresente aqui\', publique sua intenção.',
+                'label'     => 'Comuniquei minha intenção no Discuss do Estado',
+                'mapped'    => false,
+                'required'  => true,
+                'help'      => 'Busque o seu Estado e em seguida no tópico '
+                             . '\'Gerente de área ou candidato, se apresente aqui\', publique sua intenção.',
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
             ]);
     }
 
     // -------------------------------------------------------------------------
     // GERENTE DE ESTADO OU PAÍS
-    // Campo dados_uf só é adicionado quando cargo = gerente_estado (nunca no PRE_SET_DATA)
+    // Campo dados_uf só é adicionado quando cargo = gerente_estado
     // -------------------------------------------------------------------------
     private function addCamposGerenteEstadoPais(\Symfony\Component\Form\FormInterface $form, ?string $cargo = null): void
     {
@@ -315,9 +317,10 @@ class SolicitacaoType extends AbstractType
                     'Mais de 50 postagens'    => '50_mais',
                     'Nenhuma.'                => 'nenhuma',
                 ],
-                'help' => 'Você pode achar essa resposta aqui: '
-                        . '<a href="https://www.waze.com/discuss/u/SEU_NICK/activity" target="_blank" rel="noopener">'
-                        . 'https://www.waze.com/discuss/u/SEU_NICK/activity</a>',
+                'help'      => 'Você pode achar essa resposta aqui: '
+                             . '<a href="https://www.waze.com/discuss/u/SEU_NICK/activity" target="_blank" rel="noopener">'
+                             . 'https://www.waze.com/discuss/u/SEU_NICK/activity</a>',
+                'help_html' => true,
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_motivacao', TextareaType::class, [
@@ -347,10 +350,11 @@ class SolicitacaoType extends AbstractType
                 'mapped'   => false,
                 'choices'  => ['Sim' => 'sim', 'Não' => 'nao'],
                 'expanded' => true,
-                'help'     => 'Recomenda-se a leitura deste '
-                            . '<a href="https://www.waze.com/discuss/t/new-regras-e-normas-para-niveis-cargos-e-areas/282152" '
-                            . 'target="_blank" rel="noopener">tópico</a> '
-                            . 'para assegurar o atendimento aos requisitos.',
+                'help'      => 'Recomenda-se a leitura deste '
+                             . '<a href="https://www.waze.com/discuss/t/new-regras-e-normas-para-niveis-cargos-e-areas/282152" '
+                             . 'target="_blank" rel="noopener">tópico</a> '
+                             . 'para assegurar o atendimento aos requisitos.',
+                'help_html' => true,
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\EqualTo(['value' => 'sim', 'message' => 'Você deve cumprir os requisitos antes de solicitar.']),
@@ -361,7 +365,6 @@ class SolicitacaoType extends AbstractType
     // -------------------------------------------------------------------------
     // OOPS DE EDITOR
     // Upload de provas é tratado pelo input nativo no template (arquivos_oops[])
-    // Ordem: Nome do editor > Permalink > Descrição
     // -------------------------------------------------------------------------
     private function addCamposOops(\Symfony\Component\Form\FormInterface $form): void
     {

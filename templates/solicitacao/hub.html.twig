@@ -2,6 +2,23 @@
 {% block title %}Solicitações{% endblock %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
+{# ══ Macro: badge de status com ícone ══════════════════════════════════ #}
+{% macro status_badge(status, label) %}
+  {% set iconeMap = {
+    'pendente':          'bi-inbox-fill',
+    'em_andamento':      'bi-arrow-repeat',
+    'aguardando_retorno':'bi-hourglass-split',
+    'em_analise':        'bi-search',
+    'resolvida':         'bi-check-circle-fill',
+    'negada':            'bi-x-circle-fill',
+    'cancelada':         'bi-slash-circle-fill'
+  } %}
+  <span class="badge-status {{ status }}">
+    <i class="bi {{ iconeMap[status] ?? 'bi-circle' }} me-1"></i>{{ label }}
+  </span>
+{% endmacro %}
+{% import _self as m %}
+
 {% block body %}
 <div class="container py-4" style="max-width:900px">
 
@@ -172,7 +189,7 @@
       {% for s in historico %}
         <a href="{{ path('solicitacao_detalhe', {id: s.id}) }}" class="hist-row">
           <span class="hist-id">#{{ s.id }}</span>
-          <span class="badge-status {{ s.status }}">{{ s.statusLabel }}</span>
+          {{ m.status_badge(s.status, s.statusLabel) }}
           <span class="hist-tipo">{{ s.tipoLabel }}</span>
           {% if s.estado %}<span class="hist-uf">{{ s.estado }}</span>{% endif %}
           <span class="hist-data">{{ s.criadaEm|date('d/m/Y H:i') }}</span>
@@ -259,7 +276,7 @@
       {% for s in gestaoLista %}
         <div class="gestao-row">
           <span class="gr-id">#{{ s.id }}</span>
-          <span class="badge-status {{ s.status }}">{{ s.statusLabel }}</span>
+          {{ m.status_badge(s.status, s.statusLabel) }}
           <span class="gr-tipo">{{ s.tipoLabel }}</span>
           <span class="gr-user">
             {{ s.solicitanteUsuario }}
@@ -281,6 +298,7 @@
                       data-id="{{ s.id }}"
                       data-label="{{ s.tipoLabel }} · {{ s.solicitanteUsuario }}"
                       data-token="{{ csrf_token('resolver_' ~ s.id) }}"
+                      data-action="{{ path('solicitacao_resolver', {id: s.id}) }}"
                       title="Resolver solicitação">
                 <i class="bi bi-check2-square"></i> Resolver
               </button>
@@ -359,7 +377,7 @@
   'use strict';
 
   /* ══════════════════════════════════════════════════════════════
-     Modal resolver
+     Modal resolver — usa data-action gerado pelo Twig (path() correto)
   ══════════════════════════════════════════════════════════════ */
   const modalEl = document.getElementById('modal-resolver');
   if (modalEl) {
@@ -367,8 +385,7 @@
       const btn = e.relatedTarget;
       document.getElementById('resolver-label').textContent = btn.dataset.label;
       document.getElementById('resolver-token').value       = btn.dataset.token;
-      document.getElementById('form-resolver').action       =
-        '/solicitacoes/' + btn.dataset.id + '/resolver';
+      document.getElementById('form-resolver').action       = btn.dataset.action;
       const r = modalEl.querySelector('#modal-des-resolvida');
       if (r) r.checked = true;
       const ta = modalEl.querySelector('textarea[name="nota"]');
@@ -443,19 +460,8 @@
 
   /* ══════════════════════════════════════════════════════════════
      Validação de permalink (zoom ≥ 15)
-
-     Formatos aceitos:
-       https://waze.com/editor?zoom=15&...
-       https://www.waze.com/editor/?zoom=15&...
-       https://waze.com/pt-BR/editor?env=row&zoomLevel=16&...
-       https://beta.waze.com/en-US/editor?zoom=17&...
   ══════════════════════════════════════════════════════════════ */
-
-  // Aceita: waze.com[/locale]/editor[/][?...]
-  // Subdomínios: www, beta (e sem subdomínio)
   const WAZE_RE = /^https?:\/\/(?:(?:www|beta)\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor(?:\/|\?|$)/i;
-
-  // Aceita tanto zoom= quanto zoomLevel= (Waze usa os dois dependendo da versão)
   const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
 
   function checkPermalink(val) {
@@ -505,7 +511,7 @@
   initPermalinks();
 
   /* ══════════════════════════════════════════════════════════════
-     Validação dos dados pessoais (nome, usuario, email)
+     Validação dos dados pessoais
   ══════════════════════════════════════════════════════════════ */
   function validateField(input, rule) {
     const val = input.value.trim();

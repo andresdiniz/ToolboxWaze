@@ -548,6 +548,29 @@
   });
 
   /* ══════════════════════════════════════════════════════════════
+     Link do Discuss atualiza com o nick digitado no campo usuário
+     Substitui SEU_NICK em href e texto do <a data-discuss-link>
+  ══════════════════════════════════════════════════════════════ */
+  const DISCUSS_BASE = 'https://www.waze.com/discuss/u/';
+  const DISCUSS_SUFFIX = '/activity';
+
+  function updateDiscussLinks(nick) {
+    const encoded = nick ? encodeURIComponent(nick) : 'SEU_NICK';
+    const display = nick || 'SEU_NICK';
+    document.querySelectorAll('[data-discuss-link]').forEach(a => {
+      a.href        = DISCUSS_BASE + encoded + DISCUSS_SUFFIX;
+      a.textContent = DISCUSS_BASE + display + DISCUSS_SUFFIX;
+    });
+  }
+
+  const nickInput = document.querySelector('input[name="solicitacao[solicitanteUsuario]"]');
+  if (nickInput) {
+    // Inicializa com valor já preenchido (ex: ao voltar na página)
+    updateDiscussLinks(nickInput.value.trim());
+    nickInput.addEventListener('input', () => updateDiscussLinks(nickInput.value.trim()));
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      Formulário — tipo selector
   ══════════════════════════════════════════════════════════════ */
   const tipoSelect = document.querySelector('[data-tipo-select]');
@@ -602,6 +625,9 @@
             el.style.animationDelay = (i * 0.055) + 's';
           });
           initPermalinks();
+          // Atualiza os links do Discuss após recarregar campos dinâmicos
+          const nickEl = document.querySelector('input[name="solicitacao[solicitanteUsuario]"]');
+          if (nickEl) updateDiscussLinks(nickEl.value.trim());
           const newOopsInput = document.getElementById('input-oops-files');
           if (newOopsInput) newOopsInput.dispatchEvent(new Event('change'));
         }

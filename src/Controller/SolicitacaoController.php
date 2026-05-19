@@ -131,7 +131,10 @@ class SolicitacaoController extends AbstractController
     public function detalhe(Solicitacao $solicitacao): Response
     {
         $this->denyAccessUnlessGranted('SOLICITACAO_VER', $solicitacao);
-        return $this->render('solicitacao/detalhe.html.twig', ['solicitacao' => $solicitacao]);
+        return $this->render('solicitacao/detalhe.html.twig', [
+            'solicitacao' => $solicitacao,
+            'comentarios' => $solicitacao->getComentarios(),
+        ]);
     }
 
     /**

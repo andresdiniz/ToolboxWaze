@@ -16,16 +16,29 @@ final class RadarController extends AbstractController
 {
     private const PER_PAGE = 25;
 
+    /**
+     * data_validade está armazenada no banco como string 'd/m/Y' (ex: '03/11/2026').
+     * Para comparações de data, sempre converter com STR_TO_DATE(col, '%d/%m/%Y').
+     * Para o Twig comparar datas nas rows, retornamos também data_validade_iso (Y-m-d).
+     */
+    private const DATE_CONV = "STR_TO_DATE(%s, '%%d/%%m/%%Y')";
+
     public function __construct(
         private readonly Connection $db,
     ) {}
+
+    // Gera a expressão SQL de conversão para uma coluna/alias
+    private function dateConv(string $col): string
+    {
+        return sprintf(self::DATE_CONV, $col);
+    }
 
     #[Route('', name: 'index')]
     public function index(Request $req): Response
     {
         /** @var User|null $user */
-        $user        = $this->getUser();
-        $allowedUfs  = $user?->getUfsForQuery();
+        $user       = $this->getUser();
+        $allowedUfs = $user?->getUfsForQuery();
 
         $uf        = strtoupper(trim((string) $req->query->get('uf', '')));
         $municipio = trim((string) $req->query->get('municipio', ''));
@@ -50,10 +63,14 @@ final class RadarController extends AbstractController
             $params
         );
 
+        // data_validade_iso: versão Y-m-d para o Twig poder comparar corretamente com $hoje/$em30
+        $dv = $this->dateConv('rm.data_validade');
         $rows = $this->db->fetchAllAssociative(
             "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
                     rm.local_verificacao, rm.data_ultima_verificacao,
-                    rm.data_validade, rm.ultimo_resultado,
+                    rm.data_validade,
+                    DATE_FORMAT($dv, '%Y-%m-%d') AS data_validade_iso,
+                    rm.ultimo_resultado,
                     rm.tipo_medidor, rm.proprietario_nome
              FROM radar_medidor rm $baseFrom
              $whereClause
@@ -85,38 +102,30 @@ final class RadarController extends AbstractController
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
 
-        // ── Stats ──────────────────────────────────────────────────────────────
-        // ATENÇÃO: a ordem dos ? na query deve ser respeitada.
-        // Na SQL: SUM(data_validade < ?)         → $hoje
-        //         SUM(data_validade BETWEEN ? AND ?) → $hoje, $em30
-        //         WHERE sigla_uf IN (?,?,...)     → $allowedUfs
-        // Portanto os params de data vêm ANTES dos UFs.
+        // ── Stats ─────────────────────────────────────────────────────────────
+        // data_validade está em d/m/Y → usar STR_TO_DATE para comparar datas
+        // corretamente. Ordem dos ? posicionais: datas primeiro, UFs depois.
+        $dv = $this->dateConv('data_validade');
+        $statsSql = "SELECT COUNT(*) AS total,
+                            SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
+                            SUM(ultimo_resultado = 'REPROVADO') AS reprovados,
+                            SUM(data_validade IS NOT NULL AND $dv < ?)                       AS vencidos,
+                            SUM(data_validade IS NOT NULL AND $dv >= ? AND $dv <= ?)         AS vencendo,
+                            COUNT(DISTINCT sigla_uf) AS estados
+                     FROM radar_medidor";
+
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
-            $ph         = implode(',', array_fill(0, count($allowedUfs), '?'));
-            $statsWhere = " WHERE sigla_uf IN ($ph)";
-            $stats      = $this->db->fetchAssociative(
-                "SELECT COUNT(*) AS total,
-                        SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
-                        SUM(ultimo_resultado = 'REPROVADO') AS reprovados,
-                        SUM(data_validade IS NOT NULL AND data_validade < ?)           AS vencidos,
-                        SUM(data_validade IS NOT NULL AND data_validade >= ? AND data_validade <= ?) AS vencendo,
-                        COUNT(DISTINCT sigla_uf) AS estados
-                 FROM radar_medidor $statsWhere",
-                // data params primeiro, depois os UFs do WHERE
+            $ph     = implode(',', array_fill(0, count($allowedUfs), '?'));
+            $stats  = $this->db->fetchAssociative(
+                $statsSql . " WHERE sigla_uf IN ($ph)",
                 array_merge([$hoje, $hoje, $em30], $allowedUfs)
             );
         } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
             $stats = ['total' => 0, 'aprovados' => 0, 'reprovados' => 0, 'vencidos' => 0, 'vencendo' => 0, 'estados' => 0];
         } else {
             $stats = $this->db->fetchAssociative(
-                "SELECT COUNT(*) AS total,
-                        SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
-                        SUM(ultimo_resultado = 'REPROVADO') AS reprovados,
-                        SUM(data_validade IS NOT NULL AND data_validade < :hoje)                         AS vencidos,
-                        SUM(data_validade IS NOT NULL AND data_validade >= :hoje AND data_validade <= :em30) AS vencendo,
-                        COUNT(DISTINCT sigla_uf) AS estados
-                 FROM radar_medidor",
-                ['hoje' => $hoje, 'em30' => $em30]
+                $statsSql,
+                [$hoje, $hoje, $em30]
             );
         }
 
@@ -318,7 +327,7 @@ final class RadarController extends AbstractController
             if (count($allowedUfs) === 0) {
                 $parts[] = '1=0';
             } else {
-                $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
+                $ph      = implode(',', array_fill(0, count($allowedUfs), '?'));
                 $parts[] = "rm.sigla_uf IN ($ph)";
                 foreach ($allowedUfs as $ufsVal) {
                     $params[] = $ufsVal;
@@ -348,16 +357,19 @@ final class RadarController extends AbstractController
             $params[] = "%$serie%";
         }
 
+        // data_validade está em d/m/Y → converter com STR_TO_DATE para comparar
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $dv   = $this->dateConv('rm.data_validade');
+
         if ($validade === 'vencido') {
-            $parts[]  = 'rm.data_validade < ?';
+            $parts[]  = "$dv < ?";
             $params[] = $hoje;
         } elseif ($validade === 'valido') {
-            $parts[]  = 'rm.data_validade >= ?';
+            $parts[]  = "$dv >= ?";
             $params[] = $hoje;
         } elseif ($validade === '30dias') {
-            $parts[]  = 'rm.data_validade >= ? AND rm.data_validade <= ?';
+            $parts[]  = "$dv >= ? AND $dv <= ?";
             $params[] = $hoje;
             $params[] = $em30;
         }

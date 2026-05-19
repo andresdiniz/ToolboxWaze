@@ -29,17 +29,17 @@ class SolicitacaoType extends AbstractType
         (?:www\.|beta\.)?waze\.com
         (?:\/[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})?)?
         \/editor
-        [^"\s]*
+        ["\\s]*
         [?&]zoom(?:Level)?=
         (1[5-9]|[2-9]\d|\d{3,})
-        [^"\s]*
+        ["\\s]*
     /xi';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
             ->add('tipo', ChoiceType::class, [
-                'label'       => 'Tipo de solicita\u00e7\u00e3o',
+                'label'       => 'Tipo de solicitação',
                 'choices'     => array_flip(Solicitacao::TIPOS),
                 'placeholder' => 'Escolher',
                 'constraints' => [new Assert\NotBlank()],
@@ -50,7 +50,7 @@ class SolicitacaoType extends AbstractType
                 'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
             ])
             ->add('solicitanteUsuario', TextType::class, [
-                'label'       => 'Nome de usu\u00e1rio (WME)',
+                'label'       => 'Nome de usuário (WME)',
                 'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
             ])
             ->add('solicitanteEmail', EmailType::class, [
@@ -99,12 +99,12 @@ class SolicitacaoType extends AbstractType
         $constraints = [
             new Assert\Regex([
                 'pattern' => self::PERMALINK_PATTERN,
-                'message' => 'O permalink deve ser do editor Waze com zoom \u226515. '
+                'message' => 'O permalink deve ser do editor Waze com zoom ≥15. '
                            . 'Ex: https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
             ]),
         ];
         if ($required) {
-            array_unshift($constraints, new Assert\NotBlank(message: 'O permalink \u00e9 obrigat\u00f3rio.'));
+            array_unshift($constraints, new Assert\NotBlank(message: 'O permalink é obrigatório.'));
         }
         return $constraints;
     }
@@ -113,27 +113,27 @@ class SolicitacaoType extends AbstractType
     {
         $form
             ->add('dados_motivo', ChoiceType::class, [
-                'label' => 'Motivo da solicita\u00e7\u00e3o', 'mapped' => false,
+                'label' => 'Motivo da solicitação', 'mapped' => false,
                 'choices' => [
-                    'A imagem com maior resolu\u00e7\u00e3o \u00e9 muito antiga' => 'muito_antiga',
-                    'A imagem est\u00e1 com qualidade/resolu\u00e7\u00e3o baixa'  => 'baixa_qualidade',
-                    'Altera\u00e7\u00f5es significativas na \u00e1rea'           => 'alteracoes',
-                    'As imagens est\u00e3o ruins ou nubladas'                   => 'ruins_nubladas',
+                    'A imagem com maior resolução é muito antiga' => 'muito_antiga',
+                    'A imagem está com qualidade/resolução baixa'  => 'baixa_qualidade',
+                    'Alterações significativas na área'            => 'alteracoes',
+                    'As imagens estão ruins ou nubladas'           => 'ruins_nubladas',
                 ],
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_idadeImagem', ChoiceType::class, [
-                'label' => 'Qu\u00e3o antiga pode ser a imagem atualizada?', 'mapped' => false,
-                'choices' => ['1 ano' => '1_ano', '6 meses' => '6_meses', '1 m\u00eas' => '1_mes', '1 semana' => '1_semana'],
+                'label' => 'Quão antiga pode ser a imagem atualizada?', 'mapped' => false,
+                'choices' => ['1 ano' => '1_ano', '6 meses' => '6_meses', '1 mês' => '1_mes', '1 semana' => '1_semana'],
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_urgente', ChoiceType::class, [
-                'label' => '\u00c9 urgente?', 'mapped' => false,
-                'choices' => ['Sim' => 'sim', 'N\u00e3o' => 'nao'],
+                'label' => 'É urgente?', 'mapped' => false,
+                'choices' => ['Sim' => 'sim', 'Não' => 'nao'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_permalink', TextType::class, [
-                'label'  => 'Permalink (zoom \u226515)',
+                'label'  => 'Permalink (zoom ≥15)',
                 'mapped' => false,
                 'attr'   => [
                     'placeholder'    => 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15',
@@ -141,7 +141,7 @@ class SolicitacaoType extends AbstractType
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'        => 'Abra o WME, navegue at\u00e9 a \u00e1rea com zoom \u226515 e copie a URL completa do navegador. '
+                'help'        => 'Abra o WME, navegue até a área com zoom ≥15 e copie a URL completa do navegador. '
                                . 'A URL deve ser do editor Waze (waze.com/editor).',
                 'constraints' => $this->permalinkConstraints(required: true),
             ]);
@@ -153,35 +153,35 @@ class SolicitacaoType extends AbstractType
             ->add('dados_mentor', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
             ->add('dados_recomendadores', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
             ->add('dados_poligono', TextareaType::class, [
-                'label'  => 'Pol\u00edgono da \u00e1rea',
+                'label'  => 'Polígono da área',
                 'mapped' => false,
                 'attr'   => ['rows' => 4],
-                'help'   => 'Cole o pol\u00edgono gerado por uma dessas ferramentas:<br>'
-                          . '\u2022 <a href="https://arthur-e.github.io/Wicket/sandbox-gmaps3.html" target="_blank" rel="noopener">arthur-e.github.io/Wicket</a><br>'
-                          . '\u2022 <a href="http://map.wazedev.com/" target="_blank" rel="noopener">map.wazedev.com</a><br>'
+                'help'   => 'Cole o polígono gerado por uma dessas ferramentas:<br>'
+                          . '• <a href="https://arthur-e.github.io/Wicket/sandbox-gmaps3.html" target="_blank" rel="noopener">arthur-e.github.io/Wicket</a><br>'
+                          . '• <a href="http://map.wazedev.com/" target="_blank" rel="noopener">map.wazedev.com</a><br>'
                           . 'O valor deve iniciar com <strong>POLYGON((</strong> ou <strong>LINESTRING(</strong>.',
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Regex([
                         'pattern' => '/^(POLYGON|LINESTRING)\s*\(/i',
-                        'message' => 'O pol\u00edgono deve iniciar com POLYGON(( ou LINESTRING(',
+                        'message' => 'O polígono deve iniciar com POLYGON(( ou LINESTRING(',
                     ]),
                 ],
             ])
             ->add('dados_comunicouIntencao', CheckboxType::class, [
-                'label'    => 'Comuniquei minha inten\u00e7\u00e3o no Discuss do Estado',
+                'label'    => 'Comuniquei minha intenção no Discuss do Estado',
                 'mapped'   => false,
                 'required' => true,
-                'constraints' => [new Assert\IsTrue(message: 'Voc\u00ea deve comunicar sua inten\u00e7\u00e3o no Discuss antes de enviar.')],
+                'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
             ])
-            ->add('dados_comentarios', TextareaType::class, ['label' => 'Coment\u00e1rios', 'mapped' => false, 'required' => false]);
+            ->add('dados_comentarios', TextareaType::class, ['label' => 'Comentários', 'mapped' => false, 'required' => false]);
     }
 
     private function addCamposGerenteEstadoPais(\Symfony\Component\Form\FormInterface $form, ?string $cargo = null): void
     {
         $form
             ->add('dados_acao', ChoiceType::class, [
-                'label'    => 'Voc\u00ea deseja\u2026', 'mapped' => false,
+                'label'    => 'Você deseja…', 'mapped' => false,
                 'choices'  => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
@@ -193,13 +193,13 @@ class SolicitacaoType extends AbstractType
             ])
             ->add('dados_cargo', ChoiceType::class, [
                 'label'    => 'Cargo desejado', 'mapped' => false,
-                'choices'  => ['Gerente de Estado' => 'gerente_estado', 'Gerente de Pa\u00eds' => 'gerente_pais'],
+                'choices'  => ['Gerente de Estado' => 'gerente_estado', 'Gerente de País' => 'gerente_pais'],
                 'expanded' => true,
                 'constraints' => [new Assert\NotBlank()],
                 'attr'     => ['data-cargo-select' => '1'],
             ]);
 
-        // Exibe sele\u00e7\u00e3o de UF apenas para Gerente de Estado
+        // Exibe seleção de UF apenas para Gerente de Estado
         if ($cargo === 'gerente_estado' || $cargo === null) {
             $form->add('dados_uf', ChoiceType::class, [
                 'label'       => 'Estado',
@@ -215,59 +215,52 @@ class SolicitacaoType extends AbstractType
         }
 
         $form->add('dados_comentarios', TextareaType::class, [
-            'label' => 'Coment\u00e1rios', 'mapped' => false, 'required' => false,
+            'label' => 'Comentários', 'mapped' => false, 'required' => false,
         ]);
     }
 
     private function addCamposNivel(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            // 1. Tipo do pedido (Upgrade/Downgrade) — primeiro campo, conforme layout
             ->add('dados_tipoNivel', ChoiceType::class, [
-                'label'    => '\u00c9 um pedido de\u2026', 'mapped' => false,
+                'label'    => 'É um pedido de…', 'mapped' => false,
                 'choices'  => ['Upgrade' => 'upgrade', 'Downgrade' => 'downgrade'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
-            // 2. Mentor
             ->add('dados_mentor', TextType::class, [
                 'label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()],
             ])
-            // 3. Recomendadores
             ->add('dados_recomendadores', TextType::class, [
                 'label' => 'Editores recomendadores', 'mapped' => false, 'required' => false,
             ])
-            // 4. N\u00edvel atual
             ->add('dados_nivelAtual', TextType::class, [
-                'label' => 'N\u00edvel atual',
+                'label' => 'Nível atual',
                 'mapped' => false,
-                'attr'  => ['placeholder' => 'Digite o seu n\u00edvel de um a cinco'],
+                'attr'  => ['placeholder' => 'Digite o seu nível de um a cinco'],
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Range(['min' => 1, 'max' => 5]),
                 ],
             ])
-            // 5. N\u00edvel desejado
             ->add('dados_nivelDesejado', TextType::class, [
-                'label' => 'N\u00edvel desejado',
+                'label' => 'Nível desejado',
                 'mapped' => false,
-                'attr'  => ['placeholder' => 'Digite o n\u00edvel desejado de dois a seis'],
+                'attr'  => ['placeholder' => 'Digite o nível desejado de dois a seis'],
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Range(['min' => 2, 'max' => 6]),
                 ],
             ])
-            // 6. Ativo na comunidade
             ->add('dados_ativo', ChoiceType::class, [
-                'label'    => 'Voc\u00ea se considera ativo na comunidade?',
+                'label'    => 'Você se considera ativo na comunidade?',
                 'mapped'   => false,
-                'choices'  => ['Sim' => 'sim', 'N\u00e3o' => 'nao'],
+                'choices'  => ['Sim' => 'sim', 'Não' => 'nao'],
                 'expanded' => true,
-                'help'     => 'Indique se voc\u00ea se considera ativo nos canais oficiais do Waze.',
+                'help'     => 'Indique se você se considera ativo nos canais oficiais do Waze.',
                 'constraints' => [new Assert\NotBlank()],
             ])
-            // 7. Postagens no Discuss
             ->add('dados_postagens', ChoiceType::class, [
-                'label'  => 'Quantas postagens voc\u00ea fez no \u00faltimo ano no Discuss?',
+                'label'  => 'Quantas postagens você fez no último ano no Discuss?',
                 'mapped' => false,
                 'choices' => [
                     'Entre 1 e 5 postagens'   => '1_5',
@@ -277,47 +270,45 @@ class SolicitacaoType extends AbstractType
                     'Mais de 50 postagens'    => '50_mais',
                     'Nenhuma.'                => 'nenhuma',
                 ],
-                'help'        => 'Voc\u00ea pode achar essa resposta aqui: '
+                'help'        => 'Você pode achar essa resposta aqui: '
                                . '<a href="https://www.waze.com/discuss/u/SEU_NICK/activity" target="_blank" rel="noopener">'
                                . 'https://www.waze.com/discuss/u/SEU_NICK/activity</a>',
                 'constraints' => [new Assert\NotBlank()],
             ])
-            // 8. Motiva\u00e7\u00e3o
             ->add('dados_motivacao', TextareaType::class, [
-                'label'  => 'O que motiva voc\u00ea a subir de n\u00edvel?',
+                'label'  => 'O que motiva você a subir de nível?',
                 'mapped' => false,
                 'attr'   => [
                     'rows'              => 4,
                     'minlength'         => 20,
                     'maxlength'         => 2000,
-                    'placeholder'       => 'Descreva sua motiva\u00e7\u00e3o (m\u00ednimo 20 caracteres)',
+                    'placeholder'       => 'Descreva sua motivação (mínimo 20 caracteres)',
                     'data-char-counter' => 'true',
                     'data-char-min'     => '20',
                 ],
-                'help' => 'Explique o que o motiva a buscar um n\u00edvel mais alto.',
+                'help' => 'Explique o que o motiva a buscar um nível mais alto.',
                 'constraints' => [
-                    new Assert\NotBlank(message: 'Preencha sua motiva\u00e7\u00e3o.'),
+                    new Assert\NotBlank(message: 'Preencha sua motivação.'),
                     new Assert\Length([
                         'min'        => 20,
-                        'minMessage' => 'Sua motiva\u00e7\u00e3o deve ter pelo menos {{ limit }} caracteres.',
+                        'minMessage' => 'Sua motivação deve ter pelo menos {{ limit }} caracteres.',
                         'max'        => 2000,
-                        'maxMessage' => 'Sua motiva\u00e7\u00e3o n\u00e3o pode ultrapassar {{ limit }} caracteres.',
+                        'maxMessage' => 'Sua motivação não pode ultrapassar {{ limit }} caracteres.',
                     ]),
                 ],
             ])
-            // 9. Cumpriu requisitos
             ->add('dados_cumpriuRequisitos', ChoiceType::class, [
-                'label'    => 'Voc\u00ea cumpre os requisitos para essa promo\u00e7\u00e3o?',
+                'label'    => 'Você cumpre os requisitos para essa promoção?',
                 'mapped'   => false,
-                'choices'  => ['Sim' => 'sim', 'N\u00e3o' => 'nao'],
+                'choices'  => ['Sim' => 'sim', 'Não' => 'nao'],
                 'expanded' => true,
                 'help'     => 'Recomenda-se a leitura deste '
                             . '<a href="https://www.waze.com/discuss/t/new-regras-e-normas-para-niveis-cargos-e-areas/282152" '
-                            . 'target="_blank" rel="noopener">t\u00f3pico</a> '
+                            . 'target="_blank" rel="noopener">tópico</a> '
                             . 'para assegurar o atendimento aos requisitos.',
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\EqualTo(['value' => 'sim', 'message' => 'Voc\u00ea deve cumprir os requisitos antes de solicitar.']),
+                    new Assert\EqualTo(['value' => 'sim', 'message' => 'Você deve cumprir os requisitos antes de solicitar.']),
                 ],
             ]);
     }
@@ -330,7 +321,7 @@ class SolicitacaoType extends AbstractType
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_permalink', TextType::class, [
-                'label'    => 'Permalink (zoom \u226515)',
+                'label'    => 'Permalink (zoom ≥15)',
                 'mapped'   => false,
                 'required' => false,
                 'attr'     => [
@@ -339,7 +330,7 @@ class SolicitacaoType extends AbstractType
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'        => 'Opcional, mas recomendado. Se informar, deve ter zoom \u226515. '
+                'help'        => 'Opcional, mas recomendado. Se informar, deve ter zoom ≥15. '
                                . 'A URL deve ser do editor Waze (waze.com/editor).',
                 'constraints' => $this->permalinkConstraints(required: false),
             ])
@@ -350,18 +341,18 @@ class SolicitacaoType extends AbstractType
                     'rows'              => 5,
                     'minlength'         => 30,
                     'maxlength'         => 5000,
-                    'placeholder'       => 'Descreva detalhadamente os fatos e as regras infringidas (m\u00ednimo 30 caracteres)',
+                    'placeholder'       => 'Descreva detalhadamente os fatos e as regras infringidas (mínimo 30 caracteres)',
                     'data-char-counter' => 'true',
                     'data-char-min'     => '30',
                 ],
-                'help' => 'M\u00ednimo de 30 caracteres.',
+                'help' => 'Mínimo de 30 caracteres.',
                 'constraints' => [
-                    new Assert\NotBlank(message: 'Preencha a descri\u00e7\u00e3o.'),
+                    new Assert\NotBlank(message: 'Preencha a descrição.'),
                     new Assert\Length([
                         'min'        => 30,
-                        'minMessage' => 'A descri\u00e7\u00e3o deve ter pelo menos {{ limit }} caracteres.',
+                        'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
                         'max'        => 5000,
-                        'maxMessage' => 'A descri\u00e7\u00e3o n\u00e3o pode ultrapassar {{ limit }} caracteres.',
+                        'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
                     ]),
                 ],
             ]);
@@ -371,7 +362,7 @@ class SolicitacaoType extends AbstractType
     {
         $form
             ->add('dados_acao', ChoiceType::class, [
-                'label' => 'Voc\u00ea deseja\u2026', 'mapped' => false,
+                'label' => 'Você deseja…', 'mapped' => false,
                 'choices' => ['Adicionar' => 'adicionar', 'Remover' => 'remover'],
                 'expanded' => true, 'constraints' => [new Assert\NotBlank()],
             ])
@@ -382,7 +373,7 @@ class SolicitacaoType extends AbstractType
             ->add('dados_cnpj', TextType::class, [
                 'label' => 'CNPJ de um posto ativo com cadastro atualizado', 'mapped' => false, 'required' => false,
                 'constraints' => [
-                    new Assert\Regex(['pattern' => '/^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/', 'message' => 'CNPJ inv\u00e1lido']),
+                    new Assert\Regex(['pattern' => '/^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/', 'message' => 'CNPJ inválido']),
                 ],
             ]);
     }
@@ -398,7 +389,7 @@ class SolicitacaoType extends AbstractType
                 'label' => 'ID do segmento (sem permalink)', 'mapped' => false,
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\Regex(['pattern' => '/^\d+$/', 'message' => 'Informe apenas o ID num\u00e9rico, sem permalink']),
+                    new Assert\Regex(['pattern' => '/^\d+$/', 'message' => 'Informe apenas o ID numérico, sem permalink']),
                 ],
             ]);
     }

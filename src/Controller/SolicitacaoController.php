@@ -23,9 +23,15 @@ class SolicitacaoController extends AbstractController
     #[Route('', name: 'solicitacao_hub', methods: ['GET', 'POST'])]
     public function hub(Request $request): Response
     {
-        $isAdmin   = $this->isGranted('ROLE_ADMIN');
-        $user      = $this->getUser();
-        $abaAtual  = $request->query->get('aba', 'nova');
+        $isAdmin  = $this->isGranted('ROLE_ADMIN');
+        $user     = $this->getUser();
+        $abaAtual = $request->query->get('aba', 'nova');
+
+        // Aba 'historico' exige login
+        if ($abaAtual === 'historico' && !$user) {
+            $this->addFlash('warning', 'Faça login para ver seu histórico de solicitações.');
+            return $this->redirectToRoute('app_login');
+        }
 
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
@@ -52,13 +58,14 @@ class SolicitacaoController extends AbstractController
             if ($tipoAtual === Solicitacao::TIPO_OOPS) {
                 $arquivos = $request->files->get('arquivos_oops', []);
                 $nomes    = [];
+                $dir      = $this->getParameter('kernel.project_dir') . '/public/uploads/oops';
+                if (!is_dir($dir)) {
+                    mkdir($dir, 0775, true);
+                }
                 foreach ((array) $arquivos as $file) {
                     if ($file && $file->isValid()) {
                         $nome = uniqid('oops_') . '.' . $file->guessExtension();
-                        $file->move(
-                            $this->getParameter('kernel.project_dir') . '/public/uploads/oops',
-                            $nome
-                        );
+                        $file->move($dir, $nome);
                         $nomes[] = $nome;
                     }
                 }

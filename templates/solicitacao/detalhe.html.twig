@@ -131,7 +131,7 @@
     <div class="card-body">
       <div class="d-flex flex-wrap gap-2">
       {% for arquivo in solicitacao.arquivos %}
-        <a href="/uploads/oops/{{ arquivo }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ asset('uploads/oops/' ~ arquivo) }}" target="_blank" class="btn btn-outline-secondary btn-sm">
           📎 {{ arquivo }}
         </a>
       {% endfor %}
@@ -203,7 +203,9 @@
   </div>
   {% endif %}
 
-  <a href="{{ path('solicitacao_hub', {aba: 'gestao'}) }}" class="btn btn-link ps-0 mt-3">← Voltar para gestão</a>
+  {# Botão Voltar: admin vai para gestão, usuário comum vai para histórico #}
+  <a href="{{ path('solicitacao_hub', {aba: is_granted('ROLE_ADMIN') ? 'gestao' : 'historico'}) }}"
+     class="btn btn-link ps-0 mt-3">← Voltar</a>
 
 </div>
 {% endblock %}

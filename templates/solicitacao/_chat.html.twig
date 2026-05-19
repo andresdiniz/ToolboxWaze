@@ -5,9 +5,9 @@
     - comentarios  : SolicitacaoComentario[]
   Usa o SolicitacaoVoter para controlar quem pode comentar.
 #}
-{% set podeVer       = is_granted('SOLICITACAO_VER',          solicitacao) %}
-{% set podeComentir  = is_granted('SOLICITACAO_COMENTAR',     solicitacao) %}
-{% set podeInterno   = is_granted('SOLICITACAO_VER_INTERNO',  solicitacao) %}
+{% set podeVer      = is_granted('SOLICITACAO_VER',          solicitacao) %}
+{% set podeComentar = is_granted('SOLICITACAO_COMENTAR',     solicitacao) %}
+{% set podeInterno  = is_granted('SOLICITACAO_VER_INTERNO',  solicitacao) %}
 
 <div class="card" id="chat">
     <div class="card-header fw-semibold d-flex align-items-center gap-2">
@@ -71,12 +71,12 @@
                 <i class="bi bi-lock me-1"></i>
                 <a href="{{ path('app_login') }}">Entre</a> para participar da conversa.
             </p>
-        {% elseif not podeComentir %}
+        {% elseif not podeComentar %}
             {# Usuário logado mas sem permissão #}
             <div class="alert alert-warning py-2 px-3 mb-0 small">
                 <i class="bi bi-shield-exclamation me-1"></i>
                 Apenas o solicitante e os responsáveis pelo tipo
-                <strong>{{ solicitacao.tipo.nome ?? '' }}</strong>
+                <strong>{{ solicitacao.tipoLabel }}</strong>
                 podem comentar nesta solicitação.
             </div>
         {% else %}

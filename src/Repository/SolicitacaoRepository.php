@@ -85,7 +85,16 @@ class SolicitacaoRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
 
-        $map = ['pendente' => 0, 'resolvida' => 0, 'cancelada' => 0];
+        // Inicializa todos os 7 status para evitar null no Twig
+        $map = [
+            Solicitacao::STATUS_PENDENTE     => 0,
+            Solicitacao::STATUS_EM_ANALISE   => 0,
+            Solicitacao::STATUS_EM_ANDAMENTO => 0,
+            Solicitacao::STATUS_AGUARDANDO   => 0,
+            Solicitacao::STATUS_RESOLVIDA    => 0,
+            Solicitacao::STATUS_NEGADA       => 0,
+            Solicitacao::STATUS_CANCELADA    => 0,
+        ];
         foreach ($rows as $r) {
             $map[$r['status']] = (int) $r['total'];
         }

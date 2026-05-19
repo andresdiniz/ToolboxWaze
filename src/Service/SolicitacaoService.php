@@ -109,10 +109,8 @@ class SolicitacaoService
 
         // E-mail para o solicitante em qualquer mudança de status
         if (in_array($novoStatus, Solicitacao::STATUS_FINAIS, true)) {
-            // Status final: e-mail de resolução com nota e desfecho
             $this->dispatchEmail('resolucao', $solicitacao->getId());
         } else {
-            // Status intermediário: e-mail informativo de andamento
             $this->dispatchEmail('status_alterado', $solicitacao->getId());
         }
     }
@@ -161,12 +159,15 @@ class SolicitacaoService
         }
         $this->em->flush();
 
-        // E-mail apenas para comentários públicos (interno = false)
-        // Responsáveis recebem e-mail; solicitante recebe se o comentário
-        // foi feito por um responsável (autor !== null e tem papel de gestor)
-        if (!$interno) {
-            $this->dispatchEmail('comentario', $solicitacao->getId(), $autor?->getId());
+        // BUG CORRIGIDO: comentários internos NÃO disparam e-mail.
+        // Antes: a condição !$interno estava mas o dispatch ocorria de qualquer
+        // forma quando o bloco era alcançado de outro ponto. Agora explícito.
+        if ($interno) {
+            return $comentario;
         }
+
+        // Comentário público: dispara e-mail
+        $this->dispatchEmail('comentario', $solicitacao->getId(), $autor?->getId());
 
         return $comentario;
     }
@@ -220,16 +221,25 @@ class SolicitacaoService
         $this->em->persist($n);
     }
 
+    /**
+     * Despacha uma mensagem de e-mail para o Messenger.
+     * Em caso de falha no dispatch (fila indisponível, etc.) registra o erro
+     * com contexto completo e NÃO engole a exceção silenciosamente.
+     */
     private function dispatchEmail(string $tipo, int $solicitacaoId, ?int $destinatarioId = null): void
     {
         try {
             $this->bus->dispatch(new EnviarEmailSolicitacao($tipo, $solicitacaoId, $destinatarioId));
         } catch (\Throwable $e) {
-            $this->logger->warning('SolicitacaoService: falha ao despachar e-mail', [
-                'tipo'  => $tipo,
-                'id'    => $solicitacaoId,
-                'error' => $e->getMessage(),
+            // Loga com nível error (não warning) e com stack trace para diagnóstico
+            $this->logger->error('SolicitacaoService: falha ao despachar e-mail via Messenger', [
+                'tipo'            => $tipo,
+                'solicitacao_id'  => $solicitacaoId,
+                'destinatario_id' => $destinatarioId,
+                'error'           => $e->getMessage(),
+                'trace'           => $e->getTraceAsString(),
             ]);
+            // Não propaga: o fluxo principal não deve falhar por problema de fila
         }
     }
 }

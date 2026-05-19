@@ -10,6 +10,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 use Twig\Environment;
 
@@ -22,8 +23,8 @@ class EnviarEmailSolicitacaoHandler
         private readonly SolicitacaoRepository $solicitacaoRepo,
         private readonly UserRepository        $userRepo,
         private readonly LoggerInterface       $logger,
-        #[Autowire('%env(MAILER_FROM)%')]    private readonly string $mailerFrom,
-        #[Autowire('%env(APP_BASE_URL)%')]   private readonly string $appBaseUrl,
+        #[Autowire('%env(MAILER_FROM)%')]   private readonly string $mailerFrom,
+        #[Autowire('%env(APP_BASE_URL)%')]  private readonly string $appBaseUrl,
     ) {}
 
     public function __invoke(EnviarEmailSolicitacao $message): void
@@ -38,24 +39,59 @@ class EnviarEmailSolicitacaoHandler
 
         try {
             match ($message->tipo) {
-                'confirmacao'    => $this->enviarConfirmacao($sol),
-                'responsavel'    => $this->enviarResponsavel($sol, $message->destinatarioId),
-                'resolucao'      => $this->enviarResolucao($sol),
-                'status_alterado'=> $this->enviarStatusAlterado($sol),
-                'comentario'     => $this->enviarComentario($sol, $message->destinatarioId),
-                default          => $this->logger->warning('EnviarEmailHandler: tipo desconhecido', [
-                                        'tipo' => $message->tipo,
-                                    ]),
+                'confirmacao'     => $this->enviarConfirmacao($sol),
+                'responsavel'     => $this->enviarResponsavel($sol, $message->destinatarioId),
+                'resolucao'       => $this->enviarResolucao($sol),
+                'status_alterado' => $this->enviarStatusAlterado($sol),
+                'comentario'      => $this->enviarComentario($sol, $message->destinatarioId),
+                default           => $this->logger->warning('EnviarEmailHandler: tipo desconhecido', [
+                                         'tipo' => $message->tipo,
+                                     ]),
             };
         } catch (\Throwable $e) {
             $this->logger->error('EnviarEmailHandler: falha no envio', [
                 'tipo'  => $message->tipo,
                 'id'    => $message->solicitacaoId,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             // Re-lança para retry automático do Messenger
             throw $e;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    /**
+     * Retorna um Address garantindo que MAILER_FROM possa ser:
+     *   - "noreply@site.com"
+     *   - "ToolboxWaze <noreply@site.com>"
+     */
+    private function fromAddress(): Address
+    {
+        // Tenta parse "Nome <email@exemplo.com>"
+        if (preg_match('/^(.+)\s<([^>]+)>$/', trim($this->mailerFrom), $m)) {
+            return new Address(trim($m[2]), trim($m[1]));
+        }
+        return new Address(trim($this->mailerFrom), 'ToolboxWaze');
+    }
+
+    private function buildUrl(Solicitacao $s): string
+    {
+        return rtrim($this->appBaseUrl, '/') . '/solicitacoes/' . $s->getId();
+    }
+
+    private function send(string $to, string $subject, string $html): void
+    {
+        $this->mailer->send(
+            (new Email())
+                ->from($this->fromAddress())
+                ->to($to)
+                ->subject($subject)
+                ->html($html)
+        );
     }
 
     // ------------------------------------------------------------------
@@ -65,14 +101,12 @@ class EnviarEmailSolicitacaoHandler
     {
         $html = $this->twig->render('emails/solicitacao_confirmacao.html.twig', [
             'solicitacao' => $s,
-            'url'         => $this->appBaseUrl . '/solicitacoes/' . $s->getId(),
+            'url'         => $this->buildUrl($s),
         ]);
-        $this->mailer->send(
-            (new Email())
-                ->from($this->mailerFrom)
-                ->to($s->getSolicitanteEmail())
-                ->subject('[ToolboxWaze] Solicitação recebida: ' . $s->getTipoLabel())
-                ->html($html)
+        $this->send(
+            $s->getSolicitanteEmail(),
+            '[ToolboxWaze] Solicitação recebida: ' . $s->getTipoLabel(),
+            $html
         );
     }
 
@@ -81,21 +115,29 @@ class EnviarEmailSolicitacaoHandler
     // ------------------------------------------------------------------
     private function enviarResponsavel(Solicitacao $s, ?int $responsavelId): void
     {
-        if (!$responsavelId) return;
+        if (!$responsavelId) {
+            $this->logger->warning('EnviarEmailHandler: enviarResponsavel chamado sem responsavelId', [
+                'solicitacao_id' => $s->getId(),
+            ]);
+            return;
+        }
         $responsavel = $this->userRepo->find($responsavelId);
-        if (!$responsavel) return;
+        if (!$responsavel) {
+            $this->logger->warning('EnviarEmailHandler: responsável não encontrado', [
+                'responsavel_id' => $responsavelId,
+            ]);
+            return;
+        }
 
         $html = $this->twig->render('emails/solicitacao_responsavel.html.twig', [
             'solicitacao' => $s,
             'responsavel' => $responsavel,
-            'url'         => $this->appBaseUrl . '/solicitacoes/' . $s->getId(),
+            'url'         => $this->buildUrl($s),
         ]);
-        $this->mailer->send(
-            (new Email())
-                ->from($this->mailerFrom)
-                ->to($responsavel->getEmail())
-                ->subject('[ToolboxWaze] Nova pendência: ' . $s->getTipoLabel() . ' (#' . $s->getId() . ')')
-                ->html($html)
+        $this->send(
+            $responsavel->getEmail(),
+            sprintf('[ToolboxWaze] Nova pendência: %s (#%d)', $s->getTipoLabel(), $s->getId()),
+            $html
         );
     }
 
@@ -106,14 +148,12 @@ class EnviarEmailSolicitacaoHandler
     {
         $html = $this->twig->render('emails/solicitacao_resolvida.html.twig', [
             'solicitacao' => $s,
-            'url'         => $this->appBaseUrl . '/solicitacoes/' . $s->getId(),
+            'url'         => $this->buildUrl($s),
         ]);
-        $this->mailer->send(
-            (new Email())
-                ->from($this->mailerFrom)
-                ->to($s->getSolicitanteEmail())
-                ->subject('[ToolboxWaze] Sua solicitação foi tratada: ' . $s->getTipoLabel())
-                ->html($html)
+        $this->send(
+            $s->getSolicitanteEmail(),
+            '[ToolboxWaze] Sua solicitação foi tratada: ' . $s->getTipoLabel(),
+            $html
         );
     }
 
@@ -124,74 +164,83 @@ class EnviarEmailSolicitacaoHandler
     {
         $html = $this->twig->render('emails/solicitacao_status_alterado.html.twig', [
             'solicitacao' => $s,
-            'url'         => $this->appBaseUrl . '/solicitacoes/' . $s->getId(),
+            'url'         => $this->buildUrl($s),
         ]);
-        $this->mailer->send(
-            (new Email())
-                ->from($this->mailerFrom)
-                ->to($s->getSolicitanteEmail())
-                ->subject('[ToolboxWaze] Atualização na sua solicitação #' . $s->getId())
-                ->html($html)
+        $this->send(
+            $s->getSolicitanteEmail(),
+            '[ToolboxWaze] Atualização na sua solicitação #' . $s->getId(),
+            $html
         );
     }
 
     // ------------------------------------------------------------------
     // Novo comentário público
-    // Lógica:
-    //   - Se autorId == null  → comentário veio do solicitante anônimo
-    //     → envia e-mail para todos os responsáveis
-    //   - Se autorId != null  → comentário veio de um responsável
-    //     → envia e-mail para o solicitante (e para outros responsáveis
-    //        que não sejam o autor)
+    //
+    // Regras:
+    //   autorId == null  → comentário do solicitante externo (sem login)
+    //                      → avisa todos os responsáveis
+    //   autorId != null  → comentário de um responsável/admin logado
+    //                      → avisa o solicitante
+    //                      → avisa demais responsáveis (exceto o autor)
+    //
+    // IMPORTANTE: comentários internos (interno=true) NUNCA chegam aqui —
+    // o SolicitacaoService só faz dispatch quando interno=false.  Esta
+    // verificação é apenas uma camada de defesa extra.
     // ------------------------------------------------------------------
     private function enviarComentario(Solicitacao $s, ?int $autorId): void
     {
-        $url = $this->appBaseUrl . '/solicitacoes/' . $s->getId();
+        $url = $this->buildUrl($s);
 
         if ($autorId === null) {
-            // Solicitante comentou → avisa responsáveis
-            foreach ($s->getResponsaveis() as $r) {
+            // Solicitante (anônimo / sem login) comentou → avisa responsáveis
+            $responsaveis = $s->getResponsaveis();
+
+            if ($responsaveis->isEmpty()) {
+                $this->logger->info(
+                    'EnviarEmailHandler: solicitação sem responsáveis cadastrados — comentário sem destinatário',
+                    ['solicitacao_id' => $s->getId()]
+                );
+                return;
+            }
+
+            foreach ($responsaveis as $r) {
                 $html = $this->twig->render('emails/solicitacao_comentario.html.twig', [
                     'solicitacao' => $s,
                     'responsavel' => $r,
                     'url'         => $url,
                 ]);
-                $this->mailer->send(
-                    (new Email())
-                        ->from($this->mailerFrom)
-                        ->to($r->getEmail())
-                        ->subject('[ToolboxWaze] Novo comentário em #' . $s->getId())
-                        ->html($html)
+                $this->send(
+                    $r->getEmail(),
+                    '[ToolboxWaze] Novo comentário em #' . $s->getId(),
+                    $html
                 );
             }
         } else {
-            // Responsável comentou → avisa solicitante
+            // Responsável/admin comentou → avisa o solicitante
             $html = $this->twig->render('emails/solicitacao_comentario_solicitante.html.twig', [
                 'solicitacao' => $s,
                 'url'         => $url,
             ]);
-            $this->mailer->send(
-                (new Email())
-                    ->from($this->mailerFrom)
-                    ->to($s->getSolicitanteEmail())
-                    ->subject('[ToolboxWaze] Resposta na sua solicitação #' . $s->getId())
-                    ->html($html)
+            $this->send(
+                $s->getSolicitanteEmail(),
+                '[ToolboxWaze] Resposta na sua solicitação #' . $s->getId(),
+                $html
             );
 
-            // Avisa outros responsáveis também (exceto o autor)
+            // Avisa outros responsáveis (exceto o autor do comentário)
             foreach ($s->getResponsaveis() as $r) {
-                if ($r->getId() === $autorId) continue;
+                if ($r->getId() === $autorId) {
+                    continue;
+                }
                 $html2 = $this->twig->render('emails/solicitacao_comentario.html.twig', [
                     'solicitacao' => $s,
                     'responsavel' => $r,
                     'url'         => $url,
                 ]);
-                $this->mailer->send(
-                    (new Email())
-                        ->from($this->mailerFrom)
-                        ->to($r->getEmail())
-                        ->subject('[ToolboxWaze] Novo comentário em #' . $s->getId())
-                        ->html($html2)
+                $this->send(
+                    $r->getEmail(),
+                    '[ToolboxWaze] Novo comentário em #' . $s->getId(),
+                    $html2
                 );
             }
         }

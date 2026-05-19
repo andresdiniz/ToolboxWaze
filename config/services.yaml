@@ -15,11 +15,21 @@ services:
             - '../src/Entity/'
             - '../src/Kernel.php'
 
-    # EnviarEmailSolicitacaoHandler usa #[Autowire] diretamente no construtor
-    # para o canal email_queue — sem necessidade de override aqui.
+    # ---------------------------------------------------------------
+    # Controllers
+    # ---------------------------------------------------------------
 
-    # Os handlers abaixo NÃO usam #[Autowire] no construtor,
-    # por isso precisam de configuração explícita:
+    # $mailFrom não pode ser autowired (é string) — injeção explícita necessária
+    App\Controller\RegistrationController:
+        arguments:
+            $mailFrom: '%env(MAILER_FROM)%'
+
+    # ---------------------------------------------------------------
+    # MessageHandlers
+    # EnviarEmailSolicitacaoHandler usa #[Autowire] no construtor (auto).
+    # Os demais precisam de configuração explícita abaixo.
+    # ---------------------------------------------------------------
+
     App\MessageHandler\EnviarEmailContaHandler:
         arguments:
             $emailQueueLogger: '@monolog.logger.email_queue'

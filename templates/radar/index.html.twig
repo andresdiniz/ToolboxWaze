@@ -17,43 +17,43 @@
 
 {# ── Stats ── #}
 {% if stats %}
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md col-sm-4">
-        <div class="card stat-card p-3 h-100">
-            <div class="detail-label">Total</div>
-            <div class="stat-value">{{ stats.total|number_format(0,',','.') }}</div>
+<div class="row g-2 mb-4">
+    <div class="col-6 col-sm-4 col-md-2">
+        <div class="card p-3 h-100 text-center">
+            <div class="detail-label mb-1">Total</div>
+            <div class="stat-value fw-bold fs-4">{{ stats.total|number_format(0,',','.') }}</div>
         </div>
     </div>
-    <div class="col-6 col-md col-sm-4">
-        <div class="card p-3 h-100" style="border-left:3px solid #198754">
-            <div class="detail-label">Aprovados</div>
-            <div class="stat-value" style="color:#198754">{{ stats.aprovados|default(0)|number_format(0,',','.') }}</div>
+    <div class="col-6 col-sm-4 col-md-2">
+        <div class="card p-3 h-100 text-center border-success border-opacity-50">
+            <div class="detail-label mb-1 text-success">Aprovados</div>
+            <div class="stat-value fw-bold fs-4 text-success">{{ stats.aprovados|default(0)|number_format(0,',','.') }}</div>
         </div>
     </div>
-    <div class="col-6 col-md col-sm-4">
-        <div class="card p-3 h-100" style="border-left:3px solid #dc3545">
-            <div class="detail-label">Reprovados</div>
-            <div class="stat-value" style="color:#dc3545">{{ stats.reprovados|default(0)|number_format(0,',','.') }}</div>
+    <div class="col-6 col-sm-4 col-md-2">
+        <div class="card p-3 h-100 text-center border-danger border-opacity-50">
+            <div class="detail-label mb-1 text-danger">Reprovados</div>
+            <div class="stat-value fw-bold fs-4 text-danger">{{ stats.reprovados|default(0)|number_format(0,',','.') }}</div>
         </div>
     </div>
-    <div class="col-6 col-md col-sm-4">
-        <div class="card p-3 h-100" style="border-left:3px solid #dc3545">
-            <div class="detail-label">Vencidos</div>
-            <div class="stat-value" style="color:#dc3545">{{ stats.vencidos|default(0)|number_format(0,',','.') }}</div>
-            <div style="font-size:.7rem" class="text-muted">validade expirada</div>
+    <div class="col-6 col-sm-4 col-md-2">
+        <div class="card p-3 h-100 text-center border-danger border-opacity-25">
+            <div class="detail-label mb-1 text-danger">Vencidos</div>
+            <div class="stat-value fw-bold fs-4 text-danger">{{ stats.vencidos|default(0)|number_format(0,',','.') }}</div>
+            <div class="text-muted" style="font-size:.7rem">validade expirada</div>
         </div>
     </div>
-    <div class="col-6 col-md col-sm-4">
-        <div class="card p-3 h-100" style="border-left:3px solid #fd7e14">
-            <div class="detail-label">Vencendo</div>
-            <div class="stat-value" style="color:#fd7e14">{{ stats.vencendo|default(0)|number_format(0,',','.') }}</div>
-            <div style="font-size:.7rem" class="text-muted">próx. 30 dias</div>
+    <div class="col-6 col-sm-4 col-md-2">
+        <div class="card p-3 h-100 text-center border-warning border-opacity-50">
+            <div class="detail-label mb-1 text-warning">Vencendo</div>
+            <div class="stat-value fw-bold fs-4 text-warning">{{ stats.vencendo|default(0)|number_format(0,',','.') }}</div>
+            <div class="text-muted" style="font-size:.7rem">próx. 30 dias</div>
         </div>
     </div>
-    <div class="col-6 col-md col-sm-4">
-        <div class="card p-3 h-100" style="border-left:3px solid #6c757d">
-            <div class="detail-label">Estados</div>
-            <div class="stat-value" style="color:#6c757d">{{ stats.estados }}</div>
+    <div class="col-6 col-sm-4 col-md-2">
+        <div class="card p-3 h-100 text-center">
+            <div class="detail-label mb-1">Estados</div>
+            <div class="stat-value fw-bold fs-4 text-secondary">{{ stats.estados }}</div>
         </div>
     </div>
 </div>
@@ -68,13 +68,13 @@
             <span class="badge bg-primary ms-1">{{ activeCount }} ativo{{ activeCount > 1 ? 's' }}</span>
         {% endif %}
     </div>
-    <div class="card-body">
+    <div class="card-body pb-2">
         <form method="get" class="filters-form" id="filterForm">
             <div class="row g-2 align-items-end">
 
                 <div class="col-6 col-md-1">
                     <label class="form-label mb-1 detail-label">Estado</label>
-                    <select name="uf" class="form-select form-select-sm">
+                    <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         {% for u in ufs %}
                             <option value="{{ u }}" {{ filters.uf == u ? 'selected' }}>{{ u }}</option>
@@ -90,7 +90,7 @@
 
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1 detail-label">Resultado</label>
-                    <select name="resultado" class="form-select form-select-sm">
+                    <select name="resultado" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         {% for r in resultados %}
                             <option value="{{ r }}" {{ filters.resultado == r ? 'selected' }}>{{ r }}</option>
@@ -100,7 +100,7 @@
 
                 <div class="col-12 col-md-2">
                     <label class="form-label mb-1 detail-label">Tipo Medidor</label>
-                    <select name="tipo" class="form-select form-select-sm">
+                    <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         {% for t in tipos %}
                             <option value="{{ t }}" {{ filters.tipo == t ? 'selected' }}>{{ t }}</option>
@@ -110,7 +110,7 @@
 
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1 detail-label">Validade</label>
-                    <select name="validade" class="form-select form-select-sm">
+                    <select name="validade" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todas</option>
                         <option value="valido"  {{ filters.validade == 'valido'  ? 'selected' }}>✓ Dentro do prazo</option>
                         <option value="30dias"  {{ filters.validade == '30dias'  ? 'selected' }}>⚠ Vence em 30 dias</option>
@@ -125,7 +125,7 @@
                 </div>
 
                 <div class="col-12 col-md-1 d-flex gap-1">
-                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1" title="Buscar">
                         <i class="bi bi-search"></i>
                     </button>
                     {% if activeCount > 0 %}
@@ -184,82 +184,103 @@
     </div>
 </div>
 
+{# ── Aviso UFs restritas ── #}
+{% if allowedUfs is not null and allowedUfs|length > 0 %}
+<div class="alert alert-info py-2 px-3 mb-3 small">
+    <i class="bi bi-shield-lock me-1"></i>
+    Exibindo apenas dados dos estados autorizados para sua conta:
+    {% for uf in allowedUfs %}
+        <span class="badge bg-primary ms-1">{{ uf }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+
 {# ── Tabela ── #}
-{% if rows is empty %}
-    <div class="text-center py-5 text-muted">
-        <i class="bi bi-camera-video-off fs-1 d-block mb-2"></i>
-        <p class="mb-0">Nenhum radar encontrado com os filtros selecionados.</p>
-        {% if activeCount > 0 %}
-            <a href="{{ path('radar_index') }}" class="btn btn-outline-primary btn-sm mt-3">
-                <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar filtros
-            </a>
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small">
+            <i class="bi bi-table me-1"></i>
+            {% if total > 0 %}
+                Mostrando {{ ((page-1)*per_page + 1)|number_format(0,',','.') }}–{{ [page*per_page, total]|min|number_format(0,',','.') }}
+                de {{ total|number_format(0,',','.') }}
+            {% else %}
+                Nenhum registro encontrado
+            {% endif %}
+        </span>
+        {% if total > per_page %}
+        <small class="text-muted">Página {{ page }} de {{ pages }}</small>
         {% endif %}
     </div>
-{% else %}
-<div class="card">
+
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover table-sm mb-0 align-middle">
             <thead class="table-light">
                 <tr>
-                    <th style="width:50px">UF</th>
+                    <th class="ps-3">UF</th>
                     <th>Município</th>
-                    <th>Local de Verificação</th>
+                    <th>Local</th>
                     <th>Tipo</th>
                     <th>Resultado</th>
-                    <th>Última Verif.</th>
+                    <th>Ú. Verificação</th>
                     <th>Validade</th>
                     <th>Proprietário</th>
-                    <th style="width:40px"></th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in rows %}
-                {% set vencido   = row.data_validade and row.data_validade < hoje %}
-                {% set vencendo  = row.data_validade and row.data_validade >= hoje and row.data_validade <= em30 %}
-                <tr class="row-link {{ vencido ? 'table-danger' : (vencendo ? 'table-warning' : '') }}"
-                    onclick="window.location='{{ path('radar_show', {id: row.id}) }}'">
-                    <td><span class="badge badge-uf">{{ row.sigla_uf }}</span></td>
-                    <td>{{ row.municipio }}</td>
-                    <td class="text-truncate" style="max-width:200px" title="{{ row.local_verificacao }}">
-                        {{ row.local_verificacao }}
+                <tr>
+                    <td class="ps-3">
+                        <span class="badge bg-secondary">{{ row.sigla_uf }}</span>
                     </td>
-                    <td><small class="text-muted">{{ row.tipo_medidor ?? '—' }}</small></td>
+                    <td class="text-nowrap">{{ row.municipio }}</td>
+                    <td style="max-width:220px">
+                        <span class="d-block text-truncate" title="{{ row.local_verificacao }}">{{ row.local_verificacao }}</span>
+                    </td>
+                    <td class="text-muted small text-nowrap">{{ row.tipo_medidor ?? '—' }}</td>
                     <td>
                         {% if row.ultimo_resultado == 'APROVADO' %}
-                            <span class="badge badge-aprovado"><i class="bi bi-check-circle me-1"></i>APROVADO</span>
+                            <span class="badge badge-aprovado"><i class="bi bi-check-circle me-1"></i>Aprovado</span>
                         {% elseif row.ultimo_resultado == 'REPROVADO' %}
-                            <span class="badge badge-reprovado"><i class="bi bi-x-circle me-1"></i>REPROVADO</span>
+                            <span class="badge badge-reprovado"><i class="bi bi-x-circle me-1"></i>Reprovado</span>
                         {% else %}
-                            <span class="badge bg-secondary">{{ row.ultimo_resultado ?? '—' }}</span>
+                            <span class="text-muted small">{{ row.ultimo_resultado ?? '—' }}</span>
                         {% endif %}
                     </td>
-                    <td><small>{{ row.data_ultima_verificacao ?? '—' }}</small></td>
-                    <td>
+                    <td class="text-muted small text-nowrap">{{ row.data_ultima_verificacao ?? '—' }}</td>
+                    <td class="text-nowrap">
                         {% if row.data_validade %}
-                            {% if vencido %}
-                                <span class="fw-semibold text-danger">
-                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ row.data_validade }}
-                                </span>
-                            {% elseif vencendo %}
-                                <span class="fw-semibold text-warning">
-                                    <i class="bi bi-clock-fill me-1"></i>{{ row.data_validade }}
-                                </span>
+                            {% if row.data_validade < hoje %}
+                                <span class="text-danger small"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ row.data_validade }}</span>
+                            {% elseif row.data_validade <= em30 %}
+                                <span class="text-warning small"><i class="bi bi-clock me-1"></i>{{ row.data_validade }}</span>
                             {% else %}
-                                <span class="text-success">
-                                    <i class="bi bi-check me-1"></i>{{ row.data_validade }}
-                                </span>
+                                <span class="text-success small"><i class="bi bi-check me-1"></i>{{ row.data_validade }}</span>
                             {% endif %}
-                        {% else %}—{% endif %}
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
                     </td>
-                    <td class="text-truncate" style="max-width:150px" title="{{ row.proprietario_nome }}">
-                        <small>{{ row.proprietario_nome ?? '—' }}</small>
+                    <td class="text-muted small" style="max-width:160px">
+                        <span class="d-block text-truncate" title="{{ row.proprietario_nome }}">{{ row.proprietario_nome ?? '—' }}</span>
                     </td>
-                    <td>
+                    <td class="text-end pe-3">
                         <a href="{{ path('radar_show', {id: row.id}) }}"
-                           class="btn btn-outline-primary btn-sm py-0 px-2"
-                           onclick="event.stopPropagation()" title="Ver detalhes">
-                            <i class="bi bi-eye"></i>
+                           class="btn btn-sm btn-outline-primary py-0 px-2">
+                            <i class="bi bi-eye me-1"></i>Ver
                         </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-5">
+                        <i class="bi bi-camera-video-off d-block mb-2" style="font-size:2rem"></i>
+                        Nenhum radar encontrado com os filtros aplicados.
+                        {% if activeCount > 0 %}
+                            <div class="mt-2">
+                                <a href="{{ path('radar_index') }}" class="btn btn-sm btn-outline-secondary">Limpar filtros</a>
+                            </div>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -267,55 +288,45 @@
         </table>
     </div>
 
-    <div class="card-footer text-muted small d-flex justify-content-between align-items-center">
-        <span>
-            Mostrando {{ rows|length }} de {{ total|number_format(0,',','.') }} registros
-        </span>
-        <div class="d-flex gap-3">
-            <span><span class="badge" style="background:#dc354520;color:#dc3545;border:1px solid #dc354550">■</span> Vencido</span>
-            <span><span class="badge" style="background:#ffc10720;color:#856404;border:1px solid #ffc10750">■</span> Vence em 30 dias</span>
-        </div>
+    {# Paginação #}
+    {% if pages > 1 %}
+    <div class="card-footer py-2">
+        <nav aria-label="Paginação">
+            <ul class="pagination pagination-sm mb-0 justify-content-center flex-wrap">
+                <li class="page-item {{ page <= 1 ? 'disabled' }}">
+                    <a class="page-link" href="{{ path('radar_index', filters|merge({page: page-1})) }}">‹ Anterior</a>
+                </li>
+
+                {% set startPage = max(1, page - 2) %}
+                {% set endPage   = min(pages, page + 2) %}
+
+                {% if startPage > 1 %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ path('radar_index', filters|merge({page: 1})) }}">1</a>
+                    </li>
+                    {% if startPage > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                {% endif %}
+
+                {% for p in startPage..endPage %}
+                <li class="page-item {{ p == page ? 'active' }}">
+                    <a class="page-link" href="{{ path('radar_index', filters|merge({page: p})) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if endPage < pages %}
+                    {% if endPage < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ path('radar_index', filters|merge({page: pages})) }}">{{ pages }}</a>
+                    </li>
+                {% endif %}
+
+                <li class="page-item {{ page >= pages ? 'disabled' }}">
+                    <a class="page-link" href="{{ path('radar_index', filters|merge({page: page+1})) }}">Próxima ›</a>
+                </li>
+            </ul>
+        </nav>
     </div>
+    {% endif %}
 </div>
 
-{# ── Paginação ── #}
-{% if pages > 1 %}
-<nav class="mt-3" aria-label="Paginação">
-    <ul class="pagination pagination-sm justify-content-center flex-wrap">
-
-        <li class="page-item {{ page == 1 ? 'disabled' }}">
-            <a class="page-link" href="{{ path('radar_index', filters|merge({page: page - 1})) }}" aria-label="Anterior">‹</a>
-        </li>
-
-        {% set from = max(1, page - 2) %}
-        {% set to   = min(pages, page + 2) %}
-
-        {% if from > 1 %}
-            <li class="page-item"><a class="page-link" href="{{ path('radar_index', filters|merge({page: 1})) }}">1</a></li>
-            {% if from > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-        {% endif %}
-
-        {% for p in from..to %}
-            <li class="page-item {{ p == page ? 'active' }}">
-                <a class="page-link" href="{{ path('radar_index', filters|merge({page: p})) }}">{{ p }}</a>
-            </li>
-        {% endfor %}
-
-        {% if to < pages %}
-            {% if to < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-            <li class="page-item"><a class="page-link" href="{{ path('radar_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
-        {% endif %}
-
-        <li class="page-item {{ page == pages ? 'disabled' }}">
-            <a class="page-link" href="{{ path('radar_index', filters|merge({page: page + 1})) }}" aria-label="Próxima">›</a>
-        </li>
-
-    </ul>
-    <p class="text-center text-muted small mt-1">
-        Página {{ page }} de {{ pages }} — {{ total|number_format(0,',','.') }} registros
-    </p>
-</nav>
-{% endif %}
-
-{% endif %}
 {% endblock %}

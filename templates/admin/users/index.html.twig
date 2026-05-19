@@ -59,6 +59,18 @@
         .admin-toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
         .admin-toggle label{font-size:.875rem;font-weight:600;color:var(--primary);cursor:pointer}
 
+        /* UFs */
+        .ufs-section{margin-top:1rem;margin-bottom:1.25rem}
+        .ufs-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;flex-wrap:wrap;gap:.5rem}
+        .ufs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:.35rem;margin-top:.6rem}
+        .uf-check{display:flex;align-items:center;justify-content:center;gap:.3rem;padding:.4rem .5rem;border:1px solid var(--border);border-radius:.4rem;cursor:pointer;transition:.15s;font-size:.8rem;font-weight:600;background:var(--surface)}
+        .uf-check:hover{border-color:var(--primary);background:var(--primary-hl)}
+        .uf-check input{accent-color:var(--primary);width:13px;height:13px;cursor:pointer}
+        .uf-check.is-checked{border-color:var(--primary);background:var(--primary-hl);color:var(--primary)}
+        .all-ufs-toggle{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--muted);cursor:pointer;user-select:none}
+        .all-ufs-toggle input{accent-color:var(--primary);width:14px;height:14px;cursor:pointer}
+        .ufs-count{font-size:.78rem;color:var(--muted);margin-top:.45rem}
+
         /* Tipos de Solicitação */
         .tipos-section{margin-top:1rem;margin-bottom:1.25rem}
         .tipos-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem}
@@ -119,7 +131,38 @@
         </button>
     </div>
 
-    {# Macro para o bloco de Tipos de Solicitação (reutilizado em pendentes e aprovados) #}
+    {# ──────────────────────────────────────────────────────────
+       MACRO: bloco de Estados (UFs) — reutilizado em pendentes e aprovados
+    ────────────────────────────────────────────────────────── #}
+    {% macro ufsBlock(user, allUfs) %}
+    <div class="ufs-section">
+        <div class="ufs-header">
+            <div class="section-label" style="margin-bottom:0">Estados com acesso</div>
+            <label class="all-ufs-toggle">
+                <input type="checkbox" name="all_ufs" value="1"
+                    id="all_ufs_{{ user.id }}"
+                    {{ user.allowedUfs is null ? 'checked' : '' }}
+                    onchange="toggleAllUfs({{ user.id }}, this.checked)">
+                Todos os estados
+            </label>
+        </div>
+        <div class="ufs-grid" id="ufs_grid_{{ user.id }}"
+             style="{{ user.allowedUfs is null ? 'opacity:.4;pointer-events:none' : '' }}">
+            {% for uf in allUfs %}
+            {% set checked = user.allowedUfs is null or uf in (user.allowedUfs ?? []) %}
+            <label class="uf-check {{ checked ? 'is-checked' : '' }}" id="uflabel_{{ user.id }}_{{ uf }}">
+                <input type="checkbox" name="allowed_ufs[]" value="{{ uf }}"
+                    {{ checked ? 'checked' : '' }}
+                    onchange="this.closest('.uf-check').classList.toggle('is-checked', this.checked);updateUfsCount({{ user.id }})">
+                {{ uf }}
+            </label>
+            {% endfor %}
+        </div>
+        <div class="ufs-count" id="ufs_count_{{ user.id }}"></div>
+    </div>
+    {% endmacro %}
+
+    {# MACRO: bloco de Tipos de Solicitação #}
     {% macro tiposBlock(user, allTipos) %}
     <div class="tipos-section">
         <div class="tipos-header">
@@ -175,7 +218,6 @@
                 <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
             </div>
             <div class="user-card-body">
-                {# form de aprovação #}
                 <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
 
@@ -194,6 +236,9 @@
                         {% endfor %}
                     </div>
 
+                    {# ESTADOS — macro reutilizável; user pendente começa com all_ufs marcado #}
+                    {{ _self.ufsBlock(user, allUfs) }}
+
                     {{ _self.tiposBlock(user, allTipos) }}
 
                     <div class="actions">
@@ -204,7 +249,6 @@
                     </div>
                 </form>
 
-                {# form de rejeição — separado, fora do form de aprovação #}
                 <form method="POST" action="{{ path('admin_users_reject', {id: user.id}) }}" style="margin-top:.5rem">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
                     <button type="submit" class="btn btn-reject" onclick="return confirm('Rejeitar este usuário?')">
@@ -240,6 +284,16 @@
                         <span>{{ user.email }}</span>
                         {% if user.wazeNickname %}<span>🗺 {{ user.wazeNickname }}</span>{% endif %}
                         {% if user.lastLoginAt %}<span>Último acesso {{ user.lastLoginAt|date('d/m/Y') }}</span>{% endif %}
+                        {# Exibir UFs atuais do usuário no header do card #}
+                        {% if user.allowedUfs is not null %}
+                            <span title="Estados com acesso">
+                                🗺
+                                {% for uf in user.allowedUfs|slice(0,4) %}{{ uf }}{% if not loop.last %}, {% endif %}{% endfor %}
+                                {% if user.allowedUfs|length > 4 %}+{{ user.allowedUfs|length - 4 }} UFs{% endif %}
+                            </span>
+                        {% else %}
+                            <span title="Acesso a todos os estados">🌎 Todos os estados</span>
+                        {% endif %}
                     </div>
                 </div>
                 {% if user.isAdmin %}<span class="badge badge-admin">Admin</span>{% else %}<span class="badge badge-approved">Ativo</span>{% endif %}
@@ -251,7 +305,6 @@
                     <span>Cadastrado em <strong>{{ user.createdAt|date('d/m/Y') }}</strong></span>
                 </div>
 
-                {# form de permissões — sem nenhum form aninhado dentro #}
                 <form method="POST" action="{{ path('admin_users_permissions', {id: user.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_perms_' ~ user.id) }}">
 
@@ -270,6 +323,9 @@
                         {% endfor %}
                     </div>
 
+                    {# ESTADOS — com os valores atuais do usuário pré-selecionados #}
+                    {{ _self.ufsBlock(user, allUfs) }}
+
                     {{ _self.tiposBlock(user, allTipos) }}
 
                     <div class="actions">
@@ -280,7 +336,6 @@
                     </div>
                 </form>
 
-                {# form de remoção — separado, fora do form de permissões #}
                 <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}" style="margin-top:.5rem">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
                     <button type="submit" class="btn btn-delete" onclick="return confirm('Remover este usuário permanentemente?')">
@@ -344,6 +399,34 @@ function switchTab(name, btn) {
 function toggleCard(id) {
     document.getElementById('card-' + id).classList.toggle('open');
 }
+
+/* ── UFs ── */
+function toggleAllUfs(userId, allChecked) {
+    const grid = document.getElementById('ufs_grid_' + userId);
+    grid.style.opacity = allChecked ? '.4' : '1';
+    grid.style.pointerEvents = allChecked ? 'none' : '';
+    if (allChecked) {
+        grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+            cb.checked = true;
+            cb.closest('.uf-check').classList.add('is-checked');
+        });
+    }
+    updateUfsCount(userId);
+}
+function updateUfsCount(userId) {
+    const grid  = document.getElementById('ufs_grid_' + userId);
+    const all   = document.getElementById('all_ufs_' + userId);
+    const count = document.getElementById('ufs_count_' + userId);
+    if (!count) return;
+    if (all && all.checked) {
+        count.textContent = 'Acesso a todos os estados';
+    } else {
+        const n = grid ? grid.querySelectorAll('input:checked').length : 0;
+        count.textContent = n + ' estado(s) selecionado(s)';
+    }
+}
+
+/* ── Tipos ── */
 function toggleAllTipos(userId, allChecked) {
     const grid = document.getElementById('tipos_grid_' + userId);
     grid.style.opacity = allChecked ? '.4' : '1';
@@ -368,7 +451,14 @@ function updateTiposCount(userId) {
         count.textContent = n + ' tipo(s) selecionado(s)';
     }
 }
+
 document.addEventListener('DOMContentLoaded', () => {
+    /* inicializar contadores de UFs */
+    document.querySelectorAll('[id^="ufs_grid_"]').forEach(grid => {
+        const uid = grid.id.replace('ufs_grid_', '');
+        updateUfsCount(uid);
+    });
+    /* inicializar contadores de tipos */
     document.querySelectorAll('[id^="tipos_grid_"]').forEach(grid => {
         const uid = grid.id.replace('tipos_grid_', '');
         updateTiposCount(uid);
@@ -377,6 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
 (function(){
     const t=document.querySelector('[data-theme-toggle]'),r=document.documentElement;
     let d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';

@@ -11,22 +11,42 @@
     </ol>
 </nav>
 
+{% set hoje = 'now'|date('Y-m-d') %}
+{% set em30 = 'now'|date_modify('+30 days')|date('Y-m-d') %}
+
 {# ── Cabeçalho ── #}
-<div class="d-flex align-items-start justify-content-between mb-4">
+<div class="d-flex align-items-start justify-content-between mb-4 gap-3 flex-wrap">
     <div>
         <h1 class="h4 mb-1 fw-bold">
             <span class="badge badge-uf me-2">{{ radar.sigla_uf }}</span>
             {{ radar.local_verificacao }}
         </h1>
-        <div class="text-muted small">{{ radar.municipio }} — {{ radar.estado }}</div>
+        <div class="text-muted small">
+            <i class="bi bi-geo-alt me-1"></i>{{ radar.municipio }} — {{ radar.estado }}
+        </div>
     </div>
-    {% if radar.ultimo_resultado == 'APROVADO' %}
-        <span class="badge badge-aprovado fs-6 px-3 py-2"><i class="bi bi-check-circle me-1"></i>APROVADO</span>
-    {% elseif radar.ultimo_resultado == 'REPROVADO' %}
-        <span class="badge badge-reprovado fs-6 px-3 py-2"><i class="bi bi-x-circle me-1"></i>REPROVADO</span>
-    {% elseif radar.ultimo_resultado %}
-        <span class="badge bg-secondary fs-6 px-3 py-2">{{ radar.ultimo_resultado }}</span>
-    {% endif %}
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        {% if radar.ultimo_resultado == 'APROVADO' %}
+            <span class="badge badge-aprovado fs-6 px-3 py-2"><i class="bi bi-check-circle me-1"></i>APROVADO</span>
+        {% elseif radar.ultimo_resultado == 'REPROVADO' %}
+            <span class="badge badge-reprovado fs-6 px-3 py-2"><i class="bi bi-x-circle me-1"></i>REPROVADO</span>
+        {% elseif radar.ultimo_resultado %}
+            <span class="badge bg-secondary fs-6 px-3 py-2">{{ radar.ultimo_resultado }}</span>
+        {% endif %}
+
+        {# Badge de validade no cabeçalho #}
+        {% if radar.data_validade %}
+            {% if radar.data_validade < hoje %}
+                <span class="badge bg-danger fs-6 px-3 py-2">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>VENCIDO
+                </span>
+            {% elseif radar.data_validade <= em30 %}
+                <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+                    <i class="bi bi-clock me-1"></i>VENCE EM BREVE
+                </span>
+            {% endif %}
+        {% endif %}
+    </div>
 </div>
 
 {% for type, messages in app.flashes %}
@@ -45,8 +65,9 @@
 
         {# Dados gerais #}
         <div class="card mb-4">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-info-circle me-2"></i>Dados Gerais
+            <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-info-circle me-2"></i>Dados Gerais</span>
+                <small class="text-muted fw-normal">ID #{{ radar.id }}</small>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -56,7 +77,15 @@
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Resultado</div>
-                        <div class="detail-value">{{ radar.ultimo_resultado ?? '—' }}</div>
+                        <div class="detail-value">
+                            {% if radar.ultimo_resultado == 'APROVADO' %}
+                                <span class="text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>{{ radar.ultimo_resultado }}</span>
+                            {% elseif radar.ultimo_resultado == 'REPROVADO' %}
+                                <span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>{{ radar.ultimo_resultado }}</span>
+                            {% else %}
+                                {{ radar.ultimo_resultado ?? '—' }}
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Última Verificação</div>
@@ -65,14 +94,21 @@
                     <div class="col-sm-6">
                         <div class="detail-label">Validade</div>
                         <div class="detail-value">
-                            {% set hoje = 'now'|date('Y-m-d') %}
                             {% if radar.data_validade %}
                                 {% if radar.data_validade < hoje %}
-                                    <span class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ radar.data_validade }} (vencido)</span>
-                                {% elseif radar.data_validade <= hoje|date_modify('+30 days')|date('Y-m-d') %}
-                                    <span class="text-warning"><i class="bi bi-clock me-1"></i>{{ radar.data_validade }} (vence em breve)</span>
+                                    <span class="text-danger fw-semibold">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ radar.data_validade }}
+                                        <span class="badge bg-danger ms-1">Vencido</span>
+                                    </span>
+                                {% elseif radar.data_validade <= em30 %}
+                                    <span class="text-warning fw-semibold">
+                                        <i class="bi bi-clock me-1"></i>{{ radar.data_validade }}
+                                        <span class="badge bg-warning text-dark ms-1">Vence em breve</span>
+                                    </span>
                                 {% else %}
-                                    <span class="text-success"><i class="bi bi-check me-1"></i>{{ radar.data_validade }}</span>
+                                    <span class="text-success">
+                                        <i class="bi bi-check-circle me-1"></i>{{ radar.data_validade }}
+                                    </span>
                                 {% endif %}
                             {% else %}—{% endif %}
                         </div>
@@ -119,7 +155,7 @@
                 <i class="bi bi-layout-three-columns me-2"></i>Faixas ({{ faixas|length }})
             </div>
             <div class="table-responsive">
-                <table class="table table-sm mb-0">
+                <table class="table table-sm table-hover mb-0">
                     <thead class="table-light">
                         <tr>
                             <th>Faixa</th>
@@ -145,14 +181,66 @@
         </div>
         {% endif %}
 
+        {# Histórico de verificações #}
+        {% if historico is not empty %}
+        <div class="card mb-4">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-clock-history me-2"></i>Histórico de Verificações
+                <span class="badge bg-secondary ms-1">{{ historico|length }}</span>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for h in historico %}
+                <div class="list-group-item px-3 py-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="fw-semibold small">{{ h.tipo_servico ?? '—' }} — {{ h.ano ?? '' }}</div>
+                            <div class="text-muted" style="font-size:.8rem">
+                                Cert: <code>{{ h.numero_certificado ?? '—' }}</code> |
+                                Ensaio: <code>{{ h.numero_ensaio ?? '—' }}</code>
+                            </div>
+                            <div class="text-muted" style="font-size:.8rem">
+                                Laudo: {{ h.data_laudo ?? '—' }} | Validade: {{ h.data_validade ?? '—' }}
+                            </div>
+                        </div>
+                        <span class="badge {{ h.resultado == 'APROVADO' ? 'badge-aprovado' : (h.resultado == 'REPROVADO' ? 'badge-reprovado' : 'bg-secondary') }} ms-2">
+                            {{ h.resultado ?? '—' }}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Metadados de importação #}
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-database me-2"></i>Metadados
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-sm-6">
+                        <div class="detail-label">Importado em</div>
+                        <div class="detail-value small">{{ radar.imported_at ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Atualizado em</div>
+                        <div class="detail-value small">{{ radar.updated_at ?? '—' }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="detail-label">Row Hash</div>
+                        <div class="detail-value"><code style="font-size:.7rem">{{ radar.row_hash }}</code></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>{# /col-lg-7 #}
 
     {# ── Coluna direita ── #}
     <div class="col-lg-5">
 
-        {# ===================================================
-           CARD: EDITOR WAZE
-        =================================================== #}
+        {# CARD: EDITOR WAZE #}
         {% if app.user %}
         <div class="card mb-4 border-primary" id="card-waze">
             <div class="card-header fw-semibold bg-primary text-white d-flex justify-content-between align-items-center">
@@ -166,32 +254,37 @@
             </div>
             <div class="card-body">
 
-                {# ── Estado atual (somente leitura) quando já existe link ── #}
+                {# Estado atual (somente leitura) quando já existe link #}
                 {% if wazeLink %}
-                <div class="mb-3 p-2 rounded bg-light border">
-                    <div class="detail-label">Hazard ID atual</div>
-                    <div class="fw-bold text-primary fs-5">#{{ wazeLink.permanent_hazard_id }}</div>
-
-                    <div class="detail-label mt-2">Cadastrado por</div>
-                    <div class="small">{{ wazeLink.inserted_by_email }}
-                        <span class="text-muted">— {{ wazeLink.inserted_at|date('d/m/Y H:i') }}</span>
+                <div class="mb-3 p-3 rounded" style="background:var(--bs-light, #f8f9fa);border:1px solid var(--bs-border-color, #dee2e6)">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <div class="detail-label">Hazard ID atual</div>
+                            <div class="fw-bold text-primary fs-5">#{{ wazeLink.permanent_hazard_id }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="detail-label">Cadastrado por</div>
+                            <div class="small">{{ wazeLink.inserted_by_email }}</div>
+                            <div class="text-muted" style="font-size:.75rem">{{ wazeLink.inserted_at|date('d/m/Y H:i') }}</div>
+                        </div>
+                        {% if wazeLink.updated_at %}
+                        <div class="col-sm-6">
+                            <div class="detail-label">Última edição</div>
+                            <div class="small text-warning fw-semibold">{{ wazeLink.updated_by_email }}</div>
+                            <div class="text-muted" style="font-size:.75rem">{{ wazeLink.updated_at|date('d/m/Y H:i') }}</div>
+                        </div>
+                        {% endif %}
+                        {% if wazeLink.observacao %}
+                        <div class="col-12">
+                            <div class="detail-label">Motivo última revisão</div>
+                            <div class="small fst-italic">{{ wazeLink.observacao }}</div>
+                        </div>
+                        {% endif %}
                     </div>
-
-                    {% if wazeLink.updated_at %}
-                    <div class="detail-label mt-2">Última edição</div>
-                    <div class="small text-warning fw-semibold">{{ wazeLink.updated_by_email }}
-                        <span class="fw-normal">— {{ wazeLink.updated_at|date('d/m/Y H:i') }}</span>
-                    </div>
-                    {% endif %}
-
-                    {% if wazeLink.observacao %}
-                    <div class="detail-label mt-2">Motivo última revisão</div>
-                    <div class="small fst-italic">{{ wazeLink.observacao }}</div>
-                    {% endif %}
                 </div>
                 {% endif %}
 
-                {# ── Botão para recolher/expandir o formulário (só quando já tem link) ── #}
+                {# Botão para recolher/expandir o formulário (só quando já tem link) #}
                 {% if wazeLink %}
                 <button class="btn btn-outline-primary btn-sm w-100 mb-3"
                         type="button"
@@ -226,12 +319,12 @@
                             {% if wazeErrors.waze_link is defined %}
                                 <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
                             {% else %}
-                                <div class="form-text">Cole a URL do Editor Waze com <code>permanentHazards=NÚMERO</code>.</div>
+                                <div class="form-text">Cole a URL com <code>permanentHazards=NÚMERO</code>.</div>
                             {% endif %}
                         </div>
 
                         <div id="waze-hazard-preview" class="alert alert-info py-1 px-2 mb-3 d-none small">
-                            Hazard ID: <strong id="waze-hazard-id"></strong>
+                            Hazard ID detectado: <strong id="waze-hazard-id"></strong>
                         </div>
 
                         <div class="mb-3">
@@ -248,19 +341,9 @@
                             {% endif %}
                         </div>
 
-                        <div class="row g-2 mb-3">
-                            <div class="col-7">
-                                <label class="form-label fw-semibold small">Usuário (auto)</label>
-                                <input type="text" class="form-control form-control-sm"
-                                       value="{{ app.user.email }}" disabled
-                                       style="background:#f8f9fa;font-style:italic">
-                            </div>
-                            <div class="col-5">
-                                <label class="form-label fw-semibold small">Data/Hora (auto)</label>
-                                <input type="text" class="form-control form-control-sm"
-                                       value="Agora" disabled
-                                       style="background:#f8f9fa;font-style:italic">
-                            </div>
+                        <div class="mb-3 p-2 rounded bg-light border small text-muted">
+                            <i class="bi bi-person-check me-1"></i>
+                            Será registrado como: <strong>{{ app.user.email }}</strong> — agora
                         </div>
 
                         <button type="submit" class="btn btn-primary btn-sm w-100">
@@ -271,11 +354,7 @@
 
                 </div>{# /waze-form-wrap #}
 
-                {# ===================================================
-                   TIMELINE DE HISTÓRICO DO LINK WAZE
-                   Exibe TODOS os registros de radar_waze_link_log,
-                   não apenas o último.
-                =================================================== #}
+                {# TIMELINE DE HISTÓRICO DO LINK WAZE #}
                 {% if wazeLog is not empty %}
                 <hr class="my-3">
                 <button class="btn btn-outline-secondary btn-sm w-100 mb-2"
@@ -291,7 +370,6 @@
                     <div class="waze-timeline mt-2">
                         {% for log in wazeLog %}
                         <div class="waze-timeline-item">
-                            {# Bolinha + linha vertical #}
                             <div class="waze-timeline-dot
                                 {{ log.campo_alterado == 'waze_link' ? 'dot-link' : 'dot-obs' }}"></div>
 
@@ -370,65 +448,10 @@
         </div>{# /card editor waze #}
         {% endif %}{# app.user #}
 
-        {# Histórico de verificações #}
-        {% if historico is not empty %}
-        <div class="card mb-4">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-clock-history me-2"></i>Histórico de Verificações
-            </div>
-            <div class="list-group list-group-flush">
-                {% for h in historico %}
-                <div class="list-group-item px-3 py-2">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="fw-semibold small">{{ h.tipo_servico ?? '—' }} — {{ h.ano ?? '' }}</div>
-                            <div class="text-muted" style="font-size:.8rem">
-                                Cert: <code>{{ h.numero_certificado ?? '—' }}</code> |
-                                Ensaio: <code>{{ h.numero_ensaio ?? '—' }}</code>
-                            </div>
-                            <div class="text-muted" style="font-size:.8rem">
-                                Laudo: {{ h.data_laudo ?? '—' }} | Validade: {{ h.data_validade ?? '—' }}
-                            </div>
-                        </div>
-                        <span class="badge {{ h.resultado == 'APROVADO' ? 'badge-aprovado' : (h.resultado == 'REPROVADO' ? 'badge-reprovado' : 'bg-secondary') }} ms-2">
-                            {{ h.resultado ?? '—' }}
-                        </span>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        {# Metadados de importação #}
-        <div class="card">
-            <div class="card-header fw-semibold">
-                <i class="bi bi-database me-2"></i>Metadados
-            </div>
-            <div class="card-body">
-                <div class="row g-2">
-                    <div class="col-12">
-                        <div class="detail-label">Importado em</div>
-                        <div class="detail-value small">{{ radar.imported_at ?? '—' }}</div>
-                    </div>
-                    <div class="col-12">
-                        <div class="detail-label">Atualizado em</div>
-                        <div class="detail-value small">{{ radar.updated_at ?? '—' }}</div>
-                    </div>
-                    <div class="col-12">
-                        <div class="detail-label">Row Hash</div>
-                        <div class="detail-value"><code style="font-size:.7rem">{{ radar.row_hash }}</code></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>{# /col-lg-5 #}
 </div>
 
-{# ===================================================
-   CSS INLINE — Timeline Waze
-=================================================== #}
+{# CSS INLINE — Timeline Waze #}
 <style>
 .waze-timeline {
     position: relative;

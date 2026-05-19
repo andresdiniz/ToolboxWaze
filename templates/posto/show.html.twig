@@ -29,7 +29,6 @@
     <div class="card-body p-4">
         <div class="d-flex flex-column flex-sm-row align-items-sm-start justify-content-sm-between gap-3">
             <div class="flex-grow-1">
-                {# Badges topo #}
                 <div class="d-flex flex-wrap gap-2 mb-2">
                     <span class="badge badge-uf fs-6 px-3 py-2">{{ posto.uf }}</span>
                     {% if posto.bandeira %}
@@ -46,7 +45,6 @@
                     {% endif %}
                 </div>
 
-                {# Nome #}
                 <h1 class="h3 fw-bold mb-1">
                     <i class="bi bi-fuel-pump text-success me-2"></i>{{ posto.razaoSocial }}
                 </h1>
@@ -54,14 +52,12 @@
                     <p class="text-muted mb-2">{{ posto.nomeFantasia }}</p>
                 {% endif %}
 
-                {# Endereço resumido #}
                 <p class="mb-0 text-muted small">
                     <i class="bi bi-geo-alt me-1"></i>
                     {{ posto.endereco }}{% if posto.complemento %}, {{ posto.complemento }}{% endif %} — {{ posto.municipio }}/{{ posto.uf }}{% if posto.cep %} · {{ posto.cep }}{% endif %}
                 </p>
             </div>
 
-            {# CNPJ destaque #}
             <div class="posto-cnpj-box text-center text-sm-end flex-shrink-0">
                 <div class="text-muted" style="font-size:.7rem;letter-spacing:.08em">CNPJ</div>
                 <code class="fs-6 fw-semibold">{{ posto.cnpj }}</code>
@@ -75,9 +71,7 @@
 ══════════════════════════════════════════ #}
 <div class="row g-4">
 
-    {# ─────────────────────────────
-       COLUNA ESQUERDA
-    ───────────────────────────── #}
+    {# COLUNA ESQUERDA #}
     <div class="col-xl-6">
 
         {# ── Localização ── #}
@@ -90,9 +84,7 @@
                 <div class="row g-3">
                     <div class="col-12">
                         <div class="detail-label">Endereço</div>
-                        <div class="detail-value">
-                            {{ posto.endereco }}{% if posto.complemento %}, {{ posto.complemento }}{% endif %}
-                        </div>
+                        <div class="detail-value">{{ posto.endereco }}{% if posto.complemento %}, {{ posto.complemento }}{% endif %}</div>
                     </div>
                     <div class="col-sm-5">
                         <div class="detail-label">Bairro</div>
@@ -112,13 +104,11 @@
                     </div>
                     <div class="col-12 pt-1">
                         <a href="https://www.google.com/maps/search/{{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
-                           target="_blank" rel="noopener"
-                           class="btn btn-sm btn-outline-secondary me-2">
+                           target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary me-2">
                             <i class="bi bi-google me-1"></i>Google Maps
                         </a>
                         <a href="https://waze.com/ul?q={{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
-                           target="_blank" rel="noopener"
-                           class="btn btn-sm btn-outline-primary">
+                           target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-waze me-1"></i>Buscar no Waze
                         </a>
                     </div>
@@ -170,10 +160,8 @@
             </div>
             <div class="card-body d-flex flex-column gap-2">
                 {% set cnpj_limpo = posto.cnpj|replace({'.': '', '/': '', '-': ''}) %}
-
                 <a href="https://solucoes.receita.fazenda.gov.br/servicos/cnpjreva/Cnpjreva_Solicitacao.asp?cnpj={{ cnpj_limpo }}"
-                   target="_blank" rel="noopener"
-                   class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
+                   target="_blank" rel="noopener" class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
                     <i class="bi bi-building flex-shrink-0"></i>
                     <div class="flex-grow-1">
                         <div class="fw-semibold lh-sm">Receita Federal</div>
@@ -181,10 +169,8 @@
                     </div>
                     <i class="bi bi-arrow-up-right flex-shrink-0 opacity-50"></i>
                 </a>
-
                 <a href="https://cdp.anp.gov.br/ords/r/cdp_apex/consulta-dados-publicos-cdp/consulta-de-postos-lista?P3_CNPJ={{ cnpj_limpo }}"
-                   target="_blank" rel="noopener"
-                   class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
+                   target="_blank" rel="noopener" class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
                     <i class="bi bi-fuel-pump flex-shrink-0"></i>
                     <div class="flex-grow-1">
                         <div class="fw-semibold lh-sm">ANP — Consulta CDP</div>
@@ -192,10 +178,8 @@
                     </div>
                     <i class="bi bi-arrow-up-right flex-shrink-0 opacity-50"></i>
                 </a>
-
                 <a href="https://atosoficiais.com.br/anp?q={{ cnpj_limpo }}"
-                   target="_blank" rel="noopener"
-                   class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
+                   target="_blank" rel="noopener" class="btn btn-outline-secondary text-start d-flex align-items-center gap-2">
                     <i class="bi bi-file-earmark-text flex-shrink-0"></i>
                     <div class="flex-grow-1">
                         <div class="fw-semibold lh-sm">ANP — Atos de Autorização</div>
@@ -208,9 +192,7 @@
 
     </div>
 
-    {# ─────────────────────────────
-       COLUNA DIREITA
-    ───────────────────────────── #}
+    {# COLUNA DIREITA #}
     <div class="col-xl-6">
 
         {# ══ WAZE CARD ══ #}
@@ -222,8 +204,7 @@
                     Vínculo Waze
                 </span>
                 {% if wazeLink %}
-                    <a href="{{ wazeLink.wazeLink }}" target="_blank" rel="noopener"
-                       class="btn btn-sm btn-primary">
+                    <a href="{{ wazeLink.wazeLink }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
                         <i class="bi bi-box-arrow-up-right me-1"></i>Abrir Editor
                     </a>
                 {% endif %}
@@ -231,21 +212,17 @@
 
             {% if wazeLink %}
             <div class="card-body">
-
-                {# Venue ID destaque #}
                 <div class="venue-id-box p-3 mb-3 rounded-3 bg-body-secondary d-flex align-items-center gap-3">
                     <div class="flex-grow-1">
                         <div class="detail-label mb-1">Venue ID</div>
                         <code class="fs-6 fw-bold text-primary">{{ wazeLink.venueId }}</code>
                     </div>
                     <button class="btn btn-sm btn-outline-secondary copy-btn flex-shrink-0"
-                            data-copy="{{ wazeLink.venueId }}"
-                            title="Copiar ID">
+                            data-copy="{{ wazeLink.venueId }}" title="Copiar ID">
                         <i class="bi bi-clipboard"></i>
                     </button>
                 </div>
 
-                {# URL #}
                 <div class="mb-3">
                     <div class="detail-label">URL cadastrada</div>
                     <div class="detail-value small text-break">
@@ -253,12 +230,11 @@
                     </div>
                 </div>
 
-                {# Meta: cadastro e atualização #}
                 <div class="row g-2">
                     <div class="col-sm-6">
                         <div class="detail-label">Cadastrado por</div>
                         <div class="detail-value small">
-                            <i class="bi bi-person me-1 opacity-50"></i>{{ wazeLink.insertedBy }}<br>
+                            <i class="bi bi-person me-1 opacity-50"></i>{{ wazeLink.insertedBy.email }}<br>
                             <span class="text-muted">{{ wazeLink.insertedAt|date('d/m/Y H:i') }}</span>
                         </div>
                     </div>
@@ -266,7 +242,7 @@
                     <div class="col-sm-6">
                         <div class="detail-label">Última atualização</div>
                         <div class="detail-value small">
-                            <i class="bi bi-pencil me-1 opacity-50"></i>{{ wazeLink.updatedBy }}<br>
+                            <i class="bi bi-pencil me-1 opacity-50"></i>{{ wazeLink.updatedBy.email }}<br>
                             <span class="text-muted">{{ wazeLink.updatedAt|date('d/m/Y H:i') }}</span>
                         </div>
                     </div>
@@ -306,7 +282,6 @@
                                 <form method="post" action="{{ path('posto_waze_save', {id: posto.id}) }}">
                                     <input type="hidden" name="_token"
                                            value="{{ csrf_token('posto_waze_save_' ~ posto.id) }}">
-
                                     <div class="mb-3">
                                         <label class="form-label fw-semibold" for="waze_link_posto">
                                             <i class="bi bi-link-45deg me-1"></i>Link do Editor Waze
@@ -323,7 +298,6 @@
                                             </div>
                                         {% endif %}
                                     </div>
-
                                     {% if wazeLink %}
                                     <div class="mb-3">
                                         <label class="form-label fw-semibold" for="motivo_revisao_posto">
@@ -338,7 +312,6 @@
                                         {% endif %}
                                     </div>
                                     {% endif %}
-
                                     <button type="submit" class="btn btn-primary btn-sm">
                                         <i class="bi bi-floppy me-1"></i>
                                         {{ wazeLink ? 'Atualizar link' : 'Salvar link' }}
@@ -364,26 +337,17 @@
                 {% for log in wazeLog %}
                 <div class="list-group-item px-3 py-2">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="badge
-                            {% if log.campoAlterado == 'waze_link' %}bg-primary-subtle text-primary border border-primary-subtle
-                            {% else %}bg-secondary-subtle text-secondary border border-secondary-subtle{% endif %}
-                            ">
-                            <i class="bi bi-{{ log.campoAlterado == 'waze_link' ? 'link-45deg' : 'chat-left-text' }} me-1"></i>
-                            {{ log.campoAlterado|replace({'_': ' '})|title }}
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                            <i class="bi bi-link-45deg me-1"></i>Waze Link
                         </span>
                         <small class="text-muted">
-                            <i class="bi bi-person me-1"></i>{{ log.changedBy }}
+                            <i class="bi bi-person me-1"></i>{{ log.changedBy.email }}
                             · {{ log.changedAt|date('d/m/Y H:i') }}
                         </small>
                     </div>
-                    {% if log.valorAnterior %}
+                    {% if log.wazeLinkAnterior %}
                     <div class="small text-danger-emphasis bg-danger-subtle rounded px-2 py-1 mb-1 text-break">
-                        <i class="bi bi-dash-circle me-1"></i>{{ log.valorAnterior }}
-                    </div>
-                    {% endif %}
-                    {% if log.valorNovo %}
-                    <div class="small text-success-emphasis bg-success-subtle rounded px-2 py-1 text-break">
-                        <i class="bi bi-plus-circle me-1"></i>{{ log.valorNovo }}
+                        <i class="bi bi-dash-circle me-1"></i>{{ log.wazeLinkAnterior }}
                     </div>
                     {% endif %}
                 </div>

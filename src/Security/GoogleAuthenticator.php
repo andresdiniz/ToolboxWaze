@@ -46,22 +46,18 @@ class GoogleAuthenticator extends OAuth2Authenticator
 
                 $repo = $this->em->getRepository(User::class);
 
-                // Tenta pelo Google ID primeiro
                 $user = $repo->findOneBy(['googleId' => $googleUser->getId()]);
 
-                // Depois pelo e-mail
                 if (!$user) {
                     $user = $repo->findByEmail($googleUser->getEmail());
                 }
 
                 if ($user) {
-                    // Atualiza Google ID se ainda não tinha
                     if (!$user->getGoogleId()) {
                         $user->setGoogleId($googleUser->getId());
                         $user->setAvatarUrl($googleUser->getAvatar());
                     }
                 } else {
-                    // Cria novo usuário via Google — status pending, precisa de aprovação
                     $user = new User();
                     $user->setEmail($googleUser->getEmail());
                     $user->setName($googleUser->getName() ?? $googleUser->getEmail());
@@ -76,7 +72,10 @@ class GoogleAuthenticator extends OAuth2Authenticator
                     throw new CustomUserMessageAuthenticationException('google_pending:' . $user->getEmail());
                 }
                 if ($user->isRejected()) {
-                    throw new CustomUserMessageAuthenticationException('Sua conta foi recusada. Entre em contato com o administrador.');
+                    // Mensagem genérica — não expõe detalhes internos
+                    throw new CustomUserMessageAuthenticationException(
+                        'Sua conta não está autorizada. Entre em contato com o administrador.'
+                    );
                 }
 
                 $user->setLastLoginAt(new \DateTimeImmutable());
@@ -102,7 +101,11 @@ class GoogleAuthenticator extends OAuth2Authenticator
                 'Cadastro recebido! Aguarde a aprovação do administrador.'
             );
         } else {
-            $request->getSession()->getFlashBag()->add('danger', $exception->getMessage());
+            // Usa getMessageKey() (string traduzível) em vez de getMessage() (técnico)
+            $request->getSession()->getFlashBag()->add(
+                'danger',
+                $exception->getMessageKey()
+            );
         }
 
         return new RedirectResponse($this->router->generate('app_login'));

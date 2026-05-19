@@ -34,7 +34,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         self::PERMISSION_EXPORT  => 'Exportação de Dados',
     ];
 
-    /** Lista oficial dos 27 estados brasileiros */
     public const ALL_UFS = [
         'AC','AL','AM','AP','BA','CE','DF','ES','GO',
         'MA','MG','MS','MT','PA','PB','PE','PI','PR',
@@ -64,19 +63,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private array $permissions = [];
 
     /**
-     * Tipos de solicitação que este usuário pode receber/tratar.
-     * Array vazio = nenhum tipo. NULL = todos os tipos (admin herda automaticamente via isAdmin()).
-     *
      * @var list<string>
      */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $solicitacaoTipos = [];
 
     /**
-     * UFs que o usuário tem permissão de acessar/editar.
-     * Array vazio = nenhum estado (bloqueado).
-     * NULL = todos os estados (apenas ROLE_ADMIN herda isso automaticamente via isAdmin()).
-     *
      * @var list<string>
      */
     #[ORM\Column(type: 'json', nullable: true)]
@@ -108,6 +100,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastLoginAt = null;
+
+    public function __construct()
+    {
+        // Garante que $createdAt nunca é lida como uninitialised antes do PrePersist
+        $this->createdAt = new \DateTimeImmutable();
+    }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void
@@ -147,32 +145,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->isAdmin() || in_array($perm, $this->permissions, true);
     }
 
-    // ---- Tipos de Solicitação -----------------------------------------------
-
     public function getSolicitacaoTipos(): ?array { return $this->solicitacaoTipos; }
-
     public function setSolicitacaoTipos(?array $tipos): static
     {
         $this->solicitacaoTipos = $tipos !== null ? array_values(array_unique($tipos)) : null;
         return $this;
     }
 
-    /**
-     * Retorna true se o usuário pode tratar o tipo informado.
-     * Admins sempre podem. NULL = todos os tipos.
-     */
     public function podeTratar(string $tipo): bool
     {
-        if ($this->isAdmin()) {
-            return true;
-        }
-        if ($this->solicitacaoTipos === null) {
-            return true;
-        }
+        if ($this->isAdmin()) { return true; }
+        if ($this->solicitacaoTipos === null) { return true; }
         return in_array($tipo, $this->solicitacaoTipos, true);
     }
-
-    // ---- UF access control --------------------------------------------------
 
     public function getAllowedUfs(): ?array { return $this->allowedUfs; }
     public function setAllowedUfs(?array $ufs): static
@@ -181,34 +166,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * Retorna true se o usuário pode visualizar/editar dados do estado informado.
-     * Admins sempre podem. NULL significa "todos".
-     */
     public function canAccessUf(string $uf): bool
     {
-        if ($this->isAdmin()) {
-            return true;
-        }
-        if ($this->allowedUfs === null) {
-            return true;
-        }
+        if ($this->isAdmin()) { return true; }
+        if ($this->allowedUfs === null) { return true; }
         return in_array(strtoupper($uf), $this->allowedUfs, true);
     }
 
-    /**
-     * Retorna os UFs permitidos para uso em queries SQL.
-     * Admins e usuários com acesso total recebem null (sem restrição).
-     */
     public function getUfsForQuery(): ?array
     {
-        if ($this->isAdmin() || $this->allowedUfs === null) {
-            return null;
-        }
+        if ($this->isAdmin() || $this->allowedUfs === null) { return null; }
         return $this->allowedUfs;
     }
-
-    // ---- Status helpers -----------------------------------------------------
 
     public function getPassword(): ?string { return $this->password; }
     public function setPassword(?string $v): static { $this->password = $v; return $this; }

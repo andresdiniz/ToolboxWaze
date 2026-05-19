@@ -2,9 +2,10 @@
 
 namespace App\Entity;
 
+use App\Repository\NotificacaoRepository;
 use Doctrine\ORM\Mapping as ORM;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: NotificacaoRepository::class)]
 #[ORM\Table(name: 'notificacoes')]
 #[ORM\Index(columns: ['usuario_id', 'lida'], name: 'idx_notif_usuario_lida')]
 class Notificacao

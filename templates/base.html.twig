@@ -127,5 +127,65 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         crossorigin="anonymous"></script>
+
+{#
+  TIMEZONE LOCAL DO USUÁRIO
+  ─────────────────────────
+  Todas as datas gravadas no banco estão em UTC.
+  Qualquer elemento com o atributo data-utc="<ISO 8601 UTC>" será automaticamente
+  convertido pelo JavaScript abaixo para o fuso horário do navegador do usuário.
+
+  Como usar nos templates:
+    <time data-utc="{{ alguma_data|date('c') }}">{{ alguma_data|date('d/m/Y H:i') }}</time>
+
+  O JS substitui o texto visível pela hora local e adiciona um title com o UTC original.
+  Funciona com qualquer tag HTML que tenha o atributo data-utc.
+#}
+<script>
+(function () {
+  'use strict';
+
+  var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+  // Formato longo: dd/mm/aaaa hh:mm
+  var fmtDateTime = new Intl.DateTimeFormat('pt-BR', {
+    timeZone : tz,
+    day      : '2-digit',
+    month    : '2-digit',
+    year     : 'numeric',
+    hour     : '2-digit',
+    minute   : '2-digit',
+  });
+
+  // Formato curto (só data, sem hora) — usado quando a string UTC não tem componente de hora
+  var fmtDate = new Intl.DateTimeFormat('pt-BR', {
+    timeZone : tz,
+    day      : '2-digit',
+    month    : '2-digit',
+    year     : 'numeric',
+  });
+
+  document.querySelectorAll('[data-utc]').forEach(function (el) {
+    var raw = el.getAttribute('data-utc');
+    if (!raw) return;
+
+    // Garante que a string seja tratada como UTC mesmo sem sufixo Z
+    if (!/Z|[+-]\d{2}:?\d{2}$/.test(raw)) {
+      raw = raw.replace(' ', 'T') + 'Z';
+    }
+
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) return;
+
+    // Se o valor original é só data (sem hora, ex: 2026-05-18), exibe só data
+    var hasTime = /T|\d{2}:\d{2}/.test(el.getAttribute('data-utc'));
+    var localStr = hasTime ? fmtDateTime.format(d) : fmtDate.format(d);
+
+    // Guarda UTC original como tooltip
+    el.setAttribute('title', 'UTC: ' + el.getAttribute('data-utc'));
+    el.textContent = localStr;
+  });
+}());
+</script>
 </body>
 </html>

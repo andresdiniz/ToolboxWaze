@@ -27,10 +27,6 @@ class PostoController extends AbstractController
         private readonly PostoWazeLinkRepository    $linkRepo,
     ) {}
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Listagem
-    // ──────────────────────────────────────────────────────────────────────────
-
     #[Route('', name: 'posto_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
@@ -67,6 +63,7 @@ class PostoController extends AbstractController
             $types,
         );
 
+        // $offset e PER_PAGE via placeholder — nunca interpolados
         $rows = $this->db->fetchAllAssociative(
             "SELECT r.id, r.nome_fantasia, r.razao_social, r.cnpj, r.estado, r.municipio,
                     pwl.id AS link_id, pwl.waze_link, pwl.venue_id
@@ -89,10 +86,6 @@ class PostoController extends AbstractController
         ]);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Detalhe
-    // ──────────────────────────────────────────────────────────────────────────
-
     #[Route('/{id}', name: 'posto_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
@@ -106,10 +99,6 @@ class PostoController extends AbstractController
             'link'  => $link,
         ]);
     }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Salvar / atualizar link Waze
-    // ──────────────────────────────────────────────────────────────────────────
 
     #[Route('/{id}/waze-save', name: 'posto_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
@@ -126,13 +115,12 @@ class PostoController extends AbstractController
         $user        = $this->getUser();
         $now         = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
-        // Extrai venue_id do parâmetro venues= da URL
         $venueId = PostoWazeLink::extractVenueId($wazeLink);
 
         if ($venueId === null) {
             $this->addFlash('danger', 'O link deve conter o parâmetro venues com valor numérico (ex: &venues=207160888).');
             return $this->redirectToRoute('posto_show', [
-                'id'       => $id,
+                'id'        => $id,
                 '_fragment' => 'waze-form-collapse',
             ]);
         }
@@ -143,21 +131,18 @@ class PostoController extends AbstractController
         );
 
         if ($existing === false) {
-            // INSERT
             $this->db->executeStatement(
                 'INSERT INTO posto_waze_link (posto_id, waze_link, venue_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
                 [$id, $wazeLink, $venueId, $observacao, $user->getId(), $now]
             );
         } else {
-            // LOG da versão anterior
             $this->db->executeStatement(
                 'INSERT INTO posto_waze_link_log (posto_waze_link_id, waze_link_anterior, changed_by, changed_at)
                  VALUES (?, ?, ?, ?)',
                 [$existing['id'], $existing['waze_link'], $user->getId(), $now]
             );
 
-            // UPDATE
             $this->db->executeStatement(
                 'UPDATE posto_waze_link SET waze_link = ?, venue_id = ?, observacao = ?, updated_by = ?, updated_at = ?
                  WHERE posto_id = ?',
@@ -172,10 +157,6 @@ class PostoController extends AbstractController
             '_fragment' => 'waze-form-collapse',
         ]);
     }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Excluir link
-    // ──────────────────────────────────────────────────────────────────────────
 
     #[Route('/{id}/waze-delete', name: 'posto_waze_delete', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeDelete(int $id, Request $request): Response
@@ -193,10 +174,6 @@ class PostoController extends AbstractController
 
         return $this->redirectToRoute('posto_show', ['id' => $id]);
     }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // API — sugestão de link a partir de lat/lon
-    // ──────────────────────────────────────────────────────────────────────────
 
     #[Route('/{id}/waze-suggest', name: 'posto_waze_suggest', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function wazeSuggest(int $id): JsonResponse

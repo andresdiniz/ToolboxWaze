@@ -7,7 +7,6 @@ namespace App\Controller;
 use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -19,7 +18,6 @@ final class RadarController extends AbstractController
 
     public function __construct(
         private readonly Connection $db,
-        private readonly Security $security,
     ) {}
 
     #[Route('', name: 'index')]
@@ -52,6 +50,7 @@ final class RadarController extends AbstractController
             $params
         );
 
+        // $offset via placeholder para evitar interpolação direta na query
         $rows = $this->db->fetchAllAssociative(
             "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
                     rm.local_verificacao, rm.data_ultima_verificacao,
@@ -60,8 +59,9 @@ final class RadarController extends AbstractController
              FROM radar_medidor rm $baseFrom
              $whereClause
              ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao
-             LIMIT " . self::PER_PAGE . " OFFSET $offset",
-            $params
+             LIMIT ? OFFSET ?",
+            array_merge($params, [self::PER_PAGE, $offset]),
+            array_merge(array_fill(0, count($params), \PDO::PARAM_STR), [\PDO::PARAM_INT, \PDO::PARAM_INT])
         );
 
         $ufsQuery = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';
@@ -87,7 +87,6 @@ final class RadarController extends AbstractController
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
 
-        $statsParams = ['hoje' => $hoje, 'em30' => $em30];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
             $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
             $statsWhere = " WHERE sigla_uf IN ($ph)";
@@ -133,10 +132,6 @@ final class RadarController extends AbstractController
         ]);
     }
 
-    // =========================================================================
-    // SHOW — detalhes do radar + formulário Waze inline
-    // =========================================================================
-
     #[Route('/{id}', name: 'show', requirements: ['id' => '\\d+'])]
     public function show(int $id, Request $req): Response
     {
@@ -159,7 +154,6 @@ final class RadarController extends AbstractController
             'SELECT * FROM radar_historico WHERE radar_medidor_id = ? ORDER BY ano DESC, data_laudo DESC', [$id]
         );
 
-        // Waze link atual (se houver)
         $wazeLink = $this->db->fetchAssociative(
             'SELECT wl.*, ui.email AS inserted_by_email, uu.email AS updated_by_email
              FROM radar_waze_link wl
@@ -169,7 +163,6 @@ final class RadarController extends AbstractController
             [$id]
         ) ?: null;
 
-        // Histórico de alterações do link Waze
         $wazeLog = [];
         if ($wazeLink) {
             $wazeLog = $this->db->fetchAllAssociative(
@@ -182,7 +175,6 @@ final class RadarController extends AbstractController
             );
         }
 
-        // Recupera erros/dados de formulário que vieram de um redirect
         $session      = $req->getSession();
         $wazeErrors   = $session->remove('_waze_errors_' . $id) ?? [];
         $wazeFormData = $session->remove('_waze_form_'   . $id) ?? [];
@@ -198,14 +190,9 @@ final class RadarController extends AbstractController
         ]);
     }
 
-    // =========================================================================
-    // SAVE WAZE LINK — POST separado para manter show() limpo
-    // =========================================================================
-
     #[Route('/{id}/waze-salvar', name: 'waze_save', requirements: ['id' => '\\d+'], methods: ['POST'])]
     public function wazeSave(int $id, Request $req): Response
     {
-        // IS_AUTHENTICATED_REMEMBERED permite acesso via remember-me cookie
         $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
 
         if (!$this->isCsrfTokenValid('waze_save_' . $id, $req->request->get('_token'))) {
@@ -226,7 +213,6 @@ final class RadarController extends AbstractController
         $wazeLink      = trim((string) $req->request->get('waze_link', ''));
         $motivoRevisao = trim((string) $req->request->get('motivo_revisao', ''));
 
-        // ── Validação ──────────────────────────────────────────────────────────
         $errors = [];
 
         if ($wazeLink === '') {
@@ -237,7 +223,6 @@ final class RadarController extends AbstractController
             $errors['waze_link'] = 'A URL deve conter o parâmetro permanentHazards=NÚMERO.';
         }
 
-        // Motivo obrigatório apenas ao editar
         $existing = $this->db->fetchAssociative(
             'SELECT * FROM radar_waze_link WHERE radar_medidor_id = ?', [$id]
         ) ?: null;
@@ -257,10 +242,7 @@ final class RadarController extends AbstractController
 
         $hazardId = (int) $m[1];
 
-        // ── Persistência ───────────────────────────────────────────────────────
         if ($existing) {
-            // Registra log de cada campo alterado
-            // Colunas da tabela: id, radar_waze_link_id, changed_by, changed_at, campo_alterado, valor_anterior, valor_novo
             if ($wazeLink !== $existing['waze_link']) {
                 $this->db->executeStatement(
                     'INSERT INTO radar_waze_link_log
@@ -288,7 +270,6 @@ final class RadarController extends AbstractController
 
             $this->addFlash('success', 'Link Waze atualizado com sucesso.');
         } else {
-            // Primeiro cadastro
             $this->db->executeStatement(
                 'INSERT INTO radar_waze_link
                  (radar_medidor_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
@@ -298,7 +279,6 @@ final class RadarController extends AbstractController
 
             $newId = (int) $this->db->lastInsertId();
 
-            // Registra log de criação para aparecer no histórico
             $this->db->executeStatement(
                 'INSERT INTO radar_waze_link_log
                  (radar_waze_link_id, changed_by, campo_alterado, valor_anterior, valor_novo, changed_at)
@@ -311,10 +291,6 @@ final class RadarController extends AbstractController
 
         return $this->redirectToRoute('radar_show', ['id' => $id]);
     }
-
-    // =========================================================================
-    // Helpers
-    // =========================================================================
 
     private function buildFrom(string $serie): string
     {

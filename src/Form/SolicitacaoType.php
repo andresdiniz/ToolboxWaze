@@ -29,10 +29,10 @@ class SolicitacaoType extends AbstractType
         (?:www\.|beta\.)?waze\.com
         (?:\/[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})?)?
         \/editor
-        ["\\s]*
+        [^\s]*
         [?&]zoom(?:Level)?=
         (1[5-9]|[2-9]\d|\d{3,})
-        ["\\s]*
+        [^\s]*
     /xi';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -74,7 +74,7 @@ class SolicitacaoType extends AbstractType
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) {
-            $tipo = $event->getData()['tipo'] ?? null;
+            $tipo  = $event->getData()['tipo']       ?? null;
             $cargo = $event->getData()['dados_cargo'] ?? null;
             $this->addDadosDinamicos($event->getForm(), $tipo, $cargo);
         });
@@ -99,8 +99,7 @@ class SolicitacaoType extends AbstractType
         $constraints = [
             new Assert\Regex([
                 'pattern' => self::PERMALINK_PATTERN,
-                'message' => 'O permalink deve ser do editor Waze com zoom ≥15. '
-                           . 'Ex: https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
+                'message' => 'O permalink deve ser do editor Waze com zoom ≥15. Ex: https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
             ]),
         ];
         if ($required) {
@@ -109,11 +108,15 @@ class SolicitacaoType extends AbstractType
         return $constraints;
     }
 
+    // -------------------------------------------------------------------------
+    // IMAGEM DE SATÉLITE
+    // -------------------------------------------------------------------------
     private function addCamposImagemSatelite(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_motivo', ChoiceType::class, [
-                'label' => 'Motivo da solicitação', 'mapped' => false,
+                'label'  => 'Motivo da solicitação',
+                'mapped' => false,
                 'choices' => [
                     'A imagem com maior resolução é muito antiga' => 'muito_antiga',
                     'A imagem está com qualidade/resolução baixa'  => 'baixa_qualidade',
@@ -123,14 +126,17 @@ class SolicitacaoType extends AbstractType
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_idadeImagem', ChoiceType::class, [
-                'label' => 'Quão antiga pode ser a imagem atualizada?', 'mapped' => false,
+                'label'  => 'Quão antiga pode ser a imagem atualizada?',
+                'mapped' => false,
                 'choices' => ['1 ano' => '1_ano', '6 meses' => '6_meses', '1 mês' => '1_mes', '1 semana' => '1_semana'],
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_urgente', ChoiceType::class, [
-                'label' => 'É urgente?', 'mapped' => false,
-                'choices' => ['Sim' => 'sim', 'Não' => 'nao'],
-                'expanded' => true, 'constraints' => [new Assert\NotBlank()],
+                'label'    => 'É urgente?',
+                'mapped'   => false,
+                'choices'  => ['Sim' => 'sim', 'Não' => 'nao'],
+                'expanded' => true,
+                'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_permalink', TextType::class, [
                 'label'  => 'Permalink (zoom ≥15)',
@@ -141,17 +147,27 @@ class SolicitacaoType extends AbstractType
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'        => 'Abra o WME, navegue até a área com zoom ≥15 e copie a URL completa do navegador. '
-                               . 'A URL deve ser do editor Waze (waze.com/editor).',
+                'help'        => 'Abra o WME, navegue até a área com zoom ≥15 e copie a URL completa do navegador. A URL deve ser do editor Waze (waze.com/editor).',
                 'constraints' => $this->permalinkConstraints(required: true),
             ]);
     }
 
+    // -------------------------------------------------------------------------
+    // GERENTE DE ÁREA
+    // -------------------------------------------------------------------------
     private function addCamposGerenteArea(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados_mentor', TextType::class, ['label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()]])
-            ->add('dados_recomendadores', TextType::class, ['label' => 'Editores recomendadores', 'mapped' => false, 'required' => false])
+            ->add('dados_mentor', TextType::class, [
+                'label'       => 'Mentor',
+                'mapped'      => false,
+                'constraints' => [new Assert\NotBlank()],
+            ])
+            ->add('dados_recomendadores', TextType::class, [
+                'label'    => 'Editores recomendadores',
+                'mapped'   => false,
+                'required' => false,
+            ])
             ->add('dados_poligono', TextareaType::class, [
                 'label'  => 'Polígono da área',
                 'mapped' => false,
@@ -174,32 +190,45 @@ class SolicitacaoType extends AbstractType
                 'required' => true,
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
             ])
-            ->add('dados_comentarios', TextareaType::class, ['label' => 'Comentários', 'mapped' => false, 'required' => false]);
+            ->add('dados_comentarios', TextareaType::class, [
+                'label'    => 'Comentários',
+                'mapped'   => false,
+                'required' => false,
+            ]);
     }
 
+    // -------------------------------------------------------------------------
+    // GERENTE DE ESTADO OU PAÍS
+    // -------------------------------------------------------------------------
     private function addCamposGerenteEstadoPais(\Symfony\Component\Form\FormInterface $form, ?string $cargo = null): void
     {
         $form
             ->add('dados_acao', ChoiceType::class, [
-                'label'    => 'Você deseja…', 'mapped' => false,
+                'label'    => 'Você deseja…',
+                'mapped'   => false,
                 'choices'  => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
-                'expanded' => true, 'constraints' => [new Assert\NotBlank()],
+                'expanded' => true,
+                'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_mentor', TextType::class, [
-                'label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()],
+                'label'       => 'Mentor',
+                'mapped'      => false,
+                'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_recomendadores', TextType::class, [
-                'label' => 'Editores recomendadores', 'mapped' => false, 'required' => false,
+                'label'    => 'Editores recomendadores',
+                'mapped'   => false,
+                'required' => false,
             ])
             ->add('dados_cargo', ChoiceType::class, [
-                'label'    => 'Cargo desejado', 'mapped' => false,
+                'label'    => 'Cargo desejado',
+                'mapped'   => false,
                 'choices'  => ['Gerente de Estado' => 'gerente_estado', 'Gerente de País' => 'gerente_pais'],
                 'expanded' => true,
                 'constraints' => [new Assert\NotBlank()],
                 'attr'     => ['data-cargo-select' => '1'],
             ]);
 
-        // Exibe seleção de UF apenas para Gerente de Estado
         if ($cargo === 'gerente_estado' || $cargo === null) {
             $form->add('dados_uf', ChoiceType::class, [
                 'label'       => 'Estado',
@@ -210,42 +239,55 @@ class SolicitacaoType extends AbstractType
                 'constraints' => $cargo === 'gerente_estado'
                     ? [new Assert\NotBlank(message: 'Selecione o estado.')]
                     : [],
-                'attr'        => ['data-uf-gerente' => '1'],
+                'attr' => ['data-uf-gerente' => '1'],
             ]);
         }
 
         $form->add('dados_comentarios', TextareaType::class, [
-            'label' => 'Comentários', 'mapped' => false, 'required' => false,
+            'label'    => 'Comentários',
+            'mapped'   => false,
+            'required' => false,
         ]);
     }
 
+    // -------------------------------------------------------------------------
+    // NÍVEL (UPGRADE / DOWNGRADE)
+    // -------------------------------------------------------------------------
     private function addCamposNivel(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_tipoNivel', ChoiceType::class, [
-                'label'    => 'É um pedido de…', 'mapped' => false,
+                'label'    => 'É um pedido de…',
+                'mapped'   => false,
                 'choices'  => ['Upgrade' => 'upgrade', 'Downgrade' => 'downgrade'],
-                'expanded' => true, 'constraints' => [new Assert\NotBlank()],
+                'expanded' => true,
+                'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_mentor', TextType::class, [
-                'label' => 'Mentor', 'mapped' => false, 'constraints' => [new Assert\NotBlank()],
+                'label'       => 'Mentor',
+                'mapped'      => false,
+                'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_recomendadores', TextType::class, [
-                'label' => 'Editores recomendadores', 'mapped' => false, 'required' => false,
+                'label'    => 'Editores recomendadores',
+                'mapped'   => false,
+                'required' => false,
             ])
             ->add('dados_nivelAtual', TextType::class, [
-                'label' => 'Nível atual',
+                'label'  => 'Nível atual',
                 'mapped' => false,
-                'attr'  => ['placeholder' => 'Digite o seu nível de um a cinco'],
+                'attr'   => ['placeholder' => 'Digite o seu nível de um a cinco'],
+                'help'   => 'Digite o seu nível de um a cinco.',
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Range(['min' => 1, 'max' => 5]),
                 ],
             ])
             ->add('dados_nivelDesejado', TextType::class, [
-                'label' => 'Nível desejado',
+                'label'  => 'Nível desejado',
                 'mapped' => false,
-                'attr'  => ['placeholder' => 'Digite o nível desejado de dois a seis'],
+                'attr'   => ['placeholder' => 'Digite o nível desejado de dois a seis'],
+                'help'   => 'Digite o nível desejado de dois a seis.',
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Range(['min' => 2, 'max' => 6]),
@@ -270,9 +312,9 @@ class SolicitacaoType extends AbstractType
                     'Mais de 50 postagens'    => '50_mais',
                     'Nenhuma.'                => 'nenhuma',
                 ],
-                'help'        => 'Você pode achar essa resposta aqui: '
-                               . '<a href="https://www.waze.com/discuss/u/SEU_NICK/activity" target="_blank" rel="noopener">'
-                               . 'https://www.waze.com/discuss/u/SEU_NICK/activity</a>',
+                'help' => 'Você pode achar essa resposta aqui: '
+                        . '<a href="https://www.waze.com/discuss/u/SEU_NICK/activity" target="_blank" rel="noopener">'
+                        . 'https://www.waze.com/discuss/u/SEU_NICK/activity</a>',
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_motivacao', TextareaType::class, [
@@ -313,11 +355,15 @@ class SolicitacaoType extends AbstractType
             ]);
     }
 
+    // -------------------------------------------------------------------------
+    // OOPS DE EDITOR
+    // -------------------------------------------------------------------------
     private function addCamposOops(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_editorNome', TextType::class, [
-                'label' => 'Nome do editor que cometeu o Oops', 'mapped' => false,
+                'label'       => 'Nome do editor que cometeu o Oops',
+                'mapped'      => false,
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_permalink', TextType::class, [
@@ -330,8 +376,7 @@ class SolicitacaoType extends AbstractType
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'        => 'Opcional, mas recomendado. Se informar, deve ter zoom ≥15. '
-                               . 'A URL deve ser do editor Waze (waze.com/editor).',
+                'help'        => 'Opcional, mas recomendado. Se informar, deve ter zoom ≥15. A URL deve ser do editor Waze (waze.com/editor).',
                 'constraints' => $this->permalinkConstraints(required: false),
             ])
             ->add('dados_descricao', TextareaType::class, [
@@ -358,35 +403,48 @@ class SolicitacaoType extends AbstractType
             ]);
     }
 
+    // -------------------------------------------------------------------------
+    // BANDEIRA DE POSTO DE GASOLINA
+    // -------------------------------------------------------------------------
     private function addCamposBandeiraPosto(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_acao', ChoiceType::class, [
-                'label' => 'Você deseja…', 'mapped' => false,
-                'choices' => ['Adicionar' => 'adicionar', 'Remover' => 'remover'],
-                'expanded' => true, 'constraints' => [new Assert\NotBlank()],
+                'label'    => 'Você deseja…',
+                'mapped'   => false,
+                'choices'  => ['Adicionar' => 'adicionar', 'Remover' => 'remover'],
+                'expanded' => true,
+                'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_nomeBandeira', TextType::class, [
-                'label' => 'Nome da bandeira', 'mapped' => false,
+                'label'       => 'Nome da bandeira',
+                'mapped'      => false,
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_cnpj', TextType::class, [
-                'label' => 'CNPJ de um posto ativo com cadastro atualizado', 'mapped' => false, 'required' => false,
+                'label'    => 'CNPJ de um posto ativo com cadastro atualizado',
+                'mapped'   => false,
+                'required' => false,
                 'constraints' => [
                     new Assert\Regex(['pattern' => '/^\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}$/', 'message' => 'CNPJ inválido']),
                 ],
             ]);
     }
 
+    // -------------------------------------------------------------------------
+    // CADASTRO DE ID DE SEGMENTO
+    // -------------------------------------------------------------------------
     private function addCamposIdSegmento(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_nomeSegmento', TextType::class, [
-                'label' => 'Nome do segmento (conforme WME)', 'mapped' => false,
+                'label'       => 'Nome do segmento (conforme WME)',
+                'mapped'      => false,
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_idSegmento', TextType::class, [
-                'label' => 'ID do segmento (sem permalink)', 'mapped' => false,
+                'label'  => 'ID do segmento (sem permalink)',
+                'mapped' => false,
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Regex(['pattern' => '/^\d+$/', 'message' => 'Informe apenas o ID numérico, sem permalink']),

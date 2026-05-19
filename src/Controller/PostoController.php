@@ -52,7 +52,6 @@ class PostoController extends AbstractController
 
         $whereClause = implode(' AND ', $where);
 
-        // DBAL 3.x/4.x: sem terceiro argumento de tipos (PDO::PARAM_* não é aceito)
         $total = (int) $this->db->fetchOne(
             "SELECT COUNT(*) FROM fuel_reseller_raw r WHERE $whereClause",
             $params
@@ -60,7 +59,7 @@ class PostoController extends AbstractController
 
         $rows = $this->db->fetchAllAssociative(
             "SELECT r.id, r.nome_fantasia, r.razao_social, r.cnpj, r.uf, r.municipio,
-                    pwl.id AS link_id, pwl.waze_link, pwl.permanent_hazard_id
+                    pwl.id AS link_id, pwl.waze_link, pwl.venue_id
              FROM fuel_reseller_raw r
              LEFT JOIN posto_waze_link pwl ON pwl.posto_id = r.id
              WHERE $whereClause
@@ -103,14 +102,14 @@ class PostoController extends AbstractController
         $posto = $this->postoRepo->find($id)
             ?? throw $this->createNotFoundException("Posto #$id não encontrado.");
 
-        $wazeLink    = trim((string) $request->request->get('waze_link', ''));
-        $observacao  = trim((string) $request->request->get('observacao', '')) ?: null;
-        $user        = $this->getUser();
-        $now         = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $wazeLink   = trim((string) $request->request->get('waze_link', ''));
+        $observacao = trim((string) $request->request->get('observacao', '')) ?: null;
+        $user       = $this->getUser();
+        $now        = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
-        $hazardId = PostoWazeLink::extractVenueId($wazeLink);
+        $venueId = PostoWazeLink::extractVenueId($wazeLink);
 
-        if ($hazardId === null) {
+        if ($venueId === null) {
             $this->addFlash('danger', 'O link deve conter o parâmetro venues com valor numérico (ex: &venues=207160888).');
             return $this->redirectToRoute('posto_show', [
                 'id'        => $id,
@@ -125,9 +124,9 @@ class PostoController extends AbstractController
 
         if ($existing === false) {
             $this->db->executeStatement(
-                'INSERT INTO posto_waze_link (posto_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
+                'INSERT INTO posto_waze_link (posto_id, waze_link, venue_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $wazeLink, $hazardId, $observacao, $user->getId(), $now]
+                [$id, $wazeLink, $venueId, $observacao, $user->getId(), $now]
             );
         } else {
             $this->db->executeStatement(
@@ -137,9 +136,9 @@ class PostoController extends AbstractController
             );
 
             $this->db->executeStatement(
-                'UPDATE posto_waze_link SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
+                'UPDATE posto_waze_link SET waze_link = ?, venue_id = ?, observacao = ?, updated_by = ?, updated_at = ?
                  WHERE posto_id = ?',
-                [$wazeLink, $hazardId, $observacao, $user->getId(), $now, $id]
+                [$wazeLink, $venueId, $observacao, $user->getId(), $now, $id]
             );
         }
 

@@ -87,7 +87,17 @@
 {%- block form_help -%}
   {%- if help is not empty -%}
     {%- set help_translation_domain = help_translation_domain|default(false) -%}
-    <p class="sol-help" id="{{ id }}_help">{{ help|trans({}, help_translation_domain) }}</p>
+    {#
+      help_html_translation_parameters indica se o help já contém HTML seguro
+      (gerado pelo próprio SolicitacaoType, nunca vindo de input do usuário).
+      Quando true → |raw para renderizar links e tags.
+      Quando false/ausente → escape normal.
+    #}
+    {%- if help_html_translation_parameters is defined and help_html_translation_parameters is not same as(false) -%}
+      <p class="sol-help" id="{{ id }}_help">{{ help|trans({}, help_translation_domain)|raw }}</p>
+    {%- else -%}
+      <p class="sol-help" id="{{ id }}_help">{{ help|trans({}, help_translation_domain) }}</p>
+    {%- endif -%}
   {%- endif -%}
 {%- endblock form_help -%}
 

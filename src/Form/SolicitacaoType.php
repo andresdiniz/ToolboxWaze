@@ -5,7 +5,7 @@ namespace App\Form;
 use App\Entity\Solicitacao;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\{
-    ChoiceType, EmailType, TextareaType, TextType, CheckboxType
+    ChoiceType, EmailType, FileType, TextareaType, TextType, CheckboxType
 };
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
@@ -74,7 +74,7 @@ class SolicitacaoType extends AbstractType
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) {
-            $tipo  = $event->getData()['tipo']       ?? null;
+            $tipo  = $event->getData()['tipo']        ?? null;
             $cargo = $event->getData()['dados_cargo'] ?? null;
             $this->addDadosDinamicos($event->getForm(), $tipo, $cargo);
         });
@@ -154,6 +154,7 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // GERENTE DE ÁREA
+    // Ordem: Mentor > Recomendadores > Comentários > Polígono > Comuniquei
     // -------------------------------------------------------------------------
     private function addCamposGerenteArea(\Symfony\Component\Form\FormInterface $form): void
     {
@@ -167,6 +168,13 @@ class SolicitacaoType extends AbstractType
                 'label'    => 'Editores recomendadores',
                 'mapped'   => false,
                 'required' => false,
+            ])
+            ->add('dados_comentarios', TextareaType::class, [
+                'label'    => 'Comentários',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => ['rows' => 3],
+                'help'     => 'Caso necessário, adicione informações relevantes para a sua solicitação.',
             ])
             ->add('dados_poligono', TextareaType::class, [
                 'label'  => 'Polígono da área',
@@ -188,17 +196,14 @@ class SolicitacaoType extends AbstractType
                 'label'    => 'Comuniquei minha intenção no Discuss do Estado',
                 'mapped'   => false,
                 'required' => true,
+                'help'     => 'Busque o seu Estado e em seguida no tópico \'Gerente de área ou candidato, se apresente aqui\', publique sua intenção.',
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
-            ])
-            ->add('dados_comentarios', TextareaType::class, [
-                'label'    => 'Comentários',
-                'mapped'   => false,
-                'required' => false,
             ]);
     }
 
     // -------------------------------------------------------------------------
     // GERENTE DE ESTADO OU PAÍS
+    // Campo dados_uf só é adicionado quando cargo = gerente_estado (nunca no PRE_SET_DATA)
     // -------------------------------------------------------------------------
     private function addCamposGerenteEstadoPais(\Symfony\Component\Form\FormInterface $form, ?string $cargo = null): void
     {
@@ -229,17 +234,18 @@ class SolicitacaoType extends AbstractType
                 'attr'     => ['data-cargo-select' => '1'],
             ]);
 
-        if ($cargo === 'gerente_estado' || $cargo === null) {
+        // Campo UF só aparece (e é obrigatório) quando o cargo submetido é gerente_estado.
+        // No PRE_SET_DATA ($cargo === null) não é adicionado — o JS no frontend
+        // exibe/esconde o campo via data-cargo-select sem precisar de reload.
+        if ($cargo === 'gerente_estado') {
             $form->add('dados_uf', ChoiceType::class, [
                 'label'       => 'Estado',
                 'mapped'      => false,
                 'choices'     => self::UFS,
                 'placeholder' => 'Escolher',
-                'required'    => ($cargo === 'gerente_estado'),
-                'constraints' => $cargo === 'gerente_estado'
-                    ? [new Assert\NotBlank(message: 'Selecione o estado.')]
-                    : [],
-                'attr' => ['data-uf-gerente' => '1'],
+                'required'    => true,
+                'constraints' => [new Assert\NotBlank(message: 'Selecione o estado.')],
+                'attr'        => ['data-uf-gerente' => '1'],
             ]);
         }
 
@@ -357,17 +363,40 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // OOPS DE EDITOR
+    // Ordem: Nome do editor > Provas (upload) > Permalink > Descrição
     // -------------------------------------------------------------------------
     private function addCamposOops(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_editorNome', TextType::class, [
-                'label'       => 'Nome do editor que cometeu o Oops',
+                'label'       => 'Qual o nome do editor que cometeu o Oops?',
                 'mapped'      => false,
+                'help'        => 'Digite o nome do usuário.',
                 'constraints' => [new Assert\NotBlank()],
             ])
+            ->add('dados_provas', FileType::class, [
+                'label'    => 'Compartilhe provas',
+                'mapped'   => false,
+                'required' => false,
+                'multiple' => true,
+                'help'     => 'Envie até 5 imagens, com tamanho máximo de 1 MB cada.',
+                'attr'     => ['accept' => 'image/*', 'data-max-files' => '5'],
+                'constraints' => [
+                    new Assert\All([
+                        'constraints' => [
+                            new Assert\File([
+                                'maxSize'          => '1M',
+                                'maxSizeMessage'   => 'Cada imagem deve ter no máximo 1 MB.',
+                                'mimeTypes'        => ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+                                'mimeTypesMessage' => 'Envie apenas imagens (JPG, PNG, GIF ou WebP).',
+                            ]),
+                        ],
+                    ]),
+                    new Assert\Count(['max' => 5, 'maxMessage' => 'Envie no máximo 5 imagens.']),
+                ],
+            ])
             ->add('dados_permalink', TextType::class, [
-                'label'    => 'Permalink (zoom ≥15)',
+                'label'    => 'Compartilhe permalink',
                 'mapped'   => false,
                 'required' => false,
                 'attr'     => [
@@ -376,7 +405,7 @@ class SolicitacaoType extends AbstractType
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'        => 'Opcional, mas recomendado. Se informar, deve ter zoom ≥15. A URL deve ser do editor Waze (waze.com/editor).',
+                'help'        => 'Acesse o Editor de Mapas (WME) e copie o Permalink.',
                 'constraints' => $this->permalinkConstraints(required: false),
             ])
             ->add('dados_descricao', TextareaType::class, [
@@ -390,7 +419,7 @@ class SolicitacaoType extends AbstractType
                     'data-char-counter' => 'true',
                     'data-char-min'     => '30',
                 ],
-                'help' => 'Mínimo de 30 caracteres.',
+                'help' => 'Inclua todas as informações e detalhes relevantes para facilitar a análise.',
                 'constraints' => [
                     new Assert\NotBlank(message: 'Preencha a descrição.'),
                     new Assert\Length([

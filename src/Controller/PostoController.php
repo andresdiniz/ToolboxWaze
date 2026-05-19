@@ -37,43 +37,36 @@ class PostoController extends AbstractController
 
         $where  = ['1=1'];
         $params = [];
-        $types  = [];
 
         if ($search !== '') {
             $where[]  = '(r.nome_fantasia LIKE ? OR r.razao_social LIKE ? OR r.cnpj LIKE ?)';
             $params[] = "%$search%";
             $params[] = "%$search%";
             $params[] = "%$search%";
-            $types[]  = \PDO::PARAM_STR;
-            $types[]  = \PDO::PARAM_STR;
-            $types[]  = \PDO::PARAM_STR;
         }
 
         if ($uf !== '') {
             $where[]  = 'r.estado = ?';
             $params[] = $uf;
-            $types[]  = \PDO::PARAM_STR;
         }
 
         $whereClause = implode(' AND ', $where);
 
+        // DBAL 3.x/4.x: sem terceiro argumento de tipos (PDO::PARAM_* não é aceito)
         $total = (int) $this->db->fetchOne(
             "SELECT COUNT(*) FROM fuel_reseller_raw r WHERE $whereClause",
-            $params,
-            $types,
+            $params
         );
 
-        // $offset e PER_PAGE via placeholder — nunca interpolados
         $rows = $this->db->fetchAllAssociative(
             "SELECT r.id, r.nome_fantasia, r.razao_social, r.cnpj, r.estado, r.municipio,
-                    pwl.id AS link_id, pwl.waze_link, pwl.venue_id
+                    pwl.id AS link_id, pwl.waze_link, pwl.permanent_hazard_id
              FROM fuel_reseller_raw r
              LEFT JOIN posto_waze_link pwl ON pwl.posto_id = r.id
              WHERE $whereClause
              ORDER BY r.nome_fantasia
-             LIMIT ? OFFSET ?",
-            [...$params, self::PER_PAGE, $offset],
-            [...$types, \PDO::PARAM_INT, \PDO::PARAM_INT],
+             LIMIT $offset, " . self::PER_PAGE,
+            $params
         );
 
         return $this->render('posto/index.html.twig', [
@@ -115,9 +108,9 @@ class PostoController extends AbstractController
         $user        = $this->getUser();
         $now         = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
-        $venueId = PostoWazeLink::extractVenueId($wazeLink);
+        $hazardId = PostoWazeLink::extractVenueId($wazeLink);
 
-        if ($venueId === null) {
+        if ($hazardId === null) {
             $this->addFlash('danger', 'O link deve conter o parâmetro venues com valor numérico (ex: &venues=207160888).');
             return $this->redirectToRoute('posto_show', [
                 'id'        => $id,
@@ -132,9 +125,9 @@ class PostoController extends AbstractController
 
         if ($existing === false) {
             $this->db->executeStatement(
-                'INSERT INTO posto_waze_link (posto_id, waze_link, venue_id, observacao, inserted_by, inserted_at)
+                'INSERT INTO posto_waze_link (posto_id, waze_link, permanent_hazard_id, observacao, inserted_by, inserted_at)
                  VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $wazeLink, $venueId, $observacao, $user->getId(), $now]
+                [$id, $wazeLink, $hazardId, $observacao, $user->getId(), $now]
             );
         } else {
             $this->db->executeStatement(
@@ -144,9 +137,9 @@ class PostoController extends AbstractController
             );
 
             $this->db->executeStatement(
-                'UPDATE posto_waze_link SET waze_link = ?, venue_id = ?, observacao = ?, updated_by = ?, updated_at = ?
+                'UPDATE posto_waze_link SET waze_link = ?, permanent_hazard_id = ?, observacao = ?, updated_by = ?, updated_at = ?
                  WHERE posto_id = ?',
-                [$wazeLink, $venueId, $observacao, $user->getId(), $now, $id]
+                [$wazeLink, $hazardId, $observacao, $user->getId(), $now, $id]
             );
         }
 

@@ -50,7 +50,7 @@ final class RadarController extends AbstractController
             $params
         );
 
-        // $offset via placeholder para evitar interpolação direta na query
+        // DBAL 3.x/4.x: não passar PDO::PARAM_* como terceiro argumento — usa string por padrão
         $rows = $this->db->fetchAllAssociative(
             "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
                     rm.local_verificacao, rm.data_ultima_verificacao,
@@ -59,9 +59,8 @@ final class RadarController extends AbstractController
              FROM radar_medidor rm $baseFrom
              $whereClause
              ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao
-             LIMIT ? OFFSET ?",
-            array_merge($params, [self::PER_PAGE, $offset]),
-            array_merge(array_fill(0, count($params), \PDO::PARAM_STR), [\PDO::PARAM_INT, \PDO::PARAM_INT])
+             LIMIT $offset, " . self::PER_PAGE,
+            $params
         );
 
         $ufsQuery = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';

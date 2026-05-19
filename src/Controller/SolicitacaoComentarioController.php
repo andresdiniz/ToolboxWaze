@@ -29,13 +29,13 @@ class SolicitacaoComentarioController extends AbstractController
 
         if (!$this->isCsrfTokenValid('comment_' . $solicitacao->getId(), $request->request->get('_token'))) {
             $this->addFlash('danger', 'Token inválido.');
-            return $this->redirectToRoute('solicitacao_show', ['id' => $solicitacao->getId()]);
+            return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
         }
 
         $mensagem = trim((string) $request->request->get('mensagem', ''));
         if (mb_strlen($mensagem) < 3 || mb_strlen($mensagem) > 2000) {
             $this->addFlash('danger', 'Mensagem deve ter entre 3 e 2000 caracteres.');
-            return $this->redirectToRoute('solicitacao_show', ['id' => $solicitacao->getId()]);
+            return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
         }
 
         // Apenas responsáveis/admins podem marcar como interno
@@ -51,8 +51,8 @@ class SolicitacaoComentarioController extends AbstractController
         );
 
         $this->addFlash('success', 'Comentário adicionado.');
-        return $this->redirectToRoute('solicitacao_show', [
-            'id'       => $solicitacao->getId(),
+        return $this->redirectToRoute('solicitacao_detalhe', [
+            'id'        => $solicitacao->getId(),
             '_fragment' => 'chat',
         ]);
     }
@@ -69,7 +69,7 @@ class SolicitacaoComentarioController extends AbstractController
 
         if (!$this->isCsrfTokenValid('status_' . $solicitacao->getId(), $request->request->get('_token'))) {
             $this->addFlash('danger', 'Token inválido.');
-            return $this->redirectToRoute('solicitacao_show', ['id' => $solicitacao->getId()]);
+            return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
         }
 
         $novoStatus = $request->request->get('status', '');
@@ -77,12 +77,12 @@ class SolicitacaoComentarioController extends AbstractController
 
         if (!array_key_exists($novoStatus, Solicitacao::STATUS_LABELS)) {
             $this->addFlash('danger', 'Status inválido.');
-            return $this->redirectToRoute('solicitacao_show', ['id' => $solicitacao->getId()]);
+            return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
         }
 
         $this->service->mudarStatus($solicitacao, $novoStatus, $this->getUser(), $nota ?: null);
 
         $this->addFlash('success', 'Status atualizado para "' . Solicitacao::STATUS_LABELS[$novoStatus] . '".');
-        return $this->redirectToRoute('solicitacao_show', ['id' => $solicitacao->getId()]);
+        return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
     }
 }

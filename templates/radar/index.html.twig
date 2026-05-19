@@ -201,7 +201,7 @@
         <span class="fw-semibold small">
             <i class="bi bi-table me-1"></i>
             {% if total > 0 %}
-                Mostrando {{ ((page-1)*per_page + 1)|number_format(0,',','.') }}–{{ [page*per_page, total]|min|number_format(0,',','.') }}
+                Mostrando {{ ((page-1)*per_page + 1)|number_format(0,',','.') }}–{{ min(page*per_page, total)|number_format(0,',','.') }}
                 de {{ total|number_format(0,',','.') }}
             {% else %}
                 Nenhum registro encontrado

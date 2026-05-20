@@ -1,11 +1,8 @@
-# Enable stateless CSRF protection for forms and logins/logouts
+# Proteção CSRF para formulários
+# IMPORTANTE: NÃO usar stateless_token_ids para 'authenticate' ou 'logout'
+# pois o modo double-submit cookie falha em hospedagem compartilhada (Hostinger)
+# O token é validado via sessão PHP (configurado em framework.yaml)
 framework:
     form:
         csrf_protection:
             token_id: submit
-
-    csrf_protection:
-        stateless_token_ids:
-            - submit
-            - authenticate
-            - logout

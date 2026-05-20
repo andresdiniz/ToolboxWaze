@@ -3,10 +3,9 @@ framework:
     secret: '%env(APP_SECRET)%'
     csrf_protection:
         enabled: true
-        # Forçar armazenamento na sessão (não cookie)
-        token_manager: session.csrf_token_manager
 
-    # Note that the session will be started ONLY if you read or write from it.
+    # Sessão — necessária para armazenar o token CSRF
+    # O token é gerenciado pela sessão PHP (não cookie double-submit)
     session: true
 
 when@test:

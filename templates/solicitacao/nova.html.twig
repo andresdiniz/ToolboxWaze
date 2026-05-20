@@ -26,7 +26,6 @@
   {# ── 1. Dados do solicitante ──────────────────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header">
-      {# person icon #}
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.294 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
       Seus dados
     </div>
@@ -42,8 +41,7 @@
   {# ── 2. Tipo (pills visuais) ──────────────────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header">
-      {# list-check icon #}
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3.854 2.146a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 3.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 7.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3.854 2.146a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 3.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708L2 7.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0"/></svg>
       Tipo de solicitação
     </div>
     <div class="sol-card-body">
@@ -51,11 +49,6 @@
       {{ form_widget(form.estado, {attr: {'data-estado-select': '1', class: 'd-none', 'aria-hidden': 'true'}}) }}
       {{ form_errors(form.tipo) }}
 
-      {#
-        Mapa de ícones: SVG inline por tipo.
-        Cada entrada: {'svg': '<path ...>', 'label': '...'}
-        viewBox padrão 0 0 16 16, fill currentColor.
-      #}
       <div class="tipo-grid" id="tipo-pills">
         {% set iconMap = {
           'imagem_satelite': {
@@ -109,52 +102,84 @@
   </div>
 
   <div id="campos-dinamicos">
-    {% for field in form %}
-      {% if field.vars.name starts with 'dados_' %}
-        {% set isPermalink = field.vars.name == 'dados_permalink' %}
-        <div class="sol-card campo-animado">
-          <div class="sol-card-body">
 
-            {% if isPermalink %}
-              <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
-                {{ field.vars.label }}
-                {% if field.vars.required %}<span class="sol-required" aria-hidden="true">*</span>{% endif %}
-              </label>
-              <div class="permalink-wrapper">
-                {{ form_widget(field, {attr: {
-                  'data-permalink': '1',
-                  'autocomplete':   'off',
-                  'spellcheck':     'false',
-                  'placeholder':    'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'
-                }}) }}
-                <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
-                  {# clipboard icon #}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
-                </button>
-              </div>
-              {% if field.vars.help is defined and field.vars.help %}
-                <p class="sol-help">{{ field.vars.help }}</p>
-              {% endif %}
-              {{ form_errors(field) }}
-
-            {% else %}
-              {{ form_row(field) }}
-            {% endif %}
-
-          </div>
+    {#
+      Radio Upgrade/Downgrade — FIXO aqui, fora do fragmento AJAX.
+      Só aparece quando o tipo for 'nivel' e o form tiver o campo dados_tipoNivel.
+      O AJAX (_campos.html.twig) NÃO inclui este campo, evitando que a escolha
+      seja perdida a cada fetch.
+    #}
+    {% if form.dados_tipoNivel is defined %}
+    <div class="sol-card" id="card-tipo-nivel">
+      <div class="sol-card-body">
+        <div data-tipo-nivel="1">
+          {{ form_row(form.dados_tipoNivel) }}
         </div>
-      {% endif %}
-    {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {#
+      Área trocada pelo AJAX — apenas os campos abaixo do radio.
+      Ao selecionar Downgrade: retorna checkbox Champ + campos de downgrade.
+      Ao selecionar Upgrade: retorna campos de upgrade.
+    #}
+    <div id="campos-sub">
+      {% for field in form %}
+        {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
+          {% set isPermalink = field.vars.name == 'dados_permalink' %}
+          <div class="sol-card campo-animado">
+            <div class="sol-card-body">
+
+              {% if isPermalink %}
+                <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
+                  {{ field.vars.label }}
+                  {% if field.vars.required %}<span class="sol-required" aria-hidden="true">*</span>{% endif %}
+                </label>
+                <div class="permalink-wrapper">
+                  {{ form_widget(field, {attr: {
+                    'data-permalink': '1',
+                    'autocomplete':   'off',
+                    'spellcheck':     'false',
+                    'placeholder':    'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'
+                  }}) }}
+                  <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
+                  </button>
+                </div>
+                {% if field.vars.help is defined and field.vars.help %}
+                  <p class="sol-help">{{ field.vars.help }}</p>
+                {% endif %}
+                {{ form_errors(field) }}
+
+              {% elseif field.vars.name == 'dados_souChamp' %}
+                <div data-sou-champ-wrapper="1">
+                  {{ form_label(field) }}
+                  {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
+                  {{ form_errors(field) }}
+                  {% if field.vars.help is defined and field.vars.help %}
+                    <p class="sol-help">{{ field.vars.help }}</p>
+                  {% endif %}
+                </div>
+
+              {% else %}
+                {{ form_row(field) }}
+              {% endif %}
+
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
 
     {# Bloco de provas Oops #}
     <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
       <div class="sol-card-header">
-        {# images icon #}
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 0 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
         Provas (imagens)
       </div>
       <div class="sol-card-body">
-        <label class="sol-label">Compartilhe as provas <span class="text-muted fw-normal" style="font-size:.8rem">(até 5 imagens, 1 MB cada)</span></label>
+        <label class="sol-help">Compartilhe as provas <span class="text-muted fw-normal" style="font-size:.8rem">(até 5 imagens, 1 MB cada)</span></label>
         <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
       </div>
     </div>
@@ -162,7 +187,6 @@
 
   <div class="d-flex justify-content-end mt-2 mb-5">
     <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
-      {# send icon #}
       <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" style="margin-right:.3em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/></svg>
       Enviar solicitação
     </button>
@@ -241,19 +265,18 @@
   /* ── Elementos principais ─────────────────────────────────────────────── */
   const tipoSelect = document.querySelector('[data-tipo-select]');
   if (!tipoSelect) return;
-  const pills     = document.querySelectorAll('.tipo-pill');
-  const dinamicos = document.getElementById('campos-dinamicos');
-  const spinner   = document.getElementById('campos-spinner');
+  const pills    = document.querySelectorAll('.tipo-pill');
+  const subArea  = document.getElementById('campos-sub');      // só esta área é trocada pelo AJAX
+  const spinner  = document.getElementById('campos-spinner');
   const btnEnviar = document.getElementById('btn-enviar');
 
   /*
-    tipoNivelAtual rastreia se estamos em 'downgrade', 'upgrade' ou null.
-    O fetch só acontece quando:
-      1. O usuário troca de tipo (pill) → sempre
-      2. O usuário escolhe downgrade → precisa recarregar para mostrar bloco Champ
-      3. O usuário volta de downgrade para upgrade → precisa recarregar para remover bloco Champ
-      4. O usuário marca/desmarca checkbox Champ → precisa recarregar para mostrar/remover campos extras
-    Não faz fetch ao selecionar upgrade quando já está em upgrade (nenhuma mudança visível).
+    tipoNivelAtual: 'upgrade' | 'downgrade' | null
+    souChampAtual:  true | false
+
+    O radio dados_tipoNivel é FIXO no DOM (não está no fragmento AJAX).
+    O AJAX só troca o conteúdo de #campos-sub (abaixo do radio).
+    Assim a escolha do radio nunca é perdida.
   */
   let tipoNivelAtual = null;
   let souChampAtual  = false;
@@ -283,10 +306,10 @@
     if (btnEnviar) btnEnviar.disabled = !valor;
   }
 
-  /* ── Fetch de campos dinâmicos (rota dedicada) ──────────────── */
+  /* ── Fetch: troca APENAS #campos-sub ─────────────────────────────────── */
   function fetchCampos(tipo, tipoNivel, souChamp) {
     spinner.classList.add('show');
-    dinamicos.classList.add('loading');
+    if (subArea) subArea.classList.add('loading');
 
     const url = new URL('/solicitacoes/campos', window.location.origin);
     url.searchParams.set('tipo', tipo ?? tipoSelect.value);
@@ -296,50 +319,47 @@
     fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(html => {
-        dinamicos.innerHTML = html;
-        dinamicos.querySelectorAll('.sol-card').forEach((el, i) => {
-          el.style.animationDelay = (i * 0.055) + 's';
-        });
+        if (subArea) {
+          subArea.innerHTML = html;
+          subArea.querySelectorAll('.sol-card').forEach((el, i) => {
+            el.style.animationDelay = (i * 0.055) + 's';
+          });
+        }
         initPermalinks();
-        bindNivelListeners();
+        bindSubListeners();
       })
       .catch(err => console.error('ToolboxWaze fetchCampos erro:', err))
       .finally(() => {
         spinner.classList.remove('show');
-        dinamicos.classList.remove('loading');
+        if (subArea) subArea.classList.remove('loading');
       });
   }
 
-  /* ── Listeners para Upgrade/Downgrade e checkbox Champ ── */
-  function bindNivelListeners() {
-
-    dinamicos.querySelectorAll('[data-tipo-nivel] input[type=radio]').forEach(radio => {
+  /* ── Listeners para o radio (fixo no DOM) e checkbox Champ (no #campos-sub) ── */
+  function bindNivelRadios() {
+    document.querySelectorAll('[data-tipo-nivel] input[type=radio]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
       radio.dataset.nivelBound = '1';
       radio.addEventListener('change', function () {
         const novoValor = this.value;
-
-        /* Sem mudança: ignora */
         if (novoValor === tipoNivelAtual) return;
-
         const anteriorEraDowngrade = (tipoNivelAtual === 'downgrade');
         tipoNivelAtual = novoValor;
         souChampAtual  = false;
-
-        /*
-          Só faz fetch nos casos que mudam o formulário visivelmente:
-            - Escolheu downgrade (precisa mostrar bloco Champ)
-            - Voltou de downgrade para upgrade (precisa remover bloco Champ)
-          Se estava em null/upgrade e escolheu upgrade: não há nada para mudar.
-        */
+        /* Só faz fetch quando a mudança afeta os campos abaixo do radio */
         if (novoValor === 'downgrade' || anteriorEraDowngrade) {
+          fetchCampos(tipoSelect.value, tipoNivelAtual, false);
+        } else {
+          /* upgrade → upgrade sem downgrade anterior: carrega campos de upgrade normalmente */
           fetchCampos(tipoSelect.value, tipoNivelAtual, false);
         }
       });
     });
+  }
 
-    /* Checkbox dados_souChamp: só aparece quando tipoNivelAtual === 'downgrade' */
-    const chk = dinamicos.querySelector('[data-sou-champ]');
+  function bindSubListeners() {
+    /* Checkbox dados_souChamp: aparece dentro de #campos-sub quando downgrade */
+    const chk = subArea?.querySelector('[data-sou-champ]');
     if (chk && !chk.dataset.champBound) {
       chk.dataset.champBound = '1';
       chk.addEventListener('change', function () {
@@ -349,8 +369,13 @@
     }
   }
 
-  /* Inicializa listeners nos campos já renderizados pelo Twig (re-submit com erros) */
-  bindNivelListeners();
+  /* Inicializa listeners nos elementos já no DOM (re-submit com erros) */
+  bindNivelRadios();
+  bindSubListeners();
+
+  /* Quando o tipo inicial já é 'nivel', garante que o radio está vinculado */
+  const cardNivel = document.getElementById('card-tipo-nivel');
+  if (cardNivel) bindNivelRadios();
 
   /* ── Bloqueia submit se permalink inválido ─────────────────── */
   document.getElementById('form-solicitacao')

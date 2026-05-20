@@ -21,16 +21,32 @@
             <p class="sol-help">{{ field.vars.help }}</p>
           {% endif %}
           {{ form_errors(field) }}
+
         {% elseif field.vars.name == 'dados_tipoNivel' %}
-          {# Radio Upgrade/Downgrade: mantém data-tipo-nivel para o JS bindar o listener #}
+          {#
+            Radio Upgrade/Downgrade.
+            data-tipo-nivel="1" no wrapper → JS usa querySelector('[data-tipo-nivel] input[type=radio]')
+          #}
           <div data-tipo-nivel="1">
             {{ form_row(field) }}
           </div>
+
         {% elseif field.vars.name == 'dados_souChamp' %}
-          {# Checkbox de confirmação Champ: data-sou-champ para o JS bindar o listener #}
+          {#
+            Checkbox de confirmação Champ.
+            IMPORTANTE: data-sou-champ deve ficar no <input>, não no wrapper.
+            form_row({attr:…}) aplica no wrapper div — por isso usamos
+            form_label + form_widget separados para passar o attr no input.
+          #}
           <div data-sou-champ-wrapper="1">
-            {{ form_row(field, {attr: {'data-sou-champ': '1'}}) }}
+            {{ form_label(field) }}
+            {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
+            {{ form_errors(field) }}
+            {% if field.vars.help is defined and field.vars.help %}
+              <p class="sol-help">{{ field.vars.help }}</p>
+            {% endif %}
           </div>
+
         {% else %}
           {{ form_row(field) }}
         {% endif %}
@@ -42,7 +58,7 @@
 <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
   <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
   <div class="sol-card-body">
-    <label class="sol-label">Compartilhe provas <span class="text-muted fw-normal">(até 5 imagens, 1 MB cada)</span></label>
+    <label class="sol-help">Compartilhe provas <span class="text-muted fw-normal">(até 5 imagens, 1 MB cada)</span></label>
     <input type="file" name="arquivos_oops[]" id="input-oops-files" class="sol-input" accept="image/*" multiple>
     <div id="oops-file-preview" class="d-flex flex-wrap gap-2 mt-2"></div>
     <p id="oops-file-error" class="sol-error d-none mt-1"><i class="bi bi-exclamation-circle"></i> <span></span></p>

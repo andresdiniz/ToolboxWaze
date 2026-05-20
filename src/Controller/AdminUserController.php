@@ -38,6 +38,7 @@ class AdminUserController extends AbstractController
             'allPerms'  => User::ALL_PERMISSIONS,
             'allUfs'    => User::ALL_UFS,
             'allTipos'  => Solicitacao::TIPOS,
+            'champTipos' => User::CHAMP_DOWNGRADE_TIPOS,
         ]);
     }
 
@@ -57,16 +58,11 @@ class AdminUserController extends AbstractController
         return array_unique($roles);
     }
 
-    #[Route('/{id}/approve', name: 'approve', methods: ['POST'])]
-    public function approve(User $user, Request $request): Response
+    // -------------------------------------------------------------------------
+    // Helper: aplica configurações de permissões (comum a approve e updatePermissions)
+    // -------------------------------------------------------------------------
+    private function applyPermissions(User $user, Request $request): void
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
-        if (!$this->isCsrfTokenValid('user_action_' . $user->getId(), $request->request->get('_token'))) {
-            $this->addFlash('error', 'Token inválido.');
-            return $this->redirectToRoute('admin_users_index');
-        }
-
         $permissions = $request->request->all('permissions') ?? [];
 
         $allowedUfs = $request->request->getBoolean('all_ufs')
@@ -83,12 +79,45 @@ class AdminUserController extends AbstractController
                 fn($v) => array_key_exists($v, Solicitacao::TIPOS)
               ));
 
-        $user->setStatus(User::STATUS_APPROVED)
-             ->setApprovedAt(new \DateTimeImmutable())
-             ->setRoles($this->buildRoles($request))
+        $user->setRoles($this->buildRoles($request))
              ->setPermissions($permissions)
              ->setAllowedUfs($allowedUfs)
              ->setSolicitacaoTipos($solicitacaoTipos);
+
+        // Configurações do perfil Champ (só persistidas se is_champ estiver marcado)
+        $isChamp = $request->request->getBoolean('is_champ');
+        if ($isChamp) {
+            $limitDay = $request->request->get('champ_limit_day');
+            $user->setChampLimitDay($limitDay !== '' && $limitDay !== null ? (int) $limitDay : null);
+
+            $limitMonth = $request->request->get('champ_limit_month');
+            $user->setChampLimitMonth($limitMonth !== '' && $limitMonth !== null ? (int) $limitMonth : null);
+
+            $champTipos = (array) $request->request->all('champ_downgrade_tipos');
+            // null = todos os tipos liberados quando nenhum foi marcado
+            $user->setChampDowngradeTipos(!empty($champTipos) ? $champTipos : null);
+        } else {
+            // Ao remover o perfil Champ, limpa os dados de configuração
+            $user->setChampLimitDay(null)
+                 ->setChampLimitMonth(null)
+                 ->setChampDowngradeTipos(null);
+        }
+    }
+
+    #[Route('/{id}/approve', name: 'approve', methods: ['POST'])]
+    public function approve(User $user, Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+
+        if (!$this->isCsrfTokenValid('user_action_' . $user->getId(), $request->request->get('_token'))) {
+            $this->addFlash('error', 'Token inválido.');
+            return $this->redirectToRoute('admin_users_index');
+        }
+
+        $user->setStatus(User::STATUS_APPROVED)
+             ->setApprovedAt(new \DateTimeImmutable());
+
+        $this->applyPermissions($user, $request);
 
         $this->em->flush();
 
@@ -101,13 +130,13 @@ class AdminUserController extends AbstractController
                 ->subject('[ToolboxWaze] Seu acesso foi aprovado!')
                 ->html($this->renderView('emails/user_approved.html.twig', [
                     'user'       => $user,
-                    'allowedUfs' => $allowedUfs,
+                    'allowedUfs' => $user->getAllowedUfs(),
                     'loginUrl'   => $loginUrl,
                 ]));
             $this->mailer->send($email);
         } catch (\Throwable) {}
 
-        $ufsLabel = $allowedUfs === null ? 'todos os estados' : implode(', ', $allowedUfs);
+        $ufsLabel = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
         $isChamp  = in_array('ROLE_CHAMP', $user->getRoles(), true);
         $this->addFlash('success', "Usuário {$user->getName()} aprovado. Estados: $ufsLabel" . ($isChamp ? ' | Champ: sim' : '') . '.');
         return $this->redirectToRoute('admin_users_index');
@@ -151,26 +180,7 @@ class AdminUserController extends AbstractController
             return $this->redirectToRoute('admin_users_index');
         }
 
-        $permissions = $request->request->all('permissions') ?? [];
-
-        $allowedUfs = $request->request->getBoolean('all_ufs')
-            ? null
-            : array_values(array_filter(
-                (array) $request->request->all('allowed_ufs'),
-                fn($v) => in_array($v, User::ALL_UFS, true)
-              ));
-
-        $solicitacaoTipos = $request->request->getBoolean('all_tipos')
-            ? null
-            : array_values(array_filter(
-                (array) $request->request->all('solicitacao_tipos'),
-                fn($v) => array_key_exists($v, Solicitacao::TIPOS)
-              ));
-
-        $user->setRoles($this->buildRoles($request))
-             ->setPermissions($permissions)
-             ->setAllowedUfs($allowedUfs)
-             ->setSolicitacaoTipos($solicitacaoTipos);
+        $this->applyPermissions($user, $request);
 
         $this->em->flush();
 
@@ -183,13 +193,13 @@ class AdminUserController extends AbstractController
                 ->subject('[ToolboxWaze] Suas permissões foram atualizadas')
                 ->html($this->renderView('emails/user_permissions_updated.html.twig', [
                     'user'       => $user,
-                    'allowedUfs' => $allowedUfs,
+                    'allowedUfs' => $user->getAllowedUfs(),
                     'loginUrl'   => $loginUrl,
                 ]));
             $this->mailer->send($email);
         } catch (\Throwable) {}
 
-        $ufsLabel = $allowedUfs === null ? 'todos os estados' : implode(', ', $allowedUfs);
+        $ufsLabel = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
         $isChamp  = in_array('ROLE_CHAMP', $user->getRoles(), true);
         $this->addFlash('success', "Permissões de {$user->getName()} atualizadas. Estados: $ufsLabel" . ($isChamp ? ' | Champ: sim' : '') . '.');
         return $this->redirectToRoute('admin_users_index');

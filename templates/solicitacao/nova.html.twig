@@ -70,7 +70,7 @@
           },
           'id_segmento': {
             'label': 'Cadastro de ID de Segmento',
-            'svg': '<path d="M7 7V1.414a1 1 0 0 1 2 0V7h5.586a1 1 0 0 1 0 2H9v5.586a1 1 0 0 1-2 0V9H1.414a1 1 0 0 1 0-2z"/><path fill-rule="evenodd" d=".5 1h15a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3V2H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3A.5.5 0 0 1 .5 1m0 9h3a.5.5 0 0 1 0 1H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m11.5 0h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3v-2h-3a.5.5 0 0 1 0-1"/>'
+            'svg': '<path d="M7 7V1.414a1 1 0 0 1 2 0V7h5.586a1 1 0 0 1 0 2H9v5.586a1 1 0 0 1-2 0V9H1.414a1 1 0 0 1 0-2z"/><path fill-rule="evenodd" d="M.5 1h15a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3V2H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3A.5.5 0 0 1 .5 1m0 9h3a.5.5 0 0 1 0 1H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m11.5 0h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3v-2h-3a.5.5 0 0 1 0-1"/>'
           }
         } %}
 
@@ -178,7 +178,6 @@
     let podeEnviar = !!tipoAtual;
     if (tipoAtual === 'nivel')               podeEnviar = tipoNivelAtual !== null;
     if (tipoAtual === 'gerente_area')        podeEnviar = acaoGerenteAtual !== null;
-    // FIX: exige também cargoAtual para não habilitar o botão antes de escolher cargo
     if (tipoAtual === 'gerente_estado_pais') podeEnviar = acaoGerenteEpAtual !== null && cargoAtual !== null;
     btnEnviar.disabled = !podeEnviar;
   }
@@ -264,6 +263,9 @@
     });
 
     // Radio Incluir/Excluir (tipo=gerente_area)
+    // FIX: quando o radio já vem checked após um fetch anterior (ex: re-render
+    // com acaoGerenteAtual já definido), é necessário chamar fetchCampos() para
+    // que os subcampos condicionais (mentor, polígono, etc.) sejam carregados.
     subArea.querySelectorAll('[data-acao-gerente-area-ajax]').forEach(radio => {
       if (radio.dataset.gerenteAreaBound) return;
       radio.dataset.gerenteAreaBound = '1';
@@ -273,32 +275,33 @@
         atualizaBtnEnviar();
         fetchCampos();
       });
-      if (radio.checked && !acaoGerenteAtual) {
+      if (radio.checked && acaoGerenteAtual !== radio.value) {
         acaoGerenteAtual = radio.value;
         atualizaBtnEnviar();
+        fetchCampos(); // FIX: garante subcampos ao re-renderizar com ação já selecionada
       }
     });
 
     // Radio Incluir/Excluir (tipo=gerente_estado_pais)
+    // FIX: mesmo padrão — fetchCampos() ao detectar radio pré-checked
     subArea.querySelectorAll('[data-acao-gerente-ep-ajax]').forEach(radio => {
       if (radio.dataset.gerenteEpBound) return;
       radio.dataset.gerenteEpBound = '1';
       radio.addEventListener('change', function () {
         if (!this.checked || this.value === acaoGerenteEpAtual) return;
         acaoGerenteEpAtual = this.value;
-        cargoAtual = null;  // reset cargo ao trocar de ação
+        cargoAtual = null;
         atualizaBtnEnviar();
         fetchCampos();
       });
-      if (radio.checked && !acaoGerenteEpAtual) {
+      if (radio.checked && acaoGerenteEpAtual !== radio.value) {
         acaoGerenteEpAtual = radio.value;
         atualizaBtnEnviar();
+        fetchCampos(); // FIX: garante subcampos ao re-renderizar com ação já selecionada
       }
     });
 
     // Radio Gerente de Estado / Gerente de País (tipo=gerente_estado_pais)
-    // FIX: dispara fetchCampos ao detectar radio checked por padrão para
-    // garantir que o campo UF condicional seja carregado corretamente
     subArea.querySelectorAll('[data-cargo-select] input[type="radio"]').forEach(radio => {
       if (radio.dataset.cargoBound) return;
       radio.dataset.cargoBound = '1';
@@ -309,7 +312,7 @@
       });
       if (radio.checked && !cargoAtual) {
         cargoAtual = radio.value;
-        fetchCampos(); // necessário: fetch anterior não tinha cargo, campos condicionais podem estar ausentes
+        fetchCampos();
       }
     });
 
@@ -329,7 +332,6 @@
     ?.addEventListener('submit', e => {
       let ok = true;
 
-      // FIX: valida campos obrigatórios do solicitante antes de enviar
       const camposObrigatorios = ['solicitanteNome', 'solicitanteUsuario', 'solicitanteEmail'];
       camposObrigatorios.forEach(nome => {
         const el = e.target.querySelector(`[name$="[${nome}]"]`);
@@ -343,7 +345,6 @@
         }
       });
 
-      // Valida permalinks
       e.target.querySelectorAll('[data-permalink]').forEach(input => {
         if (!input.value.trim()) return;
         const r = checkPermalink(input.value);

@@ -1,14 +1,9 @@
-# Symfony .htaccess para hosting compartilhado (Apache)
-# Esconde o /public/ da URL e roteia tudo para index.php
+# Symfony .htaccess - Hostinger hosting compartilhado
+# O DocumentRoot aponta para /public, entao so precisamos
+# rotear tudo para o index.php (front controller)
 
 Options -MultiViews
 RewriteEngine On
-
-# Se o dominio aponta para a raiz do projeto (nao para /public),
-# redireciona tudo para /public
-RewriteCond %{REQUEST_URI} !^/public/
-RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f
-RewriteRule ^ /public%{REQUEST_URI} [L]
 
 # Nao reescrever arquivos ou diretorios que existam fisicamente
 RewriteCond %{REQUEST_FILENAME} !-f
@@ -40,7 +35,6 @@ RewriteRule ^(.*)$ index.php [QSA,L]
     ExpiresByType text/css "access plus 1 year"
     ExpiresByType application/javascript "access plus 1 year"
     ExpiresByType image/png "access plus 1 year"
-    ExpiresByType image/jpg "access plus 1 year"
     ExpiresByType image/jpeg "access plus 1 year"
     ExpiresByType image/gif "access plus 1 year"
     ExpiresByType image/svg+xml "access plus 1 year"

@@ -1,6 +1,13 @@
+# .htaccess dentro de /public
+# Roteia tudo para o front controller do Symfony
+
 Options -MultiViews
 RewriteEngine On
+RewriteBase /public/
 
+# Nao reescrever arquivos ou diretorios que existam fisicamente
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
+
+# Roteia tudo para index.php
 RewriteRule ^(.*)$ index.php [QSA,L]

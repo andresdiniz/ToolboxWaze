@@ -357,8 +357,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /*
    * tipoNivelAtual: estado em memoria do radio selecionado.
-   * Comeca como null; muda quando o usuario clica num radio.
-   * NOTA: variavel JS pura — nao confundir com variaveis Twig.
+   * Comeca como null; muda quando o usuario clica num radio
+   * ou quando onRadioChange e chamado pela re-hidratacao.
    */
   var tipoNivelAtual = null;
 
@@ -431,6 +431,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 extrasDiv.appendChild(cardRadio.nextSibling);
               }
             }
+
+            /*
+             * FIX: o evento 'change' NUNCA dispara em radios que ja chegam
+             * marcados via HTML (checked no atributo). Sem isso, ao voltar
+             * do servidor apos submit invalido com tipoNivel=upgrade/downgrade,
+             * o radio ficava visualmente marcado mas os campos extras nao
+             * eram carregados. Verificamos manualmente e chamamos onRadioChange.
+             */
+            var radioMarcado = dinamicos.querySelector('[data-tipo-nivel-ajax]:checked');
+            if (radioMarcado) {
+              onRadioChange(radioMarcado.value);
+              return; // initDinamicoListeners sera chamado no fetchCampos recursivo (apenasExtras=true)
+            }
           }
 
         } else {
@@ -460,7 +473,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /*
-   * onRadioChange: chamado quando o usuario clica num radio tipoNivel.
+   * onRadioChange: chamado quando o usuario clica num radio tipoNivel
+   * OU quando o radio ja vem checked do servidor (ver FIX acima).
    * NAO destroi o card do radio — apenas busca os campos extras.
    */
   function onRadioChange(valor) {
@@ -505,7 +519,11 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /* Checkbox souChamp */
+    /*
+     * FIX: usa tipoNivelAtual (variavel de estado) para garantir que
+     * o fetch do souChamp re-use o tipoNivel ja escolhido pelo usuario,
+     * em vez de enviar null e perder os campos extras carregados.
+     */
     var souChampCb = dinamicos.querySelector('[data-sou-champ]');
     if (souChampCb) {
       souChampCb.addEventListener('change', function () {

@@ -10,8 +10,10 @@ security:
                 property: email
 
     role_hierarchy:
+        # ROLE_CHAMP e ROLE_ADMIN sao hierarquias SEPARADAS.
+        # Admin NAO herda ROLE_CHAMP: downgrade e restrito a Champs.
         ROLE_CHAMP: ROLE_USER
-        ROLE_ADMIN: [ROLE_CHAMP, ROLE_USER]
+        ROLE_ADMIN: ROLE_USER
 
     firewalls:
         dev:

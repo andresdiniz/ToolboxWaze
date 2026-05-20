@@ -23,12 +23,13 @@ class SolicitacaoController extends AbstractController
     #[Route('', name: 'solicitacao_hub', methods: ['GET', 'POST'])]
     public function hub(Request $request): Response
     {
-        $isAdmin  = $this->isGranted('ROLE_ADMIN');
-        $isChamp  = $this->isGranted('ROLE_CHAMP');
-        $user     = $this->getUser();
+        $isAdmin = $this->isGranted('ROLE_ADMIN');
+        // ROLE_CHAMP e ROLE_ADMIN sao hierarquias separadas.
+        // Um admin NAO e automaticamente Champ.
+        $isChamp = $this->isGranted('ROLE_CHAMP');
+        $user    = $this->getUser();
         $abaAtual = $request->query->get('aba', 'nova');
 
-        // Aba 'historico' exige login
         if ($abaAtual === 'historico' && !$user) {
             $this->addFlash('warning', 'Faça login para ver seu histórico de solicitações.');
             return $this->redirectToRoute('app_login');
@@ -37,9 +38,6 @@ class SolicitacaoController extends AbstractController
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
-        // IMPORTANTE: setar o tipo ANTES de createForm para que o PRE_SET_DATA
-        // do SolicitacaoType já receba a entidade com tipo definido e adicione
-        // os campos dinâmicos corretos (usado pelo AJAX de campos dinâmicos).
         $ajaxTipo = $request->query->get('_ajax_tipo');
         if ($ajaxTipo) {
             try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
@@ -50,7 +48,7 @@ class SolicitacaoController extends AbstractController
         ]);
         $form->handleRequest($request);
 
-        // ── Resposta AJAX: retorna apenas o fragmento #campos-dinamicos ────────
+        // ── Resposta AJAX ──────────────────────────────────────────────────────
         if ($ajaxTipo && $request->isXmlHttpRequest()) {
             $html = $this->renderView('solicitacao/hub.html.twig', [
                 'form'         => $form,
@@ -73,7 +71,7 @@ class SolicitacaoController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
 
-            // Bloqueia downgrade para quem não é Champ (dupla verificação server-side)
+            // Bloqueio server-side: downgrade exige ROLE_CHAMP (admin nao basta)
             $tipoNivelSubmetido = $form->has('dados_tipoNivel')
                 ? $form->get('dados_tipoNivel')->getData()
                 : null;
@@ -136,11 +134,32 @@ class SolicitacaoController extends AbstractController
         $filtroStatus = null;
         $filtroTipo   = null;
 
-        if ($isAdmin && $abaAtual === 'gestao') {
-            $filtroStatus = $request->query->get('status') ?: null;
-            $filtroTipo   = $request->query->get('tipo')   ?: null;
-            $gestaoLista  = $this->solicitacaoRepo->findParaGestao($filtroStatus, $filtroTipo);
-            $contadores   = $this->solicitacaoRepo->countByStatus();
+        if ($abaAtual === 'gestao') {
+            if ($isAdmin) {
+                // Admin ve tudo EXCETO downgrade de nivel
+                $filtroStatus = $request->query->get('status') ?: null;
+                $filtroTipo   = $request->query->get('tipo')   ?: null;
+                $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
+                    $filtroStatus,
+                    $filtroTipo,
+                    excluirDowngrade: true   // admin nao processa downgrade
+                );
+                $contadores = $this->solicitacaoRepo->countByStatus(
+                    excluirDowngrade: true
+                );
+            } elseif ($isChamp) {
+                // Champ ve apenas as solicitacoes de downgrade
+                $filtroStatus = $request->query->get('status') ?: null;
+                $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
+                    $filtroStatus,
+                    tipo: Solicitacao::TIPO_NIVEL,
+                    apenasDowngrade: true    // champ so processa downgrade
+                );
+                $contadores = $this->solicitacaoRepo->countByStatus(
+                    tipo: Solicitacao::TIPO_NIVEL,
+                    apenasDowngrade: true
+                );
+            }
         }
 
         return $this->render('solicitacao/hub.html.twig', [
@@ -181,11 +200,6 @@ class SolicitacaoController extends AbstractController
         ]);
     }
 
-    /**
-     * Muda o status de uma solicitação.
-     * Quando o desfecho é final (resolvida/negada/cancelada) o service
-     * preenche resolvidaPor, resolvidaEm e notaResolucao automaticamente.
-     */
     #[Route('/{id}/resolver', name: 'solicitacao_resolver', methods: ['POST'])]
     #[IsGranted('ROLE_USER')]
     public function resolver(Solicitacao $solicitacao, Request $request): Response
@@ -202,6 +216,15 @@ class SolicitacaoController extends AbstractController
         if (!$novoStatus || !array_key_exists($novoStatus, Solicitacao::STATUS_LABELS)) {
             $this->addFlash('danger', 'Status inválido.');
             return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
+        }
+
+        // Bloqueia admin de resolver downgrade
+        $isDowngrade = $solicitacao->getTipo() === Solicitacao::TIPO_NIVEL
+            && ($solicitacao->getDados()['tipoNivel'] ?? null) === 'downgrade';
+
+        if ($isDowngrade && !$this->isGranted('ROLE_CHAMP')) {
+            $this->addFlash('danger', 'Apenas Champs podem processar solicitações de downgrade.');
+            return $this->redirectToRoute('solicitacao_hub', ['aba' => 'gestao']);
         }
 
         $nota = trim((string) $request->request->get('nota', '')) ?: null;

@@ -41,6 +41,22 @@ class AdminUserController extends AbstractController
         ]);
     }
 
+    // -------------------------------------------------------------------------
+    // Helper: monta array de roles a partir do request
+    // -------------------------------------------------------------------------
+    private function buildRoles(Request $request): array
+    {
+        $roles = ['ROLE_USER'];
+        if ($request->request->getBoolean('is_admin')) {
+            $roles[] = 'ROLE_ADMIN';
+        }
+        // ROLE_CHAMP é independente de ROLE_ADMIN
+        if ($request->request->getBoolean('is_champ')) {
+            $roles[] = 'ROLE_CHAMP';
+        }
+        return array_unique($roles);
+    }
+
     #[Route('/{id}/approve', name: 'approve', methods: ['POST'])]
     public function approve(User $user, Request $request): Response
     {
@@ -52,10 +68,6 @@ class AdminUserController extends AbstractController
         }
 
         $permissions = $request->request->all('permissions') ?? [];
-        $roles = ['ROLE_USER'];
-        if ($request->request->getBoolean('is_admin')) {
-            $roles[] = 'ROLE_ADMIN';
-        }
 
         $allowedUfs = $request->request->getBoolean('all_ufs')
             ? null
@@ -73,7 +85,7 @@ class AdminUserController extends AbstractController
 
         $user->setStatus(User::STATUS_APPROVED)
              ->setApprovedAt(new \DateTimeImmutable())
-             ->setRoles($roles)
+             ->setRoles($this->buildRoles($request))
              ->setPermissions($permissions)
              ->setAllowedUfs($allowedUfs)
              ->setSolicitacaoTipos($solicitacaoTipos);
@@ -93,12 +105,11 @@ class AdminUserController extends AbstractController
                     'loginUrl'   => $loginUrl,
                 ]));
             $this->mailer->send($email);
-        } catch (\Throwable) {
-            // e-mail não bloqueia o fluxo
-        }
+        } catch (\Throwable) {}
 
         $ufsLabel = $allowedUfs === null ? 'todos os estados' : implode(', ', $allowedUfs);
-        $this->addFlash('success', "Usuário {$user->getName()} aprovado. Estados: $ufsLabel.");
+        $isChamp  = in_array('ROLE_CHAMP', $user->getRoles(), true);
+        $this->addFlash('success', "Usuário {$user->getName()} aprovado. Estados: $ufsLabel" . ($isChamp ? ' | Champ: sim' : '') . '.');
         return $this->redirectToRoute('admin_users_index');
     }
 
@@ -124,9 +135,7 @@ class AdminUserController extends AbstractController
                     'user' => $user,
                 ]));
             $this->mailer->send($email);
-        } catch (\Throwable) {
-            // e-mail não bloqueia o fluxo
-        }
+        } catch (\Throwable) {}
 
         $this->addFlash('warning', "Usuário {$user->getName()} rejeitado.");
         return $this->redirectToRoute('admin_users_index');
@@ -143,10 +152,6 @@ class AdminUserController extends AbstractController
         }
 
         $permissions = $request->request->all('permissions') ?? [];
-        $roles = ['ROLE_USER'];
-        if ($request->request->getBoolean('is_admin')) {
-            $roles[] = 'ROLE_ADMIN';
-        }
 
         $allowedUfs = $request->request->getBoolean('all_ufs')
             ? null
@@ -162,7 +167,7 @@ class AdminUserController extends AbstractController
                 fn($v) => array_key_exists($v, Solicitacao::TIPOS)
               ));
 
-        $user->setRoles($roles)
+        $user->setRoles($this->buildRoles($request))
              ->setPermissions($permissions)
              ->setAllowedUfs($allowedUfs)
              ->setSolicitacaoTipos($solicitacaoTipos);
@@ -182,12 +187,11 @@ class AdminUserController extends AbstractController
                     'loginUrl'   => $loginUrl,
                 ]));
             $this->mailer->send($email);
-        } catch (\Throwable) {
-            // e-mail não bloqueia o fluxo
-        }
+        } catch (\Throwable) {}
 
         $ufsLabel = $allowedUfs === null ? 'todos os estados' : implode(', ', $allowedUfs);
-        $this->addFlash('success', "Permissões de {$user->getName()} atualizadas. Estados: $ufsLabel.");
+        $isChamp  = in_array('ROLE_CHAMP', $user->getRoles(), true);
+        $this->addFlash('success', "Permissões de {$user->getName()} atualizadas. Estados: $ufsLabel" . ($isChamp ? ' | Champ: sim' : '') . '.');
         return $this->redirectToRoute('admin_users_index');
     }
 

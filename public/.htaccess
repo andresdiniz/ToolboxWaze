@@ -1,44 +1,6 @@
-# Symfony .htaccess - Hostinger hosting compartilhado
-# O DocumentRoot aponta para /public, entao so precisamos
-# rotear tudo para o index.php (front controller)
-
 Options -MultiViews
 RewriteEngine On
 
-# Nao reescrever arquivos ou diretorios que existam fisicamente
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-
-# Redireciona tudo para o front controller
 RewriteRule ^(.*)$ index.php [QSA,L]
-
-# Seguranca: bloqueia acesso a arquivos sensiveis
-<FilesMatch "\.(env|yaml|yml|xml|lock|json|md|gitignore)$">
-    Require all denied
-</FilesMatch>
-
-# Headers de seguranca
-<IfModule mod_headers.c>
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-</IfModule>
-
-# Compressao gzip
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
-</IfModule>
-
-# Cache de assets estaticos
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresByType text/css "access plus 1 year"
-    ExpiresByType application/javascript "access plus 1 year"
-    ExpiresByType image/png "access plus 1 year"
-    ExpiresByType image/jpeg "access plus 1 year"
-    ExpiresByType image/gif "access plus 1 year"
-    ExpiresByType image/svg+xml "access plus 1 year"
-    ExpiresByType image/webp "access plus 1 year"
-    ExpiresByType image/x-icon "access plus 1 year"
-    ExpiresByType font/woff2 "access plus 1 year"
-</IfModule>

@@ -102,6 +102,22 @@ class SolicitacaoController extends AbstractController
         }
 
         $solicitacao = new Solicitacao();
+
+        // Pré-preenche os dados do solicitante a partir do usuário logado.
+        // O formulário usará esses valores como data inicial dos campos,
+        // dispensando digitação manual e evitando erros.
+        if ($user !== null) {
+            if (method_exists($user, 'getName') && $user->getName()) {
+                $solicitacao->setSolicitanteNome($user->getName());
+            }
+            if (method_exists($user, 'getWazeUsername') && $user->getWazeUsername()) {
+                $solicitacao->setSolicitanteUsuario($user->getWazeUsername());
+            }
+            if (method_exists($user, 'getEmail') && $user->getEmail()) {
+                $solicitacao->setSolicitanteEmail($user->getEmail());
+            }
+        }
+
         $tipoAtual   = null;
 
         $postData      = $request->request->all('solicitacao') ?? [];

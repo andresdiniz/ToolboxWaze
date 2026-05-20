@@ -25,38 +25,35 @@ class SolicitacaoController extends AbstractController
     {
         $isAdmin = $this->isGranted('ROLE_ADMIN');
         $isChamp = $this->isGranted('ROLE_CHAMP');
-        $user    = $this->getUser();
+        $user     = $this->getUser();
         $abaAtual = $request->query->get('aba', 'nova');
 
         if ($abaAtual === 'historico' && !$user) {
-            $this->addFlash('warning', 'Faça login para ver seu histórico de solicitações.');
+            $this->addFlash('warning', 'Faça login para ver seu histórico.');
             return $this->redirectToRoute('app_login');
         }
 
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
+        // ── AJAX: retorna fragmento de campos dinâmicos ───────────────────────────
         $ajaxTipo      = $request->query->get('_ajax_tipo');
         $ajaxTipoNivel = $request->query->get('_ajax_tipoNivel');
         $ajaxSouChamp  = (bool) $request->query->get('_ajax_souChamp');
 
         if ($ajaxTipo) {
             try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
-        }
 
-        if (!in_array($ajaxTipoNivel, ['upgrade', 'downgrade', null], true)) {
-            $ajaxTipoNivel = null;
-        }
+            if (!in_array($ajaxTipoNivel, ['upgrade', 'downgrade', null], true)) {
+                $ajaxTipoNivel = null;
+            }
 
-        $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-            'is_champ'        => $isChamp,
-            'ajax_tipo_nivel' => $ajaxTipoNivel,
-            'ajax_sou_champ'  => $ajaxSouChamp,
-        ]);
-        $form->handleRequest($request);
+            $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
+                'is_champ'        => $isChamp,
+                'ajax_tipo_nivel' => $ajaxTipoNivel,
+                'ajax_sou_champ'  => $ajaxSouChamp,
+            ]);
 
-        // ── Resposta AJAX: só retorna o fragmento de campos ────────────────────
-        if ($ajaxTipo) {
             return new Response(
                 $this->renderView('solicitacao/_campos.html.twig', [
                     'form'      => $form->createView(),
@@ -65,10 +62,31 @@ class SolicitacaoController extends AbstractController
             );
         }
 
-        // ── Submit normal ─────────────────────────────────────────────────────
-        if ($form->isSubmitted() && $form->isValid()) {
-            try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
+        // ── POST: extrai tipo do payload ANTES de criar o form ────────────────────
+        // Isso garante que PRE_SUBMIT e PRE_SET_DATA recebam o tipo correto
+        // e adicionem os campos dados_* antes da validação.
+        $postData      = $request->request->all('solicitacao') ?? [];
+        $tipoDoPost    = $postData['tipo']                        ?? null;
+        $tipoNivelPost = $postData['dados_tipoNivel']             ?? null;
+        $souChampPost  = !empty($postData['dados_souChamp']);
 
+        if ($tipoDoPost) {
+            try { $solicitacao->setTipo($tipoDoPost); $tipoAtual = $tipoDoPost; } catch (\Throwable) {}
+        }
+
+        if (!in_array($tipoNivelPost, ['upgrade', 'downgrade', null], true)) {
+            $tipoNivelPost = null;
+        }
+
+        $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
+            'is_champ'        => $isChamp,
+            'ajax_tipo_nivel' => $tipoNivelPost,
+            'ajax_sou_champ'  => $souChampPost,
+        ]);
+        $form->handleRequest($request);
+
+        // ── Submit válido ─────────────────────────────────────────────────────
+        if ($form->isSubmitted() && $form->isValid()) {
             $tipoNivelSubmetido = $form->has('dados_tipoNivel')
                 ? $form->get('dados_tipoNivel')->getData()
                 : null;
@@ -109,18 +127,13 @@ class SolicitacaoController extends AbstractController
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
+        // ── Submit inválido: reexibe form com erros e campos dinâmicos ─────────
         if ($form->isSubmitted() && !$form->isValid()) {
-            try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) { $tipoAtual = null; }
             $abaAtual = 'nova';
-            $erros = [];
-            foreach ($form->getErrors(true) as $erro) {
-                $erros[] = $erro->getMessage();
-            }
-            if (!empty($erros)) {
-                $this->addFlash('danger', 'Corrija os erros: ' . implode(' | ', array_unique($erros)));
-            }
+            // tipoAtual já foi extraído do POST acima — a pill correta fica ativa
         }
 
+        // ── Histórico / Gestão ───────────────────────────────────────────────────
         $historico = [];
         if ($user && $abaAtual === 'historico') {
             $historico = $this->solicitacaoRepo->findByEmail($user->getEmail());
@@ -136,9 +149,7 @@ class SolicitacaoController extends AbstractController
                 $filtroStatus = $request->query->get('status') ?: null;
                 $filtroTipo   = $request->query->get('tipo')   ?: null;
                 $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
-                    $filtroStatus,
-                    $filtroTipo,
-                    excluirDowngrade: true
+                    $filtroStatus, $filtroTipo, excluirDowngrade: true
                 );
                 $contadores = $this->solicitacaoRepo->countByStatus(excluirDowngrade: true);
             } elseif ($isChamp) {
@@ -214,7 +225,7 @@ class SolicitacaoController extends AbstractController
             && ($solicitacao->getDados()['tipoNivel'] ?? null) === 'downgrade';
 
         if ($isDowngrade && !$this->isGranted('ROLE_CHAMP')) {
-            $this->addFlash('danger', 'Apenas Champs podem processar solicitações de downgrade.');
+            $this->addFlash('danger', 'Apenas Champs podem processar downgrade.');
             return $this->redirectToRoute('solicitacao_hub', ['aba' => 'gestao']);
         }
 

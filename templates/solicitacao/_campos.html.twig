@@ -3,31 +3,31 @@
   Substitui completamente #campos-dinamicos.
 
   Variáveis:
-    form                  — FormView de SolicitacaoType
-    tipoAtual             — tipo da solicitação (ex: "nivel", "gerente_estado_pais")
-    isChamp               — bool
-    tipoNivelAtual        — "upgrade" | "downgrade" | null  (só tipo nivel)
-    souChampAuto          — bool: true quando Champ+downgrade (campo oculto/implícito)
-    acaoGerenteAtual      — "nomear" | "excluir" | "transferir" | null  (só gerente_estado_pais)
-    acaoGerenteAreaAtual  — "incluir" | "excluir" | null  (só gerente_area)
+    form                     — FormView de SolicitacaoType
+    tipoAtual                — tipo da solicitação (ex: "nivel", "gerente_estado_pais")
+    isChamp                  — bool
+    tipoNivelAtual           — "upgrade" | "downgrade" | null  (só tipo nivel)
+    souChampAuto             — bool: true quando Champ+downgrade (campo oculto/implícito)
+    acaoGerenteAtual         — "incluir" | "excluir" | null  (gerente_area)
+    acaoGerenteEpAtual       — "incluir" | "excluir" | null  (gerente_estado_pais)
 
   Estrutura para tipo="nivel":
-    <div id="card-tipo-nivel-ajax">               ← sempre presente, nunca destruído pelo JS
-    <div id="campos-extras-nivel-server">         ← campos extras; vazio quando tipoNivel=null
-
-  Estrutura para tipo="gerente_estado_pais":
-    <div id="card-acao-gerente-ajax">             ← sempre presente
-    <div id="campos-extras-gerente-server">       ← campos extras; vazio quando acaoGerente=null
+    <div id="card-tipo-nivel-ajax">               ← sempre presente, nunca destruído
+    <div id="campos-extras-nivel-server">         ← campos extras; vazio quando null
 
   Estrutura para tipo="gerente_area":
-    <div id="card-acao-gerente-area-ajax">        ← sempre presente
-    <div id="campos-extras-gerente-area-server">  ← campos extras; vazio quando acaoGerenteArea=null
+    <div id="card-acao-gerente-area-ajax">        ← sempre presente, nunca destruído
+    <div id="campos-extras-gerente-area-server"> ← campos extras; vazio quando null
+
+  Estrutura para tipo="gerente_estado_pais":
+    <div id="card-acao-gerente-ep-ajax">          ← sempre presente, nunca destruído
+    <div id="campos-extras-gerente-ep-server">   ← campos extras; vazio quando null
 
   Para outros tipos: campos direto, sem wrapping especial.
 #}
-{% set souChampAuto         = souChampAuto ?? false %}
-{% set acaoGerenteAtual     = acaoGerenteAtual ?? null %}
-{% set acaoGerenteAreaAtual = acaoGerenteAreaAtual ?? null %}
+{% set souChampAuto        = souChampAuto ?? false %}
+{% set acaoGerenteAtual    = acaoGerenteAtual ?? null %}
+{% set acaoGerenteEpAtual  = acaoGerenteEpAtual ?? null %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
 {# ── Bloco nivel: radio Upgrade/Downgrade ───────────────────────────────────── #}
@@ -78,61 +78,7 @@
     </div>
   {% endif %}
 
-{# ── Bloco gerente_estado_pais: radio Ação (Nomear/Excluir/Transferir) ───────── #}
-{% elseif tipoAtual == 'gerente_estado_pais' %}
-  {% if form.dados_acaoGerente is defined %}
-    <div class="sol-card campo-animado" id="card-acao-gerente-ajax">
-      <div class="sol-card-body">
-        {{ form_label(form.dados_acaoGerente) }}
-        {% for child in form.dados_acaoGerente %}
-          <div class="form-check form-check-inline">
-            <input
-              type="radio"
-              id="{{ child.vars.id }}"
-              name="{{ child.vars.full_name }}"
-              value="{{ child.vars.value }}"
-              class="form-check-input"
-              data-acao-gerente-ajax
-              {{ acaoGerenteAtual == child.vars.value ? 'checked' : '' }}
-            >
-            <label class="form-check-label" for="{{ child.vars.id }}">
-              {% if child.vars.value == 'nomear' %}📌
-              {% elseif child.vars.value == 'excluir' %}🗑️
-              {% else %}🔄
-              {% endif %}
-              {{ child.vars.label }}
-            </label>
-          </div>
-        {% endfor %}
-        {{ form_errors(form.dados_acaoGerente) }}
-
-        {% if acaoGerenteAtual is null %}
-          <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
-            Selecione a <strong>Ação</strong> desejada para continuar preenchendo o formulário.
-          </p>
-        {% endif %}
-      </div>
-    </div>
-
-    <div id="campos-extras-gerente-server">
-      {% if acaoGerenteAtual is not null %}
-        {% for field in form %}
-          {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_acaoGerente' %}
-            {{ _self.renderField(field, false) }}
-          {% endif %}
-        {% endfor %}
-      {% endif %}
-    </div>
-  {% else %}
-    {# Fallback: form sem dados_acaoGerente — render genérico #}
-    {% for field in form %}
-      {% if field.vars.name starts with 'dados_' %}
-        {{ _self.renderField(field, false) }}
-      {% endif %}
-    {% endfor %}
-  {% endif %}
-
-{# ── Bloco gerente_area: radio Ação (Incluir/Excluir) ───────────────────────── #}
+{# ── Bloco gerente_area: radio Incluir/Excluir ─────────────────────────────── #}
 {% elseif tipoAtual == 'gerente_area' %}
   {% if form.dados_acaoGerenteArea is defined %}
     <div class="sol-card campo-animado" id="card-acao-gerente-area-ajax">
@@ -147,7 +93,7 @@
               value="{{ child.vars.value }}"
               class="form-check-input"
               data-acao-gerente-area-ajax
-              {{ acaoGerenteAreaAtual == child.vars.value ? 'checked' : '' }}
+              {{ acaoGerenteAtual == child.vars.value ? 'checked' : '' }}
             >
             <label class="form-check-label" for="{{ child.vars.id }}">
               {% if child.vars.value == 'incluir' %}📌 {% else %}🗑️ {% endif %}
@@ -157,7 +103,7 @@
         {% endfor %}
         {{ form_errors(form.dados_acaoGerenteArea) }}
 
-        {% if acaoGerenteAreaAtual is null %}
+        {% if acaoGerenteAtual is null %}
           <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
             Selecione a <strong>Ação</strong> desejada para continuar preenchendo o formulário.
           </p>
@@ -166,7 +112,7 @@
     </div>
 
     <div id="campos-extras-gerente-area-server">
-      {% if acaoGerenteAreaAtual is not null %}
+      {% if acaoGerenteAtual is not null %}
         {% for field in form %}
           {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_acaoGerenteArea' %}
             {{ _self.renderField(field, false) }}
@@ -175,7 +121,56 @@
       {% endif %}
     </div>
   {% else %}
-    {# Fallback: form sem dados_acaoGerenteArea — render genérico #}
+    {% for field in form %}
+      {% if field.vars.name starts with 'dados_' %}
+        {{ _self.renderField(field, false) }}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+
+{# ── Bloco gerente_estado_pais: radio Incluir/Excluir ───────────────────────── #}
+{% elseif tipoAtual == 'gerente_estado_pais' %}
+  {% if form.dados_acaoGerenteEstadoPais is defined %}
+    <div class="sol-card campo-animado" id="card-acao-gerente-ep-ajax">
+      <div class="sol-card-body">
+        {{ form_label(form.dados_acaoGerenteEstadoPais) }}
+        {% for child in form.dados_acaoGerenteEstadoPais %}
+          <div class="form-check form-check-inline">
+            <input
+              type="radio"
+              id="{{ child.vars.id }}"
+              name="{{ child.vars.full_name }}"
+              value="{{ child.vars.value }}"
+              class="form-check-input"
+              data-acao-gerente-ep-ajax
+              {{ acaoGerenteEpAtual == child.vars.value ? 'checked' : '' }}
+            >
+            <label class="form-check-label" for="{{ child.vars.id }}">
+              {% if child.vars.value == 'incluir' %}📌 {% else %}🗑️ {% endif %}
+              {{ child.vars.label }}
+            </label>
+          </div>
+        {% endfor %}
+        {{ form_errors(form.dados_acaoGerenteEstadoPais) }}
+
+        {% if acaoGerenteEpAtual is null %}
+          <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
+            Selecione a <strong>Ação</strong> desejada para continuar preenchendo o formulário.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div id="campos-extras-gerente-ep-server">
+      {% if acaoGerenteEpAtual is not null %}
+        {% for field in form %}
+          {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_acaoGerenteEstadoPais' %}
+            {{ _self.renderField(field, false) }}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+  {% else %}
     {% for field in form %}
       {% if field.vars.name starts with 'dados_' %}
         {{ _self.renderField(field, false) }}

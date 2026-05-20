@@ -78,19 +78,22 @@ class SolicitacaoType extends AbstractType
             $this->addDadosDinamicos(
                 $event->getForm(),
                 $tipo,
-                null,
+                null,   // cargo
                 $ajaxTipoNivel,
                 $isChamp,
-                $ajaxSouChamp
+                $ajaxSouChamp,
+                null,   // acaoGerenteArea
+                null    // acaoGerenteEstadoPais
             );
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($isChamp) {
-            $data               = $event->getData();
-            $tipo               = $data['tipo']                  ?? null;
-            $cargo              = $data['dados_cargo']           ?? null;
-            $tipoNivel          = $data['dados_tipoNivel']       ?? null;
-            $acaoGerenteArea    = $data['dados_acaoGerenteArea'] ?? null;
+            $data                    = $event->getData();
+            $tipo                    = $data['tipo']                         ?? null;
+            $cargo                   = $data['dados_cargo']                  ?? null;
+            $tipoNivel               = $data['dados_tipoNivel']              ?? null;
+            $acaoGerenteArea         = $data['dados_acaoGerenteArea']        ?? null;
+            $acaoGerenteEstadoPais   = $data['dados_acaoGerenteEstadoPais']  ?? null;
 
             $souChamp = !empty($data['dados_souChamp']);
 
@@ -106,7 +109,8 @@ class SolicitacaoType extends AbstractType
                 $tipoNivel,
                 $isChamp,
                 $souChamp,
-                $acaoGerenteArea
+                $acaoGerenteArea,
+                $acaoGerenteEstadoPais
             );
         });
     }
@@ -127,16 +131,17 @@ class SolicitacaoType extends AbstractType
     private function addDadosDinamicos(
         \Symfony\Component\Form\FormInterface $form,
         ?string $tipo,
-        ?string $cargo           = null,
-        ?string $tipoNivel       = null,
-        bool    $isChamp         = false,
-        bool    $souChamp        = false,
-        ?string $acaoGerenteArea = null
+        ?string $cargo                  = null,
+        ?string $tipoNivel              = null,
+        bool    $isChamp                = false,
+        bool    $souChamp               = false,
+        ?string $acaoGerenteArea        = null,
+        ?string $acaoGerenteEstadoPais  = null
     ): void {
         match ($tipo) {
             Solicitacao::TIPO_IMAGEM_SATELITE     => $this->addCamposImagemSatelite($form),
             Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form, $acaoGerenteArea),
-            Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $cargo),
+            Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $acaoGerenteEstadoPais, $cargo),
             Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp, $souChamp),
             Solicitacao::TIPO_OOPS                => $this->addCamposOops($form),
             Solicitacao::TIPO_BANDEIRA_POSTO      => $this->addCamposBandeiraPosto($form),
@@ -210,7 +215,6 @@ class SolicitacaoType extends AbstractType
         \Symfony\Component\Form\FormInterface $form,
         ?string $acaoGerenteArea = null
     ): void {
-        // Radio de ação — sempre presente (nunca destruído pelo JS)
         $form->add('dados_acaoGerenteArea', ChoiceType::class, [
             'label'    => 'Você deseja…',
             'mapped'   => false,
@@ -220,11 +224,10 @@ class SolicitacaoType extends AbstractType
             'constraints' => [new Assert\NotBlank()],
         ]);
 
-        // Campos extras dependentes da ação
         match ($acaoGerenteArea) {
             'incluir' => $this->addCamposGerenteAreaIncluir($form),
             'excluir' => $this->addCamposGerenteAreaExcluir($form),
-            default   => null, // null: só o radio aparece
+            default   => null,
         };
     }
 
@@ -319,17 +322,43 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // GERENTE DE ESTADO OU PAÍS
+    //
+    // Fluxo:
+    //   1. Usuário seleciona pill → radio Incluir/Excluir aparece
+    //   2. Clica em Incluir → AJAX envia acaoGerenteEstadoPais=incluir
+    //      → campos: cargo, UF (se estado), mentor, recomendadores, comentários
+    //   3. Clica em Excluir → AJAX envia acaoGerenteEstadoPais=excluir
+    //      → campos: cargo, UF (se estado), editorNome, justificativa, comentários
+    //      (sem mentor/recomendadores — mesmo padrão do downgrade)
     // -------------------------------------------------------------------------
-    private function addCamposGerenteEstadoPais(\Symfony\Component\Form\FormInterface $form, ?string $cargo = null): void
-    {
+    private function addCamposGerenteEstadoPais(
+        \Symfony\Component\Form\FormInterface $form,
+        ?string $acaoGerenteEstadoPais = null,
+        ?string $cargo                 = null
+    ): void {
+        // Radio de ação — sempre presente
+        $form->add('dados_acaoGerenteEstadoPais', ChoiceType::class, [
+            'label'    => 'Você deseja…',
+            'mapped'   => false,
+            'choices'  => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
+            'expanded' => true,
+            'attr'     => ['data-acao-gerente-ep-ajax' => '1'],
+            'constraints' => [new Assert\NotBlank()],
+        ]);
+
+        // Campos extras dependentes da ação
+        match ($acaoGerenteEstadoPais) {
+            'incluir' => $this->addCamposGerenteEstadoPaisIncluir($form, $cargo),
+            'excluir' => $this->addCamposGerenteEstadoPaisExcluir($form, $cargo),
+            default   => null, // null: só o radio aparece
+        };
+    }
+
+    private function addCamposGerenteEstadoPaisIncluir(
+        \Symfony\Component\Form\FormInterface $form,
+        ?string $cargo = null
+    ): void {
         $form
-            ->add('dados_acao', ChoiceType::class, [
-                'label'    => 'Você deseja…',
-                'mapped'   => false,
-                'choices'  => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
-                'expanded' => true,
-                'constraints' => [new Assert\NotBlank()],
-            ])
             ->add('dados_mentor', TextType::class, [
                 'label'       => 'Mentor',
                 'mapped'      => false,
@@ -365,7 +394,74 @@ class SolicitacaoType extends AbstractType
             'label'    => 'Comentários',
             'mapped'   => false,
             'required' => false,
+            'attr'     => ['rows' => 3],
         ]);
+    }
+
+    private function addCamposGerenteEstadoPaisExcluir(
+        \Symfony\Component\Form\FormInterface $form,
+        ?string $cargo = null
+    ): void {
+        $form
+            ->add('dados_editorNome', TextType::class, [
+                'label'       => 'Nome de usuário do Gerente (a ser removido)',
+                'mapped'      => false,
+                'attr'        => ['placeholder' => 'Nick do editor no WME/Discuss'],
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Informe o nome de usuário do Gerente a ser removido.'),
+                    new Assert\Length(['max' => 255]),
+                ],
+            ])
+            ->add('dados_cargo', ChoiceType::class, [
+                'label'    => 'Cargo a ser removido',
+                'mapped'   => false,
+                'choices'  => ['Gerente de Estado' => 'gerente_estado', 'Gerente de País' => 'gerente_pais'],
+                'expanded' => true,
+                'constraints' => [new Assert\NotBlank()],
+                'attr'     => ['data-cargo-select' => '1'],
+            ]);
+
+        if ($cargo === 'gerente_estado') {
+            $form->add('dados_uf', ChoiceType::class, [
+                'label'       => 'Estado do gerente',
+                'mapped'      => false,
+                'choices'     => self::UFS,
+                'placeholder' => 'Escolher',
+                'required'    => true,
+                'constraints' => [new Assert\NotBlank(message: 'Selecione o estado.')],
+                'attr'        => ['data-uf-gerente' => '1'],
+            ]);
+        }
+
+        $form
+            ->add('dados_justificativa', TextareaType::class, [
+                'label'  => 'Justificativa',
+                'mapped' => false,
+                'attr'   => [
+                    'rows'              => 4,
+                    'minlength'         => 20,
+                    'maxlength'         => 2000,
+                    'placeholder'       => 'Descreva o motivo da remoção (mínimo 20 caracteres)',
+                    'data-char-counter' => 'true',
+                    'data-char-min'     => '20',
+                ],
+                'help' => 'Informe o motivo pelo qual o Gerente deve ser removido do cargo.',
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Preencha a justificativa.'),
+                    new Assert\Length([
+                        'min'        => 20,
+                        'minMessage' => 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
+                        'max'        => 2000,
+                        'maxMessage' => 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
+                    ]),
+                ],
+            ])
+            ->add('dados_comentarios', TextareaType::class, [
+                'label'    => 'Comentários adicionais',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => ['rows' => 3],
+            ]);
     }
 
     // -------------------------------------------------------------------------

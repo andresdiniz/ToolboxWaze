@@ -27,7 +27,12 @@
               value="{{ child.vars.value }}"
               class="form-check-input"
               data-tipo-nivel-ajax
-              {{ child.vars.checked ? 'checked' : '' }}
+              {#
+                CORREÇÃO: usa tipoNivelAtual (variável Twig passada pelo controller)
+                para marcar o radio correto — child.vars.checked nunca é true
+                em contexto AJAX pois o form é criado com dados vazios (PRE_SET_DATA).
+              #}
+              {{ tipoNivelAtual == child.vars.value ? 'checked' : '' }}
             >
             <label class="form-check-label" for="{{ child.vars.id }}">
               {% if child.vars.value == 'upgrade' %}⬆️ {% else %}⬇️ {% endif %}

@@ -174,86 +174,97 @@
         </button>
     </div>
 
-    {# ──────────────────────────────────────────────────────────
+    {# ──────────────────────────────────────────────────────────────────
        MACRO: bloco de Estados (UFs)
-       isPending=true inicializa "Todos os estados" marcado por padrão
-    ────────────────────────────────────────────────────────── #}
-    {% macro ufsBlock(user, allUfs, isPending) %}
+       Parâmetros:
+         user      - entidade User
+         allUfs    - lista de todas as UFs
+         isPending - true para pendentes/rejeitados (inicializa "Todos" marcado)
+         prefix    - prefixo de ID para evitar colisão entre painéis (ex: 're')
+    ────────────────────────────────────────────────────────────────── #}
+    {% macro ufsBlock(user, allUfs, isPending, prefix) %}
+    {% set uid = prefix ~ user.id %}
     {% set allChecked = isPending ? true : (user.allowedUfs is null) %}
     <div class="ufs-section">
         <div class="ufs-header">
             <div class="section-label" style="margin-bottom:0">Estados com acesso</div>
             <label class="all-ufs-toggle">
                 <input type="checkbox" name="all_ufs" value="1"
-                    id="all_ufs_{{ user.id }}"
+                    id="all_ufs_{{ uid }}"
+                    data-uid="{{ uid }}"
                     {{ allChecked ? 'checked' : '' }}
-                    onchange="toggleAllUfs({{ user.id }}, this.checked)">
+                    onchange="toggleAllUfs('{{ uid }}', this.checked)">
                 Todos os estados
             </label>
         </div>
-        <div class="ufs-grid" id="ufs_grid_{{ user.id }}"
+        <div class="ufs-grid" id="ufs_grid_{{ uid }}"
              style="{{ allChecked ? 'opacity:.4;pointer-events:none' : '' }}">
             {% for uf in allUfs %}
-            {# Para pendentes: todas marcadas por padrão; para aprovados: respeita allowedUfs #}
+            {# Para pendentes/rejeitados: todas marcadas por padrão; para aprovados: respeita allowedUfs #}
             {% set checked = allChecked or (not isPending and uf in (user.allowedUfs ?? [])) %}
-            <label class="uf-check {{ checked ? 'is-checked' : '' }}" id="uflabel_{{ user.id }}_{{ uf }}">
+            <label class="uf-check {{ checked ? 'is-checked' : '' }}">
                 <input type="checkbox" name="allowed_ufs[]" value="{{ uf }}"
                     {{ checked ? 'checked' : '' }}
-                    onchange="this.closest('.uf-check').classList.toggle('is-checked', this.checked);updateUfsCount({{ user.id }})">
+                    onchange="this.closest('.uf-check').classList.toggle('is-checked', this.checked);updateUfsCount('{{ uid }}')">
                 {{ uf }}
             </label>
             {% endfor %}
         </div>
-        <div class="ufs-count" id="ufs_count_{{ user.id }}"></div>
+        <div class="ufs-count" id="ufs_count_{{ uid }}"></div>
     </div>
     {% endmacro %}
 
-    {# MACRO: bloco de Tipos de Solicitação #}
-    {% macro tiposBlock(user, allTipos, isPending) %}
+    {# MACRO: bloco de Tipos de Solicitação
+       prefix - mesmo prefixo usado no ufsBlock para consistência de IDs #}
+    {% macro tiposBlock(user, allTipos, isPending, prefix) %}
+    {% set uid = prefix ~ user.id %}
     {% set allChecked = isPending ? true : (user.solicitacaoTipos is null) %}
     <div class="tipos-section">
         <div class="tipos-header">
             <div class="section-label" style="margin-bottom:0">Tipos de Solicitação que pode tratar</div>
             <label class="all-tipos-toggle">
                 <input type="checkbox" name="all_tipos" value="1"
-                    id="all_tipos_{{ user.id }}"
+                    id="all_tipos_{{ uid }}"
+                    data-uid="{{ uid }}"
                     {{ allChecked ? 'checked' : '' }}
-                    onchange="toggleAllTipos({{ user.id }}, this.checked)">
+                    onchange="toggleAllTipos('{{ uid }}', this.checked)">
                 Todos os tipos
             </label>
         </div>
-        <div class="tipos-grid" id="tipos_grid_{{ user.id }}"
+        <div class="tipos-grid" id="tipos_grid_{{ uid }}"
              style="margin-top:.6rem;{{ allChecked ? 'opacity:.4;pointer-events:none' : '' }}">
             {% for valor, label in allTipos %}
             {% set checked = allChecked or (not isPending and valor in (user.solicitacaoTipos ?? [])) %}
-            <label class="tipo-check {{ checked ? 'is-checked' : '' }}" id="tlabel_{{ user.id }}_{{ valor }}">
+            <label class="tipo-check {{ checked ? 'is-checked' : '' }}">
                 <input type="checkbox" name="solicitacao_tipos[]" value="{{ valor }}"
                     {{ checked ? 'checked' : '' }}
-                    onchange="this.closest('.tipo-check').classList.toggle('is-checked', this.checked)">
+                    onchange="this.closest('.tipo-check').classList.toggle('is-checked', this.checked);updateTiposCount('{{ uid }}')">
                 <span>{{ label }}</span>
             </label>
             {% endfor %}
         </div>
-        <div class="tipos-count" id="tipos_count_{{ user.id }}"></div>
+        <div class="tipos-count" id="tipos_count_{{ uid }}"></div>
     </div>
     {% endmacro %}
 
-    {# MACRO: bloco de configurações Champ (downgrade) #}
-    {% macro champDowngradeBlock(user, champTipos, isChamp) %}
-    <div class="downgrade-fields" id="downgrade_fields_{{ user.id }}"
+    {# MACRO: bloco de configurações Champ (downgrade)
+       prefix - prefixo de ID para evitar colisão entre painéis (ex: 're') #}
+    {% macro champDowngradeBlock(user, champTipos, isChamp, prefix) %}
+    {% set uid = prefix ~ user.id %}
+    <div class="downgrade-fields" id="downgrade_fields_{{ uid }}"
          style="{{ not isChamp ? 'display:none' : '' }}">
         <div class="section-label">⭐ Configurações Champ — Downgrade</div>
         <div class="downgrade-row">
             <div class="downgrade-field">
-                <label for="champ_limit_day_{{ user.id }}">Limite diário de downgrades</label>
-                <input type="number" id="champ_limit_day_{{ user.id }}" name="champ_limit_day"
+                <label for="champ_limit_day_{{ uid }}">Limite diário de downgrades</label>
+                <input type="number" id="champ_limit_day_{{ uid }}" name="champ_limit_day"
                        min="0" max="9999" placeholder="Ex: 50"
                        value="{{ user.champLimitDay ?? '' }}">
                 <span class="hint">Deixe em branco para sem limite</span>
             </div>
             <div class="downgrade-field">
-                <label for="champ_limit_month_{{ user.id }}">Limite mensal de downgrades</label>
-                <input type="number" id="champ_limit_month_{{ user.id }}" name="champ_limit_month"
+                <label for="champ_limit_month_{{ uid }}">Limite mensal de downgrades</label>
+                <input type="number" id="champ_limit_month_{{ uid }}" name="champ_limit_month"
                        min="0" max="99999" placeholder="Ex: 500"
                        value="{{ user.champLimitMonth ?? '' }}">
                 <span class="hint">Deixe em branco para sem limite</span>
@@ -316,11 +327,12 @@
 
                     <div class="champ-toggle">
                         <input type="checkbox" name="is_champ" id="is_champ_{{ user.id }}" value="1"
-                               onchange="toggleDowngradeFields({{ user.id }}, this.checked)">
+                               onchange="toggleDowngradeFields('{{ user.id }}', this.checked)">
                         <label for="is_champ_{{ user.id }}">⭐ Conceder perfil Champ (processa downgrades)</label>
                     </div>
 
-                    {{ _self.champDowngradeBlock(user, champTipos, false) }}
+                    {# prefix vazio — IDs padrão ex: downgrade_fields_5 #}
+                    {{ _self.champDowngradeBlock(user, champTipos, false, '') }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -332,9 +344,9 @@
                         {% endfor %}
                     </div>
 
-                    {# isPending=true: todos estados e tipos marcados por padrão #}
-                    {{ _self.ufsBlock(user, allUfs, true) }}
-                    {{ _self.tiposBlock(user, allTipos, true) }}
+                    {# isPending=true, prefix vazio: IDs ex: all_ufs_5, ufs_grid_5 #}
+                    {{ _self.ufsBlock(user, allUfs, true, '') }}
+                    {{ _self.tiposBlock(user, allTipos, true, '') }}
 
                     <div class="actions">
                         <button type="submit" class="btn btn-approve">
@@ -413,11 +425,12 @@
                     <div class="champ-toggle">
                         <input type="checkbox" name="is_champ" id="champ_{{ user.id }}" value="1"
                                {{ userIsChamp ? 'checked' : '' }}
-                               onchange="toggleDowngradeFields({{ user.id }}, this.checked)">
+                               onchange="toggleDowngradeFields('{{ user.id }}', this.checked)">
                         <label for="champ_{{ user.id }}">⭐ Perfil Champ (processa downgrades)</label>
                     </div>
 
-                    {{ _self.champDowngradeBlock(user, champTipos, userIsChamp) }}
+                    {# Aprovados: prefix vazio, IDs padrão ex: downgrade_fields_5 #}
+                    {{ _self.champDowngradeBlock(user, champTipos, userIsChamp, '') }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -429,9 +442,9 @@
                         {% endfor %}
                     </div>
 
-                    {# isPending=false: carrega estado salvo do usuário #}
-                    {{ _self.ufsBlock(user, allUfs, false) }}
-                    {{ _self.tiposBlock(user, allTipos, false) }}
+                    {# isPending=false, prefix vazio: carrega estado salvo do usuário #}
+                    {{ _self.ufsBlock(user, allUfs, false, '') }}
+                    {{ _self.tiposBlock(user, allTipos, false, '') }}
 
                     <div class="actions">
                         <button type="submit" class="btn btn-save">
@@ -466,8 +479,10 @@
         {% else %}
         <div class="user-list">
         {% for user in rejected %}
-        <div class="user-card" id="card-{{ user.id }}">
-            <div class="user-card-header" onclick="toggleCard({{ user.id }})">
+        {# Rejeitados usam prefix 're' em todos os IDs para evitar colisão
+           com cards de Pendentes que podem ter o mesmo user.id na mesma página #}
+        <div class="user-card" id="card-re{{ user.id }}">
+            <div class="user-card-header" onclick="toggleCard('re{{ user.id }}')">
                 <div class="avatar">{{ user.name|first|upper }}</div>
                 <div class="user-info">
                     <div class="user-name">{{ user.name }}</div>
@@ -477,7 +492,6 @@
                 <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
             </div>
             <div class="user-card-body">
-                {# FIX: formulário de reativação agora inclui campos completos de configuração #}
                 <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
 
@@ -487,40 +501,14 @@
                     </div>
 
                     <div class="champ-toggle">
+                        {# toggleDowngradeFields recebe uid com prefix 're' para encontrar o ID correto #}
                         <input type="checkbox" name="is_champ" id="rechamp_{{ user.id }}" value="1"
                                onchange="toggleDowngradeFields('re{{ user.id }}', this.checked)">
                         <label for="rechamp_{{ user.id }}">⭐ Conceder perfil Champ</label>
                     </div>
 
-                    {# Bloco Champ — id diferenciado para não colidir com outros painéis #}
-                    <div class="downgrade-fields" id="downgrade_fields_re{{ user.id }}" style="display:none">
-                        <div class="section-label">⭐ Configurações Champ — Downgrade</div>
-                        <div class="downgrade-row">
-                            <div class="downgrade-field">
-                                <label>Limite diário</label>
-                                <input type="number" name="champ_limit_day" min="0" max="9999" placeholder="Ex: 50">
-                                <span class="hint">Deixe em branco para sem limite</span>
-                            </div>
-                            <div class="downgrade-field">
-                                <label>Limite mensal</label>
-                                <input type="number" name="champ_limit_month" min="0" max="99999" placeholder="Ex: 500">
-                                <span class="hint">Deixe em branco para sem limite</span>
-                            </div>
-                        </div>
-                        <div class="downgrade-tipos">
-                            <div class="section-label" style="margin-top:.5rem;margin-bottom:.35rem">Tipos de downgrade permitidos</div>
-                            <div class="downgrade-tipos-grid">
-                                {% for tipoVal, tipoLabel in champTipos %}
-                                <label class="downgrade-tipo-check">
-                                    <input type="checkbox" name="champ_downgrade_tipos[]" value="{{ tipoVal }}"
-                                           onchange="this.closest('.downgrade-tipo-check').classList.toggle('is-checked', this.checked)">
-                                    {{ tipoLabel }}
-                                </label>
-                                {% endfor %}
-                            </div>
-                            <div class="downgrade-tipos-hint">Se nenhum for marcado, todos os tipos serão liberados.</div>
-                        </div>
-                    </div>
+                    {# prefix 're': IDs ex: downgrade_fields_re5, all_ufs_re5, ufs_grid_re5 #}
+                    {{ _self.champDowngradeBlock(user, champTipos, false, 're') }}
 
                     <div class="section-label" style="margin-top:.75rem">Permissões de Área</div>
                     <div class="perms-grid">
@@ -532,8 +520,9 @@
                         {% endfor %}
                     </div>
 
-                    {{ _self.ufsBlock(user, allUfs, true) }}
-                    {{ _self.tiposBlock(user, allTipos, true) }}
+                    {# isPending=true (inicializa "Todos" marcado), prefix 're' #}
+                    {{ _self.ufsBlock(user, allUfs, true, 're') }}
+                    {{ _self.tiposBlock(user, allTipos, true, 're') }}
 
                     <div class="actions">
                         <button type="submit" class="btn btn-approve">
@@ -565,6 +554,8 @@ function switchTab(name, btn) {
     document.getElementById('tab-' + name).classList.add('active');
     btn.classList.add('active');
 }
+
+// Aceita id numérico ou string com prefixo (ex: 're5')
 function toggleCard(id) {
     document.getElementById('card-' + id).classList.toggle('open');
 }
@@ -595,46 +586,54 @@ document.getElementById('confirm-modal').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-/* ── Downgrade fields (Champ) ── */
-function toggleDowngradeFields(userId, show) {
-    const el = document.getElementById('downgrade_fields_' + userId);
+/* ── Downgrade fields (Champ) ──
+   uid: string com ou sem prefixo, ex: '5' ou 're5' — deve bater com o id do elemento */
+function toggleDowngradeFields(uid, show) {
+    const el = document.getElementById('downgrade_fields_' + uid);
     if (el) el.style.display = show ? '' : 'none';
 }
 
-/* ── UFs ── */
-function toggleAllUfs(userId, allChecked) {
-    const grid = document.getElementById('ufs_grid_' + userId);
+/* ── UFs ──
+   uid: string identificadora do bloco (ex: '5' para aprovados, 're5' para rejeitados) */
+function toggleAllUfs(uid, allChecked) {
+    const grid = document.getElementById('ufs_grid_' + uid);
+    if (!grid) return;
     grid.style.opacity = allChecked ? '.4' : '1';
     grid.style.pointerEvents = allChecked ? 'none' : '';
-    // FIX: ao desmarcar "Todos", mantém todas as UFs marcadas para o admin escolher quais remover
-    // Ao marcar "Todos", força todas checked (serão ignoradas pelo backend via all_ufs=1)
+    // Ao marcar "Todos": força todas as UFs checadas (backend ignora via all_ufs=1)
+    // Ao desmarcar "Todos": mantém todas marcadas — admin escolhe quais remover
     if (allChecked) {
         grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
             cb.checked = true;
             cb.closest('.uf-check').classList.add('is-checked');
         });
     }
-    // ao desmarcar: não altera as UFs — admin decide quais manter
-    updateUfsCount(userId);
+    updateUfsCount(uid);
 }
-function updateUfsCount(userId) {
-    const grid  = document.getElementById('ufs_grid_' + userId);
-    const all   = document.getElementById('all_ufs_' + userId);
-    const count = document.getElementById('ufs_count_' + userId);
+function updateUfsCount(uid) {
+    const grid  = document.getElementById('ufs_grid_' + uid);
+    const all   = document.getElementById('all_ufs_' + uid);
+    const count = document.getElementById('ufs_count_' + uid);
     if (!count) return;
     if (all && all.checked) {
         count.textContent = 'Acesso a todos os estados';
+        count.style.color = '';
     } else {
         const n = grid ? grid.querySelectorAll('input:checked').length : 0;
-        count.textContent = n > 0 ? n + ' estado(s) selecionado(s)' : '⚠ Nenhum estado selecionado — salvar removerá todo acesso.';
-        if (count.textContent.startsWith('⚠')) count.style.color = 'var(--warning)';
-        else count.style.color = '';
+        if (n === 0) {
+            count.textContent = '⚠ Nenhum estado selecionado — salvar removerá todo acesso.';
+            count.style.color = 'var(--warning)';
+        } else {
+            count.textContent = n + ' estado(s) selecionado(s)';
+            count.style.color = '';
+        }
     }
 }
 
 /* ── Tipos ── */
-function toggleAllTipos(userId, allChecked) {
-    const grid = document.getElementById('tipos_grid_' + userId);
+function toggleAllTipos(uid, allChecked) {
+    const grid = document.getElementById('tipos_grid_' + uid);
+    if (!grid) return;
     grid.style.opacity = allChecked ? '.4' : '1';
     grid.style.pointerEvents = allChecked ? 'none' : '';
     if (allChecked) {
@@ -643,32 +642,42 @@ function toggleAllTipos(userId, allChecked) {
             cb.closest('.tipo-check').classList.add('is-checked');
         });
     }
-    updateTiposCount(userId);
+    updateTiposCount(uid);
 }
-function updateTiposCount(userId) {
-    const grid  = document.getElementById('tipos_grid_' + userId);
-    const all   = document.getElementById('all_tipos_' + userId);
-    const count = document.getElementById('tipos_count_' + userId);
+function updateTiposCount(uid) {
+    const grid  = document.getElementById('tipos_grid_' + uid);
+    const all   = document.getElementById('all_tipos_' + uid);
+    const count = document.getElementById('tipos_count_' + uid);
     if (!count) return;
     if (all && all.checked) {
         count.textContent = 'Todos os tipos habilitados';
+        count.style.color = '';
     } else {
         const n = grid ? grid.querySelectorAll('input:checked').length : 0;
         count.textContent = n + ' tipo(s) selecionado(s)';
+        count.style.color = '';
     }
 }
 
+/* ── Inicialização: usa data-uid para iterar corretamente
+   (resolve o bug de prefix 're' que causava IDs sem match) ── */
 document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('[id^="ufs_grid_"]').forEach(grid => {
-        const uid = grid.id.replace('ufs_grid_', '');
-        updateUfsCount(uid);
+    // Inicializa contadores de UFs para todos os blocos
+    document.querySelectorAll('[id^="all_ufs_"]').forEach(el => {
+        const uid = el.dataset.uid;
+        if (uid) updateUfsCount(uid);
     });
-    document.querySelectorAll('[id^="tipos_grid_"]').forEach(grid => {
-        const uid = grid.id.replace('tipos_grid_', '');
+    // Inicializa contadores de Tipos e vincula evento de change
+    document.querySelectorAll('[id^="all_tipos_"]').forEach(el => {
+        const uid = el.dataset.uid;
+        if (!uid) return;
         updateTiposCount(uid);
-        grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
-            cb.addEventListener('change', () => updateTiposCount(uid));
-        });
+        const grid = document.getElementById('tipos_grid_' + uid);
+        if (grid) {
+            grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+                cb.addEventListener('change', () => updateTiposCount(uid));
+            });
+        }
     });
 });
 

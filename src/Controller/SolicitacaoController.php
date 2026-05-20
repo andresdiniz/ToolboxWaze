@@ -24,12 +24,11 @@ class SolicitacaoController extends AbstractController
      * Rota AJAX dedicada — retorna APENAS o fragmento de campos dinâmicos.
      *
      * Parâmetros GET:
-     *   tipo       – tipo da solicitação (ex: "nivel")
-     *   tipoNivel  – "upgrade" | "downgrade" | (ausente = nenhum escolhido ainda)
-     *   souChamp   – "1" se o checkbox de confirmação Champ estiver marcado
-     *
-     * ATENÇÃO: se o usuário autenticado já tem ROLE_CHAMP e tipoNivel=downgrade,
-     * souChamp é inferido automaticamente como true — dispensando o checkbox.
+     *   tipo                    – tipo da solicitação (ex: "nivel")
+     *   tipoNivel               – "upgrade" | "downgrade" | (ausente)
+     *   souChamp                – "1" se o checkbox de confirmação Champ estiver marcado
+     *   acaoGerenteArea         – "incluir" | "excluir" | (ausente)
+     *   acaoGerenteEstadoPais   – "incluir" | "excluir" | (ausente)
      */
     #[Route('/campos', name: 'solicitacao_campos_ajax', methods: ['GET'])]
     public function camposAjax(Request $request): Response
@@ -39,12 +38,22 @@ class SolicitacaoController extends AbstractController
         $tipoNivel = $request->query->get('tipoNivel');
         $souChamp  = (bool) $request->query->get('souChamp');
 
+        $acaoGerenteArea       = $request->query->get('acaoGerenteArea');
+        $acaoGerenteEstadoPais = $request->query->get('acaoGerenteEstadoPais');
+
+        $valoresAcao = ['incluir', 'excluir', null];
+
         if (!in_array($tipoNivel, ['upgrade', 'downgrade', null], true)) {
             $tipoNivel = null;
         }
+        if (!in_array($acaoGerenteArea, $valoresAcao, true)) {
+            $acaoGerenteArea = null;
+        }
+        if (!in_array($acaoGerenteEstadoPais, $valoresAcao, true)) {
+            $acaoGerenteEstadoPais = null;
+        }
 
         // Champ fazendo downgrade: infere souChamp automaticamente
-        // O checkbox de confirmação fica oculto/marcado implicitamente
         if ($isChamp && $tipoNivel === 'downgrade') {
             $souChamp = true;
         }
@@ -60,11 +69,13 @@ class SolicitacaoController extends AbstractController
 
         return new Response(
             $this->renderView('solicitacao/_campos.html.twig', [
-                'form'           => $form->createView(),
-                'tipoAtual'      => $tipo,
-                'isChamp'        => $isChamp,
-                'tipoNivelAtual' => $tipoNivel,
-                'souChampAuto'   => $isChamp && $tipoNivel === 'downgrade',
+                'form'                 => $form->createView(),
+                'tipoAtual'            => $tipo,
+                'isChamp'              => $isChamp,
+                'tipoNivelAtual'       => $tipoNivel,
+                'souChampAuto'         => $isChamp && $tipoNivel === 'downgrade',
+                'acaoGerenteAtual'     => $acaoGerenteArea,
+                'acaoGerenteEpAtual'   => $acaoGerenteEstadoPais,
             ])
         );
     }
@@ -195,6 +206,7 @@ class SolicitacaoController extends AbstractController
             'contadores'   => $contadores,
             'filtroStatus' => $filtroStatus,
             'filtroTipo'   => $filtroTipo,
+            'postData'     => $postData,
         ]);
     }
 

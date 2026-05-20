@@ -1,8 +1,7 @@
 <?php
-// index.php na RAIZ - front controller para quando o DocumentRoot aponta para a raiz do projeto
-// NAO inclui public/index.php para evitar dupla chamada do autoload_runtime
+// index.php na RAIZ
 
-// Le o .env manualmente para garantir APP_ENV no Hostinger
+// Le o .env manualmente
 $envFile = __DIR__ . '/.env';
 if (file_exists($envFile)) {
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
@@ -21,7 +20,15 @@ if (file_exists($envFile)) {
     }
 }
 
-// Ajusta o DOCUMENT_ROOT para o Symfony gerar URLs corretas
+// === DEBUG TEMPORARIO: forca dev+debug para ver erro real ===
+$_ENV['APP_ENV'] = 'dev';
+$_SERVER['APP_ENV'] = 'dev';
+$_ENV['APP_DEBUG'] = '1';
+$_SERVER['APP_DEBUG'] = '1';
+putenv('APP_ENV=dev');
+putenv('APP_DEBUG=1');
+// === FIM DEBUG ===
+
 $_SERVER['DOCUMENT_ROOT'] = __DIR__ . '/public';
 
 use App\Kernel;

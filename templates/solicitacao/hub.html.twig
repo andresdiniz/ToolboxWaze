@@ -114,7 +114,7 @@
     </div>
   </div>
 
-  <div id="campos-spinner">
+  <div id="campos-spinner" class="d-none">
     <div class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></div>
     Carregando campos…
   </div>
@@ -366,23 +366,240 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  {# Preenche o modal resolver com os dados do botão clicado #}
+
+  /* ══════════════════════════════════════════════════════════════════
+     TIPO-PILLS — seleciona tipo e dispara fetch de campos dinâmicos
+     ══════════════════════════════════════════════════════════════════ */
+  var tipoSelect  = document.querySelector('[data-tipo-select]');
+  var estadoSelect = document.querySelector('[data-estado-select]');
+  var pills       = document.querySelectorAll('.tipo-pill');
+  var spinner     = document.getElementById('campos-spinner');
+  var dinamicos   = document.getElementById('campos-dinamicos');
+  var btnEnviar   = document.getElementById('btn-enviar');
+  var tipoError   = document.getElementById('tipo-error-msg');
+  var ajaxUrl     = '{{ path('solicitacao_hub', {aba: 'nova'}) }}';
+
+  function getTipoAtual() {
+    return tipoSelect ? tipoSelect.value : '';
+  }
+
+  function getSouChamp() {
+    var cb = dinamicos ? dinamicos.querySelector('[data-sou-champ]') : null;
+    return cb ? cb.checked : false;
+  }
+
+  function getTipoNivel() {
+    var sel = dinamicos ? dinamicos.querySelector('[data-tipo-nivel]') : null;
+    return sel ? sel.value : '';
+  }
+
+  function setActivePill(valor) {
+    pills.forEach(function (p) {
+      var active = p.getAttribute('data-value') === valor;
+      p.classList.toggle('active', active);
+      p.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (tipoSelect) tipoSelect.value = valor;
+    if (btnEnviar)  btnEnviar.disabled = !valor;
+    if (tipoError)  tipoError.classList.add('d-none');
+  }
+
+  function fetchCampos(tipo, tipoNivel, souChamp) {
+    if (!tipo) return;
+    if (spinner)   spinner.classList.remove('d-none');
+    if (dinamicos) dinamicos.innerHTML = '';
+
+    var params = new URLSearchParams({ _ajax_campos: '1', tipo: tipo });
+    if (tipoNivel) params.set('_ajax_tipoNivel', tipoNivel);
+    if (souChamp)  params.set('_ajax_souChamp', '1');
+
+    fetch(ajaxUrl + '?' + params.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      if (spinner)   spinner.classList.add('d-none');
+      if (dinamicos) {
+        dinamicos.innerHTML = html;
+        initDinamicoListeners();
+        animarCampos();
+      }
+    })
+    .catch(function () {
+      if (spinner) spinner.classList.add('d-none');
+    });
+  }
+
+  function animarCampos() {
+    if (!dinamicos) return;
+    dinamicos.querySelectorAll('.campo-animado').forEach(function (el, i) {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(8px)';
+      setTimeout(function () {
+        el.style.transition = 'opacity .25s ease, transform .25s ease';
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      }, i * 60);
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     initDinamicoListeners — chamado após cada reload de campos
+     ══════════════════════════════════════════════════════════════════ */
+  function initDinamicoListeners() {
+    if (!dinamicos) return;
+
+    /* — Permalink: botão copiar — */
+    dinamicos.querySelectorAll('.permalink-copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var inp = btn.closest('.permalink-wrapper') && btn.closest('.permalink-wrapper').querySelector('[data-permalink]');
+        if (!inp || !inp.value) return;
+        navigator.clipboard.writeText(inp.value).then(function () {
+          btn.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+          setTimeout(function () { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 2000);
+        });
+      });
+    });
+
+    /* — Discuss: atualiza link com nick digitado em tempo real — */
+    var nickInput = dinamicos.querySelector('[data-discuss-nick]') ||
+                    document.getElementById('solicitacao_solicitanteUsuario');
+    if (nickInput) {
+      nickInput.addEventListener('input', function () {
+        var nick = nickInput.value.trim() || 'SEU_NICK';
+        dinamicos.querySelectorAll('[data-discuss-help]').forEach(function (el) {
+          var base = el.getAttribute('data-discuss-base') || el.href || '';
+          if (!el.getAttribute('data-discuss-base')) el.setAttribute('data-discuss-base', base);
+          var url = base.replace(/SEU_NICK/g, encodeURIComponent(nick));
+          el.href = url;
+          if (el.textContent.includes('SEU_NICK') || el.getAttribute('data-discuss-label')) {
+            el.textContent = el.getAttribute('data-discuss-label')
+              ? el.getAttribute('data-discuss-label').replace(/SEU_NICK/g, nick)
+              : url;
+          }
+        });
+      });
+    }
+
+    /* — tipo_nivel select: refaz fetch quando muda (nível upgrade/downgrade) — */
+    var tipoNivelSel = dinamicos.querySelector('[data-tipo-nivel]');
+    if (tipoNivelSel) {
+      tipoNivelSel.addEventListener('change', function () {
+        fetchCampos(getTipoAtual(), tipoNivelSel.value, getSouChamp());
+      });
+    }
+
+    /* — sou_champ checkbox: refaz fetch para mostrar/ocultar campos de downgrade — */
+    var souChampCb = dinamicos.querySelector('[data-sou-champ]');
+    if (souChampCb) {
+      souChampCb.addEventListener('change', function () {
+        fetchCampos(getTipoAtual(), getTipoNivel(), souChampCb.checked);
+      });
+    }
+
+    /* — Oops: preview de imagens — */
+    var oopsInput   = document.getElementById('input-oops-files');
+    var oopsPreview = document.getElementById('oops-file-preview');
+    var oopsError   = document.getElementById('oops-file-error');
+    if (oopsInput) {
+      oopsInput.addEventListener('change', function () {
+        if (oopsPreview) oopsPreview.innerHTML = '';
+        if (oopsError)   oopsError.classList.add('d-none');
+        var files = Array.from(oopsInput.files);
+        var erros = [];
+        if (files.length > 5) erros.push('Máximo 5 imagens.');
+        files.slice(0, 5).forEach(function (f) {
+          if (f.size > 1048576) { erros.push(f.name + ' excede 1 MB.'); return; }
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            if (!oopsPreview) return;
+            var img = document.createElement('img');
+            img.src = e.target.result;
+            img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--sol-border)';
+            oopsPreview.appendChild(img);
+          };
+          reader.readAsDataURL(f);
+        });
+        if (erros.length && oopsError) {
+          oopsError.querySelector('span').textContent = erros.join(' ');
+          oopsError.classList.remove('d-none');
+        }
+      });
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     PILLS: click e teclado
+     ══════════════════════════════════════════════════════════════════ */
+  pills.forEach(function (pill) {
+    pill.addEventListener('click', function () {
+      var valor = pill.getAttribute('data-value');
+      setActivePill(valor);
+      fetchCampos(valor, '', false);
+    });
+    pill.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        pill.click();
+      }
+    });
+  });
+
+  /* ══════════════════════════════════════════════════════════════════
+     VALIDAÇÃO client-side no submit
+     ══════════════════════════════════════════════════════════════════ */
+  var formSol = document.getElementById('form-solicitacao');
+  if (formSol) {
+    formSol.addEventListener('submit', function (e) {
+      var tipo = getTipoAtual();
+      if (!tipo) {
+        e.preventDefault();
+        if (tipoError) tipoError.classList.remove('d-none');
+        document.getElementById('tipo-pills').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      /* loading no botão */
+      var btnText    = document.getElementById('btn-enviar-text');
+      var btnLoading = document.getElementById('btn-enviar-loading');
+      if (btnText)    btnText.classList.add('d-none');
+      if (btnLoading) btnLoading.classList.remove('d-none');
+      if (btnEnviar)  btnEnviar.disabled = true;
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     INIT: se já há tipo selecionado (recarregamento com erro),
+     ativa pill e chama listeners nos campos já renderizados
+     ══════════════════════════════════════════════════════════════════ */
+  var tipoInicial = getTipoAtual();
+  if (tipoInicial) {
+    setActivePill(tipoInicial);
+    /* campos já estão no HTML — só registra os listeners */
+    initDinamicoListeners();
+    animarCampos();
+    if (spinner) spinner.classList.add('d-none');
+  } else {
+    if (spinner) spinner.classList.add('d-none');
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     MODAL RESOLVER — preenche dados ao abrir
+     ══════════════════════════════════════════════════════════════════ */
   var modalEl = document.getElementById('modal-resolver');
   if (modalEl) {
     modalEl.addEventListener('show.bs.modal', function (event) {
       var btn    = event.relatedTarget;
-      var id     = btn.getAttribute('data-id');
       var label  = btn.getAttribute('data-label');
       var token  = btn.getAttribute('data-token');
       var action = btn.getAttribute('data-action');
       document.getElementById('resolver-label').textContent  = label;
       document.getElementById('resolver-token').value        = token;
       document.getElementById('form-resolver').action        = action;
-      {# Reseta para "resolvida" a cada abertura #}
       document.getElementById('modal-des-resolvida').checked = true;
       document.getElementById('resolver-obs').value          = '';
     });
   }
+
 });
 </script>
 

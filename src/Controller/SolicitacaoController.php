@@ -24,8 +24,6 @@ class SolicitacaoController extends AbstractController
     public function hub(Request $request): Response
     {
         $isAdmin = $this->isGranted('ROLE_ADMIN');
-        // ROLE_CHAMP e ROLE_ADMIN sao hierarquias separadas.
-        // Um admin NAO e automaticamente Champ.
         $isChamp = $this->isGranted('ROLE_CHAMP');
         $user    = $this->getUser();
         $abaAtual = $request->query->get('aba', 'nova');
@@ -46,7 +44,6 @@ class SolicitacaoController extends AbstractController
             try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
         }
 
-        // Valida que ajaxTipoNivel só aceite valores permitidos
         if (!in_array($ajaxTipoNivel, ['upgrade', 'downgrade', null], true)) {
             $ajaxTipoNivel = null;
         }
@@ -58,30 +55,20 @@ class SolicitacaoController extends AbstractController
         ]);
         $form->handleRequest($request);
 
-        // ── Resposta AJAX ──────────────────────────────────────────────────────
+        // ── Resposta AJAX — usa template parcial, sem preg_match frágil ──────
         if ($ajaxTipo && $request->isXmlHttpRequest()) {
-            $html = $this->renderView('solicitacao/hub.html.twig', [
-                'form'         => $form,
-                'tipoAtual'    => $tipoAtual,
-                'abaAtual'     => 'nova',
-                'isAdmin'      => $isAdmin,
-                'isChamp'      => $isChamp,
-                'historico'    => [],
-                'gestaoLista'  => [],
-                'contadores'   => [],
-                'filtroStatus' => null,
-                'filtroTipo'   => null,
-            ]);
-            if (preg_match('/<div id="campos-dinamicos">(.*?)<\/div>\s*<div class="d-flex justify/s', $html, $m)) {
-                return new Response('<div id="campos-dinamicos">' . $m[1] . '</div>');
-            }
-            return new Response($html);
+            return new Response(
+                $this->renderView('solicitacao/_campos.html.twig', [
+                    'form'      => $form,
+                    'tipoAtual' => $tipoAtual,
+                ])
+            );
         }
 
+        // ── Submit normal ─────────────────────────────────────────────────────
         if ($form->isSubmitted() && $form->isValid()) {
             try { $tipoAtual = $solicitacao->getTipo(); } catch (\Throwable) {}
 
-            // Bloqueio server-side: downgrade exige ROLE_CHAMP (admin nao basta)
             $tipoNivelSubmetido = $form->has('dados_tipoNivel')
                 ? $form->get('dados_tipoNivel')->getData()
                 : null;
@@ -146,24 +133,22 @@ class SolicitacaoController extends AbstractController
 
         if ($abaAtual === 'gestao') {
             if ($isAdmin) {
-                // Admin ve tudo EXCETO downgrade de nivel
                 $filtroStatus = $request->query->get('status') ?: null;
                 $filtroTipo   = $request->query->get('tipo')   ?: null;
                 $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
                     $filtroStatus,
                     $filtroTipo,
-                    excluirDowngrade: true   // admin nao processa downgrade
+                    excluirDowngrade: true
                 );
                 $contadores = $this->solicitacaoRepo->countByStatus(
                     excluirDowngrade: true
                 );
             } elseif ($isChamp) {
-                // Champ ve apenas as solicitacoes de downgrade
                 $filtroStatus = $request->query->get('status') ?: null;
                 $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
                     $filtroStatus,
                     tipo: Solicitacao::TIPO_NIVEL,
-                    apenasDowngrade: true    // champ so processa downgrade
+                    apenasDowngrade: true
                 );
                 $contadores = $this->solicitacaoRepo->countByStatus(
                     tipo: Solicitacao::TIPO_NIVEL,
@@ -228,7 +213,6 @@ class SolicitacaoController extends AbstractController
             return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
         }
 
-        // Bloqueia admin de resolver downgrade
         $isDowngrade = $solicitacao->getTipo() === Solicitacao::TIPO_NIVEL
             && ($solicitacao->getDados()['tipoNivel'] ?? null) === 'downgrade';
 

@@ -29,6 +29,7 @@ class SolicitacaoController extends AbstractController
      *   souChamp                – "1" se o checkbox de confirmação Champ estiver marcado
      *   acaoGerenteArea         – "incluir" | "excluir" | (ausente)
      *   acaoGerenteEstadoPais   – "incluir" | "excluir" | (ausente)
+     *   cargo                   – "gerente_estado" | "gerente_pais" | (ausente)
      */
     #[Route('/campos', name: 'solicitacao_campos_ajax', methods: ['GET'])]
     public function camposAjax(Request $request): Response
@@ -40,8 +41,10 @@ class SolicitacaoController extends AbstractController
 
         $acaoGerenteArea       = $request->query->get('acaoGerenteArea');
         $acaoGerenteEstadoPais = $request->query->get('acaoGerenteEstadoPais');
+        $cargo                 = $request->query->get('cargo');
 
-        $valoresAcao = ['incluir', 'excluir', null];
+        $valoresAcao  = ['incluir', 'excluir', null];
+        $valoresCargo = ['gerente_estado', 'gerente_pais', null];
 
         if (!in_array($tipoNivel, ['upgrade', 'downgrade', null], true)) {
             $tipoNivel = null;
@@ -51,6 +54,9 @@ class SolicitacaoController extends AbstractController
         }
         if (!in_array($acaoGerenteEstadoPais, $valoresAcao, true)) {
             $acaoGerenteEstadoPais = null;
+        }
+        if (!in_array($cargo, $valoresCargo, true)) {
+            $cargo = null;
         }
 
         // Champ fazendo downgrade: infere souChamp automaticamente
@@ -65,6 +71,7 @@ class SolicitacaoController extends AbstractController
             'is_champ'        => $isChamp,
             'ajax_tipo_nivel' => $tipoNivel,
             'ajax_sou_champ'  => $souChamp,
+            'ajax_cargo'      => $cargo,
         ]);
 
         return new Response(
@@ -76,6 +83,7 @@ class SolicitacaoController extends AbstractController
                 'souChampAuto'         => $isChamp && $tipoNivel === 'downgrade',
                 'acaoGerenteAtual'     => $acaoGerenteArea,
                 'acaoGerenteEpAtual'   => $acaoGerenteEstadoPais,
+                'cargoAtual'           => $cargo,
             ])
         );
     }

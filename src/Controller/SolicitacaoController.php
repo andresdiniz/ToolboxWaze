@@ -38,13 +38,23 @@ class SolicitacaoController extends AbstractController
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
-        $ajaxTipo = $request->query->get('_ajax_tipo');
+        $ajaxTipo      = $request->query->get('_ajax_tipo');
+        $ajaxTipoNivel = $request->query->get('_ajax_tipoNivel');  // 'upgrade' | 'downgrade' | null
+        $ajaxSouChamp  = (bool) $request->query->get('_ajax_souChamp'); // '1' ou ''
+
         if ($ajaxTipo) {
             try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
         }
 
+        // Valida que ajaxTipoNivel só aceite valores permitidos
+        if (!in_array($ajaxTipoNivel, ['upgrade', 'downgrade', null], true)) {
+            $ajaxTipoNivel = null;
+        }
+
         $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-            'is_champ' => $isChamp,
+            'is_champ'        => $isChamp,
+            'ajax_tipo_nivel' => $ajaxTipoNivel,
+            'ajax_sou_champ'  => $ajaxSouChamp,
         ]);
         $form->handleRequest($request);
 

@@ -26,7 +26,7 @@ class SolicitacaoType extends AbstractType
 
     private const PERMALINK_PATTERN = '/
         https?:\/\/
-        (?:www\.|beta\.)?waze\.com
+        (?:www\.|beta\.)?\.waze\.com
         (?:\/[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})?)?
         \/editor
         [^\s]*
@@ -37,7 +37,9 @@ class SolicitacaoType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $isChamp = $options['is_champ'];
+        $isChamp       = $options['is_champ'];
+        $ajaxTipoNivel = $options['ajax_tipo_nivel'];
+        $ajaxSouChamp  = $options['ajax_sou_champ'];
 
         $builder
             ->add('tipo', ChoiceType::class, [
@@ -66,13 +68,21 @@ class SolicitacaoType extends AbstractType
                 'required'    => false,
             ]);
 
-        $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event) use ($isChamp) {
+        $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event)
+            use ($isChamp, $ajaxTipoNivel, $ajaxSouChamp) {
             $solicitacao = $event->getData();
             $tipo = null;
             if ($solicitacao instanceof Solicitacao) {
                 try { $tipo = $solicitacao->getTipo(); } catch (\Error) { $tipo = null; }
             }
-            $this->addDadosDinamicos($event->getForm(), $tipo, null, null, $isChamp);
+            $this->addDadosDinamicos(
+                $event->getForm(),
+                $tipo,
+                null,
+                $ajaxTipoNivel,   // passa o tipoNivel vindo do AJAX
+                $isChamp,
+                $ajaxSouChamp     // passa o souChamp vindo do AJAX
+            );
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($isChamp) {
@@ -88,10 +98,14 @@ class SolicitacaoType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            'data_class' => Solicitacao::class,
-            'is_champ'   => false,
+            'data_class'      => Solicitacao::class,
+            'is_champ'        => false,
+            'ajax_tipo_nivel' => null,
+            'ajax_sou_champ'  => false,
         ]);
         $resolver->setAllowedTypes('is_champ', 'bool');
+        $resolver->setAllowedValues('ajax_tipo_nivel', [null, 'upgrade', 'downgrade']);
+        $resolver->setAllowedTypes('ajax_sou_champ', 'bool');
     }
 
     private function addDadosDinamicos(
@@ -281,7 +295,8 @@ class SolicitacaoType extends AbstractType
     // Fluxo:
     //   1. Usuário vê o radio Upgrade/Downgrade apenas se is_champ=true
     //   2. Ao marcar Downgrade, o front exibe o checkbox "Sou Champ" (dados_souChamp)
-    //   3. Ao marcar o checkbox, o front dispara o AJAX que recarrega os campos
+    //   3. Ao marcar o checkbox, o front dispara o AJAX passando
+    //      _ajax_tipoNivel=downgrade e _ajax_souChamp=1
     //   4. Server-side: addCamposDowngrade só é chamado se is_champ=true E souChamp=true
     //   5. Se alguém tentar forjar o POST, o campo dados_souChamp não existe no form
     //      (pois is_champ=false), então os campos de downgrade não são validados

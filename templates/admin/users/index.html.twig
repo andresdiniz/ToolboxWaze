@@ -69,14 +69,16 @@
         .downgrade-row{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end}
         .downgrade-field{display:flex;flex-direction:column;gap:.25rem;flex:1;min-width:140px}
         .downgrade-field label{font-size:.78rem;font-weight:600;color:var(--champ)}
-        .downgrade-field input[type=number]{width:100%;padding:.4rem .6rem;border:1px solid var(--champ);border-radius:.4rem;background:var(--surface);color:var(--text);font-size:.875rem;font-family:inherit;accent-color:var(--champ)}
+        .downgrade-field input[type=number]{width:100%;padding:.4rem .6rem;border:1px solid var(--champ);border-radius:.4rem;background:var(--surface);color:var(--text);font-size:.875rem;font-family:inherit}
         .downgrade-field input[type=number]:focus{outline:2px solid var(--champ);outline-offset:1px}
+        .downgrade-field .hint{font-size:.73rem;color:var(--muted);margin-top:.2rem}
         .downgrade-tipos{margin-top:.75rem}
         .downgrade-tipos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.4rem;margin-top:.4rem}
         .downgrade-tipo-check{display:flex;align-items:center;gap:.45rem;padding:.4rem .6rem;border:1px solid color-mix(in oklab,var(--champ) 40%,var(--border));border-radius:.4rem;cursor:pointer;transition:.15s;background:var(--surface);font-size:.82rem;font-weight:500}
         .downgrade-tipo-check:hover{border-color:var(--champ);background:var(--champ-hl)}
         .downgrade-tipo-check input{accent-color:var(--champ);width:13px;height:13px;cursor:pointer}
         .downgrade-tipo-check.is-checked{border-color:var(--champ);background:var(--champ-hl);color:var(--champ);font-weight:600}
+        .downgrade-tipos-hint{font-size:.73rem;color:var(--muted);margin-top:.4rem}
 
         /* UFs */
         .ufs-section{margin-top:1rem;margin-bottom:1.25rem}
@@ -115,10 +117,32 @@
         .empty{text-align:center;padding:3rem 1rem;color:var(--muted)}
         .empty svg{margin:0 auto 1rem;color:var(--faint)}
         .theme-btn{position:fixed;top:1rem;right:1rem;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);z-index:100}
+
+        /* Modal de confirmação */
+        .modal-overlay{position:fixed;inset:0;background:oklch(0 0 0/0.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem;opacity:0;pointer-events:none;transition:opacity .18s}
+        .modal-overlay.open{opacity:1;pointer-events:all}
+        .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:380px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.15);transform:translateY(8px);transition:transform .18s}
+        .modal-overlay.open .modal-box{transform:translateY(0)}
+        .modal-title{font-weight:700;font-size:1rem;margin-bottom:.5rem}
+        .modal-body{font-size:.9rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.5}
+        .modal-actions{display:flex;gap:.6rem;justify-content:flex-end}
+
         @media(max-width:600px){.page{padding:1rem}.actions{gap:.4rem}.btn{padding:.5rem .8rem;font-size:.8rem}}
     </style>
 </head>
 <body>
+
+{# Modal de confirmação reutilizável #}
+<div class="modal-overlay" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-box">
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="btn" id="modal-confirm-btn"></button>
+        </div>
+    </div>
+</div>
 
 <button class="theme-btn" data-theme-toggle aria-label="Alternar tema">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -151,24 +175,27 @@
     </div>
 
     {# ──────────────────────────────────────────────────────────
-       MACRO: bloco de Estados (UFs) — reutilizado em pendentes e aprovados
+       MACRO: bloco de Estados (UFs)
+       isPending=true inicializa "Todos os estados" marcado por padrão
     ────────────────────────────────────────────────────────── #}
-    {% macro ufsBlock(user, allUfs) %}
+    {% macro ufsBlock(user, allUfs, isPending) %}
+    {% set allChecked = isPending ? true : (user.allowedUfs is null) %}
     <div class="ufs-section">
         <div class="ufs-header">
             <div class="section-label" style="margin-bottom:0">Estados com acesso</div>
             <label class="all-ufs-toggle">
                 <input type="checkbox" name="all_ufs" value="1"
                     id="all_ufs_{{ user.id }}"
-                    {{ user.allowedUfs is null ? 'checked' : '' }}
+                    {{ allChecked ? 'checked' : '' }}
                     onchange="toggleAllUfs({{ user.id }}, this.checked)">
                 Todos os estados
             </label>
         </div>
         <div class="ufs-grid" id="ufs_grid_{{ user.id }}"
-             style="{{ user.allowedUfs is null ? 'opacity:.4;pointer-events:none' : '' }}">
+             style="{{ allChecked ? 'opacity:.4;pointer-events:none' : '' }}">
             {% for uf in allUfs %}
-            {% set checked = user.allowedUfs is null or uf in (user.allowedUfs ?? []) %}
+            {# Para pendentes: todas marcadas por padrão; para aprovados: respeita allowedUfs #}
+            {% set checked = allChecked or (not isPending and uf in (user.allowedUfs ?? [])) %}
             <label class="uf-check {{ checked ? 'is-checked' : '' }}" id="uflabel_{{ user.id }}_{{ uf }}">
                 <input type="checkbox" name="allowed_ufs[]" value="{{ uf }}"
                     {{ checked ? 'checked' : '' }}
@@ -182,22 +209,23 @@
     {% endmacro %}
 
     {# MACRO: bloco de Tipos de Solicitação #}
-    {% macro tiposBlock(user, allTipos) %}
+    {% macro tiposBlock(user, allTipos, isPending) %}
+    {% set allChecked = isPending ? true : (user.solicitacaoTipos is null) %}
     <div class="tipos-section">
         <div class="tipos-header">
             <div class="section-label" style="margin-bottom:0">Tipos de Solicitação que pode tratar</div>
             <label class="all-tipos-toggle">
                 <input type="checkbox" name="all_tipos" value="1"
                     id="all_tipos_{{ user.id }}"
-                    {{ user.solicitacaoTipos is null ? 'checked' : '' }}
+                    {{ allChecked ? 'checked' : '' }}
                     onchange="toggleAllTipos({{ user.id }}, this.checked)">
                 Todos os tipos
             </label>
         </div>
         <div class="tipos-grid" id="tipos_grid_{{ user.id }}"
-             style="margin-top:.6rem;{{ user.solicitacaoTipos is null ? 'opacity:.4;pointer-events:none' : '' }}">
+             style="margin-top:.6rem;{{ allChecked ? 'opacity:.4;pointer-events:none' : '' }}">
             {% for valor, label in allTipos %}
-            {% set checked = user.solicitacaoTipos is null or valor in (user.solicitacaoTipos ?? []) %}
+            {% set checked = allChecked or (not isPending and valor in (user.solicitacaoTipos ?? [])) %}
             <label class="tipo-check {{ checked ? 'is-checked' : '' }}" id="tlabel_{{ user.id }}_{{ valor }}">
                 <input type="checkbox" name="solicitacao_tipos[]" value="{{ valor }}"
                     {{ checked ? 'checked' : '' }}
@@ -210,8 +238,8 @@
     </div>
     {% endmacro %}
 
-    {# MACRO: bloco de configurações do perfil Champ (downgrade) #}
-    {% macro champDowngradeBlock(user, isChamp) %}
+    {# MACRO: bloco de configurações Champ (downgrade) #}
+    {% macro champDowngradeBlock(user, champTipos, isChamp) %}
     <div class="downgrade-fields" id="downgrade_fields_{{ user.id }}"
          style="{{ not isChamp ? 'display:none' : '' }}">
         <div class="section-label">⭐ Configurações Champ — Downgrade</div>
@@ -221,24 +249,23 @@
                 <input type="number" id="champ_limit_day_{{ user.id }}" name="champ_limit_day"
                        min="0" max="9999" placeholder="Ex: 50"
                        value="{{ user.champLimitDay ?? '' }}">
+                <span class="hint">Deixe em branco para sem limite</span>
             </div>
             <div class="downgrade-field">
                 <label for="champ_limit_month_{{ user.id }}">Limite mensal de downgrades</label>
                 <input type="number" id="champ_limit_month_{{ user.id }}" name="champ_limit_month"
                        min="0" max="99999" placeholder="Ex: 500"
                        value="{{ user.champLimitMonth ?? '' }}">
+                <span class="hint">Deixe em branco para sem limite</span>
             </div>
         </div>
         <div class="downgrade-tipos">
             <div class="section-label" style="margin-top:.5rem;margin-bottom:.35rem">Tipos de downgrade permitidos</div>
             <div class="downgrade-tipos-grid">
-                {% set champTipos = user.champDowngradeTipos ?? [] %}
-                {% for tipoVal, tipoLabel in {
-                    'radar':   'Radar',
-                    'posto':   'Posto de combustível',
-                    'camera':  'Câmera'
-                } %}
-                {% set tipoChecked = tipoVal in champTipos %}
+                {% set champDowngradeTiposAtivos = user.champDowngradeTipos ?? [] %}
+                {% for tipoVal, tipoLabel in champTipos %}
+                {# null = todos; array vazio = nenhum marcado; array com itens = somente esses #}
+                {% set tipoChecked = user.champDowngradeTipos is null or tipoVal in champDowngradeTiposAtivos %}
                 <label class="downgrade-tipo-check {{ tipoChecked ? 'is-checked' : '' }}">
                     <input type="checkbox" name="champ_downgrade_tipos[]" value="{{ tipoVal }}"
                            {{ tipoChecked ? 'checked' : '' }}
@@ -247,6 +274,7 @@
                 </label>
                 {% endfor %}
             </div>
+            <div class="downgrade-tipos-hint">Se nenhum for marcado, todos os tipos serão liberados.</div>
         </div>
     </div>
     {% endmacro %}
@@ -292,7 +320,7 @@
                         <label for="is_champ_{{ user.id }}">⭐ Conceder perfil Champ (processa downgrades)</label>
                     </div>
 
-                    {{ _self.champDowngradeBlock(user, false) }}
+                    {{ _self.champDowngradeBlock(user, champTipos, false) }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -304,8 +332,9 @@
                         {% endfor %}
                     </div>
 
-                    {{ _self.ufsBlock(user, allUfs) }}
-                    {{ _self.tiposBlock(user, allTipos) }}
+                    {# isPending=true: todos estados e tipos marcados por padrão #}
+                    {{ _self.ufsBlock(user, allUfs, true) }}
+                    {{ _self.tiposBlock(user, allTipos, true) }}
 
                     <div class="actions">
                         <button type="submit" class="btn btn-approve">
@@ -317,7 +346,8 @@
 
                 <form method="POST" action="{{ path('admin_users_reject', {id: user.id}) }}" style="margin-top:.5rem">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
-                    <button type="submit" class="btn btn-reject" onclick="return confirm('Rejeitar este usuário?')">
+                    <button type="button" class="btn btn-reject"
+                            onclick="openModal('Rejeitar usuário', 'Confirma a rejeição de <strong>{{ user.name|e('html') }}</strong>? O usuário será notificado por e-mail.', 'Rejeitar', 'var(--warning)', this.closest('form'))">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
                         Rejeitar
                     </button>
@@ -387,7 +417,7 @@
                         <label for="champ_{{ user.id }}">⭐ Perfil Champ (processa downgrades)</label>
                     </div>
 
-                    {{ _self.champDowngradeBlock(user, userIsChamp) }}
+                    {{ _self.champDowngradeBlock(user, champTipos, userIsChamp) }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -399,8 +429,9 @@
                         {% endfor %}
                     </div>
 
-                    {{ _self.ufsBlock(user, allUfs) }}
-                    {{ _self.tiposBlock(user, allTipos) }}
+                    {# isPending=false: carrega estado salvo do usuário #}
+                    {{ _self.ufsBlock(user, allUfs, false) }}
+                    {{ _self.tiposBlock(user, allTipos, false) }}
 
                     <div class="actions">
                         <button type="submit" class="btn btn-save">
@@ -412,7 +443,8 @@
 
                 <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}" style="margin-top:.5rem">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
-                    <button type="submit" class="btn btn-delete" onclick="return confirm('Remover este usuário permanentemente?')">
+                    <button type="button" class="btn btn-delete"
+                            onclick="openModal('Remover usuário', 'Tem certeza que deseja remover <strong>{{ user.name|e('html') }}</strong> permanentemente? Esta ação não pode ser desfeita.', 'Remover', 'var(--error)', this.closest('form'))">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                         Remover
                     </button>
@@ -445,16 +477,79 @@
                 <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
             </div>
             <div class="user-card-body">
-                <div class="actions">
-                    <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
-                        <button type="submit" class="btn btn-approve">Reativar e Aprovar</button>
-                    </form>
-                    <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
-                        <button type="submit" class="btn btn-delete" onclick="return confirm('Remover permanentemente?')">Remover</button>
-                    </form>
-                </div>
+                {# FIX: formulário de reativação agora inclui campos completos de configuração #}
+                <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
+
+                    <div class="admin-toggle">
+                        <input type="checkbox" name="is_admin" id="readmin_{{ user.id }}" value="1">
+                        <label for="readmin_{{ user.id }}">Conceder privilégios de Administrador</label>
+                    </div>
+
+                    <div class="champ-toggle">
+                        <input type="checkbox" name="is_champ" id="rechamp_{{ user.id }}" value="1"
+                               onchange="toggleDowngradeFields('re{{ user.id }}', this.checked)">
+                        <label for="rechamp_{{ user.id }}">⭐ Conceder perfil Champ</label>
+                    </div>
+
+                    {# Bloco Champ — id diferenciado para não colidir com outros painéis #}
+                    <div class="downgrade-fields" id="downgrade_fields_re{{ user.id }}" style="display:none">
+                        <div class="section-label">⭐ Configurações Champ — Downgrade</div>
+                        <div class="downgrade-row">
+                            <div class="downgrade-field">
+                                <label>Limite diário</label>
+                                <input type="number" name="champ_limit_day" min="0" max="9999" placeholder="Ex: 50">
+                                <span class="hint">Deixe em branco para sem limite</span>
+                            </div>
+                            <div class="downgrade-field">
+                                <label>Limite mensal</label>
+                                <input type="number" name="champ_limit_month" min="0" max="99999" placeholder="Ex: 500">
+                                <span class="hint">Deixe em branco para sem limite</span>
+                            </div>
+                        </div>
+                        <div class="downgrade-tipos">
+                            <div class="section-label" style="margin-top:.5rem;margin-bottom:.35rem">Tipos de downgrade permitidos</div>
+                            <div class="downgrade-tipos-grid">
+                                {% for tipoVal, tipoLabel in champTipos %}
+                                <label class="downgrade-tipo-check">
+                                    <input type="checkbox" name="champ_downgrade_tipos[]" value="{{ tipoVal }}"
+                                           onchange="this.closest('.downgrade-tipo-check').classList.toggle('is-checked', this.checked)">
+                                    {{ tipoLabel }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div class="downgrade-tipos-hint">Se nenhum for marcado, todos os tipos serão liberados.</div>
+                        </div>
+                    </div>
+
+                    <div class="section-label" style="margin-top:.75rem">Permissões de Área</div>
+                    <div class="perms-grid">
+                        {% for key, label in allPerms %}
+                        <label class="perm-check">
+                            <input type="checkbox" name="permissions[]" value="{{ key }}">
+                            <span>{{ label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    {{ _self.ufsBlock(user, allUfs, true) }}
+                    {{ _self.tiposBlock(user, allTipos, true) }}
+
+                    <div class="actions">
+                        <button type="submit" class="btn btn-approve">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                            Reativar e Aprovar
+                        </button>
+                    </div>
+                </form>
+
+                <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}" style="margin-top:.5rem">
+                    <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
+                    <button type="button" class="btn btn-delete"
+                            onclick="openModal('Remover usuário', 'Tem certeza que deseja remover <strong>{{ user.name|e('html') }}</strong> permanentemente?', 'Remover', 'var(--error)', this.closest('form'))">
+                        Remover permanentemente
+                    </button>
+                </form>
             </div>
         </div>
         {% endfor %}
@@ -474,6 +569,32 @@ function toggleCard(id) {
     document.getElementById('card-' + id).classList.toggle('open');
 }
 
+/* ── Modal de confirmação ── */
+let _modalForm = null;
+function openModal(title, body, confirmLabel, confirmColor, form) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = body;
+    const btn = document.getElementById('modal-confirm-btn');
+    btn.textContent = confirmLabel;
+    btn.style.background = confirmColor;
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    _modalForm = form;
+    document.getElementById('confirm-modal').classList.add('open');
+}
+function closeModal() {
+    document.getElementById('confirm-modal').classList.remove('open');
+    _modalForm = null;
+}
+document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+    if (_modalForm) _modalForm.submit();
+    closeModal();
+});
+document.getElementById('confirm-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
 /* ── Downgrade fields (Champ) ── */
 function toggleDowngradeFields(userId, show) {
     const el = document.getElementById('downgrade_fields_' + userId);
@@ -485,12 +606,15 @@ function toggleAllUfs(userId, allChecked) {
     const grid = document.getElementById('ufs_grid_' + userId);
     grid.style.opacity = allChecked ? '.4' : '1';
     grid.style.pointerEvents = allChecked ? 'none' : '';
+    // FIX: ao desmarcar "Todos", mantém todas as UFs marcadas para o admin escolher quais remover
+    // Ao marcar "Todos", força todas checked (serão ignoradas pelo backend via all_ufs=1)
     if (allChecked) {
         grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
             cb.checked = true;
             cb.closest('.uf-check').classList.add('is-checked');
         });
     }
+    // ao desmarcar: não altera as UFs — admin decide quais manter
     updateUfsCount(userId);
 }
 function updateUfsCount(userId) {
@@ -502,7 +626,9 @@ function updateUfsCount(userId) {
         count.textContent = 'Acesso a todos os estados';
     } else {
         const n = grid ? grid.querySelectorAll('input:checked').length : 0;
-        count.textContent = n + ' estado(s) selecionado(s)';
+        count.textContent = n > 0 ? n + ' estado(s) selecionado(s)' : '⚠ Nenhum estado selecionado — salvar removerá todo acesso.';
+        if (count.textContent.startsWith('⚠')) count.style.color = 'var(--warning)';
+        else count.style.color = '';
     }
 }
 

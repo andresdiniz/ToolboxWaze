@@ -59,9 +59,24 @@
         .admin-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--primary);border-radius:.5rem;background:var(--primary-hl);margin-bottom:.6rem;width:fit-content}
         .admin-toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
         .admin-toggle label{font-size:.875rem;font-weight:600;color:var(--primary);cursor:pointer}
-        .champ-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--champ);border-radius:.5rem;background:var(--champ-hl);margin-bottom:1rem;width:fit-content}
+        .champ-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--champ);border-radius:.5rem;background:var(--champ-hl);margin-bottom:.5rem;width:fit-content}
         .champ-toggle input{accent-color:var(--champ);width:15px;height:15px;cursor:pointer}
         .champ-toggle label{font-size:.875rem;font-weight:600;color:var(--champ);cursor:pointer}
+
+        /* Downgrade fields */
+        .downgrade-fields{border:1px solid var(--champ);border-radius:.5rem;padding:.85rem 1rem;margin-bottom:1rem;background:var(--champ-hl)}
+        .downgrade-fields .section-label{color:var(--champ);margin-bottom:.6rem}
+        .downgrade-row{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end}
+        .downgrade-field{display:flex;flex-direction:column;gap:.25rem;flex:1;min-width:140px}
+        .downgrade-field label{font-size:.78rem;font-weight:600;color:var(--champ)}
+        .downgrade-field input[type=number]{width:100%;padding:.4rem .6rem;border:1px solid var(--champ);border-radius:.4rem;background:var(--surface);color:var(--text);font-size:.875rem;font-family:inherit;accent-color:var(--champ)}
+        .downgrade-field input[type=number]:focus{outline:2px solid var(--champ);outline-offset:1px}
+        .downgrade-tipos{margin-top:.75rem}
+        .downgrade-tipos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.4rem;margin-top:.4rem}
+        .downgrade-tipo-check{display:flex;align-items:center;gap:.45rem;padding:.4rem .6rem;border:1px solid color-mix(in oklab,var(--champ) 40%,var(--border));border-radius:.4rem;cursor:pointer;transition:.15s;background:var(--surface);font-size:.82rem;font-weight:500}
+        .downgrade-tipo-check:hover{border-color:var(--champ);background:var(--champ-hl)}
+        .downgrade-tipo-check input{accent-color:var(--champ);width:13px;height:13px;cursor:pointer}
+        .downgrade-tipo-check.is-checked{border-color:var(--champ);background:var(--champ-hl);color:var(--champ);font-weight:600}
 
         /* UFs */
         .ufs-section{margin-top:1rem;margin-bottom:1.25rem}
@@ -195,6 +210,47 @@
     </div>
     {% endmacro %}
 
+    {# MACRO: bloco de configurações do perfil Champ (downgrade) #}
+    {% macro champDowngradeBlock(user, isChamp) %}
+    <div class="downgrade-fields" id="downgrade_fields_{{ user.id }}"
+         style="{{ not isChamp ? 'display:none' : '' }}">
+        <div class="section-label">⭐ Configurações Champ — Downgrade</div>
+        <div class="downgrade-row">
+            <div class="downgrade-field">
+                <label for="champ_limit_day_{{ user.id }}">Limite diário de downgrades</label>
+                <input type="number" id="champ_limit_day_{{ user.id }}" name="champ_limit_day"
+                       min="0" max="9999" placeholder="Ex: 50"
+                       value="{{ user.champLimitDay ?? '' }}">
+            </div>
+            <div class="downgrade-field">
+                <label for="champ_limit_month_{{ user.id }}">Limite mensal de downgrades</label>
+                <input type="number" id="champ_limit_month_{{ user.id }}" name="champ_limit_month"
+                       min="0" max="99999" placeholder="Ex: 500"
+                       value="{{ user.champLimitMonth ?? '' }}">
+            </div>
+        </div>
+        <div class="downgrade-tipos">
+            <div class="section-label" style="margin-top:.5rem;margin-bottom:.35rem">Tipos de downgrade permitidos</div>
+            <div class="downgrade-tipos-grid">
+                {% set champTipos = user.champDowngradeTipos ?? [] %}
+                {% for tipoVal, tipoLabel in {
+                    'radar':   'Radar',
+                    'posto':   'Posto de combustível',
+                    'camera':  'Câmera'
+                } %}
+                {% set tipoChecked = tipoVal in champTipos %}
+                <label class="downgrade-tipo-check {{ tipoChecked ? 'is-checked' : '' }}">
+                    <input type="checkbox" name="champ_downgrade_tipos[]" value="{{ tipoVal }}"
+                           {{ tipoChecked ? 'checked' : '' }}
+                           onchange="this.closest('.downgrade-tipo-check').classList.toggle('is-checked', this.checked)">
+                    {{ tipoLabel }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endmacro %}
+
     {# ===== PENDENTES ===== #}
     <div class="tab-panel active" id="tab-pending">
         {% if pending is empty %}
@@ -231,9 +287,12 @@
                     </div>
 
                     <div class="champ-toggle">
-                        <input type="checkbox" name="is_champ" id="is_champ_{{ user.id }}" value="1">
+                        <input type="checkbox" name="is_champ" id="is_champ_{{ user.id }}" value="1"
+                               onchange="toggleDowngradeFields({{ user.id }}, this.checked)">
                         <label for="is_champ_{{ user.id }}">⭐ Conceder perfil Champ (processa downgrades)</label>
                     </div>
+
+                    {{ _self.champDowngradeBlock(user, false) }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -322,9 +381,13 @@
                     </div>
 
                     <div class="champ-toggle">
-                        <input type="checkbox" name="is_champ" id="champ_{{ user.id }}" value="1" {{ userIsChamp ? 'checked' : '' }}>
+                        <input type="checkbox" name="is_champ" id="champ_{{ user.id }}" value="1"
+                               {{ userIsChamp ? 'checked' : '' }}
+                               onchange="toggleDowngradeFields({{ user.id }}, this.checked)">
                         <label for="champ_{{ user.id }}">⭐ Perfil Champ (processa downgrades)</label>
                     </div>
+
+                    {{ _self.champDowngradeBlock(user, userIsChamp) }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -409,6 +472,12 @@ function switchTab(name, btn) {
 }
 function toggleCard(id) {
     document.getElementById('card-' + id).classList.toggle('open');
+}
+
+/* ── Downgrade fields (Champ) ── */
+function toggleDowngradeFields(userId, show) {
+    const el = document.getElementById('downgrade_fields_' + userId);
+    if (el) el.style.display = show ? '' : 'none';
 }
 
 /* ── UFs ── */

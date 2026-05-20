@@ -356,9 +356,9 @@ document.addEventListener('DOMContentLoaded', function () {
   var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
 
   /*
-   * tipoNivelAtual: estado em memória do radio selecionado.
-   * É a única fonte de verdade para o JS — não relemos o DOM.
-   * Começa como null; muda quando o usuário clica num radio.
+   * tipoNivelAtual: estado em memoria do radio selecionado.
+   * Comeca como null; muda quando o usuario clica num radio.
+   * NOTA: variavel JS pura — nao confundir com variaveis Twig.
    */
   var tipoNivelAtual = null;
 
@@ -382,33 +382,19 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /*
-   * fetchCampos: busca o fragmento HTML do servidor.
+   * fetchCampos: busca o fragmento HTML do servidor (_campos.html.twig).
    *
-   * ESTRATÉGIA PARA O RADIO TIPONIVEL:
-   *   - O servidor recebe tipoNivel via query string e o Twig renderiza
-   *     o radio COM checked aplicado via {{ tipoNivelAtual == child.vars.value ? 'checked' : '' }}
-   *   - Portanto, ao passar tipoNivel no fetch, o radio JÁ VEM marcado no HTML.
-   *   - O JS NÃO precisa marcar o radio depois — apenas registrar listeners.
+   * O servidor recebe tipoNivel via query string e renderiza o radio
+   * com checked aplicado diretamente no Twig do fragmento.
+   * Portanto, ao passar tipoNivel no fetch, o radio ja vem marcado no HTML.
    *
-   * FLUXO AO CLICAR NA PILL "NÍVEL" (primeiro fetch, tipoNivel=null):
-   *   1. Servidor retorna card com os dois radios, nenhum checked (tipoNivelAtual=null).
-   *   2. JS registra listeners nos radios.
-   *   3. Usuário clica num radio → onRadioChange → fetchCampos com tipoNivel=valor.
-   *   4. Servidor retorna HTML com radio correto checked + campos do tipo.
-   *   5. tipoNivelAtual é atualizado em memória.
-   *
-   * FLUXO AO CLICAR NO RADIO (troca upgrade↔downgrade):
-   *   - NÃO destrói o card do radio — apenas a div #campos-extras-nivel abaixo.
-   *   - Isso evita o loop de fetch e mantém o radio visualmente selecionado.
+   * apenasExtras=true: so atualiza #campos-extras-nivel (abaixo do radio),
+   *   sem destruir o card do radio. Usado ao trocar upgrade<->downgrade.
+   * apenasExtras=false: recarrega tudo (primeiro clique na pill).
    */
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras) {
     if (!tipo) return;
 
-    /*
-     * apenasExtras=true: só atualiza a div de campos extras (abaixo do radio),
-     * sem destruir o card do radio. Usado quando o usuário troca upgrade↔downgrade.
-     * apenasExtras=false (default): recarrega tudo (primeiro clique na pill).
-     */
     apenasExtras = !!apenasExtras;
 
     if (!apenasExtras) {
@@ -416,7 +402,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (spinner)   spinner.classList.remove('d-none');
       if (dinamicos) dinamicos.innerHTML = '';
     } else {
-      /* Remove apenas os campos extras, mantém #card-tipo-nivel-ajax */
       var extras = dinamicos && dinamicos.querySelector('#campos-extras-nivel');
       if (extras) extras.innerHTML = '';
       if (spinner) spinner.classList.remove('d-none');
@@ -433,22 +418,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!dinamicos) return;
 
         if (!apenasExtras) {
-          /* Primeiro fetch: insere tudo normalmente */
           dinamicos.innerHTML = html;
           setActivePill(tipo);
 
-          /*
-           * Cria o container de campos extras logo após o card do radio.
-           * Os campos extras ficam FORA do card do radio para não serem
-           * destruídos quando o radio muda.
-           */
           if (tipo === 'nivel') {
             var cardRadio = dinamicos.querySelector('#card-tipo-nivel-ajax');
             if (cardRadio) {
               var extrasDiv = document.createElement('div');
               extrasDiv.id = 'campos-extras-nivel';
               cardRadio.insertAdjacentElement('afterend', extrasDiv);
-              /* Move todos os nós após o card do radio para dentro de #campos-extras-nivel */
               while (cardRadio.nextSibling) {
                 extrasDiv.appendChild(cardRadio.nextSibling);
               }
@@ -456,7 +434,6 @@ document.addEventListener('DOMContentLoaded', function () {
           }
 
         } else {
-          /* Fetch de troca: insere apenas os campos extras */
           var extras2 = dinamicos.querySelector('#campos-extras-nivel');
           if (!extras2) {
             extras2 = document.createElement('div');
@@ -469,14 +446,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
           }
 
-          /*
-           * O HTML do servidor inclui o card do radio + campos extras juntos.
-           * Precisamos extrair apenas os nós que NÃO são o card do radio.
-           */
           var tmp = document.createElement('div');
           tmp.innerHTML = html;
           var novoCard = tmp.querySelector('#card-tipo-nivel-ajax');
-          if (novoCard) novoCard.remove(); /* descarta — já existe no DOM */
+          if (novoCard) novoCard.remove();
           extras2.innerHTML = tmp.innerHTML;
         }
 
@@ -487,16 +460,12 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /*
-   * onRadioChange: chamado quando o usuário clica num radio tipoNivel.
-   *
-   * NÃO destrói o card do radio. Apenas:
-   *   1. Atualiza tipoNivelAtual em memória.
-   *   2. Marca o radio clicado visualmente (já feito pelo browser nativamente).
-   *   3. Busca apenas os campos extras correspondentes.
+   * onRadioChange: chamado quando o usuario clica num radio tipoNivel.
+   * NAO destroi o card do radio — apenas busca os campos extras.
    */
   function onRadioChange(valor) {
     tipoNivelAtual = valor;
-    fetchCampos(getTipoAtual(), valor, getSouChamp(valor), true /* apenasExtras */);
+    fetchCampos(getTipoAtual(), valor, getSouChamp(valor), true);
   }
 
   function animarCampos() {
@@ -529,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /* Radio tipoNivel: usa onRadioChange em vez de fetchCampos direto */
+    /* Radio tipoNivel */
     dinamicos.querySelectorAll('[data-tipo-nivel-ajax]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioChange(radio.value);
@@ -579,7 +548,7 @@ document.addEventListener('DOMContentLoaded', function () {
   pills.forEach(function (pill) {
     pill.addEventListener('click', function () {
       var valor = pill.getAttribute('data-value');
-      tipoNivelAtual = null; /* reset ao trocar de tipo */
+      tipoNivelAtual = null;
       setActivePill(valor);
       fetchCampos(valor, '', false, false);
     });
@@ -607,7 +576,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* Re-hidratação após submit inválido (server-side validation) */
+  /* Re-hidratacao apos submit invalido (server-side validation) */
   var erroServer = document.getElementById('campos-erros-server');
   if (erroServer) {
     var tipoInicial      = erroServer.getAttribute('data-tipo');
@@ -618,7 +587,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tipoInicial) {
       tipoNivelAtual = tipoNivelInicial;
       setActivePill(tipoInicial);
-      /* Fetch completo: o servidor marcará o radio correto via Twig */
       fetchCampos(tipoInicial, tipoNivelInicial, souChampInicial, false);
     }
   }

@@ -285,9 +285,10 @@
   </div>
 </div>
 
-{# ── JS: sincroniza classe .active nas pills ao clicar ──────────────────────── #}
+{# ── JS: pills + gate Discuss ───────────────────────────────────────────────── #}
 <script>
 (function () {
+  /* Pills */
   function bindPillActive(groupSelector) {
     document.querySelectorAll(groupSelector).forEach(function (group) {
       var pills = group.querySelectorAll('.acao-pill');
@@ -300,6 +301,24 @@
     });
   }
   bindPillActive('.acao-pill-group');
+
+  /* Gate Discuss: libera o checkbox somente após clicar no link */
+  var linkDiscuss = document.getElementById('link-discuss-intencao');
+  if (linkDiscuss) {
+    var checkbox = document.querySelector('[data-discuss-gate="1"]');
+    linkDiscuss.addEventListener('click', function () {
+      if (checkbox) {
+        checkbox.removeAttribute('disabled');
+        var helpEl = checkbox.closest('.sol-card-body');
+        if (helpEl) {
+          var hint = helpEl.querySelector('.sol-help, .form-text');
+          if (hint) {
+            hint.innerHTML = '✅ Link aberto. Agora marque a caixa após publicar sua intenção no Discuss.';
+          }
+        }
+      }
+    });
+  }
 })();
 </script>
 

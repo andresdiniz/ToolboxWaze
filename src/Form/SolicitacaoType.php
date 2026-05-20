@@ -48,25 +48,6 @@ class SolicitacaoType extends AbstractType
                 'choices'     => array_flip(Solicitacao::TIPOS),
                 'placeholder' => 'Escolher',
                 'constraints' => [new Assert\NotBlank()],
-            ])
-            ->add('solicitanteNome', TextType::class, [
-                'label'       => 'Nome',
-                'attr'        => ['placeholder' => 'Preencha apenas o seu primeiro nome'],
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
-            ])
-            ->add('solicitanteUsuario', TextType::class, [
-                'label'       => 'Nome de usuário (WME)',
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
-            ])
-            ->add('solicitanteEmail', EmailType::class, [
-                'label'       => 'E-mail',
-                'constraints' => [new Assert\NotBlank(), new Assert\Email()],
-            ])
-            ->add('estado', ChoiceType::class, [
-                'label'       => 'Estado',
-                'choices'     => self::UFS,
-                'placeholder' => 'Escolher',
-                'required'    => false,
             ]);
 
         $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event)
@@ -79,13 +60,13 @@ class SolicitacaoType extends AbstractType
             $this->addDadosDinamicos(
                 $event->getForm(),
                 $tipo,
-                null,           // cargo via POST (PRE_SET_DATA não tem dados submetidos)
+                null,
                 $ajaxTipoNivel,
                 $isChamp,
                 $ajaxSouChamp,
-                null,           // acaoGerenteArea
-                null,           // acaoGerenteEstadoPais
-                $ajaxCargo      // cargo via AJAX GET
+                null,
+                null,
+                $ajaxCargo
             );
         });
 
@@ -99,7 +80,6 @@ class SolicitacaoType extends AbstractType
 
             $souChamp = !empty($data['dados_souChamp']);
 
-            // Champ fazendo downgrade: infere souChamp automaticamente.
             if ($isChamp && $tipoNivel === 'downgrade') {
                 $souChamp = true;
             }
@@ -113,7 +93,7 @@ class SolicitacaoType extends AbstractType
                 $souChamp,
                 $acaoGerenteArea,
                 $acaoGerenteEstadoPais,
-                null            // no PRE_SUBMIT, cargo vem do form submetido
+                null
             );
         });
     }
@@ -144,8 +124,6 @@ class SolicitacaoType extends AbstractType
         ?string $acaoGerenteEstadoPais  = null,
         ?string $ajaxCargo              = null
     ): void {
-        // Para a rota AJAX (PRE_SET_DATA), $cargo vem de $ajaxCargo.
-        // Para o submit real (PRE_SUBMIT), $cargo vem do campo submetido.
         $cargoEfetivo = $cargo ?? $ajaxCargo;
 
         match ($tipo) {
@@ -279,11 +257,17 @@ class SolicitacaoType extends AbstractType
                 ],
             ])
             ->add('dados_comunicouIntencao', CheckboxType::class, [
-                'label'     => 'Comuniquei minha intenção no Discuss do Estado',
-                'mapped'    => false,
-                'required'  => true,
-                'help'      => 'Busque o seu Estado e em seguida no tópico '
-                             . '\'Gerente de área ou candidato, se apresente aqui\', publique sua intenção.',
+                'label'    => 'Confirmei minha intenção no Discuss',
+                'mapped'   => false,
+                'required' => true,
+                'attr'     => [
+                    'data-discuss-gate' => '1',
+                    'disabled'          => 'disabled',
+                ],
+                'help'      => 'Antes de marcar, <a href="https://www.waze.com/discuss/c/brazil" target="_blank" rel="noopener" id="link-discuss-intencao">clique aqui para abrir o Discuss</a>, '
+                             . 'busque o tópico <em>"Gerente de área ou candidato, se apresente aqui"</em> do seu Estado e publique sua intenção. '
+                             . 'O campo será liberado após você abrir o link.',
+                'help_html' => true,
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
             ]);
     }
@@ -332,24 +316,12 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // GERENTE DE ESTADO OU PAÍS
-    //
-    // Fluxo:
-    //   1. Usuário seleciona pill → radio Incluir/Excluir aparece
-    //   2. Clica em Incluir → AJAX envia acaoGerenteEstadoPais=incluir
-    //      → campos: cargo, UF (se estado), mentor, recomendadores, comentários
-    //   3. Clica em Excluir → AJAX envia acaoGerenteEstadoPais=excluir
-    //      → campos: cargo, UF (se estado), editorNome, justificativa, comentários
-    //      (sem mentor/recomendadores — mesmo padrão do downgrade)
-    //
-    //   4. Ao selecionar o radio cargo (Gerente de Estado / País), o JS dispara
-    //      novo AJAX com o parâmetro `cargo`, e o campo UF aparece/desaparece.
     // -------------------------------------------------------------------------
     private function addCamposGerenteEstadoPais(
         \Symfony\Component\Form\FormInterface $form,
         ?string $acaoGerenteEstadoPais = null,
         ?string $cargo                 = null
     ): void {
-        // Radio de ação — sempre presente
         $form->add('dados_acaoGerenteEstadoPais', ChoiceType::class, [
             'label'    => 'Você deseja…',
             'mapped'   => false,
@@ -359,11 +331,10 @@ class SolicitacaoType extends AbstractType
             'constraints' => [new Assert\NotBlank()],
         ]);
 
-        // Campos extras dependentes da ação
         match ($acaoGerenteEstadoPais) {
             'incluir' => $this->addCamposGerenteEstadoPaisIncluir($form, $cargo),
             'excluir' => $this->addCamposGerenteEstadoPaisExcluir($form, $cargo),
-            default   => null, // null: só o radio aparece
+            default   => null,
         };
     }
 

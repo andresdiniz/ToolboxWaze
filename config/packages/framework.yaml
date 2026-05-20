@@ -3,14 +3,13 @@ framework:
     secret: '%env(APP_SECRET)%'
 
     # Hosting compartilhado / proxy reverso:
-    # sem isso o Symfony gera URLs absolutas com /public/ no caminho
+    # ATENCAO: x-forwarded-prefix NAO deve ser trusted em hosting compartilhado
+    # pois faz o Symfony variar o base_url entre requests, quebrando o CSRF.
     trusted_proxies: '127.0.0.1,REMOTE_ADDR'
     trusted_headers:
         - x-forwarded-for
-        - x-forwarded-host
         - x-forwarded-proto
         - x-forwarded-port
-        - x-forwarded-prefix
 
     # Note that the session will be started ONLY if you read or write from it.
     session: true

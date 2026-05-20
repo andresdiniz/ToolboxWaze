@@ -70,7 +70,7 @@
           },
           'id_segmento': {
             'label': 'Cadastro de ID de Segmento',
-            'svg': '<path d="M7 7V1.414a1 1 0 0 1 2 0V7h5.586a1 1 0 0 1 0 2H9v5.586a1 1 0 0 1-2 0V9H1.414a1 1 0 0 1 0-2z"/><path fill-rule="evenodd" d="M.5 1h15a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3V2H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3A.5.5 0 0 1 .5 1m0 9h3a.5.5 0 0 1 0 1H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m11.5 0h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3v-2h-3a.5.5 0 0 1 0-1"/>'
+            'svg': '<path d="M7 7V1.414a1 1 0 0 1 2 0V7h5.586a1 1 0 0 1 0 2H9v5.586a1 1 0 0 1-2 0V9H1.414a1 1 0 0 1 0-2z"/><path fill-rule="evenodd" d=".5 1h15a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3V2H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3A.5.5 0 0 1 .5 1m0 9h3a.5.5 0 0 1 0 1H1v2h3a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m11.5 0h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H12a.5.5 0 0 1 0-1h3v-2h-3a.5.5 0 0 1 0-1"/>'
           }
         } %}
 
@@ -164,15 +164,20 @@
   const btnEnviar = document.getElementById('btn-enviar');
   const pills     = document.querySelectorAll('.tipo-pill');
 
-  let tipoAtual      = '';
-  let tipoNivelAtual = null;
-  let souChampAtual  = false;
-  let fetchController = null;
+  let tipoAtual           = '';
+  let tipoNivelAtual      = null;
+  let acaoGerenteAtual    = null;
+  let acaoGerenteEpAtual  = null;
+  let souChampAtual       = false;
+  let fetchController     = null;
 
   /* ── Avalia se botão Enviar deve ficar habilitado ───────────────────────── */
   function atualizaBtnEnviar() {
     if (!btnEnviar) return;
-    const podeEnviar = !!tipoAtual && (tipoAtual !== 'nivel' || tipoNivelAtual !== null);
+    let podeEnviar = !!tipoAtual;
+    if (tipoAtual === 'nivel')               podeEnviar = tipoNivelAtual !== null;
+    if (tipoAtual === 'gerente_area')        podeEnviar = acaoGerenteAtual !== null;
+    if (tipoAtual === 'gerente_estado_pais') podeEnviar = acaoGerenteEpAtual !== null;
     btnEnviar.disabled = !podeEnviar;
   }
 
@@ -184,10 +189,12 @@
 
   function chooseTipo(valor) {
     if (tipoAtual === valor) return;
-    tipoAtual      = valor;
-    tipoNivelAtual = null;
-    souChampAtual  = false;
-    tipoSelect.value = valor;
+    tipoAtual          = valor;
+    tipoNivelAtual     = null;
+    acaoGerenteAtual   = null;
+    acaoGerenteEpAtual = null;
+    souChampAtual      = false;
+    tipoSelect.value   = valor;
     activatePill(valor);
     atualizaBtnEnviar();
     fetchCampos();
@@ -211,10 +218,10 @@
 
     const url = new URL('/solicitacoes/campos', window.location.origin);
     url.searchParams.set('tipo', tipoAtual);
-    if (tipoNivelAtual) url.searchParams.set('tipoNivel', tipoNivelAtual);
-    // souChampAtual só é enviado se for true (não-Champ com checkbox)
-    // Champ+downgrade: o servidor infere automaticamente
-    if (souChampAtual) url.searchParams.set('souChamp', '1');
+    if (tipoNivelAtual)     url.searchParams.set('tipoNivel', tipoNivelAtual);
+    if (acaoGerenteAtual)   url.searchParams.set('acaoGerenteArea', acaoGerenteAtual);
+    if (acaoGerenteEpAtual) url.searchParams.set('acaoGerenteEstadoPais', acaoGerenteEpAtual);
+    if (souChampAtual)      url.searchParams.set('souChamp', '1');
 
     fetch(url.toString(), {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -235,27 +242,56 @@
 
   /* ── Listeners dentro de #campos-sub ────────────────────────────────────── */
   function bindSubListeners() {
-    // Radio Upgrade/Downgrade — dispara fetch imediatamente
+    // Radio Upgrade/Downgrade (tipo=nivel)
     subArea.querySelectorAll('[data-tipo-nivel-ajax]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
       radio.dataset.nivelBound = '1';
-
       radio.addEventListener('change', function () {
         if (!this.checked || this.value === tipoNivelAtual) return;
-        tipoNivelAtual = this.value;  // atualiza ANTES do fetch
-        souChampAtual  = false;       // server infere souChamp para Champ
+        tipoNivelAtual = this.value;
+        souChampAtual  = false;
         atualizaBtnEnviar();
         fetchCampos();
       });
-
-      // Restaura estado se radio já vem checked (retorno de validação server-side)
       if (radio.checked && !tipoNivelAtual) {
         tipoNivelAtual = radio.value;
         atualizaBtnEnviar();
       }
     });
 
-    // Checkbox souChamp — só aparece para não-Champ
+    // Radio Incluir/Excluir (tipo=gerente_area)
+    subArea.querySelectorAll('[data-acao-gerente-area-ajax]').forEach(radio => {
+      if (radio.dataset.gerenteAreaBound) return;
+      radio.dataset.gerenteAreaBound = '1';
+      radio.addEventListener('change', function () {
+        if (!this.checked || this.value === acaoGerenteAtual) return;
+        acaoGerenteAtual = this.value;
+        atualizaBtnEnviar();
+        fetchCampos();
+      });
+      if (radio.checked && !acaoGerenteAtual) {
+        acaoGerenteAtual = radio.value;
+        atualizaBtnEnviar();
+      }
+    });
+
+    // Radio Incluir/Excluir (tipo=gerente_estado_pais)
+    subArea.querySelectorAll('[data-acao-gerente-ep-ajax]').forEach(radio => {
+      if (radio.dataset.gerenteEpBound) return;
+      radio.dataset.gerenteEpBound = '1';
+      radio.addEventListener('change', function () {
+        if (!this.checked || this.value === acaoGerenteEpAtual) return;
+        acaoGerenteEpAtual = this.value;
+        atualizaBtnEnviar();
+        fetchCampos();
+      });
+      if (radio.checked && !acaoGerenteEpAtual) {
+        acaoGerenteEpAtual = radio.value;
+        atualizaBtnEnviar();
+      }
+    });
+
+    // Checkbox souChamp — só aparece para não-Champ no tipo nivel
     const chk = subArea.querySelector('[data-sou-champ]');
     if (chk && !chk.dataset.champBound) {
       chk.dataset.champBound = '1';

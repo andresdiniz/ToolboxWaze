@@ -1,7 +1,7 @@
 {#
   Fragmento AJAX puro — SEM extends, SEM block, SEM layout.
   Retorna apenas os campos dinâmicos para injetar no #campos-dinamicos.
-  Chamado pelo controller quando _ajax_tipo está presente.
+  Chamado pela rota dedicada /solicitacoes/campos (camposAjax).
 #}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
@@ -21,6 +21,16 @@
             <p class="sol-help">{{ field.vars.help }}</p>
           {% endif %}
           {{ form_errors(field) }}
+        {% elseif field.vars.name == 'dados_tipoNivel' %}
+          {# Radio Upgrade/Downgrade: mantém data-tipo-nivel para o JS bindar o listener #}
+          <div data-tipo-nivel="1">
+            {{ form_row(field) }}
+          </div>
+        {% elseif field.vars.name == 'dados_souChamp' %}
+          {# Checkbox de confirmação Champ: data-sou-champ para o JS bindar o listener #}
+          <div data-sou-champ-wrapper="1">
+            {{ form_row(field, {attr: {'data-sou-champ': '1'}}) }}
+          </div>
         {% else %}
           {{ form_row(field) }}
         {% endif %}

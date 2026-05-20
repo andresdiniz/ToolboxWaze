@@ -79,18 +79,28 @@ class SolicitacaoType extends AbstractType
                 $event->getForm(),
                 $tipo,
                 null,
-                $ajaxTipoNivel,   // passa o tipoNivel vindo do AJAX
+                $ajaxTipoNivel,
                 $isChamp,
-                $ajaxSouChamp     // passa o souChamp vindo do AJAX
+                $ajaxSouChamp
             );
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($isChamp) {
-            $tipo      = $event->getData()['tipo']             ?? null;
-            $cargo     = $event->getData()['dados_cargo']      ?? null;
-            $tipoNivel = $event->getData()['dados_tipoNivel']  ?? null;
-            // Downgrade só é aceito se is_champ=true E o checkbox foi marcado
-            $souChamp  = !empty($event->getData()['dados_souChamp']);
+            $data      = $event->getData();
+            $tipo      = $data['tipo']            ?? null;
+            $cargo     = $data['dados_cargo']     ?? null;
+            $tipoNivel = $data['dados_tipoNivel'] ?? null;
+
+            // Se is_champ=true e tipoNivel=downgrade, considera souChamp=true
+            // automaticamente quando campos de downgrade já estão presentes no POST
+            // (o usuário completou o fluxo AJAX de 2 etapas e submeteu o formulário).
+            // Isso evita que o PRE_SUBMIT reconstituia o form sem addCamposDowngrade()
+            // apenas porque o checkbox dados_souChamp não chegou no submit final.
+            $souChamp = !empty($data['dados_souChamp']);
+            if (!$souChamp && $isChamp && $tipoNivel === 'downgrade' && isset($data['dados_editorNome'])) {
+                $souChamp = true;
+            }
+
             $this->addDadosDinamicos($event->getForm(), $tipo, $cargo, $tipoNivel, $isChamp, $souChamp);
         });
     }
@@ -296,10 +306,12 @@ class SolicitacaoType extends AbstractType
     //   1. Usuário vê o radio Upgrade/Downgrade apenas se is_champ=true
     //   2. Ao marcar Downgrade, o front exibe o checkbox "Sou Champ" (dados_souChamp)
     //   3. Ao marcar o checkbox, o front dispara o AJAX passando
-    //      _ajax_tipoNivel=downgrade e _ajax_souChamp=1
+    //      tipoNivel=downgrade e souChamp=1
     //   4. Server-side: addCamposDowngrade só é chamado se is_champ=true E souChamp=true
-    //   5. Se alguém tentar forjar o POST, o campo dados_souChamp não existe no form
-    //      (pois is_champ=false), então os campos de downgrade não são validados
+    //   5. No PRE_SUBMIT, souChamp é inferido como true se is_champ=true,
+    //      tipoNivel=downgrade e dados_editorNome está presente no POST —
+    //      garantindo que o form reconstitua os campos mesmo sem o checkbox
+    //      chegar explicitamente no submit final.
     // -------------------------------------------------------------------------
     private function addCamposNivel(
         \Symfony\Component\Form\FormInterface $form,
@@ -331,7 +343,7 @@ class SolicitacaoType extends AbstractType
                 ],
             ]);
 
-            // Só adiciona os campos do downgrade se o checkbox já veio marcado (re-submit / AJAX)
+            // Adiciona campos do downgrade se o checkbox foi marcado (AJAX ou submit final inferido)
             if ($souChamp) {
                 $this->addCamposDowngrade($form);
             }

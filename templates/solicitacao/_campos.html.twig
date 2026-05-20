@@ -10,62 +10,51 @@
 #}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
-{# ── Radio Upgrade/Downgrade (sempre renderizado quando tipo=nivel) ────────── #}
+{# ── Bloco nivel: radio Upgrade/Downgrade + campos dinâmicos ────────────────── #}
 {% if tipoAtual == 'nivel' %}
-  <div class="sol-card campo-animado" id="card-tipo-nivel-ajax">
-    <div class="sol-card-body">
-
-      {% if isChamp %}
-        {# Champ vê Upgrade E Downgrade #}
-        <fieldset style="border:none;padding:0;margin:0">
-          <legend class="sol-label" style="margin-bottom:.6rem">É um pedido de…</legend>
-          <div class="d-flex gap-4">
-            <label class="d-flex align-items-center gap-2" style="cursor:pointer">
-              <input type="radio" name="_nivel_choice" value="upgrade"
-                     {{ tipoNivelAtual == 'upgrade' ? 'checked' : '' }}
-                     data-tipo-nivel-ajax>
-              <span>⬆️ Upgrade</span>
-            </label>
-            <label class="d-flex align-items-center gap-2" style="cursor:pointer">
-              <input type="radio" name="_nivel_choice" value="downgrade"
-                     {{ tipoNivelAtual == 'downgrade' ? 'checked' : '' }}
-                     data-tipo-nivel-ajax>
-              <span>⬇️ Downgrade</span>
+  {% if form.dados_tipoNivel is defined %}
+    <div class="sol-card campo-animado" id="card-tipo-nivel-ajax">
+      <div class="sol-card-body">
+        {#
+          Renderiza o radio do Symfony diretamente, adicionando data-tipo-nivel-ajax
+          em cada <input> para que o JS capture o evento change e dispare o fetch.
+        #}
+        {{ form_label(form.dados_tipoNivel) }}
+        {% for child in form.dados_tipoNivel %}
+          <div class="form-check form-check-inline">
+            <input
+              type="radio"
+              id="{{ child.vars.id }}"
+              name="{{ child.vars.full_name }}"
+              value="{{ child.vars.value }}"
+              class="form-check-input"
+              data-tipo-nivel-ajax
+              {{ child.vars.checked ? 'checked' : '' }}
+            >
+            <label class="form-check-label" for="{{ child.vars.id }}">
+              {% if child.vars.value == 'upgrade' %}⬆️ {% else %}⬇️ {% endif %}
+              {{ child.vars.label }}
             </label>
           </div>
-          {% if tipoNivelAtual is null %}
-            <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
-              Você é Champ. Selecione <strong>Upgrade</strong> ou <strong>Downgrade</strong> para continuar.
-            </p>
-          {% endif %}
-        </fieldset>
-      {% else %}
-        {# Não-Champ vê só Upgrade #}
-        <fieldset style="border:none;padding:0;margin:0">
-          <legend class="sol-label" style="margin-bottom:.6rem">É um pedido de…</legend>
-          <label class="d-flex align-items-center gap-2" style="cursor:pointer">
-            <input type="radio" name="_nivel_choice" value="upgrade" checked
-                   data-tipo-nivel-ajax>
-            <span>⬆️ Upgrade</span>
-          </label>
-          <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
-            Selecione <strong>Upgrade</strong> acima para continuar preenchendo o formulário.
-          </p>
-        </fieldset>
-      {% endif %}
+        {% endfor %}
+        {{ form_errors(form.dados_tipoNivel) }}
 
+        {% if tipoNivelAtual is null %}
+          <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
+            {% if isChamp %}
+              Você é Champ. Selecione <strong>Upgrade</strong> ou <strong>Downgrade</strong> para continuar.
+            {% else %}
+              Selecione <strong>Upgrade</strong> para continuar preenchendo o formulário.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
     </div>
-  </div>
+  {% endif %}
 {% endif %}
 
-{# ── Campos do formulário (upgrade / downgrade / outros tipos) ─────────────── #}
+{# ── Demais campos (upgrade, downgrade com souChamp, ou outros tipos) ───────── #}
 {% if tipoAtual != 'nivel' or tipoNivelAtual is not null %}
-
-  {# Campo oculto que o SolicitacaoType precisa para dados_tipoNivel #}
-  {% if tipoAtual == 'nivel' and form.dados_tipoNivel is defined %}
-    {{ form_widget(form.dados_tipoNivel, {attr: {class: 'd-none', 'aria-hidden': 'true'}}) }}
-  {% endif %}
-
   {% for field in form %}
     {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
       <div class="sol-card campo-animado">
@@ -100,7 +89,6 @@
       </div>
     {% endif %}
   {% endfor %}
-
 {% endif %}
 
 {# Bloco de provas Oops #}

@@ -23,7 +23,7 @@
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
-  {# ── 1. Dados do solicitante ─────────────────────────────── #}
+  {# ── 1. Dados do solicitante ──────────────────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header">
       {# person icon #}
@@ -39,7 +39,7 @@
     </div>
   </div>
 
-  {# ── 2. Tipo (pills visuais) ──────────────────────────────── #}
+  {# ── 2. Tipo (pills visuais) ──────────────────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header">
       {# list-check icon #}
@@ -102,7 +102,7 @@
     </div>
   </div>
 
-  {# ── 3. Campos dinâmicos ──────────────────────────────────── #}
+  {# ── 3. Campos dinâmicos ──────────────────────────────────────────── #}
   <div id="campos-spinner">
     <div class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></div>
     Carregando campos…
@@ -175,7 +175,7 @@
 {% block javascripts %}
 <script>
 (function () {
-  /* ── Permalink copy ───────────────────────────────────── */
+  /* ── Permalink copy ───────────────────────────────────────────────────── */
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('.permalink-copy-btn');
     if (!btn) return;
@@ -192,7 +192,7 @@
     });
   });
 
-  /* ── Validação de permalink ──────────────────────────── */
+  /* ── Validação de permalink ──────────────────────────────────────────── */
   const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor/i;
   const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
 
@@ -238,7 +238,7 @@
   }
   initPermalinks();
 
-  /* ── Elementos principais ─────────────────────────────── */
+  /* ── Elementos principais ─────────────────────────────────────────────── */
   const tipoSelect = document.querySelector('[data-tipo-select]');
   if (!tipoSelect) return;
   const estadoSel = document.querySelector('[data-estado-select]');
@@ -251,7 +251,7 @@
   let tipoNivelAtual = null;
   let souChampAtual  = false;
 
-  /* ── Pills de tipo ────────────────────────────────────── */
+  /* ── Pills de tipo ───────────────────────────────────────────────────── */
   pills.forEach(pill => {
     pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
     pill.addEventListener('keydown', e => {
@@ -262,10 +262,10 @@
   function chooseTipo(valor) {
     if (tipoSelect.value === valor) return;
     tipoSelect.value = valor;
-    tipoNivelAtual   = null;
-    souChampAtual    = false;
+    tipoNivelAtual   = null;   /* reset ao trocar tipo */
+    souChampAtual    = false;  /* reset ao trocar tipo */
     activatePill(valor);
-    fetchCampos(valor);
+    fetchCampos(valor, null, false);
   }
   function activatePill(valor) {
     pills.forEach(p => {
@@ -276,12 +276,11 @@
     if (btnEnviar) btnEnviar.disabled = !valor;
   }
 
-  /* ── Fetch de campos dinâmicos (rota dedicada) ────────── */
+  /* ── Fetch de campos dinâmicos (rota dedicada) ──────────────── */
   function fetchCampos(tipo, tipoNivel, souChamp) {
     spinner.classList.add('show');
     dinamicos.classList.add('loading');
 
-    /* Usa a rota AJAX dedicada /solicitacoes/campos */
     const url = new URL('/solicitacoes/campos', window.location.origin);
     url.searchParams.set('tipo', tipo ?? tipoSelect.value);
     if (tipoNivel) url.searchParams.set('tipoNivel', tipoNivel);
@@ -306,18 +305,31 @@
 
   /* ── Listeners para Upgrade/Downgrade e checkbox Champ ── */
   function bindNivelListeners() {
-    /* Radio dados_tipoNivel: upgrade ou downgrade */
+
+    /*
+      Radio dados_tipoNivel: upgrade ou downgrade.
+      Guard: só faz fetch se o valor realmente mudou,
+      evitando recarga ao clicar no mesmo radio já marcado
+      (que dispararia change em alguns browsers).
+    */
     dinamicos.querySelectorAll('[data-tipo-nivel] input[type=radio]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
       radio.dataset.nivelBound = '1';
       radio.addEventListener('change', function () {
-        tipoNivelAtual = this.value;
-        souChampAtual  = false;
+        const novoValor = this.value;
+        if (novoValor === tipoNivelAtual) return; /* guard: sem mudança real */
+        tipoNivelAtual = novoValor;
+        souChampAtual  = false; /* reset champ ao trocar upgrade↔downgrade */
         fetchCampos(tipoSelect.value, tipoNivelAtual, false);
       });
     });
 
-    /* Checkbox dados_souChamp: confirma que é Champ → carrega campos do downgrade */
+    /*
+      Checkbox dados_souChamp: confirma Champ → carrega campos do downgrade.
+      O data-sou-champ está no <input> (form_widget), não no wrapper,
+      portanto querySelector('[data-sou-champ]') encontra o checkbox corretamente.
+      Só deve aparecer quando tipoNivelAtual === 'downgrade'.
+    */
     const chk = dinamicos.querySelector('[data-sou-champ]');
     if (chk && !chk.dataset.champBound) {
       chk.dataset.champBound = '1';
@@ -327,11 +339,12 @@
       });
     }
   }
+
   /* Inicializa listeners nos campos já renderizados pelo Twig no page-load
-     (caso de re-submit com erros) */
+     (caso de re-submit com erros de validação) */
   bindNivelListeners();
 
-  /* ── Bloqueia submit se permalink inválido ───────────── */
+  /* ── Bloqueia submit se permalink inválido ─────────────────── */
   document.getElementById('form-solicitacao')
     ?.addEventListener('submit', e => {
       let ok = true;

@@ -3,19 +3,25 @@
   Substitui completamente #campos-dinamicos.
 
   Variáveis:
-    form           — FormView de SolicitacaoType
-    tipoAtual      — tipo da solicitação (ex: "nivel")
-    isChamp        — bool
-    tipoNivelAtual — "upgrade" | "downgrade" | null
-    souChampAuto   — bool: true quando Champ+downgrade (checkbox oculto/implícito)
+    form              — FormView de SolicitacaoType
+    tipoAtual         — tipo da solicitação (ex: "nivel", "gerente_estado_pais")
+    isChamp           — bool
+    tipoNivelAtual    — "upgrade" | "downgrade" | null  (só tipo nivel)
+    souChampAuto      — bool: true quando Champ+downgrade (campo oculto/implícito)
+    acaoGerenteAtual  — "nomear" | "excluir" | "transferir" | null  (só gerente_estado_pais)
 
   Estrutura para tipo="nivel":
-    <div id="card-tipo-nivel-ajax">  ← sempre presente, nunca destruído pelo JS
-    <div id="campos-extras-nivel-server">  ← campos extras; vazio quando tipoNivel=null
+    <div id="card-tipo-nivel-ajax">          ← sempre presente, nunca destruído pelo JS
+    <div id="campos-extras-nivel-server">    ← campos extras; vazio quando tipoNivel=null
+
+  Estrutura para tipo="gerente_estado_pais":
+    <div id="card-acao-gerente-ajax">        ← sempre presente, nunca destruído pelo JS
+    <div id="campos-extras-gerente-server">  ← campos extras; vazio quando acaoGerente=null
 
   Para outros tipos: campos direto, sem wrapping especial.
 #}
-{% set souChampAuto = souChampAuto ?? false %}
+{% set souChampAuto      = souChampAuto ?? false %}
+{% set acaoGerenteAtual  = acaoGerenteAtual ?? null %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
 {# ── Bloco nivel: radio Upgrade/Downgrade ───────────────────────────────────── #}
@@ -55,109 +61,80 @@
       </div>
     </div>
 
-    {#
-      Bloco separado com ID fixo: JS substitui apenas este div ao trocar
-      upgrade<->downgrade (apenasExtras=true), sem destruir o card do radio.
-    #}
     <div id="campos-extras-nivel-server">
       {% if tipoNivelAtual is not null %}
         {% for field in form %}
           {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
-
-            {% if field.vars.name == 'dados_souChamp' %}
-              {% if souChampAuto %}
-                <input type="hidden" name="{{ field.vars.full_name }}" value="1">
-              {% else %}
-                <div class="sol-card campo-animado">
-                  <div class="sol-card-body">
-                    <div data-sou-champ-wrapper="1">
-                      {{ form_label(field) }}
-                      {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
-                      {{ form_errors(field) }}
-                      {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
-                    </div>
-                  </div>
-                </div>
-              {% endif %}
-
-            {% elseif field.vars.name == 'dados_permalink' %}
-              <div class="sol-card campo-animado">
-                <div class="sol-card-body">
-                  <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
-                    {{ field.vars.label }}{% if field.vars.required %} <span class="sol-required" aria-hidden="true">*</span>{% endif %}
-                  </label>
-                  <div class="permalink-wrapper">
-                    {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'}}) }}
-                    <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
-                    </button>
-                  </div>
-                  {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
-                  {{ form_errors(field) }}
-                </div>
-              </div>
-
-            {% else %}
-              <div class="sol-card campo-animado">
-                <div class="sol-card-body">
-                  {{ form_row(field) }}
-                </div>
-              </div>
-            {% endif %}
-
+            {{ _self.renderField(field, souChampAuto) }}
           {% endif %}
         {% endfor %}
       {% endif %}
-    </div>{# fim #campos-extras-nivel-server #}
-
+    </div>
   {% endif %}
 
-{# ── Demais tipos (não-nivel) ────────────────────────────────────────────────── #}
+{# ── Bloco gerente_estado_pais: radio Ação (Nomear/Excluir/Transferir) ───────── #}
+{% elseif tipoAtual == 'gerente_estado_pais' %}
+  {% if form.dados_acaoGerente is defined %}
+    <div class="sol-card campo-animado" id="card-acao-gerente-ajax">
+      <div class="sol-card-body">
+        {{ form_label(form.dados_acaoGerente) }}
+        {% for child in form.dados_acaoGerente %}
+          <div class="form-check form-check-inline">
+            <input
+              type="radio"
+              id="{{ child.vars.id }}"
+              name="{{ child.vars.full_name }}"
+              value="{{ child.vars.value }}"
+              class="form-check-input"
+              data-acao-gerente-ajax
+              {{ acaoGerenteAtual == child.vars.value ? 'checked' : '' }}
+            >
+            <label class="form-check-label" for="{{ child.vars.id }}">
+              {% if child.vars.value == 'nomear' %}📌
+              {% elseif child.vars.value == 'excluir' %}🗑️
+              {% else %}🔄
+              {% endif %}
+              {{ child.vars.label }}
+            </label>
+          </div>
+        {% endfor %}
+        {{ form_errors(form.dados_acaoGerente) }}
+
+        {% if acaoGerenteAtual is null %}
+          <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
+            Selecione a <strong>Ação</strong> desejada para continuar preenchendo o formulário.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+
+    {#
+      Bloco separado com ID fixo: JS substitui apenas #campos-extras-gerente-server
+      ao trocar ação (nomear↔excluir↔transferir) sem destruir o card do radio.
+    #}
+    <div id="campos-extras-gerente-server">
+      {% if acaoGerenteAtual is not null %}
+        {% for field in form %}
+          {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_acaoGerente' %}
+            {{ _self.renderField(field, false) }}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+  {% else %}
+    {# Fallback: form sem dados_acaoGerente — render genérico #}
+    {% for field in form %}
+      {% if field.vars.name starts with 'dados_' %}
+        {{ _self.renderField(field, false) }}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+
+{# ── Demais tipos ────────────────────────────────────────────────── #}
 {% else %}
   {% for field in form %}
     {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
-
-      {% if field.vars.name == 'dados_souChamp' %}
-        {% if souChampAuto %}
-          <input type="hidden" name="{{ field.vars.full_name }}" value="1">
-        {% else %}
-          <div class="sol-card campo-animado">
-            <div class="sol-card-body">
-              <div data-sou-champ-wrapper="1">
-                {{ form_label(field) }}
-                {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
-                {{ form_errors(field) }}
-                {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
-              </div>
-            </div>
-          </div>
-        {% endif %}
-
-      {% elseif field.vars.name == 'dados_permalink' %}
-        <div class="sol-card campo-animado">
-          <div class="sol-card-body">
-            <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
-              {{ field.vars.label }}{% if field.vars.required %} <span class="sol-required" aria-hidden="true">*</span>{% endif %}
-            </label>
-            <div class="permalink-wrapper">
-              {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'}}) }}
-              <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
-              </button>
-            </div>
-            {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
-            {{ form_errors(field) }}
-          </div>
-        </div>
-
-      {% else %}
-        <div class="sol-card campo-animado">
-          <div class="sol-card-body">
-            {{ form_row(field) }}
-          </div>
-        </div>
-      {% endif %}
-
+      {{ _self.renderField(field, souChampAuto) }}
     {% endif %}
   {% endfor %}
 {% endif %}
@@ -173,3 +150,47 @@
     <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
   </div>
 </div>
+
+{# ── Macro interna: renderiza um campo genérico ou especializado ────────── #}
+{% macro renderField(field, souChampAuto) %}
+  {% if field.vars.name == 'dados_souChamp' %}
+    {% if souChampAuto %}
+      <input type="hidden" name="{{ field.vars.full_name }}" value="1">
+    {% else %}
+      <div class="sol-card campo-animado">
+        <div class="sol-card-body">
+          <div data-sou-champ-wrapper="1">
+            {{ form_label(field) }}
+            {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
+            {{ form_errors(field) }}
+            {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+  {% elseif field.vars.name == 'dados_permalink' %}
+    <div class="sol-card campo-animado">
+      <div class="sol-card-body">
+        <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
+          {{ field.vars.label }}{% if field.vars.required %} <span class="sol-required" aria-hidden="true">*</span>{% endif %}
+        </label>
+        <div class="permalink-wrapper">
+          {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'}}) }}
+          <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
+          </button>
+        </div>
+        {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+        {{ form_errors(field) }}
+      </div>
+    </div>
+
+  {% else %}
+    <div class="sol-card campo-animado">
+      <div class="sol-card-body">
+        {{ form_row(field) }}
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}

@@ -1,12 +1,4 @@
 RewriteEngine On
-
-# Se o arquivo fisico existe, serve direto
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-# Se o diretorio fisico existe, serve direto  
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
-
-# Tudo o mais vai para public/index.php
-RewriteRule ^(.*)$ public/index.php [QSA,L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]

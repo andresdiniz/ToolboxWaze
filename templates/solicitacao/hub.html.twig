@@ -119,18 +119,8 @@
     Carregando campos…
   </div>
 
-  {#
-    #campos-dinamicos: recebe o HTML do fragmento _campos.html.twig via AJAX.
-    O botão "Enviar solicitação" é injetado pelo JS no final deste div
-    após cada fetch bem-sucedido — nunca fica no meio da página.
-  #}
   <div id="campos-dinamicos"></div>
 
-  {#
-    campos-erros-server: presente apenas quando há submit inválido.
-    Guarda tipo, tipoNivel, acaoGerente, acaoGerenteArea e acaoGerenteEstadoPais
-    para re-hidratar o form via AJAX.
-  #}
   {% if tipoAtual %}
   <div id="campos-erros-server" style="display:none" aria-hidden="true"
        data-tipo="{{ tipoAtual }}"
@@ -354,7 +344,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
   var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
 
-  /* Estado em memória */
   var tipoNivelAtual             = null;
   var acaoGerenteAtual           = null;
   var acaoGerenteAreaAtual       = null;
@@ -372,7 +361,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!dinamicos) return;
     var antigo = document.getElementById('btn-enviar-wrapper');
     if (antigo) antigo.remove();
-
     var wrapper = document.createElement('div');
     wrapper.id = 'btn-enviar-wrapper';
     wrapper.className = 'd-flex justify-content-end mt-2 mb-5';
@@ -384,10 +372,8 @@ document.addEventListener('DOMContentLoaded', function () {
         '</span>' +
       '</button>';
     dinamicos.appendChild(wrapper);
-
     var formSol = document.getElementById('form-solicitacao');
-    var btn = document.getElementById('btn-enviar');
-    if (formSol && btn) {
+    if (formSol) {
       formSol.onsubmit = null;
       formSol.addEventListener('submit', onFormSubmit);
     }
@@ -404,19 +390,16 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /*
-   * fetchCampos:
-   *   apenasExtras=false → recarrega #campos-dinamicos inteiro (clique na pill)
-   *   apenasExtras=true  → substitui apenas o bloco de extras relevante
-   *
-   * Fluxo para tipo=nivel (upgrade/downgrade):
-   *   1. Clique na pill → fetchCampos(tipo, null, false, FALSE)
-   *      → injeta card com radios, NÃO injeta botão de enviar ainda
-   *      → bindSubListeners registra o evento 'change' nos radios
-   *   2. Usuário clica em Upgrade ou Downgrade → onRadioChange(valor)
-   *      → fetchCampos(tipo, valor, souChamp, TRUE)
-   *      → substitui apenas #campos-extras-nivel-server
-   *      → INJETA botão de enviar
+   * Seletores de data-attr — devem bater EXATAMENTE com o que _campos.html.twig renderiza:
+   *   [data-tipo-nivel-ajax]          → radios upgrade/downgrade
+   *   [data-acao-gerente-ajax]        → legado gerente_estado_pais (antigo)
+   *   [data-acao-gerente-area-ajax]   → radios gerente_area incluir/excluir
+   *   [data-acao-gerente-ep-ajax]     → radios gerente_estado_pais incluir/excluir
    */
+  var SEL_NIVEL   = '[data-tipo-nivel-ajax]';
+  var SEL_GA      = '[data-acao-gerente-area-ajax]';
+  var SEL_GEP     = '[data-acao-gerente-ep-ajax]';   /* ← era [data-acao-gerente-estado-pais-ajax], bug corrigido */
+
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerente, acaoGerenteArea, acaoGerenteEstadoPais) {
     if (!tipo) return;
     apenasExtras = !!apenasExtras;
@@ -445,14 +428,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!apenasExtras) {
           dinamicos.innerHTML = html;
           setActivePill(tipo);
-
-          /*
-           * Após injetar o HTML completo, registra listeners nos sub-radios.
-           * Para tipos que NÃO precisam de radio secundário (não-nivel, não-gerente),
-           * injeta o botão imediatamente.
-           * Para tipo=nivel ou gerente_*, o botão só aparece após o usuário
-           * escolher upgrade/downgrade/incluir/excluir.
-           */
           bindSubListeners();
           animarCampos();
 
@@ -463,39 +438,23 @@ document.addEventListener('DOMContentLoaded', function () {
           );
 
           if (!precisaEscolha) {
-            /* Tipos diretos: injeta botão imediatamente */
             injetaBotaoEnviar(true);
           } else {
-            /*
-             * Tipos com radio secundário: verifica se algum radio já está marcado
-             * (caso de re-hidratação após submit inválido).
-             * Se tiver, dispara fetchCampos para extras + injeta botão.
-             * Se não tiver, aguarda o usuário clicar no radio.
-             */
+            /* Re-hidratação: verifica radio já marcado */
             if (tipo === 'nivel') {
-              var radioMarcado = dinamicos.querySelector('[data-tipo-nivel-ajax]:checked');
-              if (radioMarcado) {
-                onRadioChange(radioMarcado.value);
-                return; /* onRadioChange já chama injetaBotaoEnviar */
-              }
+              var rm = dinamicos.querySelector(SEL_NIVEL + ':checked');
+              if (rm) { onRadioChange(rm.value); return; }
             } else if (tipo === 'gerente_area') {
-              var radioMarcadoGA = dinamicos.querySelector('[data-acao-gerente-area-ajax]:checked');
-              if (radioMarcadoGA) {
-                onRadioGerenteAreaChange(radioMarcadoGA.value);
-                return;
-              }
+              var rmGA = dinamicos.querySelector(SEL_GA + ':checked');
+              if (rmGA) { onRadioGerenteAreaChange(rmGA.value); return; }
             } else if (tipo === 'gerente_estado_pais') {
-              var radioMarcadoGEP = dinamicos.querySelector('[data-acao-gerente-estado-pais-ajax]:checked');
-              if (radioMarcadoGEP) {
-                onRadioGerenteEstadoPaisChange(radioMarcadoGEP.value);
-                return;
-              }
+              var rmGEP = dinamicos.querySelector(SEL_GEP + ':checked');
+              if (rmGEP) { onRadioGerenteEstadoPaisChange(rmGEP.value); return; }
             }
-            /* Nenhum radio pré-marcado: aguarda clique do usuário, sem botão de enviar */
+            /* Nenhum radio pré-marcado: aguarda clique */
           }
 
         } else {
-          /* Substitui apenas o bloco de extras relevante sem tocar no card do radio */
           var replaceBlock = function(serverSelector, cardSelector) {
             var extrasEl = dinamicos.querySelector(serverSelector);
             if (!extrasEl) return;
@@ -586,14 +545,14 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /* Radio tipoNivel — clique dispara fetch dos campos extras */
-    dinamicos.querySelectorAll('[data-tipo-nivel-ajax]').forEach(function (radio) {
+    /* Radio tipoNivel */
+    dinamicos.querySelectorAll(SEL_NIVEL).forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioChange(radio.value);
       });
     });
 
-    /* Radio acaoGerente (gerente_estado_pais legado) */
+    /* Radio acaoGerente legado */
     dinamicos.querySelectorAll('[data-acao-gerente-ajax]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteChange(radio.value);
@@ -601,14 +560,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     /* Radio acaoGerenteArea */
-    dinamicos.querySelectorAll('[data-acao-gerente-area-ajax]').forEach(function (radio) {
+    dinamicos.querySelectorAll(SEL_GA).forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteAreaChange(radio.value);
       });
     });
 
-    /* Radio acaoGerenteEstadoPais */
-    dinamicos.querySelectorAll('[data-acao-gerente-estado-pais-ajax]').forEach(function (radio) {
+    /* Radio acaoGerenteEstadoPais — usa SEL_GEP = [data-acao-gerente-ep-ajax] */
+    dinamicos.querySelectorAll(SEL_GEP).forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteEstadoPaisChange(radio.value);
       });
@@ -622,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    /* Preview de imagens Oops */
+    /* Preview imagens Oops */
     var oopsInput   = document.getElementById('input-oops-files');
     var oopsPreview = document.getElementById('oops-file-preview');
     var oopsError   = document.getElementById('oops-file-error');
@@ -636,10 +595,10 @@ document.addEventListener('DOMContentLoaded', function () {
         files.slice(0, 5).forEach(function (f) {
           if (f.size > 1048576) { erros.push(f.name + ' excede 1 MB.'); return; }
           var reader = new FileReader();
-          reader.onload = function (e) {
+          reader.onload = function (ev) {
             if (!oopsPreview) return;
             var img = document.createElement('img');
-            img.src = e.target.result;
+            img.src = ev.target.result;
             img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--sol-border)';
             oopsPreview.appendChild(img);
           };
@@ -653,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  /* Clique nas pills de tipo */
+  /* Clique nas pills */
   pills.forEach(function (pill) {
     pill.addEventListener('click', function () {
       var valor = pill.getAttribute('data-value');
@@ -669,14 +628,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  /* Listener de submit delegado ao form */
+  /* Submit listener */
   var formSol = document.getElementById('form-solicitacao');
   if (formSol) formSol.addEventListener('submit', onFormSubmit);
 
-  /*
-   * Re-hidratação após submit inválido.
-   * setActivePill chamado imediatamente (síncrono) antes do fetch.
-   */
+  /* Re-hidratação após submit inválido */
   var erroServer = document.getElementById('campos-erros-server');
   if (erroServer) {
     var tipoInicial                  = erroServer.getAttribute('data-tipo');

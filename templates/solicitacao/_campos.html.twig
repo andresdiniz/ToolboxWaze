@@ -1,10 +1,43 @@
 {#
-  Fragmento AJAX puro — SEM extends, SEM block, SEM layout.
-  Retorna apenas os campos dinâmicos para injetar no #campos-sub.
-  O radio dados_tipoNivel NÃO está aqui — ele fica fixo em nova.html.twig.
-  Chamado pela rota dedicada /solicitacoes/campos (camposAjax).
+  Fragmento AJAX puro — SEM extends, SEM block.
+  Preenche apenas #campos-sub (abaixo do radio Upgrade/Downgrade).
+
+  Variáveis disponíveis:
+    form           – FormView de SolicitacaoType
+    tipoAtual      – tipo da solicitação (ex: "nivel")
+    isChamp        – bool – usuário logado tem ROLE_CHAMP?
+    tipoNivelAtual – "upgrade" | "downgrade" | null
+
+  Quando tipoAtual="nivel" e tipoNivelAtual=null:
+    Exibe bloco de orientação ("escolha Upgrade ou Downgrade") e nada mais.
+    O radio em si fica fixo no nova.html.twig (#card-tipo-nivel).
 #}
 {% form_theme form 'form/sol_theme.html.twig' %}
+
+{# ───────────────────────────────────────────────────────────────────────────── #}
+{# Caso especial: tipo=nivel mas ainda não escolheu Upgrade ou Downgrade    #}
+{# Mostra orientação contextual (não-Champ vê apenas dica de upgrade)       #}
+{# ───────────────────────────────────────────────────────────────────────────── #}
+{% if tipoAtual == 'nivel' and tipoNivelAtual is null %}
+  <div class="sol-card campo-animado" id="bloco-nivel-dica">
+    <div class="sol-card-body" style="padding: 1.25rem 1.5rem">
+      {% if isChamp %}
+        <p style="margin:0; color: var(--bs-secondary-color, #6c757d); font-size:.9rem">
+          <strong>Você é Champ.</strong>
+          Escolha <strong>Upgrade</strong> para promover um editor
+          ou <strong>Downgrade</strong> para rebaixar.
+        </p>
+      {% else %}
+        <p style="margin:0; color: var(--bs-secondary-color, #6c757d); font-size:.9rem">
+          Selecione <strong>Upgrade</strong> acima para continuar
+          preenchendo o formulário de promoção de nível.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+{# ── Campos normais (upgrade, downgrade com souChamp, outros tipos) ──────── #}
+{% else %}
 
 {% for field in form %}
   {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
@@ -24,10 +57,6 @@
           {{ form_errors(field) }}
 
         {% elseif field.vars.name == 'dados_souChamp' %}
-          {#
-            Checkbox de confirmação Champ.
-            data-sou-champ no input (não no wrapper) para o JS detectar corretamente.
-          #}
           <div data-sou-champ-wrapper="1">
             {{ form_label(field) }}
             {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
@@ -45,6 +74,9 @@
   {% endif %}
 {% endfor %}
 
+{% endif %}
+
+{# Bloco de provas Oops (sempre presente, visibilidade controlada por CSS) #}
 <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
   <div class="sol-card-header">
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>

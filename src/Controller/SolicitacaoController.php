@@ -22,7 +22,18 @@ class SolicitacaoController extends AbstractController
 
     /**
      * Rota AJAX dedicada — retorna APENAS o fragmento de campos dinâmicos.
-     * Chamada pelo JS: GET /solicitacoes/campos?tipo=nivel&tipoNivel=downgrade
+     *
+     * Parâmetros GET:
+     *   tipo       – tipo da solicitação (ex: "nivel")
+     *   tipoNivel  – "upgrade" | "downgrade" | (ausente = nenhum escolhido ainda)
+     *   souChamp   – "1" se o checkbox de confirmação Champ estiver marcado
+     *
+     * Quando tipo=nivel e tipoNivel não for informado, o fragmento retorna
+     * apenas o radio Upgrade/Downgrade (com as opções corretas para o papel
+     * do usuário) e nada mais — sem deslocar os campos do formulário abaixo.
+     *
+     * O radio fica FIXO no #card-tipo-nivel (nova.html.twig) e esta rota
+     * preenche apenas o #campos-sub (abaixo do radio).
      */
     #[Route('/campos', name: 'solicitacao_campos_ajax', methods: ['GET'])]
     public function camposAjax(Request $request): Response
@@ -49,6 +60,9 @@ class SolicitacaoController extends AbstractController
             $this->renderView('solicitacao/_campos.html.twig', [
                 'form'      => $form->createView(),
                 'tipoAtual' => $tipo,
+                'isChamp'   => $isChamp,
+                // tipoNivel atual para o fragmento poder pré-marcar o radio se necessário
+                'tipoNivelAtual' => $tipoNivel,
             ])
         );
     }

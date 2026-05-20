@@ -2,18 +2,11 @@
 {% block title %}Nova Solicitação{% endblock %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
-{#
-  Ícones: todos SVG inline (Bootstrap Icons SVG path).
-  Não usa classes 'bi bi-*' para não depender da fonte Bootstrap Icons
-  (bloqueada pela CSP font-src no servidor de produção).
-#}
-
 {% block body %}
 <div class="container py-4" style="max-width:800px">
 
   <div class="sol-hub-header">
     <h4>
-      {# send icon #}
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align:-.2em;margin-right:.35em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/><path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0m-3.5-2a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1a.5.5 0 0 0-.5-.5"/></svg>
       Nova Solicitação
     </h4>
@@ -104,10 +97,8 @@
   <div id="campos-dinamicos">
 
     {#
-      Radio Upgrade/Downgrade — FIXO aqui, fora do fragmento AJAX.
-      Só aparece quando o tipo for 'nivel' e o form tiver o campo dados_tipoNivel.
-      O AJAX (_campos.html.twig) NÃO inclui este campo, evitando que a escolha
-      seja perdida a cada fetch.
+      Radio Upgrade/Downgrade — FIXO aqui, nunca substituído pelo AJAX.
+      Só renderizado quando o tipo for 'nivel' (form tem dados_tipoNivel).
     #}
     {% if form.dados_tipoNivel is defined %}
     <div class="sol-card" id="card-tipo-nivel">
@@ -120,9 +111,8 @@
     {% endif %}
 
     {#
-      Área trocada pelo AJAX — apenas os campos abaixo do radio.
-      Ao selecionar Downgrade: retorna checkbox Champ + campos de downgrade.
-      Ao selecionar Upgrade: retorna campos de upgrade.
+      #campos-sub: única área substituída pelo AJAX.
+      Contém os campos abaixo do radio (souChamp, campos de upgrade ou downgrade).
     #}
     <div id="campos-sub">
       {% for field in form %}
@@ -130,19 +120,13 @@
           {% set isPermalink = field.vars.name == 'dados_permalink' %}
           <div class="sol-card campo-animado">
             <div class="sol-card-body">
-
               {% if isPermalink %}
                 <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
                   {{ field.vars.label }}
                   {% if field.vars.required %}<span class="sol-required" aria-hidden="true">*</span>{% endif %}
                 </label>
                 <div class="permalink-wrapper">
-                  {{ form_widget(field, {attr: {
-                    'data-permalink': '1',
-                    'autocomplete':   'off',
-                    'spellcheck':     'false',
-                    'placeholder':    'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'
-                  }}) }}
+                  {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'}}) }}
                   <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
                   </button>
@@ -151,7 +135,6 @@
                   <p class="sol-help">{{ field.vars.help }}</p>
                 {% endif %}
                 {{ form_errors(field) }}
-
               {% elseif field.vars.name == 'dados_souChamp' %}
                 <div data-sou-champ-wrapper="1">
                   {{ form_label(field) }}
@@ -161,11 +144,9 @@
                     <p class="sol-help">{{ field.vars.help }}</p>
                   {% endif %}
                 </div>
-
               {% else %}
                 {{ form_row(field) }}
               {% endif %}
-
             </div>
           </div>
         {% endif %}
@@ -175,7 +156,7 @@
     {# Bloco de provas Oops #}
     <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
       <div class="sol-card-header">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 0 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
         Provas (imagens)
       </div>
       <div class="sol-card-body">
@@ -199,7 +180,7 @@
 {% block javascripts %}
 <script>
 (function () {
-  /* ── Permalink copy ───────────────────────────────────────────────────── */
+  /* ── Permalink copy ───────────────────────────────────────────── */
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('.permalink-copy-btn');
     if (!btn) return;
@@ -216,10 +197,9 @@
     });
   });
 
-  /* ── Validação de permalink ──────────────────────────────────────────── */
+  /* ── Validação de permalink ────────────────────────────────────────── */
   const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor/i;
   const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
-
   function checkPermalink(val) {
     const v = val.trim();
     if (!v) return { ok: true };
@@ -243,7 +223,6 @@
     let badge = parent.querySelector('.permalink-zoom-badge');
     if (result.ok && result.zoom) {
       if (!badge) { badge = document.createElement('span'); badge.className = 'permalink-zoom-badge zoom-ok'; wrap.insertAdjacentElement('afterend', badge); }
-      badge.className = 'permalink-zoom-badge zoom-ok';
       badge.textContent = `Zoom ${result.zoom} — válido`;
     } else if (badge) { badge.remove(); }
   }
@@ -262,26 +241,23 @@
   }
   initPermalinks();
 
-  /* ── Elementos principais ─────────────────────────────────────────────── */
+  /* ── Elementos principais ───────────────────────────────────────────── */
   const tipoSelect = document.querySelector('[data-tipo-select]');
   if (!tipoSelect) return;
-  const pills    = document.querySelectorAll('.tipo-pill');
-  const subArea  = document.getElementById('campos-sub');      // só esta área é trocada pelo AJAX
-  const spinner  = document.getElementById('campos-spinner');
+  const pills     = document.querySelectorAll('.tipo-pill');
+  const subArea   = document.getElementById('campos-sub');     // só esta área é trocada pelo AJAX
+  const spinner   = document.getElementById('campos-spinner');
   const btnEnviar = document.getElementById('btn-enviar');
 
   /*
     tipoNivelAtual: 'upgrade' | 'downgrade' | null
-    souChampAtual:  true | false
-
-    O radio dados_tipoNivel é FIXO no DOM (não está no fragmento AJAX).
-    O AJAX só troca o conteúdo de #campos-sub (abaixo do radio).
-    Assim a escolha do radio nunca é perdida.
+    O radio fica fixo no DOM (#card-tipo-nivel).
+    O AJAX só troca #campos-sub.
   */
   let tipoNivelAtual = null;
   let souChampAtual  = false;
 
-  /* ── Pills de tipo ───────────────────────────────────────────────────── */
+  /* ── Pills de tipo ───────────────────────────────────────────────── */
   pills.forEach(pill => {
     pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
     pill.addEventListener('keydown', e => {
@@ -306,7 +282,7 @@
     if (btnEnviar) btnEnviar.disabled = !valor;
   }
 
-  /* ── Fetch: troca APENAS #campos-sub ─────────────────────────────────── */
+  /* ── Fetch: troca APENAS #campos-sub ───────────────────────────── */
   function fetchCampos(tipo, tipoNivel, souChamp) {
     spinner.classList.add('show');
     if (subArea) subArea.classList.add('loading');
@@ -335,7 +311,7 @@
       });
   }
 
-  /* ── Listeners para o radio (fixo no DOM) e checkbox Champ (no #campos-sub) ── */
+  /* ── Radio fixo no DOM: vincula listener uma única vez ──────────────── */
   function bindNivelRadios() {
     document.querySelectorAll('[data-tipo-nivel] input[type=radio]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
@@ -343,22 +319,16 @@
       radio.addEventListener('change', function () {
         const novoValor = this.value;
         if (novoValor === tipoNivelAtual) return;
-        const anteriorEraDowngrade = (tipoNivelAtual === 'downgrade');
         tipoNivelAtual = novoValor;
         souChampAtual  = false;
-        /* Só faz fetch quando a mudança afeta os campos abaixo do radio */
-        if (novoValor === 'downgrade' || anteriorEraDowngrade) {
-          fetchCampos(tipoSelect.value, tipoNivelAtual, false);
-        } else {
-          /* upgrade → upgrade sem downgrade anterior: carrega campos de upgrade normalmente */
-          fetchCampos(tipoSelect.value, tipoNivelAtual, false);
-        }
+        /* Sempre faz fetch ao mudar o radio — carrega os campos corretos */
+        fetchCampos(tipoSelect.value, tipoNivelAtual, false);
       });
     });
   }
 
+  /* ── Checkbox souChamp fica dentro de #campos-sub, rebindado após cada fetch ── */
   function bindSubListeners() {
-    /* Checkbox dados_souChamp: aparece dentro de #campos-sub quando downgrade */
     const chk = subArea?.querySelector('[data-sou-champ]');
     if (chk && !chk.dataset.champBound) {
       chk.dataset.champBound = '1';
@@ -369,15 +339,11 @@
     }
   }
 
-  /* Inicializa listeners nos elementos já no DOM (re-submit com erros) */
+  /* Inicializa nos elementos já no DOM (re-submit com erros de validação) */
   bindNivelRadios();
   bindSubListeners();
 
-  /* Quando o tipo inicial já é 'nivel', garante que o radio está vinculado */
-  const cardNivel = document.getElementById('card-tipo-nivel');
-  if (cardNivel) bindNivelRadios();
-
-  /* ── Bloqueia submit se permalink inválido ─────────────────── */
+  /* ── Bloqueia submit se permalink inválido ────────────────────── */
   document.getElementById('form-solicitacao')
     ?.addEventListener('submit', e => {
       let ok = true;

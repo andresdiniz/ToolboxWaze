@@ -40,6 +40,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         'RJ','RN','RO','RR','RS','SC','SE','SP','TO',
     ];
 
+    /** Tipos de downgrade que um Champ pode processar */
+    public const CHAMP_DOWNGRADE_TIPOS = [
+        'radar'  => 'Radar',
+        'posto'  => 'Posto de combustível',
+        'camera' => 'Câmera',
+    ];
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -73,6 +80,23 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $allowedUfs = [];
+
+    /** Limite diário de downgrades que o Champ pode processar (null = sem limite) */
+    #[ORM\Column(nullable: true)]
+    private ?int $champLimitDay = null;
+
+    /** Limite mensal de downgrades que o Champ pode processar (null = sem limite) */
+    #[ORM\Column(nullable: true)]
+    private ?int $champLimitMonth = null;
+
+    /**
+     * Tipos de downgrade permitidos ao Champ (null = todos).
+     * Valores possíveis: 'radar', 'posto', 'camera'
+     *
+     * @var list<string>|null
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $champDowngradeTipos = null;
 
     #[ORM\Column(nullable: true)]
     private ?string $password = null;
@@ -177,6 +201,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         if ($this->isAdmin() || $this->allowedUfs === null) { return null; }
         return $this->allowedUfs;
+    }
+
+    public function getChampLimitDay(): ?int { return $this->champLimitDay; }
+    public function setChampLimitDay(?int $v): static { $this->champLimitDay = $v; return $this; }
+
+    public function getChampLimitMonth(): ?int { return $this->champLimitMonth; }
+    public function setChampLimitMonth(?int $v): static { $this->champLimitMonth = $v; return $this; }
+
+    public function getChampDowngradeTipos(): ?array { return $this->champDowngradeTipos; }
+    public function setChampDowngradeTipos(?array $tipos): static
+    {
+        $allowed = array_keys(self::CHAMP_DOWNGRADE_TIPOS);
+        $this->champDowngradeTipos = $tipos !== null
+            ? array_values(array_filter($tipos, fn($t) => in_array($t, $allowed, true)))
+            : null;
+        return $this;
     }
 
     public function getPassword(): ?string { return $this->password; }

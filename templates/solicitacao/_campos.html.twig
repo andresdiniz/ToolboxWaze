@@ -30,29 +30,103 @@
 {% set acaoGerenteEpAtual  = acaoGerenteEpAtual ?? null %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
+{# ─────────────────────────────────────────────────────────────────────────────
+   Estilos das action-pills (Incluir / Excluir / Upgrade / Downgrade)
+   Mesmo visual para os três tipos que têm radio de seleção.
+───────────────────────────────────────────────────────────────────────────── #}
+<style>
+.acao-pill-group {
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-top: .5rem;
+}
+.acao-pill {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .55rem 1.1rem;
+  border: 1.5px solid var(--sol-border, #dee2e6);
+  border-radius: 2rem;
+  cursor: pointer;
+  font-size: .9rem;
+  font-weight: 500;
+  background: var(--sol-surface, #fff);
+  color: var(--sol-text, #212529);
+  transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
+  user-select: none;
+  position: relative;
+}
+.acao-pill input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.acao-pill:hover {
+  border-color: var(--sol-primary, #198754);
+  background: var(--sol-primary-soft, #f0faf4);
+}
+.acao-pill.active,
+.acao-pill:has(input:checked) {
+  border-color: var(--sol-primary, #198754);
+  background: var(--sol-primary-soft, #f0faf4);
+  color: var(--sol-primary, #198754);
+  box-shadow: 0 0 0 3px rgba(25,135,84,.12);
+}
+.acao-pill .pill-check {
+  display: none;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.acao-pill.active .pill-check,
+.acao-pill:has(input:checked) .pill-check {
+  display: inline-block;
+}
+/* Pill excluir: vermelho quando ativo */
+.acao-pill--excluir.active,
+.acao-pill--excluir:has(input:checked) {
+  border-color: var(--bs-danger, #dc3545);
+  background: #fff5f5;
+  color: var(--bs-danger, #dc3545);
+  box-shadow: 0 0 0 3px rgba(220,53,69,.12);
+}
+.acao-pill--excluir:hover {
+  border-color: var(--bs-danger, #dc3545);
+  background: #fff5f5;
+}
+</style>
+
 {# ── Bloco nivel: radio Upgrade/Downgrade ───────────────────────────────────── #}
 {% if tipoAtual == 'nivel' %}
   {% if form.dados_tipoNivel is defined %}
     <div class="sol-card campo-animado" id="card-tipo-nivel-ajax">
       <div class="sol-card-body">
         {{ form_label(form.dados_tipoNivel) }}
-        {% for child in form.dados_tipoNivel %}
-          <div class="form-check form-check-inline">
-            <input
-              type="radio"
-              id="{{ child.vars.id }}"
-              name="{{ child.vars.full_name }}"
-              value="{{ child.vars.value }}"
-              class="form-check-input"
-              data-tipo-nivel-ajax
-              {{ tipoNivelAtual == child.vars.value ? 'checked' : '' }}
-            >
-            <label class="form-check-label" for="{{ child.vars.id }}">
-              {% if child.vars.value == 'upgrade' %}⬆️ {% else %}⬇️ {% endif %}
-              {{ child.vars.label }}
+
+        <div class="acao-pill-group" role="radiogroup">
+          {% for child in form.dados_tipoNivel %}
+            {% set isActive = tipoNivelAtual == child.vars.value %}
+            <label class="acao-pill{% if child.vars.value == 'downgrade' %} acao-pill--excluir{% endif %}{% if isActive %} active{% endif %}"
+                   for="{{ child.vars.id }}">
+              <input
+                type="radio"
+                id="{{ child.vars.id }}"
+                name="{{ child.vars.full_name }}"
+                value="{{ child.vars.value }}"
+                data-tipo-nivel-ajax
+                {{ isActive ? 'checked' : '' }}
+              >
+              <span>{% if child.vars.value == 'upgrade' %}⬆️{% else %}⬇️{% endif %} {{ child.vars.label }}</span>
+              <svg class="pill-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425z"/>
+              </svg>
             </label>
-          </div>
-        {% endfor %}
+          {% endfor %}
+        </div>
+
         {{ form_errors(form.dados_tipoNivel) }}
 
         {% if tipoNivelAtual is null %}
@@ -84,23 +158,28 @@
     <div class="sol-card campo-animado" id="card-acao-gerente-area-ajax">
       <div class="sol-card-body">
         {{ form_label(form.dados_acaoGerenteArea) }}
-        {% for child in form.dados_acaoGerenteArea %}
-          <div class="form-check form-check-inline">
-            <input
-              type="radio"
-              id="{{ child.vars.id }}"
-              name="{{ child.vars.full_name }}"
-              value="{{ child.vars.value }}"
-              class="form-check-input"
-              data-acao-gerente-area-ajax
-              {{ acaoGerenteAtual == child.vars.value ? 'checked' : '' }}
-            >
-            <label class="form-check-label" for="{{ child.vars.id }}">
-              {% if child.vars.value == 'incluir' %}📌 {% else %}🗑️ {% endif %}
-              {{ child.vars.label }}
+
+        <div class="acao-pill-group" role="radiogroup">
+          {% for child in form.dados_acaoGerenteArea %}
+            {% set isActive = acaoGerenteAtual == child.vars.value %}
+            <label class="acao-pill{% if child.vars.value == 'excluir' %} acao-pill--excluir{% endif %}{% if isActive %} active{% endif %}"
+                   for="{{ child.vars.id }}">
+              <input
+                type="radio"
+                id="{{ child.vars.id }}"
+                name="{{ child.vars.full_name }}"
+                value="{{ child.vars.value }}"
+                data-acao-gerente-area-ajax
+                {{ isActive ? 'checked' : '' }}
+              >
+              <span>{% if child.vars.value == 'incluir' %}📌{% else %}🗑️{% endif %} {{ child.vars.label }}</span>
+              <svg class="pill-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425z"/>
+              </svg>
             </label>
-          </div>
-        {% endfor %}
+          {% endfor %}
+        </div>
+
         {{ form_errors(form.dados_acaoGerenteArea) }}
 
         {% if acaoGerenteAtual is null %}
@@ -134,23 +213,28 @@
     <div class="sol-card campo-animado" id="card-acao-gerente-ep-ajax">
       <div class="sol-card-body">
         {{ form_label(form.dados_acaoGerenteEstadoPais) }}
-        {% for child in form.dados_acaoGerenteEstadoPais %}
-          <div class="form-check form-check-inline">
-            <input
-              type="radio"
-              id="{{ child.vars.id }}"
-              name="{{ child.vars.full_name }}"
-              value="{{ child.vars.value }}"
-              class="form-check-input"
-              data-acao-gerente-ep-ajax
-              {{ acaoGerenteEpAtual == child.vars.value ? 'checked' : '' }}
-            >
-            <label class="form-check-label" for="{{ child.vars.id }}">
-              {% if child.vars.value == 'incluir' %}📌 {% else %}🗑️ {% endif %}
-              {{ child.vars.label }}
+
+        <div class="acao-pill-group" role="radiogroup">
+          {% for child in form.dados_acaoGerenteEstadoPais %}
+            {% set isActive = acaoGerenteEpAtual == child.vars.value %}
+            <label class="acao-pill{% if child.vars.value == 'excluir' %} acao-pill--excluir{% endif %}{% if isActive %} active{% endif %}"
+                   for="{{ child.vars.id }}">
+              <input
+                type="radio"
+                id="{{ child.vars.id }}"
+                name="{{ child.vars.full_name }}"
+                value="{{ child.vars.value }}"
+                data-acao-gerente-ep-ajax
+                {{ isActive ? 'checked' : '' }}
+              >
+              <span>{% if child.vars.value == 'incluir' %}📌{% else %}🗑️{% endif %} {{ child.vars.label }}</span>
+              <svg class="pill-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425z"/>
+              </svg>
             </label>
-          </div>
-        {% endfor %}
+          {% endfor %}
+        </div>
+
         {{ form_errors(form.dados_acaoGerenteEstadoPais) }}
 
         {% if acaoGerenteEpAtual is null %}
@@ -195,9 +279,29 @@
   </div>
   <div class="sol-card-body">
     <label class="sol-help">Compartilhe as provas <span class="text-muted fw-normal" style="font-size:.8rem">(até 5 imagens, 1 MB cada)</span></label>
-    <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
+    <input type="file" id="input-oops-files" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
+    <div id="oops-file-preview" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem"></div>
+    <div id="oops-file-error" class="sol-error d-none mt-2"><i class="bi bi-exclamation-circle"></i> <span></span></div>
   </div>
 </div>
+
+{# ── JS: sincroniza classe .active nas pills ao clicar ──────────────────────── #}
+<script>
+(function () {
+  function bindPillActive(groupSelector) {
+    document.querySelectorAll(groupSelector).forEach(function (group) {
+      var pills = group.querySelectorAll('.acao-pill');
+      pills.forEach(function (pill) {
+        pill.addEventListener('click', function () {
+          pills.forEach(function (p) { p.classList.remove('active'); });
+          pill.classList.add('active');
+        });
+      });
+    });
+  }
+  bindPillActive('.acao-pill-group');
+})();
+</script>
 
 {# ── Macro interna: renderiza um campo genérico ou especializado ────────── #}
 {% macro renderField(field, souChampAuto) %}

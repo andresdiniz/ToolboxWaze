@@ -86,21 +86,28 @@ class SolicitacaoType extends AbstractType
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($isChamp) {
-            $data      = $event->getData();
-            $tipo      = $data['tipo']            ?? null;
-            $cargo     = $data['dados_cargo']     ?? null;
-            $tipoNivel = $data['dados_tipoNivel'] ?? null;
+            $data               = $event->getData();
+            $tipo               = $data['tipo']                  ?? null;
+            $cargo              = $data['dados_cargo']           ?? null;
+            $tipoNivel          = $data['dados_tipoNivel']       ?? null;
+            $acaoGerenteArea    = $data['dados_acaoGerenteArea'] ?? null;
 
             $souChamp = !empty($data['dados_souChamp']);
 
             // Champ fazendo downgrade: infere souChamp automaticamente.
-            // O checkbox não é adicionado ao form nesse caso (ver addCamposNivel),
-            // então dados_souChamp nunca vem no POST — inferimos aqui.
             if ($isChamp && $tipoNivel === 'downgrade') {
                 $souChamp = true;
             }
 
-            $this->addDadosDinamicos($event->getForm(), $tipo, $cargo, $tipoNivel, $isChamp, $souChamp);
+            $this->addDadosDinamicos(
+                $event->getForm(),
+                $tipo,
+                $cargo,
+                $tipoNivel,
+                $isChamp,
+                $souChamp,
+                $acaoGerenteArea
+            );
         });
     }
 
@@ -120,14 +127,15 @@ class SolicitacaoType extends AbstractType
     private function addDadosDinamicos(
         \Symfony\Component\Form\FormInterface $form,
         ?string $tipo,
-        ?string $cargo      = null,
-        ?string $tipoNivel  = null,
-        bool    $isChamp    = false,
-        bool    $souChamp   = false
+        ?string $cargo           = null,
+        ?string $tipoNivel       = null,
+        bool    $isChamp         = false,
+        bool    $souChamp        = false,
+        ?string $acaoGerenteArea = null
     ): void {
         match ($tipo) {
             Solicitacao::TIPO_IMAGEM_SATELITE     => $this->addCamposImagemSatelite($form),
-            Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form),
+            Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form, $acaoGerenteArea),
             Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $cargo),
             Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp, $souChamp),
             Solicitacao::TIPO_OOPS                => $this->addCamposOops($form),
@@ -198,7 +206,29 @@ class SolicitacaoType extends AbstractType
     // -------------------------------------------------------------------------
     // GERENTE DE ÁREA
     // -------------------------------------------------------------------------
-    private function addCamposGerenteArea(\Symfony\Component\Form\FormInterface $form): void
+    private function addCamposGerenteArea(
+        \Symfony\Component\Form\FormInterface $form,
+        ?string $acaoGerenteArea = null
+    ): void {
+        // Radio de ação — sempre presente (nunca destruído pelo JS)
+        $form->add('dados_acaoGerenteArea', ChoiceType::class, [
+            'label'    => 'Você deseja…',
+            'mapped'   => false,
+            'choices'  => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
+            'expanded' => true,
+            'attr'     => ['data-acao-gerente-area' => '1'],
+            'constraints' => [new Assert\NotBlank()],
+        ]);
+
+        // Campos extras dependentes da ação
+        match ($acaoGerenteArea) {
+            'incluir' => $this->addCamposGerenteAreaIncluir($form),
+            'excluir' => $this->addCamposGerenteAreaExcluir($form),
+            default   => null, // null: só o radio aparece
+        };
+    }
+
+    private function addCamposGerenteAreaIncluir(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_mentor', TextType::class, [
@@ -242,6 +272,48 @@ class SolicitacaoType extends AbstractType
                 'help'      => 'Busque o seu Estado e em seguida no tópico '
                              . '\'Gerente de área ou candidato, se apresente aqui\', publique sua intenção.',
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
+            ]);
+    }
+
+    private function addCamposGerenteAreaExcluir(\Symfony\Component\Form\FormInterface $form): void
+    {
+        $form
+            ->add('dados_editorNome', TextType::class, [
+                'label'       => 'Nome de usuário do Gerente de Área (a ser removido)',
+                'mapped'      => false,
+                'attr'        => ['placeholder' => 'Nick do editor no WME/Discuss'],
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Informe o nome de usuário do Gerente a ser removido.'),
+                    new Assert\Length(['max' => 255]),
+                ],
+            ])
+            ->add('dados_justificativa', TextareaType::class, [
+                'label'  => 'Justificativa',
+                'mapped' => false,
+                'attr'   => [
+                    'rows'              => 4,
+                    'minlength'         => 20,
+                    'maxlength'         => 2000,
+                    'placeholder'       => 'Descreva o motivo da remoção (mínimo 20 caracteres)',
+                    'data-char-counter' => 'true',
+                    'data-char-min'     => '20',
+                ],
+                'help' => 'Informe o motivo pelo qual o Gerente de Área deve ser removido.',
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Preencha a justificativa.'),
+                    new Assert\Length([
+                        'min'        => 20,
+                        'minMessage' => 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
+                        'max'        => 2000,
+                        'maxMessage' => 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
+                    ]),
+                ],
+            ])
+            ->add('dados_comentarios', TextareaType::class, [
+                'label'    => 'Comentários adicionais',
+                'mapped'   => false,
+                'required' => false,
+                'attr'     => ['rows' => 3],
             ]);
     }
 
@@ -298,14 +370,6 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // NÍVEL (UPGRADE / DOWNGRADE)
-    //
-    // Fluxo Champ:
-    //   1. Usuário seleciona pill "Nível" → radio Upgrade/Downgrade aparece
-    //   2. Clica em "Downgrade" → AJAX envia tipoNivel=downgrade
-    //   3. Controller infere souChamp=true automaticamente (is_champ=true)
-    //   4. Form é construído com souChamp=true → addCamposDowngrade diretamente
-    //      SEM adicionar dados_souChamp ao form (evita falha de validação)
-    //   5. No PRE_SUBMIT: mesma inferência garante que os campos existam
     // -------------------------------------------------------------------------
     private function addCamposNivel(
         \Symfony\Component\Form\FormInterface $form,
@@ -326,13 +390,8 @@ class SolicitacaoType extends AbstractType
 
         if ($tipoNivel === 'downgrade' && $isChamp) {
             if ($souChamp) {
-                // Champ confirmado automaticamente: vai direto para os campos
-                // NÃO adiciona dados_souChamp ao form — evita falha de validação
-                // pois o campo não existe no POST (veio como hidden ou foi inferido)
                 $this->addCamposDowngrade($form);
             } else {
-                // Não-Champ tentando downgrade: exibe checkbox de confirmação
-                // O checkbox bloqueia o acesso até que o usuário confirme
                 $form->add('dados_souChamp', CheckboxType::class, [
                     'label'    => 'Confirmo que sou Champ e estou autorizado a solicitar downgrade',
                     'mapped'   => false,
@@ -346,7 +405,6 @@ class SolicitacaoType extends AbstractType
         } elseif ($tipoNivel === 'upgrade' || (!$isChamp && $tipoNivel === null)) {
             $this->addCamposUpgrade($form);
         }
-        // tipoNivel === null && isChamp: apenas o radio aparece, sem campos extras
     }
 
     // -------------------------------------------------------------------------

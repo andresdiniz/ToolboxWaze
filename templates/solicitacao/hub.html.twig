@@ -370,14 +370,13 @@ document.addEventListener('DOMContentLoaded', function () {
   /* ══════════════════════════════════════════════════════════════════
      TIPO-PILLS — seleciona tipo e dispara fetch de campos dinâmicos
      ══════════════════════════════════════════════════════════════════ */
-  var tipoSelect  = document.querySelector('[data-tipo-select]');
-  var estadoSelect = document.querySelector('[data-estado-select]');
-  var pills       = document.querySelectorAll('.tipo-pill');
-  var spinner     = document.getElementById('campos-spinner');
-  var dinamicos   = document.getElementById('campos-dinamicos');
-  var btnEnviar   = document.getElementById('btn-enviar');
-  var tipoError   = document.getElementById('tipo-error-msg');
-  var ajaxUrl     = '{{ path('solicitacao_hub', {aba: 'nova'}) }}';
+  var tipoSelect   = document.querySelector('[data-tipo-select]');
+  var pills        = document.querySelectorAll('.tipo-pill');
+  var spinner      = document.getElementById('campos-spinner');
+  var dinamicos    = document.getElementById('campos-dinamicos');
+  var btnEnviar    = document.getElementById('btn-enviar');
+  var tipoError    = document.getElementById('tipo-error-msg');
+  var ajaxUrl      = '{{ path('solicitacao_hub', {aba: 'nova'}) }}';
 
   function getTipoAtual() {
     return tipoSelect ? tipoSelect.value : '';
@@ -409,7 +408,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (spinner)   spinner.classList.remove('d-none');
     if (dinamicos) dinamicos.innerHTML = '';
 
-    var params = new URLSearchParams({ _ajax_campos: '1', tipo: tipo });
+    /* CORREÇÃO: controller lê _ajax_tipo, não 'tipo' */
+    var params = new URLSearchParams({ _ajax_tipo: tipo });
     if (tipoNivel) params.set('_ajax_tipoNivel', tipoNivel);
     if (souChamp)  params.set('_ajax_souChamp', '1');
 
@@ -558,7 +558,6 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('tipo-pills').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
-      /* loading no botão */
       var btnText    = document.getElementById('btn-enviar-text');
       var btnLoading = document.getElementById('btn-enviar-loading');
       if (btnText)    btnText.classList.add('d-none');
@@ -569,18 +568,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /* ══════════════════════════════════════════════════════════════════
      INIT: se já há tipo selecionado (recarregamento com erro),
-     ativa pill e chama listeners nos campos já renderizados
+     ativa pill e registra listeners nos campos já renderizados
      ══════════════════════════════════════════════════════════════════ */
   var tipoInicial = getTipoAtual();
   if (tipoInicial) {
     setActivePill(tipoInicial);
-    /* campos já estão no HTML — só registra os listeners */
     initDinamicoListeners();
     animarCampos();
-    if (spinner) spinner.classList.add('d-none');
-  } else {
-    if (spinner) spinner.classList.add('d-none');
   }
+  if (spinner) spinner.classList.add('d-none');
 
   /* ══════════════════════════════════════════════════════════════════
      MODAL RESOLVER — preenche dados ao abrir

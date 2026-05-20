@@ -1,16 +1,12 @@
-# .htaccess na RAIZ do projeto Symfony
-# Subdominio wazetoolbox.acheireviews.com.br aponta para esta pasta
-# Redireciona tudo para /public sem path absoluto
-
 RewriteEngine On
-RewriteBase /
 
-# Nao redirecionar se ja for um arquivo ou diretorio real
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
+# Se o arquivo fisico existe, serve direto
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
 
-# Nao redirecionar o que ja comeca com public/
-RewriteCond %{REQUEST_URI} !^/public/
+# Se o diretorio fisico existe, serve direto  
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
-# Redireciona para public/
-RewriteRule ^(.*)$ public/$1 [L]
+# Tudo o mais vai para public/index.php
+RewriteRule ^(.*)$ public/index.php [QSA,L]

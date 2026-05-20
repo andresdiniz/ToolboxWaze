@@ -16,7 +16,7 @@
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
-  {# ── 1. Dados do solicitante ──────────────────────────────────────────── #}
+  {# ── 1. Dados do solicitante ─────────────────────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.294 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
@@ -31,7 +31,7 @@
     </div>
   </div>
 
-  {# ── 2. Tipo (pills visuais) ──────────────────────────────────────────── #}
+  {# ── 2. Tipo (pills visuais) ─────────────────────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3.854 2.146a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708L2 3.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708L2 7.293l1.146-1.147a.5.5 0 0 1 .708 0m0 4a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0"/></svg>
@@ -88,86 +88,17 @@
     </div>
   </div>
 
-  {# ── 3. Campos dinâmicos ──────────────────────────────────────────── #}
-  <div id="campos-spinner">
+  {# ── 3. Área dinâmica — 100% gerenciada pelo JS via AJAX ─────────────────── #}
+  <div id="campos-spinner" style="display:none;align-items:center;gap:.5rem;padding:.5rem 0;color:var(--bs-secondary-color,#6c757d)">
     <div class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></div>
     Carregando campos…
   </div>
 
-  <div id="campos-dinamicos">
-
-    {#
-      Radio Upgrade/Downgrade — FIXO aqui, nunca substituído pelo AJAX.
-      Só renderizado quando o tipo for 'nivel' (form tem dados_tipoNivel).
-    #}
-    {% if form.dados_tipoNivel is defined %}
-    <div class="sol-card" id="card-tipo-nivel">
-      <div class="sol-card-body">
-        <div data-tipo-nivel="1">
-          {{ form_row(form.dados_tipoNivel) }}
-        </div>
-      </div>
-    </div>
-    {% endif %}
-
-    {#
-      #campos-sub: única área substituída pelo AJAX.
-      Contém os campos abaixo do radio (souChamp, campos de upgrade ou downgrade).
-    #}
-    <div id="campos-sub">
-      {% for field in form %}
-        {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
-          {% set isPermalink = field.vars.name == 'dados_permalink' %}
-          <div class="sol-card campo-animado">
-            <div class="sol-card-body">
-              {% if isPermalink %}
-                <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
-                  {{ field.vars.label }}
-                  {% if field.vars.required %}<span class="sol-required" aria-hidden="true">*</span>{% endif %}
-                </label>
-                <div class="permalink-wrapper">
-                  {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'}}) }}
-                  <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
-                  </button>
-                </div>
-                {% if field.vars.help is defined and field.vars.help %}
-                  <p class="sol-help">{{ field.vars.help }}</p>
-                {% endif %}
-                {{ form_errors(field) }}
-              {% elseif field.vars.name == 'dados_souChamp' %}
-                <div data-sou-champ-wrapper="1">
-                  {{ form_label(field) }}
-                  {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
-                  {{ form_errors(field) }}
-                  {% if field.vars.help is defined and field.vars.help %}
-                    <p class="sol-help">{{ field.vars.help }}</p>
-                  {% endif %}
-                </div>
-              {% else %}
-                {{ form_row(field) }}
-              {% endif %}
-            </div>
-          </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-
-    {# Bloco de provas Oops #}
-    <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
-      <div class="sol-card-header">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
-        Provas (imagens)
-      </div>
-      <div class="sol-card-body">
-        <label class="sol-help">Compartilhe as provas <span class="text-muted fw-normal" style="font-size:.8rem">(até 5 imagens, 1 MB cada)</span></label>
-        <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
-      </div>
-    </div>
-  </div>
+  {# #campos-sub: substituído inteiramente pelo AJAX. Inclui radio + campos. #}
+  <div id="campos-sub"></div>
 
   <div class="d-flex justify-content-end mt-2 mb-5">
-    <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
+    <button type="submit" class="btn-enviar" id="btn-enviar" disabled>
       <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" style="margin-right:.3em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/></svg>
       Enviar solicitação
     </button>
@@ -180,170 +111,145 @@
 {% block javascripts %}
 <script>
 (function () {
-  /* ── Permalink copy ───────────────────────────────────────────── */
+  /* ── Permalink copy ──────────────────────────────────────────────────────── */
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('.permalink-copy-btn');
     if (!btn) return;
     const input = btn.closest('.permalink-wrapper')?.querySelector('input');
     if (!input || !input.value) return;
     navigator.clipboard.writeText(input.value).then(() => {
-      const icon = btn.querySelector('svg');
-      icon.innerHTML = '<path d="M10.97 4.97a.235.235 0 0 0-.02.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-1.071-1.05"/><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/>';
       btn.style.color = 'var(--tw)';
-      setTimeout(() => {
-        icon.innerHTML = '<path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/>';
-        btn.style.color = '';
-      }, 1800);
+      setTimeout(() => { btn.style.color = ''; }, 1800);
     });
   });
 
-  /* ── Validação de permalink ────────────────────────────────────────── */
+  /* ── Permalink validation ────────────────────────────────────────────────── */
   const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor/i;
   const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
   function checkPermalink(val) {
     const v = val.trim();
     if (!v) return { ok: true };
-    if (!WAZE_RE.test(v)) return { ok: false, msg: 'A URL deve ser do editor Waze (waze.com/editor).' };
+    if (!WAZE_RE.test(v)) return { ok: false, msg: 'URL deve ser do editor Waze (waze.com/editor).' };
     const m = ZOOM_RE.exec(v);
     if (!m) return { ok: false, msg: 'URL sem parâmetro zoom. Copie a URL completa do editor.' };
     const z = parseInt(m[1], 10);
-    if (z < 15) return { ok: false, msg: `Zoom ${z} é insuficiente — mínimo exigido: 15.` };
+    if (z < 15) return { ok: false, msg: `Zoom ${z} insuficiente — mínimo: 15.` };
     return { ok: true, zoom: z };
   }
   function applyPermalinkFeedback(input, result) {
     const wrap   = input.closest('.permalink-wrapper') ?? input.parentElement;
     const parent = wrap.parentElement;
     input.classList.toggle('is-invalid', !result.ok);
-    input.classList.toggle('is-valid',    result.ok && input.value.trim().length > 0);
+    input.classList.toggle('is-valid', result.ok && !!input.value.trim());
     let fb = parent.querySelector('.permalink-feedback');
     if (!result.ok) {
       if (!fb) { fb = document.createElement('p'); fb.className = 'sol-error permalink-feedback'; wrap.insertAdjacentElement('afterend', fb); }
       fb.textContent = result.msg;
-    } else if (fb) { fb.remove(); }
-    let badge = parent.querySelector('.permalink-zoom-badge');
-    if (result.ok && result.zoom) {
-      if (!badge) { badge = document.createElement('span'); badge.className = 'permalink-zoom-badge zoom-ok'; wrap.insertAdjacentElement('afterend', badge); }
-      badge.textContent = `Zoom ${result.zoom} — válido`;
-    } else if (badge) { badge.remove(); }
+    } else if (fb) fb.remove();
   }
-  function initPermalinks() {
-    document.querySelectorAll('[data-permalink]').forEach(input => {
+  function initPermalinks(root) {
+    (root ?? document).querySelectorAll('[data-permalink]').forEach(input => {
       if (input.dataset.plInit) return;
       input.dataset.plInit = '1';
       input.addEventListener('blur',  () => applyPermalinkFeedback(input, checkPermalink(input.value)));
-      input.addEventListener('input', () => {
-        if (input.classList.contains('is-invalid')) {
-          const r = checkPermalink(input.value);
-          if (r.ok) applyPermalinkFeedback(input, r);
-        }
-      });
+      input.addEventListener('input', () => { if (input.classList.contains('is-invalid')) applyPermalinkFeedback(input, checkPermalink(input.value)); });
     });
   }
-  initPermalinks();
 
-  /* ── Elementos principais ───────────────────────────────────────────── */
+  /* ── Estado ─────────────────────────────────────────────────────────────── */
   const tipoSelect = document.querySelector('[data-tipo-select]');
   if (!tipoSelect) return;
-  const pills     = document.querySelectorAll('.tipo-pill');
-  const subArea   = document.getElementById('campos-sub');     // só esta área é trocada pelo AJAX
+
+  const subArea   = document.getElementById('campos-sub');
   const spinner   = document.getElementById('campos-spinner');
   const btnEnviar = document.getElementById('btn-enviar');
+  const pills     = document.querySelectorAll('.tipo-pill');
 
-  /*
-    tipoNivelAtual: 'upgrade' | 'downgrade' | null
-    O radio fica fixo no DOM (#card-tipo-nivel).
-    O AJAX só troca #campos-sub.
-  */
-  let tipoNivelAtual = null;
+  let tipoAtual      = '';
+  let tipoNivelAtual = null; // 'upgrade' | 'downgrade' | null
   let souChampAtual  = false;
 
-  /* ── Pills de tipo ───────────────────────────────────────────────── */
+  /* ── Pills ───────────────────────────────────────────────────────────────── */
   pills.forEach(pill => {
     pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
-    pill.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); }
-    });
+    pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); } });
   });
 
   function chooseTipo(valor) {
-    if (tipoSelect.value === valor) return;
+    if (tipoAtual === valor) return;
+    tipoAtual      = valor;
+    tipoNivelAtual = null;
+    souChampAtual  = false;
     tipoSelect.value = valor;
-    tipoNivelAtual   = null;
-    souChampAtual    = false;
     activatePill(valor);
-    fetchCampos(valor, null, false);
+    fetchCampos();
   }
+
   function activatePill(valor) {
     pills.forEach(p => {
       const on = p.dataset.value === valor;
       p.classList.toggle('active', on);
       p.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
-    if (btnEnviar) btnEnviar.disabled = !valor;
   }
 
-  /* ── Fetch: troca APENAS #campos-sub ───────────────────────────── */
-  function fetchCampos(tipo, tipoNivel, souChamp) {
-    spinner.classList.add('show');
-    if (subArea) subArea.classList.add('loading');
+  /* ── AJAX: substitui #campos-sub inteiro ────────────────────────────────── */
+  function fetchCampos() {
+    spinner.style.display = 'flex';
+    subArea.style.opacity = '0.4';
 
     const url = new URL('/solicitacoes/campos', window.location.origin);
-    url.searchParams.set('tipo', tipo ?? tipoSelect.value);
-    if (tipoNivel) url.searchParams.set('tipoNivel', tipoNivel);
-    if (souChamp)  url.searchParams.set('souChamp',  '1');
+    url.searchParams.set('tipo', tipoAtual);
+    if (tipoNivelAtual) url.searchParams.set('tipoNivel', tipoNivelAtual);
+    if (souChampAtual)  url.searchParams.set('souChamp',  '1');
 
     fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(html => {
-        if (subArea) {
-          subArea.innerHTML = html;
-          subArea.querySelectorAll('.sol-card').forEach((el, i) => {
-            el.style.animationDelay = (i * 0.055) + 's';
-          });
-        }
-        initPermalinks();
+        subArea.innerHTML = html;
+        subArea.style.opacity = '';
+        // Anima cards
+        subArea.querySelectorAll('.sol-card').forEach((el, i) => { el.style.animationDelay = (i * 0.055) + 's'; });
+        initPermalinks(subArea);
         bindSubListeners();
+        // Habilitia enviar assim que há tipo selecionado e (se nivel) tipoNivel escolhido
+        const podeEnviar = tipoAtual && (tipoAtual !== 'nivel' || tipoNivelAtual !== null);
+        if (btnEnviar) btnEnviar.disabled = !podeEnviar;
       })
-      .catch(err => console.error('ToolboxWaze fetchCampos erro:', err))
-      .finally(() => {
-        spinner.classList.remove('show');
-        if (subArea) subArea.classList.remove('loading');
-      });
+      .catch(err => console.error('fetchCampos erro:', err))
+      .finally(() => { spinner.style.display = 'none'; subArea.style.opacity = ''; });
   }
 
-  /* ── Radio fixo no DOM: vincula listener uma única vez ──────────────── */
-  function bindNivelRadios() {
-    document.querySelectorAll('[data-tipo-nivel] input[type=radio]').forEach(radio => {
+  /* ── Listeners dentro de #campos-sub (rebindados após cada fetch) ────────── */
+  function bindSubListeners() {
+    // Radio Upgrade/Downgrade (gerado pelo _campos.html.twig, data-tipo-nivel-ajax)
+    subArea.querySelectorAll('[data-tipo-nivel-ajax]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
       radio.dataset.nivelBound = '1';
       radio.addEventListener('change', function () {
-        const novoValor = this.value;
-        if (novoValor === tipoNivelAtual) return;
-        tipoNivelAtual = novoValor;
+        if (!this.checked || this.value === tipoNivelAtual) return;
+        tipoNivelAtual = this.value;
         souChampAtual  = false;
-        /* Sempre faz fetch ao mudar o radio — carrega os campos corretos */
-        fetchCampos(tipoSelect.value, tipoNivelAtual, false);
+        fetchCampos();
       });
+      // Se já vem pré-selecionado no HTML e tipoNivelAtual ainda é null (primeiro load)
+      if (radio.checked && !tipoNivelAtual) {
+        tipoNivelAtual = radio.value;
+      }
     });
-  }
 
-  /* ── Checkbox souChamp fica dentro de #campos-sub, rebindado após cada fetch ── */
-  function bindSubListeners() {
-    const chk = subArea?.querySelector('[data-sou-champ]');
+    // Checkbox souChamp
+    const chk = subArea.querySelector('[data-sou-champ]');
     if (chk && !chk.dataset.champBound) {
       chk.dataset.champBound = '1';
       chk.addEventListener('change', function () {
         souChampAtual = this.checked;
-        fetchCampos(tipoSelect.value, tipoNivelAtual, souChampAtual);
+        fetchCampos();
       });
     }
   }
 
-  /* Inicializa nos elementos já no DOM (re-submit com erros de validação) */
-  bindNivelRadios();
-  bindSubListeners();
-
-  /* ── Bloqueia submit se permalink inválido ────────────────────── */
+  /* ── Bloqueia submit com permalink inválido ─────────────────────────────── */
   document.getElementById('form-solicitacao')
     ?.addEventListener('submit', e => {
       let ok = true;

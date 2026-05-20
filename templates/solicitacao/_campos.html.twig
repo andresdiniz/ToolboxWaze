@@ -1,91 +1,116 @@
 {#
   Fragmento AJAX puro — SEM extends, SEM block.
-  Preenche apenas #campos-sub (abaixo do radio Upgrade/Downgrade).
+  Substitui completamente #campos-sub.
 
-  Variáveis disponíveis:
-    form           – FormView de SolicitacaoType
-    tipoAtual      – tipo da solicitação (ex: "nivel")
-    isChamp        – bool – usuário logado tem ROLE_CHAMP?
-    tipoNivelAtual – "upgrade" | "downgrade" | null
-
-  Quando tipoAtual="nivel" e tipoNivelAtual=null:
-    Exibe bloco de orientação ("escolha Upgrade ou Downgrade") e nada mais.
-    O radio em si fica fixo no nova.html.twig (#card-tipo-nivel).
+  Variáveis:
+    form           — FormView de SolicitacaoType
+    tipoAtual      — tipo da solicitação (ex: "nivel")
+    isChamp        — bool
+    tipoNivelAtual — "upgrade" | "downgrade" | null
 #}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
-{# ───────────────────────────────────────────────────────────────────────────── #}
-{# Caso especial: tipo=nivel mas ainda não escolheu Upgrade ou Downgrade    #}
-{# Mostra orientação contextual (não-Champ vê apenas dica de upgrade)       #}
-{# ───────────────────────────────────────────────────────────────────────────── #}
-{% if tipoAtual == 'nivel' and tipoNivelAtual is null %}
-  <div class="sol-card campo-animado" id="bloco-nivel-dica">
-    <div class="sol-card-body" style="padding: 1.25rem 1.5rem">
+{# ── Radio Upgrade/Downgrade (sempre renderizado quando tipo=nivel) ────────── #}
+{% if tipoAtual == 'nivel' %}
+  <div class="sol-card campo-animado" id="card-tipo-nivel-ajax">
+    <div class="sol-card-body">
+
       {% if isChamp %}
-        <p style="margin:0; color: var(--bs-secondary-color, #6c757d); font-size:.9rem">
-          <strong>Você é Champ.</strong>
-          Escolha <strong>Upgrade</strong> para promover um editor
-          ou <strong>Downgrade</strong> para rebaixar.
-        </p>
+        {# Champ vê Upgrade E Downgrade #}
+        <fieldset style="border:none;padding:0;margin:0">
+          <legend class="sol-label" style="margin-bottom:.6rem">É um pedido de…</legend>
+          <div class="d-flex gap-4">
+            <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+              <input type="radio" name="_nivel_choice" value="upgrade"
+                     {{ tipoNivelAtual == 'upgrade' ? 'checked' : '' }}
+                     data-tipo-nivel-ajax>
+              <span>⬆️ Upgrade</span>
+            </label>
+            <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+              <input type="radio" name="_nivel_choice" value="downgrade"
+                     {{ tipoNivelAtual == 'downgrade' ? 'checked' : '' }}
+                     data-tipo-nivel-ajax>
+              <span>⬇️ Downgrade</span>
+            </label>
+          </div>
+          {% if tipoNivelAtual is null %}
+            <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
+              Você é Champ. Selecione <strong>Upgrade</strong> ou <strong>Downgrade</strong> para continuar.
+            </p>
+          {% endif %}
+        </fieldset>
       {% else %}
-        <p style="margin:0; color: var(--bs-secondary-color, #6c757d); font-size:.9rem">
-          Selecione <strong>Upgrade</strong> acima para continuar
-          preenchendo o formulário de promoção de nível.
-        </p>
+        {# Não-Champ vê só Upgrade #}
+        <fieldset style="border:none;padding:0;margin:0">
+          <legend class="sol-label" style="margin-bottom:.6rem">É um pedido de…</legend>
+          <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+            <input type="radio" name="_nivel_choice" value="upgrade" checked
+                   data-tipo-nivel-ajax>
+            <span>⬆️ Upgrade</span>
+          </label>
+          <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
+            Selecione <strong>Upgrade</strong> acima para continuar preenchendo o formulário.
+          </p>
+        </fieldset>
       {% endif %}
+
     </div>
   </div>
+{% endif %}
 
-{# ── Campos normais (upgrade, downgrade com souChamp, outros tipos) ──────── #}
-{% else %}
+{# ── Campos do formulário (upgrade / downgrade / outros tipos) ─────────────── #}
+{% if tipoAtual != 'nivel' or tipoNivelAtual is not null %}
 
-{% for field in form %}
-  {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
-    <div class="sol-card campo-animado">
-      <div class="sol-card-body">
-        {% if field.vars.name == 'dados_permalink' %}
-          <label class="sol-label" for="{{ field.vars.id }}">{{ field.vars.label }}</label>
-          <div class="permalink-wrapper">
-            {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&zoom=15&lat=-23&lon=-46'}}) }}
-            <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
-              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
-            </button>
-          </div>
-          {% if field.vars.help is defined and field.vars.help %}
-            <p class="sol-help">{{ field.vars.help }}</p>
-          {% endif %}
-          {{ form_errors(field) }}
-
-        {% elseif field.vars.name == 'dados_souChamp' %}
-          <div data-sou-champ-wrapper="1">
-            {{ form_label(field) }}
-            {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
-            {{ form_errors(field) }}
-            {% if field.vars.help is defined and field.vars.help %}
-              <p class="sol-help">{{ field.vars.help }}</p>
-            {% endif %}
-          </div>
-
-        {% else %}
-          {{ form_row(field) }}
-        {% endif %}
-      </div>
-    </div>
+  {# Campo oculto que o SolicitacaoType precisa para dados_tipoNivel #}
+  {% if tipoAtual == 'nivel' and form.dados_tipoNivel is defined %}
+    {{ form_widget(form.dados_tipoNivel, {attr: {class: 'd-none', 'aria-hidden': 'true'}}) }}
   {% endif %}
-{% endfor %}
+
+  {% for field in form %}
+    {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
+      <div class="sol-card campo-animado">
+        <div class="sol-card-body">
+
+          {% if field.vars.name == 'dados_permalink' %}
+            <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
+              {{ field.vars.label }}{% if field.vars.required %} <span class="sol-required" aria-hidden="true">*</span>{% endif %}
+            </label>
+            <div class="permalink-wrapper">
+              {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'}}) }}
+              <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
+              </button>
+            </div>
+            {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+            {{ form_errors(field) }}
+
+          {% elseif field.vars.name == 'dados_souChamp' %}
+            <div data-sou-champ-wrapper="1">
+              {{ form_label(field) }}
+              {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
+              {{ form_errors(field) }}
+              {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+            </div>
+
+          {% else %}
+            {{ form_row(field) }}
+          {% endif %}
+
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
 
 {% endif %}
 
-{# Bloco de provas Oops (sempre presente, visibilidade controlada por CSS) #}
+{# Bloco de provas Oops #}
 <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
   <div class="sol-card-header">
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
     Provas (imagens)
   </div>
   <div class="sol-card-body">
-    <label class="sol-help">Compartilhe provas <span class="text-muted fw-normal">(até 5 imagens, 1 MB cada)</span></label>
-    <input type="file" name="arquivos_oops[]" id="input-oops-files" class="sol-input" accept="image/*" multiple>
-    <div id="oops-file-preview" class="d-flex flex-wrap gap-2 mt-2"></div>
-    <p id="oops-file-error" class="sol-error d-none mt-1"><span></span></p>
+    <label class="sol-help">Compartilhe as provas <span class="text-muted fw-normal" style="font-size:.8rem">(até 5 imagens, 1 MB cada)</span></label>
+    <input type="file" name="arquivos_oops[]" class="sol-input" accept="image/*" multiple>
   </div>
 </div>

@@ -356,12 +356,34 @@ document.addEventListener('DOMContentLoaded', function () {
   var btnEnviar  = document.getElementById('btn-enviar');
   var tipoError  = document.getElementById('tipo-error-msg');
 
+  /* Injetado pelo Twig — true se o usuário logado tem ROLE_CHAMP */
+  var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
+
   /* URL da rota AJAX dedicada — nunca retorna layout completo */
   var ajaxUrl = '{{ path('solicitacao_campos_ajax') }}';
 
   function getTipoAtual()  { return tipoSelect ? tipoSelect.value : ''; }
-  function getSouChamp()   { var cb = dinamicos && dinamicos.querySelector('[data-sou-champ]'); return cb ? cb.checked : false; }
-  function getTipoNivel()  { var s  = dinamicos && dinamicos.querySelector('[data-tipo-nivel]'); return s ? s.value : ''; }
+
+  /**
+   * Retorna se souChamp deve ser enviado como true.
+   * Para Champ + downgrade: sempre true (inferido automaticamente).
+   * Para não-Champ: verifica o checkbox [data-sou-champ] no DOM.
+   */
+  function getSouChamp(tipoNivel) {
+    if (IS_CHAMP && tipoNivel === 'downgrade') return true;
+    var cb = dinamicos && dinamicos.querySelector('[data-sou-champ]');
+    return cb ? cb.checked : false;
+  }
+
+  function getTipoNivel()  {
+    var s = dinamicos && dinamicos.querySelector('[data-tipo-nivel-ajax]');
+    if (s) {
+      // radio group — acha o value do checked
+      var checked = dinamicos.querySelector('[data-tipo-nivel-ajax]:checked');
+      return checked ? checked.value : '';
+    }
+    return '';
+  }
 
   function setActivePill(valor) {
     pills.forEach(function (p) {
@@ -418,25 +440,29 @@ document.addEventListener('DOMContentLoaded', function () {
         var inp = btn.closest('.permalink-wrapper') && btn.closest('.permalink-wrapper').querySelector('[data-permalink]');
         if (!inp || !inp.value) return;
         navigator.clipboard.writeText(inp.value).then(function () {
-          btn.innerHTML = '<i class="bi bi-clipboard-check"></i>';
-          setTimeout(function () { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 2000);
+          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425z"/></svg>';
+          setTimeout(function () {
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>';
+          }, 2000);
         });
       });
     });
 
-    /* tipo_nivel: refaz fetch ao mudar */
-    var tipoNivelSel = dinamicos.querySelector('[data-tipo-nivel]');
-    if (tipoNivelSel) {
-      tipoNivelSel.addEventListener('change', function () {
-        fetchCampos(getTipoAtual(), tipoNivelSel.value, getSouChamp());
+    /* tipo_nivel: refaz fetch ao mudar — para Champ+downgrade já passa souChamp=true */
+    var tipoNivelRadios = dinamicos.querySelectorAll('[data-tipo-nivel-ajax]');
+    tipoNivelRadios.forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        var tipoNivel = radio.value;
+        fetchCampos(getTipoAtual(), tipoNivel, getSouChamp(tipoNivel));
       });
-    }
+    });
 
-    /* sou_champ: refaz fetch */
+    /* sou_champ: refaz fetch — só aparece para não-Champ */
     var souChampCb = dinamicos.querySelector('[data-sou-champ]');
     if (souChampCb) {
       souChampCb.addEventListener('change', function () {
-        fetchCampos(getTipoAtual(), getTipoNivel(), souChampCb.checked);
+        var tipoNivel = getTipoNivel();
+        fetchCampos(getTipoAtual(), tipoNivel, souChampCb.checked);
       });
     }
 
@@ -505,9 +531,12 @@ document.addEventListener('DOMContentLoaded', function () {
   /* INIT: se há tipo inicial (submit inválido), ativa pill e busca campos */
   var erroServer = document.getElementById('campos-erros-server');
   if (erroServer) {
-    var tipoInicial    = erroServer.getAttribute('data-tipo');
+    var tipoInicial      = erroServer.getAttribute('data-tipo');
     var tipoNivelInicial = erroServer.getAttribute('data-tipo-nivel');
-    var souChampInicial  = erroServer.getAttribute('data-sou-champ') === '1';
+    /* Para Champ+downgrade, souChamp é inferido automaticamente */
+    var souChampInicial  = IS_CHAMP && tipoNivelInicial === 'downgrade'
+      ? true
+      : erroServer.getAttribute('data-sou-champ') === '1';
     if (tipoInicial) {
       setActivePill(tipoInicial);
       fetchCampos(tipoInicial, tipoNivelInicial, souChampInicial);

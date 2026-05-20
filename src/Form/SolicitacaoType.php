@@ -26,7 +26,7 @@ class SolicitacaoType extends AbstractType
 
     private const PERMALINK_PATTERN = '/
         https?:\/\/
-        (?:www\.|beta\.)?\.waze\.com
+        (?:www\.|beta\.)?waze\.com
         (?:\/[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})?)?
         \/editor
         [^\s]*
@@ -91,13 +91,12 @@ class SolicitacaoType extends AbstractType
             $cargo     = $data['dados_cargo']     ?? null;
             $tipoNivel = $data['dados_tipoNivel'] ?? null;
 
-            // Se is_champ=true e tipoNivel=downgrade, considera souChamp=true
-            // automaticamente quando campos de downgrade já estão presentes no POST
-            // (o usuário completou o fluxo AJAX de 2 etapas e submeteu o formulário).
-            // Isso evita que o PRE_SUBMIT reconstituia o form sem addCamposDowngrade()
-            // apenas porque o checkbox dados_souChamp não chegou no submit final.
             $souChamp = !empty($data['dados_souChamp']);
-            if (!$souChamp && $isChamp && $tipoNivel === 'downgrade' && isset($data['dados_editorNome'])) {
+
+            // Champ fazendo downgrade: infere souChamp automaticamente.
+            // O checkbox não é adicionado ao form nesse caso (ver addCamposNivel),
+            // então dados_souChamp nunca vem no POST — inferimos aqui.
+            if ($isChamp && $tipoNivel === 'downgrade') {
                 $souChamp = true;
             }
 
@@ -198,7 +197,6 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // GERENTE DE ÁREA
-    // Ordem: Mentor > Recomendadores > Comentários > Polígono > Comuniquei
     // -------------------------------------------------------------------------
     private function addCamposGerenteArea(\Symfony\Component\Form\FormInterface $form): void
     {
@@ -224,7 +222,7 @@ class SolicitacaoType extends AbstractType
                 'label'     => 'Polígono da área',
                 'mapped'    => false,
                 'attr'      => ['rows' => 4],
-                'help'      => 'Cole o polígono gerado por uma dessas ferramentas:<br>'
+                'help'      => 'Compartilhe o polígono gerado por uma dessas ferramentas:<br>'
                              . '• <a href="https://arthur-e.github.io/Wicket/sandbox-gmaps3.html" target="_blank" rel="noopener">arthur-e.github.io/Wicket</a><br>'
                              . '• <a href="http://map.wazedev.com/" target="_blank" rel="noopener">map.wazedev.com</a><br>'
                              . 'O valor deve iniciar com <strong>POLYGON((</strong> ou <strong>LINESTRING(</strong>.',
@@ -249,7 +247,6 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // GERENTE DE ESTADO OU PAÍS
-    // Campo dados_uf só é adicionado quando cargo = gerente_estado
     // -------------------------------------------------------------------------
     private function addCamposGerenteEstadoPais(\Symfony\Component\Form\FormInterface $form, ?string $cargo = null): void
     {
@@ -302,16 +299,13 @@ class SolicitacaoType extends AbstractType
     // -------------------------------------------------------------------------
     // NÍVEL (UPGRADE / DOWNGRADE)
     //
-    // Fluxo:
-    //   1. Usuário vê o radio Upgrade/Downgrade apenas se is_champ=true
-    //   2. Ao marcar Downgrade, o front exibe o checkbox "Sou Champ" (dados_souChamp)
-    //   3. Ao marcar o checkbox, o front dispara o AJAX passando
-    //      tipoNivel=downgrade e souChamp=1
-    //   4. Server-side: addCamposDowngrade só é chamado se is_champ=true E souChamp=true
-    //   5. No PRE_SUBMIT, souChamp é inferido como true se is_champ=true,
-    //      tipoNivel=downgrade e dados_editorNome está presente no POST —
-    //      garantindo que o form reconstitua os campos mesmo sem o checkbox
-    //      chegar explicitamente no submit final.
+    // Fluxo Champ:
+    //   1. Usuário seleciona pill "Nível" → radio Upgrade/Downgrade aparece
+    //   2. Clica em "Downgrade" → AJAX envia tipoNivel=downgrade
+    //   3. Controller infere souChamp=true automaticamente (is_champ=true)
+    //   4. Form é construído com souChamp=true → addCamposDowngrade diretamente
+    //      SEM adicionar dados_souChamp ao form (evita falha de validação)
+    //   5. No PRE_SUBMIT: mesma inferência garante que os campos existam
     // -------------------------------------------------------------------------
     private function addCamposNivel(
         \Symfony\Component\Form\FormInterface $form,
@@ -331,25 +325,28 @@ class SolicitacaoType extends AbstractType
         ]);
 
         if ($tipoNivel === 'downgrade' && $isChamp) {
-            // Checkbox de confirmação: "Confirmo que sou Champ"
-            // Só existe no form quando is_champ=true, bloqueando forja de POST
-            $form->add('dados_souChamp', CheckboxType::class, [
-                'label'    => 'Confirmo que sou Champ e estou autorizado a solicitar downgrade',
-                'mapped'   => false,
-                'required' => true,
-                'attr'     => ['data-sou-champ' => '1'],
-                'constraints' => [
-                    new Assert\IsTrue(message: 'Você precisa confirmar que é Champ para solicitar downgrade.'),
-                ],
-            ]);
-
-            // Adiciona campos do downgrade se o checkbox foi marcado (AJAX ou submit final inferido)
             if ($souChamp) {
+                // Champ confirmado automaticamente: vai direto para os campos
+                // NÃO adiciona dados_souChamp ao form — evita falha de validação
+                // pois o campo não existe no POST (veio como hidden ou foi inferido)
                 $this->addCamposDowngrade($form);
+            } else {
+                // Não-Champ tentando downgrade: exibe checkbox de confirmação
+                // O checkbox bloqueia o acesso até que o usuário confirme
+                $form->add('dados_souChamp', CheckboxType::class, [
+                    'label'    => 'Confirmo que sou Champ e estou autorizado a solicitar downgrade',
+                    'mapped'   => false,
+                    'required' => true,
+                    'attr'     => ['data-sou-champ' => '1'],
+                    'constraints' => [
+                        new Assert\IsTrue(message: 'Você precisa confirmar que é Champ para solicitar downgrade.'),
+                    ],
+                ]);
             }
-        } else {
+        } elseif ($tipoNivel === 'upgrade' || (!$isChamp && $tipoNivel === null)) {
             $this->addCamposUpgrade($form);
         }
+        // tipoNivel === null && isChamp: apenas o radio aparece, sem campos extras
     }
 
     // -------------------------------------------------------------------------
@@ -455,7 +452,7 @@ class SolicitacaoType extends AbstractType
     }
 
     // -------------------------------------------------------------------------
-    // DOWNGRADE — editor-alvo; champNome removido (sistema usa usuário logado)
+    // DOWNGRADE
     // -------------------------------------------------------------------------
     private function addCamposDowngrade(\Symfony\Component\Form\FormInterface $form): void
     {

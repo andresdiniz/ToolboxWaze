@@ -241,13 +241,20 @@
   /* ── Elementos principais ─────────────────────────────────────────────── */
   const tipoSelect = document.querySelector('[data-tipo-select]');
   if (!tipoSelect) return;
-  const estadoSel = document.querySelector('[data-estado-select]');
   const pills     = document.querySelectorAll('.tipo-pill');
   const dinamicos = document.getElementById('campos-dinamicos');
   const spinner   = document.getElementById('campos-spinner');
   const btnEnviar = document.getElementById('btn-enviar');
 
-  /* Estado corrente do tipo-nível e souChamp para recargas AJAX */
+  /*
+    tipoNivelAtual rastreia se estamos em 'downgrade', 'upgrade' ou null.
+    O fetch só acontece quando:
+      1. O usuário troca de tipo (pill) → sempre
+      2. O usuário escolhe downgrade → precisa recarregar para mostrar bloco Champ
+      3. O usuário volta de downgrade para upgrade → precisa recarregar para remover bloco Champ
+      4. O usuário marca/desmarca checkbox Champ → precisa recarregar para mostrar/remover campos extras
+    Não faz fetch ao selecionar upgrade quando já está em upgrade (nenhuma mudança visível).
+  */
   let tipoNivelAtual = null;
   let souChampAtual  = false;
 
@@ -262,8 +269,8 @@
   function chooseTipo(valor) {
     if (tipoSelect.value === valor) return;
     tipoSelect.value = valor;
-    tipoNivelAtual   = null;   /* reset ao trocar tipo */
-    souChampAtual    = false;  /* reset ao trocar tipo */
+    tipoNivelAtual   = null;
+    souChampAtual    = false;
     activatePill(valor);
     fetchCampos(valor, null, false);
   }
@@ -306,30 +313,32 @@
   /* ── Listeners para Upgrade/Downgrade e checkbox Champ ── */
   function bindNivelListeners() {
 
-    /*
-      Radio dados_tipoNivel: upgrade ou downgrade.
-      Guard: só faz fetch se o valor realmente mudou,
-      evitando recarga ao clicar no mesmo radio já marcado
-      (que dispararia change em alguns browsers).
-    */
     dinamicos.querySelectorAll('[data-tipo-nivel] input[type=radio]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
       radio.dataset.nivelBound = '1';
       radio.addEventListener('change', function () {
         const novoValor = this.value;
-        if (novoValor === tipoNivelAtual) return; /* guard: sem mudança real */
+
+        /* Sem mudança: ignora */
+        if (novoValor === tipoNivelAtual) return;
+
+        const anteriorEraDowngrade = (tipoNivelAtual === 'downgrade');
         tipoNivelAtual = novoValor;
-        souChampAtual  = false; /* reset champ ao trocar upgrade↔downgrade */
-        fetchCampos(tipoSelect.value, tipoNivelAtual, false);
+        souChampAtual  = false;
+
+        /*
+          Só faz fetch nos casos que mudam o formulário visivelmente:
+            - Escolheu downgrade (precisa mostrar bloco Champ)
+            - Voltou de downgrade para upgrade (precisa remover bloco Champ)
+          Se estava em null/upgrade e escolheu upgrade: não há nada para mudar.
+        */
+        if (novoValor === 'downgrade' || anteriorEraDowngrade) {
+          fetchCampos(tipoSelect.value, tipoNivelAtual, false);
+        }
       });
     });
 
-    /*
-      Checkbox dados_souChamp: confirma Champ → carrega campos do downgrade.
-      O data-sou-champ está no <input> (form_widget), não no wrapper,
-      portanto querySelector('[data-sou-champ]') encontra o checkbox corretamente.
-      Só deve aparecer quando tipoNivelAtual === 'downgrade'.
-    */
+    /* Checkbox dados_souChamp: só aparece quando tipoNivelAtual === 'downgrade' */
     const chk = dinamicos.querySelector('[data-sou-champ]');
     if (chk && !chk.dataset.champBound) {
       chk.dataset.champBound = '1';
@@ -340,8 +349,7 @@
     }
   }
 
-  /* Inicializa listeners nos campos já renderizados pelo Twig no page-load
-     (caso de re-submit com erros de validação) */
+  /* Inicializa listeners nos campos já renderizados pelo Twig (re-submit com erros) */
   bindNivelListeners();
 
   /* ── Bloqueia submit se permalink inválido ─────────────────── */

@@ -1,6 +1,6 @@
 {#
   Fragmento AJAX puro — SEM extends, SEM block.
-  Substitui completamente #campos-sub.
+  Substitui completamente #campos-dinamicos.
 
   Variáveis:
     form           — FormView de SolicitacaoType
@@ -8,6 +8,12 @@
     isChamp        — bool
     tipoNivelAtual — "upgrade" | "downgrade" | null
     souChampAuto   — bool: true quando Champ+downgrade (checkbox oculto/implícito)
+
+  Estrutura para tipo="nivel":
+    <div id="card-tipo-nivel-ajax">  ← sempre presente, nunca destruído pelo JS
+    <div id="campos-extras-nivel-server">  ← campos extras; vazio quando tipoNivel=null
+
+  Para outros tipos: campos direto, sem wrapping especial.
 #}
 {% set souChampAuto = souChampAuto ?? false %}
 {% form_theme form 'form/sol_theme.html.twig' %}
@@ -27,11 +33,6 @@
               value="{{ child.vars.value }}"
               class="form-check-input"
               data-tipo-nivel-ajax
-              {#
-                CORREÇÃO: usa tipoNivelAtual (variável Twig passada pelo controller)
-                para marcar o radio correto — child.vars.checked nunca é true
-                em contexto AJAX pois o form é criado com dados vazios (PRE_SET_DATA).
-              #}
               {{ tipoNivelAtual == child.vars.value ? 'checked' : '' }}
             >
             <label class="form-check-label" for="{{ child.vars.id }}">
@@ -53,18 +54,71 @@
         {% endif %}
       </div>
     </div>
-  {% endif %}
-{% endif %}
 
-{# ── Demais campos ───────────────────────────────────────────────────────────── #}
-{% if tipoAtual != 'nivel' or tipoNivelAtual is not null %}
+    {#
+      Bloco separado com ID fixo: JS substitui apenas este div ao trocar
+      upgrade<->downgrade (apenasExtras=true), sem destruir o card do radio.
+    #}
+    <div id="campos-extras-nivel-server">
+      {% if tipoNivelAtual is not null %}
+        {% for field in form %}
+          {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
+
+            {% if field.vars.name == 'dados_souChamp' %}
+              {% if souChampAuto %}
+                <input type="hidden" name="{{ field.vars.full_name }}" value="1">
+              {% else %}
+                <div class="sol-card campo-animado">
+                  <div class="sol-card-body">
+                    <div data-sou-champ-wrapper="1">
+                      {{ form_label(field) }}
+                      {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
+                      {{ form_errors(field) }}
+                      {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
+
+            {% elseif field.vars.name == 'dados_permalink' %}
+              <div class="sol-card campo-animado">
+                <div class="sol-card-body">
+                  <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
+                    {{ field.vars.label }}{% if field.vars.required %} <span class="sol-required" aria-hidden="true">*</span>{% endif %}
+                  </label>
+                  <div class="permalink-wrapper">
+                    {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&lat=-20.255&lon=-43.224&zoomLevel=15'}}) }}
+                    <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>
+                    </button>
+                  </div>
+                  {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+                  {{ form_errors(field) }}
+                </div>
+              </div>
+
+            {% else %}
+              <div class="sol-card campo-animado">
+                <div class="sol-card-body">
+                  {{ form_row(field) }}
+                </div>
+              </div>
+            {% endif %}
+
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>{# fim #campos-extras-nivel-server #}
+
+  {% endif %}
+
+{# ── Demais tipos (não-nivel) ────────────────────────────────────────────────── #}
+{% else %}
   {% for field in form %}
     {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
 
-      {# Checkbox souChamp: oculto para Champ+downgrade (inferido automaticamente) #}
       {% if field.vars.name == 'dados_souChamp' %}
         {% if souChampAuto %}
-          {# Campo oculto enviado automaticamente com valor 1 — sem interação do usuário #}
           <input type="hidden" name="{{ field.vars.full_name }}" value="1">
         {% else %}
           <div class="sol-card campo-animado">

@@ -114,17 +114,21 @@
     </div>
   </div>
 
-  <div id="campos-spinner" class="d-none">
+  <div id="campos-spinner" class="d-none" style="padding:.75rem 0">
     <div class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></div>
     Carregando campos…
   </div>
 
+  {#
+    #campos-dinamicos: recebe o HTML do fragmento _campos.html.twig via AJAX.
+    O botão "Enviar solicitação" é injetado pelo JS no final deste div
+    após cada fetch bem-sucedido — nunca fica no meio da página.
+  #}
   <div id="campos-dinamicos"></div>
 
   {#
     campos-erros-server: presente apenas quando há submit inválido.
     Guarda tipo e tipoNivel para re-hidratar o form via AJAX.
-    postData vem do controller com os dados do POST.
   #}
   {% if tipoAtual %}
   <div id="campos-erros-server" style="display:none" aria-hidden="true"
@@ -134,14 +138,6 @@
   </div>
   {% endif %}
 
-  <div class="d-flex justify-content-end mt-2 mb-5">
-    <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
-      <span id="btn-enviar-text"><i class="bi bi-send-fill"></i> Enviar solicitação</span>
-      <span id="btn-enviar-loading" class="d-none">
-        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando…
-      </span>
-    </button>
-  </div>
   {{ form_end(form) }}
 
   {% endif %}
@@ -349,25 +345,53 @@ document.addEventListener('DOMContentLoaded', function () {
   var pills      = document.querySelectorAll('.tipo-pill');
   var spinner    = document.getElementById('campos-spinner');
   var dinamicos  = document.getElementById('campos-dinamicos');
-  var btnEnviar  = document.getElementById('btn-enviar');
   var tipoError  = document.getElementById('tipo-error-msg');
 
   var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
   var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
 
-  /*
-   * tipoNivelAtual: estado em memoria do radio selecionado.
-   * Comeca como null; muda quando o usuario clica num radio
-   * ou quando onRadioChange e chamado pela re-hidratacao.
-   */
+  /* Estado em memória do radio tipoNivel selecionado */
   var tipoNivelAtual = null;
 
   function getTipoAtual() { return tipoSelect ? tipoSelect.value : ''; }
+
+  function getBtnEnviar() { return document.getElementById('btn-enviar'); }
 
   function getSouChamp(tipoNivel) {
     if (IS_CHAMP && tipoNivel === 'downgrade') return true;
     var cb = dinamicos && dinamicos.querySelector('[data-sou-champ]');
     return cb ? cb.checked : false;
+  }
+
+  /*
+   * injetaBotaoEnviar: garante que o botão "Enviar" fique SEMPRE no final
+   * de #campos-dinamicos, após todos os campos carregados via AJAX.
+   * Remove qualquer botão anterior antes de reinserir.
+   */
+  function injetaBotaoEnviar(habilitado) {
+    if (!dinamicos) return;
+    var antigo = document.getElementById('btn-enviar-wrapper');
+    if (antigo) antigo.remove();
+
+    var wrapper = document.createElement('div');
+    wrapper.id = 'btn-enviar-wrapper';
+    wrapper.className = 'd-flex justify-content-end mt-2 mb-5';
+    wrapper.innerHTML =
+      '<button type="submit" class="btn-enviar" id="btn-enviar"' + (habilitado ? '' : ' disabled') + '>' +
+        '<span id="btn-enviar-text"><i class="bi bi-send-fill"></i> Enviar solicitação</span>' +
+        '<span id="btn-enviar-loading" class="d-none">' +
+          '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando…' +
+        '</span>' +
+      '</button>';
+    dinamicos.appendChild(wrapper);
+
+    /* Re-aplica listener de submit loading após recriar o botão */
+    var formSol = document.getElementById('form-solicitacao');
+    var btn = document.getElementById('btn-enviar');
+    if (formSol && btn) {
+      formSol.onsubmit = null;
+      formSol.addEventListener('submit', onFormSubmit);
+    }
   }
 
   function setActivePill(valor) {
@@ -377,32 +401,26 @@ document.addEventListener('DOMContentLoaded', function () {
       p.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
     if (tipoSelect) tipoSelect.value = valor;
-    if (btnEnviar)  btnEnviar.disabled = !valor;
     if (tipoError)  tipoError.classList.add('d-none');
+    /* Botão é controlado pelo injetaBotaoEnviar — não precisa de referência direta aqui */
   }
 
   /*
-   * fetchCampos: busca o fragmento HTML do servidor (_campos.html.twig).
-   *
-   * O servidor recebe tipoNivel via query string e renderiza o radio
-   * com checked aplicado diretamente no Twig do fragmento.
-   * Portanto, ao passar tipoNivel no fetch, o radio ja vem marcado no HTML.
-   *
-   * apenasExtras=true: so atualiza #campos-extras-nivel (abaixo do radio),
-   *   sem destruir o card do radio. Usado ao trocar upgrade<->downgrade.
-   * apenasExtras=false: recarrega tudo (primeiro clique na pill).
+   * fetchCampos:
+   *   apenasExtras=false → recarrega #campos-dinamicos inteiro (clique na pill)
+   *   apenasExtras=true  → substitui apenas #campos-extras-nivel-server
+   *                        sem destruir o card do radio (troca upgrade<->downgrade)
    */
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras) {
     if (!tipo) return;
-
     apenasExtras = !!apenasExtras;
 
     if (!apenasExtras) {
       tipoNivelAtual = tipoNivel || null;
-      if (spinner)   spinner.classList.remove('d-none');
       if (dinamicos) dinamicos.innerHTML = '';
+      if (spinner)   spinner.classList.remove('d-none');
     } else {
-      var extras = dinamicos && dinamicos.querySelector('#campos-extras-nivel');
+      var extras = dinamicos && dinamicos.querySelector('#campos-extras-nivel-server');
       if (extras) extras.innerHTML = '';
       if (spinner) spinner.classList.remove('d-none');
     }
@@ -421,49 +439,42 @@ document.addEventListener('DOMContentLoaded', function () {
           dinamicos.innerHTML = html;
           setActivePill(tipo);
 
+          /*
+           * FIX: radio checked via HTML nunca dispara 'change'.
+           * Detecta manualmente e chama onRadioChange para carregar
+           * os campos extras sem exigir clique do usuário.
+           */
           if (tipo === 'nivel') {
-            var cardRadio = dinamicos.querySelector('#card-tipo-nivel-ajax');
-            if (cardRadio) {
-              var extrasDiv = document.createElement('div');
-              extrasDiv.id = 'campos-extras-nivel';
-              cardRadio.insertAdjacentElement('afterend', extrasDiv);
-              while (cardRadio.nextSibling) {
-                extrasDiv.appendChild(cardRadio.nextSibling);
-              }
-            }
-
-            /*
-             * FIX: o evento 'change' NUNCA dispara em radios que ja chegam
-             * marcados via HTML (checked no atributo). Sem isso, ao voltar
-             * do servidor apos submit invalido com tipoNivel=upgrade/downgrade,
-             * o radio ficava visualmente marcado mas os campos extras nao
-             * eram carregados. Verificamos manualmente e chamamos onRadioChange.
-             */
             var radioMarcado = dinamicos.querySelector('[data-tipo-nivel-ajax]:checked');
             if (radioMarcado) {
+              /* Não chama injetaBotaoEnviar ainda — será chamado pelo fetch extras */
               onRadioChange(radioMarcado.value);
-              return; // initDinamicoListeners sera chamado no fetchCampos recursivo (apenasExtras=true)
+              return;
             }
           }
+
+          /* Para tipos sem radio intermediário, injeta botão imediatamente */
+          injetaBotaoEnviar(true);
 
         } else {
-          var extras2 = dinamicos.querySelector('#campos-extras-nivel');
-          if (!extras2) {
-            extras2 = document.createElement('div');
-            extras2.id = 'campos-extras-nivel';
-            var cardRadio2 = dinamicos.querySelector('#card-tipo-nivel-ajax');
-            if (cardRadio2) {
-              cardRadio2.insertAdjacentElement('afterend', extras2);
-            } else {
-              dinamicos.appendChild(extras2);
-            }
+          /*
+           * apenasExtras=true: substitui #campos-extras-nivel-server
+           * com o conteúdo retornado (já sem o card do radio, pois o
+           * _campos.html.twig separa os dois blocos com IDs distintos).
+           */
+          var extrasEl = dinamicos.querySelector('#campos-extras-nivel-server');
+          if (extrasEl) {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            /* Remove o card do radio do HTML retornado — só queremos os extras */
+            var cardRadio = tmp.querySelector('#card-tipo-nivel-ajax');
+            if (cardRadio) cardRadio.remove();
+            /* Remove o wrapper #campos-extras-nivel-server aninhado, se vier */
+            var innerExtras = tmp.querySelector('#campos-extras-nivel-server');
+            extrasEl.innerHTML = innerExtras ? innerExtras.innerHTML : tmp.innerHTML;
           }
-
-          var tmp = document.createElement('div');
-          tmp.innerHTML = html;
-          var novoCard = tmp.querySelector('#card-tipo-nivel-ajax');
-          if (novoCard) novoCard.remove();
-          extras2.innerHTML = tmp.innerHTML;
+          /* Botão vai ao final, habilitado pois tipoNivel foi escolhido */
+          injetaBotaoEnviar(true);
         }
 
         initDinamicoListeners();
@@ -472,11 +483,6 @@ document.addEventListener('DOMContentLoaded', function () {
       .catch(function () { if (spinner) spinner.classList.add('d-none'); });
   }
 
-  /*
-   * onRadioChange: chamado quando o usuario clica num radio tipoNivel
-   * OU quando o radio ja vem checked do servidor (ver FIX acima).
-   * NAO destroi o card do radio — apenas busca os campos extras.
-   */
   function onRadioChange(valor) {
     tipoNivelAtual = valor;
     fetchCampos(getTipoAtual(), valor, getSouChamp(valor), true);
@@ -493,6 +499,23 @@ document.addEventListener('DOMContentLoaded', function () {
         el.style.transform  = 'translateY(0)';
       }, i * 60);
     });
+  }
+
+  function onFormSubmit(e) {
+    var tipo = getTipoAtual();
+    if (!tipo) {
+      e.preventDefault();
+      if (tipoError) tipoError.classList.remove('d-none');
+      var pillsEl = document.getElementById('tipo-pills');
+      if (pillsEl) pillsEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    var btnText    = document.getElementById('btn-enviar-text');
+    var btnLoading = document.getElementById('btn-enviar-loading');
+    var btn        = document.getElementById('btn-enviar');
+    if (btnText)    btnText.classList.add('d-none');
+    if (btnLoading) btnLoading.classList.remove('d-none');
+    if (btn)        btn.disabled = true;
   }
 
   function initDinamicoListeners() {
@@ -519,11 +542,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /*
-     * FIX: usa tipoNivelAtual (variavel de estado) para garantir que
-     * o fetch do souChamp re-use o tipoNivel ja escolhido pelo usuario,
-     * em vez de enviar null e perder os campos extras carregados.
-     */
+    /* Checkbox souChamp — usa tipoNivelAtual para não perder o nivel escolhido */
     var souChampCb = dinamicos.querySelector('[data-sou-champ]');
     if (souChampCb) {
       souChampCb.addEventListener('change', function () {
@@ -575,26 +594,18 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  /* Submit: valida tipo selecionado */
+  /* Listener de submit delegado ao form (btn é recriado dinamicamente) */
   var formSol = document.getElementById('form-solicitacao');
-  if (formSol) {
-    formSol.addEventListener('submit', function (e) {
-      var tipo = getTipoAtual();
-      if (!tipo) {
-        e.preventDefault();
-        if (tipoError) tipoError.classList.remove('d-none');
-        document.getElementById('tipo-pills').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-      var btnText    = document.getElementById('btn-enviar-text');
-      var btnLoading = document.getElementById('btn-enviar-loading');
-      if (btnText)    btnText.classList.add('d-none');
-      if (btnLoading) btnLoading.classList.remove('d-none');
-      if (btnEnviar)  btnEnviar.disabled = true;
-    });
-  }
+  if (formSol) formSol.addEventListener('submit', onFormSubmit);
 
-  /* Re-hidratacao apos submit invalido (server-side validation) */
+  /*
+   * Re-hidratação após submit inválido.
+   * setActivePill é chamado IMEDIATAMENTE (síncrono) para:
+   *   - marcar a pill correta
+   *   - garantir que tipoSelect.value está preenchido
+   * fetchCampos é chamado logo depois (assíncrono) para carregar os campos.
+   * injetaBotaoEnviar é chamado dentro do fetchCampos após o fetch completar.
+   */
   var erroServer = document.getElementById('campos-erros-server');
   if (erroServer) {
     var tipoInicial      = erroServer.getAttribute('data-tipo');

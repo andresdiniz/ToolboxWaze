@@ -10,8 +10,8 @@
     <title>Gerenciar Usuários — ToolboxWaze Admin</title>
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
     <style>
-        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--surface2:#f3f0ec;--border:#d4d1ca;--divider:#e8e5e0;--text:#28251d;--muted:#7a7974;--faint:#bab9b4;--primary:#01696f;--primary-h:#0c4e54;--primary-hl:color-mix(in oklab,#01696f 12%,transparent);--success:#437a22;--success-hl:color-mix(in oklab,#437a22 12%,transparent);--error:#a12c7b;--error-hl:color-mix(in oklab,#a12c7b 12%,transparent);--warning:#964219;--warning-hl:color-mix(in oklab,#964219 12%,transparent);--amber:#7a5c00;--amber-hl:color-mix(in oklab,#7a5c00 10%,transparent);--radius:.75rem;--shadow:0 2px 12px rgba(0,0,0,.07)}
-        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--surface2:#22211f;--border:#393836;--divider:#2a2927;--text:#cdccca;--muted:#797876;--faint:#5a5957;--primary:#4f98a3;--primary-h:#227f8b;--primary-hl:color-mix(in oklab,#4f98a3 15%,transparent);--success:#6daa45;--success-hl:color-mix(in oklab,#6daa45 15%,transparent);--error:#d163a7;--error-hl:color-mix(in oklab,#d163a7 15%,transparent);--warning:#bb653b;--warning-hl:color-mix(in oklab,#bb653b 15%,transparent);--amber:#c8960a;--amber-hl:color-mix(in oklab,#c8960a 15%,transparent)}
+        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--surface2:#f3f0ec;--border:#d4d1ca;--divider:#e8e5e0;--text:#28251d;--muted:#7a7974;--faint:#bab9b4;--primary:#01696f;--primary-h:#0c4e54;--primary-hl:color-mix(in oklab,#01696f 12%,transparent);--success:#437a22;--success-hl:color-mix(in oklab,#437a22 12%,transparent);--error:#a12c7b;--error-hl:color-mix(in oklab,#a12c7b 12%,transparent);--warning:#964219;--warning-hl:color-mix(in oklab,#964219 12%,transparent);--amber:#7a5c00;--amber-hl:color-mix(in oklab,#7a5c00 10%,transparent);--champ:#6b21a8;--champ-hl:color-mix(in oklab,#6b21a8 12%,transparent);--radius:.75rem;--shadow:0 2px 12px rgba(0,0,0,.07)}
+        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--surface2:#22211f;--border:#393836;--divider:#2a2927;--text:#cdccca;--muted:#797876;--faint:#5a5957;--primary:#4f98a3;--primary-h:#227f8b;--primary-hl:color-mix(in oklab,#4f98a3 15%,transparent);--success:#6daa45;--success-hl:color-mix(in oklab,#6daa45 15%,transparent);--error:#d163a7;--error-hl:color-mix(in oklab,#d163a7 15%,transparent);--warning:#bb653b;--warning-hl:color-mix(in oklab,#bb653b 15%,transparent);--amber:#c8960a;--amber-hl:color-mix(in oklab,#c8960a 15%,transparent);--champ:#a855f7;--champ-hl:color-mix(in oklab,#a855f7 15%,transparent)}
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html{-webkit-font-smoothing:antialiased}
         body{font-family:'Satoshi',sans-serif;font-size:1rem;color:var(--text);background:var(--bg);min-height:100dvh}
@@ -45,6 +45,7 @@
         .badge-approved{background:var(--success-hl);color:var(--success)}
         .badge-rejected{background:var(--error-hl);color:var(--error)}
         .badge-admin{background:var(--primary-hl);color:var(--primary)}
+        .badge-champ{background:var(--champ-hl);color:var(--champ)}
         .chevron{color:var(--faint);transition:transform .2s;flex-shrink:0}
         .user-card.open .chevron{transform:rotate(180deg)}
         .user-card-body{display:none;border-top:1px solid var(--divider);padding:1.25rem}
@@ -55,9 +56,12 @@
         .perm-check:hover{border-color:var(--primary);background:var(--primary-hl)}
         .perm-check input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
         .perm-check span{font-size:.875rem;font-weight:500}
-        .admin-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--primary);border-radius:.5rem;background:var(--primary-hl);margin-bottom:1rem;width:fit-content}
+        .admin-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--primary);border-radius:.5rem;background:var(--primary-hl);margin-bottom:.6rem;width:fit-content}
         .admin-toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
         .admin-toggle label{font-size:.875rem;font-weight:600;color:var(--primary);cursor:pointer}
+        .champ-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--champ);border-radius:.5rem;background:var(--champ-hl);margin-bottom:1rem;width:fit-content}
+        .champ-toggle input{accent-color:var(--champ);width:15px;height:15px;cursor:pointer}
+        .champ-toggle label{font-size:.875rem;font-weight:600;color:var(--champ);cursor:pointer}
 
         /* UFs */
         .ufs-section{margin-top:1rem;margin-bottom:1.25rem}
@@ -226,6 +230,11 @@
                         <label for="is_admin_{{ user.id }}">Conceder privilégios de Administrador</label>
                     </div>
 
+                    <div class="champ-toggle">
+                        <input type="checkbox" name="is_champ" id="is_champ_{{ user.id }}" value="1">
+                        <label for="is_champ_{{ user.id }}">⭐ Conceder perfil Champ (processa downgrades)</label>
+                    </div>
+
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
                         {% for key, label in allPerms %}
@@ -236,9 +245,7 @@
                         {% endfor %}
                     </div>
 
-                    {# ESTADOS — macro reutilizável; user pendente começa com all_ufs marcado #}
                     {{ _self.ufsBlock(user, allUfs) }}
-
                     {{ _self.tiposBlock(user, allTipos) }}
 
                     <div class="actions">
@@ -273,6 +280,7 @@
         {% else %}
         <div class="user-list">
         {% for user in approved %}
+        {% set userIsChamp = 'ROLE_CHAMP' in user.roles %}
         <div class="user-card" id="card-{{ user.id }}">
             <div class="user-card-header" onclick="toggleCard({{ user.id }})">
                 <div class="avatar">
@@ -284,7 +292,6 @@
                         <span>{{ user.email }}</span>
                         {% if user.wazeNickname %}<span>🗺 {{ user.wazeNickname }}</span>{% endif %}
                         {% if user.lastLoginAt %}<span>Último acesso {{ user.lastLoginAt|date('d/m/Y') }}</span>{% endif %}
-                        {# Exibir UFs atuais do usuário no header do card #}
                         {% if user.allowedUfs is not null %}
                             <span title="Estados com acesso">
                                 🗺
@@ -297,6 +304,7 @@
                     </div>
                 </div>
                 {% if user.isAdmin %}<span class="badge badge-admin">Admin</span>{% else %}<span class="badge badge-approved">Ativo</span>{% endif %}
+                {% if userIsChamp %}<span class="badge badge-champ">⭐ Champ</span>{% endif %}
                 <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
             </div>
             <div class="user-card-body">
@@ -313,6 +321,11 @@
                         <label for="admin_{{ user.id }}">Privilégios de Administrador</label>
                     </div>
 
+                    <div class="champ-toggle">
+                        <input type="checkbox" name="is_champ" id="champ_{{ user.id }}" value="1" {{ userIsChamp ? 'checked' : '' }}>
+                        <label for="champ_{{ user.id }}">⭐ Perfil Champ (processa downgrades)</label>
+                    </div>
+
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
                         {% for key, label in allPerms %}
@@ -323,9 +336,7 @@
                         {% endfor %}
                     </div>
 
-                    {# ESTADOS — com os valores atuais do usuário pré-selecionados #}
                     {{ _self.ufsBlock(user, allUfs) }}
-
                     {{ _self.tiposBlock(user, allTipos) }}
 
                     <div class="actions">
@@ -453,12 +464,10 @@ function updateTiposCount(userId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    /* inicializar contadores de UFs */
     document.querySelectorAll('[id^="ufs_grid_"]').forEach(grid => {
         const uid = grid.id.replace('ufs_grid_', '');
         updateUfsCount(uid);
     });
-    /* inicializar contadores de tipos */
     document.querySelectorAll('[id^="tipos_grid_"]').forEach(grid => {
         const uid = grid.id.replace('tipos_grid_', '');
         updateTiposCount(uid);

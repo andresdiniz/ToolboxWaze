@@ -1,7 +1,10 @@
-{% extends 'base_ajax.html.twig' %}
+{#
+  Fragmento AJAX puro — SEM extends, SEM block, SEM layout.
+  Retorna apenas os campos dinâmicos para injetar no #campos-dinamicos.
+  Chamado pelo controller quando _ajax_tipo está presente.
+#}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
-{% block body %}
 {% for field in form %}
   {% if field.vars.name starts with 'dados_' %}
     <div class="sol-card campo-animado">
@@ -35,4 +38,3 @@
     <p id="oops-file-error" class="sol-error d-none mt-1"><i class="bi bi-exclamation-circle"></i> <span></span></p>
   </div>
 </div>
-{% endblock %}

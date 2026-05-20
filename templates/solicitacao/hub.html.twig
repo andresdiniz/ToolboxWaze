@@ -72,13 +72,23 @@
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
+  {# Painel estático "Seus dados" — campos pré-preenchidos pelo controller #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-person-fill"></i> Seus dados</div>
     <div class="sol-card-body">
       <div class="row g-3">
-        <div class="col-md-6" id="wrap-solicitanteNome">{{ form_row(form.solicitanteNome) }}</div>
-        <div class="col-md-6" id="wrap-solicitanteUsuario">{{ form_row(form.solicitanteUsuario) }}</div>
-        <div class="col-12"   id="wrap-solicitanteEmail">{{ form_row(form.solicitanteEmail) }}</div>
+        <div class="col-md-6">
+          <div class="sol-label">Nome</div>
+          <div class="sol-static-value">{{ app.user.nome ?? app.user.userIdentifier }}</div>
+        </div>
+        <div class="col-md-6">
+          <div class="sol-label">Usuário Waze</div>
+          <div class="sol-static-value">{{ app.user.usuarioWaze ?? '—' }}</div>
+        </div>
+        <div class="col-12">
+          <div class="sol-label">E-mail</div>
+          <div class="sol-static-value">{{ app.user.email ?? app.user.userIdentifier }}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -389,16 +399,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tipoError)  tipoError.classList.add('d-none');
   }
 
-  /*
-   * Seletores de data-attr — devem bater EXATAMENTE com o que _campos.html.twig renderiza:
-   *   [data-tipo-nivel-ajax]          → radios upgrade/downgrade
-   *   [data-acao-gerente-ajax]        → legado gerente_estado_pais (antigo)
-   *   [data-acao-gerente-area-ajax]   → radios gerente_area incluir/excluir
-   *   [data-acao-gerente-ep-ajax]     → radios gerente_estado_pais incluir/excluir
-   */
   var SEL_NIVEL   = '[data-tipo-nivel-ajax]';
   var SEL_GA      = '[data-acao-gerente-area-ajax]';
-  var SEL_GEP     = '[data-acao-gerente-ep-ajax]';   /* ← era [data-acao-gerente-estado-pais-ajax], bug corrigido */
+  var SEL_GEP     = '[data-acao-gerente-ep-ajax]';
 
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerente, acaoGerenteArea, acaoGerenteEstadoPais) {
     if (!tipo) return;
@@ -440,7 +443,6 @@ document.addEventListener('DOMContentLoaded', function () {
           if (!precisaEscolha) {
             injetaBotaoEnviar(true);
           } else {
-            /* Re-hidratação: verifica radio já marcado */
             if (tipo === 'nivel') {
               var rm = dinamicos.querySelector(SEL_NIVEL + ':checked');
               if (rm) { onRadioChange(rm.value); return; }
@@ -451,7 +453,6 @@ document.addEventListener('DOMContentLoaded', function () {
               var rmGEP = dinamicos.querySelector(SEL_GEP + ':checked');
               if (rmGEP) { onRadioGerenteEstadoPaisChange(rmGEP.value); return; }
             }
-            /* Nenhum radio pré-marcado: aguarda clique */
           }
 
         } else {
@@ -531,7 +532,6 @@ document.addEventListener('DOMContentLoaded', function () {
   function bindSubListeners() {
     if (!dinamicos) return;
 
-    /* Permalink copy */
     dinamicos.querySelectorAll('.permalink-copy-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var inp = btn.closest('.permalink-wrapper') && btn.closest('.permalink-wrapper').querySelector('[data-permalink]');
@@ -545,35 +545,30 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /* Radio tipoNivel */
     dinamicos.querySelectorAll(SEL_NIVEL).forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioChange(radio.value);
       });
     });
 
-    /* Radio acaoGerente legado */
     dinamicos.querySelectorAll('[data-acao-gerente-ajax]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteChange(radio.value);
       });
     });
 
-    /* Radio acaoGerenteArea */
     dinamicos.querySelectorAll(SEL_GA).forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteAreaChange(radio.value);
       });
     });
 
-    /* Radio acaoGerenteEstadoPais — usa SEL_GEP = [data-acao-gerente-ep-ajax] */
     dinamicos.querySelectorAll(SEL_GEP).forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteEstadoPaisChange(radio.value);
       });
     });
 
-    /* Checkbox souChamp */
     var souChampCb = dinamicos.querySelector('[data-sou-champ]');
     if (souChampCb) {
       souChampCb.addEventListener('change', function () {
@@ -581,7 +576,6 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    /* Preview imagens Oops */
     var oopsInput   = document.getElementById('input-oops-files');
     var oopsPreview = document.getElementById('oops-file-preview');
     var oopsError   = document.getElementById('oops-file-error');
@@ -612,7 +606,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  /* Clique nas pills */
   pills.forEach(function (pill) {
     pill.addEventListener('click', function () {
       var valor = pill.getAttribute('data-value');
@@ -628,11 +621,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  /* Submit listener */
   var formSol = document.getElementById('form-solicitacao');
   if (formSol) formSol.addEventListener('submit', onFormSubmit);
 
-  /* Re-hidratação após submit inválido */
   var erroServer = document.getElementById('campos-erros-server');
   if (erroServer) {
     var tipoInicial                  = erroServer.getAttribute('data-tipo');
@@ -663,7 +654,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (spinner) spinner.classList.add('d-none');
 
-  /* Modal resolver */
   var modalEl = document.getElementById('modal-resolver');
   if (modalEl) {
     modalEl.addEventListener('show.bs.modal', function (event) {

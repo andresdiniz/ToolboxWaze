@@ -1,8 +1,7 @@
-{# Fragmento AJAX — campos dinâmicos do form de solicitação.
-   Renderizado diretamente pelo controller quando _ajax_tipo está presente.
-   NÃO estende base.html.twig — é injetado no #campos-dinamicos pelo JS. #}
+{% extends 'base_ajax.html.twig' %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
+{% block body %}
 {% for field in form %}
   {% if field.vars.name starts with 'dados_' %}
     <div class="sol-card campo-animado">
@@ -27,7 +26,6 @@
   {% endif %}
 {% endfor %}
 
-{# Bloco de upload de imagens — visível apenas para tipo oops #}
 <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
   <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
   <div class="sol-card-body">
@@ -37,3 +35,4 @@
     <p id="oops-file-error" class="sol-error d-none mt-1"><i class="bi bi-exclamation-circle"></i> <span></span></p>
   </div>
 </div>
+{% endblock %}

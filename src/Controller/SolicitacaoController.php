@@ -37,8 +37,8 @@ class SolicitacaoController extends AbstractController
         $tipoAtual   = null;
 
         $ajaxTipo      = $request->query->get('_ajax_tipo');
-        $ajaxTipoNivel = $request->query->get('_ajax_tipoNivel');  // 'upgrade' | 'downgrade' | null
-        $ajaxSouChamp  = (bool) $request->query->get('_ajax_souChamp'); // '1' ou ''
+        $ajaxTipoNivel = $request->query->get('_ajax_tipoNivel');
+        $ajaxSouChamp  = (bool) $request->query->get('_ajax_souChamp');
 
         if ($ajaxTipo) {
             try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
@@ -55,11 +55,11 @@ class SolicitacaoController extends AbstractController
         ]);
         $form->handleRequest($request);
 
-        // ── Resposta AJAX — usa template parcial, sem preg_match frágil ──────
-        if ($ajaxTipo && $request->isXmlHttpRequest()) {
+        // ── Resposta AJAX: só retorna o fragmento de campos ────────────────────
+        if ($ajaxTipo) {
             return new Response(
                 $this->renderView('solicitacao/_campos.html.twig', [
-                    'form'      => $form,
+                    'form'      => $form->createView(),
                     'tipoAtual' => $tipoAtual,
                 ])
             );
@@ -105,7 +105,7 @@ class SolicitacaoController extends AbstractController
 
             $this->solicitacaoService->criar($solicitacao);
 
-            $this->addFlash('success', 'Solicitação enviada com sucesso! Você receberá uma confirmação por e-mail em breve.');
+            $this->addFlash('success', 'Solicitação enviada com sucesso!');
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
@@ -117,7 +117,7 @@ class SolicitacaoController extends AbstractController
                 $erros[] = $erro->getMessage();
             }
             if (!empty($erros)) {
-                $this->addFlash('danger', 'Corrija os erros no formulário: ' . implode(' | ', array_unique($erros)));
+                $this->addFlash('danger', 'Corrija os erros: ' . implode(' | ', array_unique($erros)));
             }
         }
 
@@ -140,9 +140,7 @@ class SolicitacaoController extends AbstractController
                     $filtroTipo,
                     excluirDowngrade: true
                 );
-                $contadores = $this->solicitacaoRepo->countByStatus(
-                    excluirDowngrade: true
-                );
+                $contadores = $this->solicitacaoRepo->countByStatus(excluirDowngrade: true);
             } elseif ($isChamp) {
                 $filtroStatus = $request->query->get('status') ?: null;
                 $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
@@ -205,8 +203,7 @@ class SolicitacaoController extends AbstractController
             throw $this->createAccessDeniedException('Token CSRF inválido.');
         }
 
-        $novoStatus = $request->request->get('desfecho')
-                   ?? $request->request->get('status');
+        $novoStatus = $request->request->get('desfecho') ?? $request->request->get('status');
 
         if (!$novoStatus || !array_key_exists($novoStatus, Solicitacao::STATUS_LABELS)) {
             $this->addFlash('danger', 'Status inválido.');
@@ -222,7 +219,6 @@ class SolicitacaoController extends AbstractController
         }
 
         $nota = trim((string) $request->request->get('nota', '')) ?: null;
-
         $this->solicitacaoService->mudarStatus($solicitacao, $novoStatus, $this->getUser(), $nota);
 
         $label = Solicitacao::STATUS_LABELS[$novoStatus] ?? $novoStatus;

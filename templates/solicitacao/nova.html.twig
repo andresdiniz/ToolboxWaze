@@ -168,6 +168,7 @@
   let tipoNivelAtual      = null;
   let acaoGerenteAtual    = null;
   let acaoGerenteEpAtual  = null;
+  let cargoAtual          = null;
   let souChampAtual       = false;
   let fetchController     = null;
 
@@ -193,6 +194,7 @@
     tipoNivelAtual     = null;
     acaoGerenteAtual   = null;
     acaoGerenteEpAtual = null;
+    cargoAtual         = null;
     souChampAtual      = false;
     tipoSelect.value   = valor;
     activatePill(valor);
@@ -221,6 +223,7 @@
     if (tipoNivelAtual)     url.searchParams.set('tipoNivel', tipoNivelAtual);
     if (acaoGerenteAtual)   url.searchParams.set('acaoGerenteArea', acaoGerenteAtual);
     if (acaoGerenteEpAtual) url.searchParams.set('acaoGerenteEstadoPais', acaoGerenteEpAtual);
+    if (cargoAtual)         url.searchParams.set('cargo', cargoAtual);
     if (souChampAtual)      url.searchParams.set('souChamp', '1');
 
     fetch(url.toString(), {
@@ -282,12 +285,29 @@
       radio.addEventListener('change', function () {
         if (!this.checked || this.value === acaoGerenteEpAtual) return;
         acaoGerenteEpAtual = this.value;
+        cargoAtual = null;  // reset cargo ao trocar de ação
         atualizaBtnEnviar();
         fetchCampos();
       });
       if (radio.checked && !acaoGerenteEpAtual) {
         acaoGerenteEpAtual = radio.value;
         atualizaBtnEnviar();
+      }
+    });
+
+    // Radio Gerente de Estado / Gerente de País (tipo=gerente_estado_pais)
+    // Ao mudar o cargo, dispara novo AJAX com ?cargo=... para mostrar/ocultar campo UF
+    subArea.querySelectorAll('[data-cargo-select] input[type="radio"]').forEach(radio => {
+      if (radio.dataset.cargoBound) return;
+      radio.dataset.cargoBound = '1';
+      radio.addEventListener('change', function () {
+        if (!this.checked || this.value === cargoAtual) return;
+        cargoAtual = this.value;
+        fetchCampos();
+      });
+      if (radio.checked && !cargoAtual) {
+        cargoAtual = radio.value;
+        // Não dispara fetchCampos aqui: o estado já está correto após o fetch anterior
       }
     });
 

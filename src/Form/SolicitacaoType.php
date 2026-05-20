@@ -40,6 +40,7 @@ class SolicitacaoType extends AbstractType
         $isChamp       = $options['is_champ'];
         $ajaxTipoNivel = $options['ajax_tipo_nivel'];
         $ajaxSouChamp  = $options['ajax_sou_champ'];
+        $ajaxCargo     = $options['ajax_cargo'];
 
         $builder
             ->add('tipo', ChoiceType::class, [
@@ -69,7 +70,7 @@ class SolicitacaoType extends AbstractType
             ]);
 
         $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event)
-            use ($isChamp, $ajaxTipoNivel, $ajaxSouChamp) {
+            use ($isChamp, $ajaxTipoNivel, $ajaxSouChamp, $ajaxCargo) {
             $solicitacao = $event->getData();
             $tipo = null;
             if ($solicitacao instanceof Solicitacao) {
@@ -78,12 +79,13 @@ class SolicitacaoType extends AbstractType
             $this->addDadosDinamicos(
                 $event->getForm(),
                 $tipo,
-                null,   // cargo
+                null,           // cargo via POST (PRE_SET_DATA não tem dados submetidos)
                 $ajaxTipoNivel,
                 $isChamp,
                 $ajaxSouChamp,
-                null,   // acaoGerenteArea
-                null    // acaoGerenteEstadoPais
+                null,           // acaoGerenteArea
+                null,           // acaoGerenteEstadoPais
+                $ajaxCargo      // cargo via AJAX GET
             );
         });
 
@@ -110,7 +112,8 @@ class SolicitacaoType extends AbstractType
                 $isChamp,
                 $souChamp,
                 $acaoGerenteArea,
-                $acaoGerenteEstadoPais
+                $acaoGerenteEstadoPais,
+                null            // no PRE_SUBMIT, cargo vem do form submetido
             );
         });
     }
@@ -122,10 +125,12 @@ class SolicitacaoType extends AbstractType
             'is_champ'        => false,
             'ajax_tipo_nivel' => null,
             'ajax_sou_champ'  => false,
+            'ajax_cargo'      => null,
         ]);
         $resolver->setAllowedTypes('is_champ', 'bool');
         $resolver->setAllowedValues('ajax_tipo_nivel', [null, 'upgrade', 'downgrade']);
         $resolver->setAllowedTypes('ajax_sou_champ', 'bool');
+        $resolver->setAllowedValues('ajax_cargo', [null, 'gerente_estado', 'gerente_pais']);
     }
 
     private function addDadosDinamicos(
@@ -136,12 +141,17 @@ class SolicitacaoType extends AbstractType
         bool    $isChamp                = false,
         bool    $souChamp               = false,
         ?string $acaoGerenteArea        = null,
-        ?string $acaoGerenteEstadoPais  = null
+        ?string $acaoGerenteEstadoPais  = null,
+        ?string $ajaxCargo              = null
     ): void {
+        // Para a rota AJAX (PRE_SET_DATA), $cargo vem de $ajaxCargo.
+        // Para o submit real (PRE_SUBMIT), $cargo vem do campo submetido.
+        $cargoEfetivo = $cargo ?? $ajaxCargo;
+
         match ($tipo) {
             Solicitacao::TIPO_IMAGEM_SATELITE     => $this->addCamposImagemSatelite($form),
             Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form, $acaoGerenteArea),
-            Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $acaoGerenteEstadoPais, $cargo),
+            Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $acaoGerenteEstadoPais, $cargoEfetivo),
             Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp, $souChamp),
             Solicitacao::TIPO_OOPS                => $this->addCamposOops($form),
             Solicitacao::TIPO_BANDEIRA_POSTO      => $this->addCamposBandeiraPosto($form),
@@ -330,6 +340,9 @@ class SolicitacaoType extends AbstractType
     //   3. Clica em Excluir → AJAX envia acaoGerenteEstadoPais=excluir
     //      → campos: cargo, UF (se estado), editorNome, justificativa, comentários
     //      (sem mentor/recomendadores — mesmo padrão do downgrade)
+    //
+    //   4. Ao selecionar o radio cargo (Gerente de Estado / País), o JS dispara
+    //      novo AJAX com o parâmetro `cargo`, e o campo UF aparece/desaparece.
     // -------------------------------------------------------------------------
     private function addCamposGerenteEstadoPais(
         \Symfony\Component\Form\FormInterface $form,
@@ -772,11 +785,26 @@ class SolicitacaoType extends AbstractType
                 ],
                 'constraints' => $this->permalinkConstraints(required: true),
             ])
-            ->add('dados_comentarios', TextareaType::class, [
-                'label'    => 'Comentários',
-                'mapped'   => false,
-                'required' => false,
-                'attr'     => ['rows' => 3],
+            ->add('dados_descricaoBandeira', TextareaType::class, [
+                'label'  => 'Descrição / Justificativa',
+                'mapped' => false,
+                'attr'   => [
+                    'rows'              => 4,
+                    'minlength'         => 10,
+                    'maxlength'         => 2000,
+                    'placeholder'       => 'Descreva a solicitação (mínimo 10 caracteres)',
+                    'data-char-counter' => 'true',
+                    'data-char-min'     => '10',
+                ],
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Preencha a descrição.'),
+                    new Assert\Length([
+                        'min'        => 10,
+                        'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
+                        'max'        => 2000,
+                        'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
+                    ]),
+                ],
             ]);
     }
 
@@ -795,13 +823,29 @@ class SolicitacaoType extends AbstractType
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
+                'help'        => 'Abra o WME, navegue até o segmento com zoom ≥15 e copie a URL completa do navegador.',
                 'constraints' => $this->permalinkConstraints(required: true),
             ])
-            ->add('dados_comentarios', TextareaType::class, [
-                'label'    => 'Comentários',
-                'mapped'   => false,
-                'required' => false,
-                'attr'     => ['rows' => 3],
+            ->add('dados_descricao', TextareaType::class, [
+                'label'  => 'Descrição do segmento',
+                'mapped' => false,
+                'attr'   => [
+                    'rows'              => 3,
+                    'minlength'         => 10,
+                    'maxlength'         => 1000,
+                    'placeholder'       => 'Descreva brevemente o segmento (mínimo 10 caracteres)',
+                    'data-char-counter' => 'true',
+                    'data-char-min'     => '10',
+                ],
+                'constraints' => [
+                    new Assert\NotBlank(message: 'Descreva o segmento.'),
+                    new Assert\Length([
+                        'min'        => 10,
+                        'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
+                        'max'        => 1000,
+                        'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
+                    ]),
+                ],
             ]);
     }
 }

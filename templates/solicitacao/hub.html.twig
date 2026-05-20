@@ -374,6 +374,36 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tipoError)  tipoError.classList.add('d-none');
   }
 
+  /**
+   * Após o AJAX inserir o HTML, garante que o radio tipoNivel
+   * tenha sempre um valor selecionado:
+   *   - Se Champ: força "upgrade" por padrão (ou o que veio no fetch)
+   *   - Para todos: se nenhum radio estiver checked, marca o primeiro
+   * Então dispara o evento 'change' para acionar o próximo fetch
+   * e carregar os campos corretos.
+   */
+  function autoSelectTipoNivel(tipoNivelForcado) {
+    if (!dinamicos) return;
+    var radios = dinamicos.querySelectorAll('[data-tipo-nivel-ajax]');
+    if (!radios.length) return;
+
+    var jaChecked = dinamicos.querySelector('[data-tipo-nivel-ajax]:checked');
+    if (jaChecked) return; /* Symfony já marcou o correto (submit inválido) */
+
+    /* Tenta encontrar o radio correspondente ao valor forçado */
+    var alvo = null;
+    if (tipoNivelForcado) {
+      radios.forEach(function (r) {
+        if (r.value === tipoNivelForcado) alvo = r;
+      });
+    }
+    /* Fallback: primeiro radio (upgrade) */
+    if (!alvo) alvo = radios[0];
+
+    alvo.checked = true;
+    alvo.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   function fetchCampos(tipo, tipoNivel, souChamp) {
     if (!tipo) return;
     if (spinner)   spinner.classList.remove('d-none');
@@ -389,10 +419,19 @@ document.addEventListener('DOMContentLoaded', function () {
         if (spinner)   spinner.classList.add('d-none');
         if (dinamicos) {
           dinamicos.innerHTML = html;
-          /* Re-aplica o active na pill após qualquer substituição de DOM */
           setActivePill(tipo);
           initDinamicoListeners();
-          animarCampos();
+          /*
+           * Se o fetch não trouxe tipoNivel (primeiro clique na pill),
+           * auto-seleciona o radio e dispara o fetch seguinte com os campos.
+           * Se já trouxe tipoNivel (Champ+downgrade ou submit inválido),
+           * o radio já virá checked pelo Symfony ou não precisa refetch.
+           */
+          if (!tipoNivel) {
+            autoSelectTipoNivel(IS_CHAMP ? 'upgrade' : 'upgrade');
+          } else {
+            animarCampos();
+          }
         }
       })
       .catch(function () { if (spinner) spinner.classList.add('d-none'); });

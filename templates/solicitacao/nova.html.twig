@@ -168,6 +168,15 @@
   let tipoAtual      = '';
   let tipoNivelAtual = null; // 'upgrade' | 'downgrade' | null
   let souChampAtual  = false;
+  let fetchController = null; // AbortController para cancelar fetch anterior
+
+  /* ── Avalia se o botão Enviar deve ficar habilitado ─────────────────────── */
+  function atualizaBtnEnviar() {
+    if (!btnEnviar) return;
+    // Para tipo 'nivel': só habilita depois de escolher upgrade ou downgrade
+    const podeEnviar = !!tipoAtual && (tipoAtual !== 'nivel' || tipoNivelAtual !== null);
+    btnEnviar.disabled = !podeEnviar;
+  }
 
   /* ── Pills ───────────────────────────────────────────────────────────────── */
   pills.forEach(pill => {
@@ -182,6 +191,7 @@
     souChampAtual  = false;
     tipoSelect.value = valor;
     activatePill(valor);
+    atualizaBtnEnviar();
     fetchCampos();
   }
 
@@ -195,6 +205,10 @@
 
   /* ── AJAX: substitui #campos-sub inteiro ────────────────────────────────── */
   function fetchCampos() {
+    // Cancela fetch anterior se ainda estiver em andamento
+    if (fetchController) fetchController.abort();
+    fetchController = new AbortController();
+
     spinner.style.display = 'flex';
     subArea.style.opacity = '0.4';
 
@@ -203,7 +217,10 @@
     if (tipoNivelAtual) url.searchParams.set('tipoNivel', tipoNivelAtual);
     if (souChampAtual)  url.searchParams.set('souChamp',  '1');
 
-    fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch(url.toString(), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      signal: fetchController.signal
+    })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(html => {
         subArea.innerHTML = html;
@@ -212,29 +229,31 @@
         subArea.querySelectorAll('.sol-card').forEach((el, i) => { el.style.animationDelay = (i * 0.055) + 's'; });
         initPermalinks(subArea);
         bindSubListeners();
-        // Habilitia enviar assim que há tipo selecionado e (se nivel) tipoNivel escolhido
-        const podeEnviar = tipoAtual && (tipoAtual !== 'nivel' || tipoNivelAtual !== null);
-        if (btnEnviar) btnEnviar.disabled = !podeEnviar;
+        atualizaBtnEnviar();
       })
-      .catch(err => console.error('fetchCampos erro:', err))
+      .catch(err => { if (err.name !== 'AbortError') console.error('fetchCampos erro:', err); })
       .finally(() => { spinner.style.display = 'none'; subArea.style.opacity = ''; });
   }
 
   /* ── Listeners dentro de #campos-sub (rebindados após cada fetch) ────────── */
   function bindSubListeners() {
-    // Radio Upgrade/Downgrade (gerado pelo _campos.html.twig, data-tipo-nivel-ajax)
+    // Radio Upgrade/Downgrade — dispara fetch imediatamente ao selecionar
     subArea.querySelectorAll('[data-tipo-nivel-ajax]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
       radio.dataset.nivelBound = '1';
+
       radio.addEventListener('change', function () {
         if (!this.checked || this.value === tipoNivelAtual) return;
-        tipoNivelAtual = this.value;
+        tipoNivelAtual = this.value; // ← atualiza ANTES do fetch
         souChampAtual  = false;
-        fetchCampos();
+        atualizaBtnEnviar();        // ← habilita/desabilita enviar imediatamente
+        fetchCampos();              // ← carrega o form correspondente
       });
-      // Se já vem pré-selecionado no HTML e tipoNivelAtual ainda é null (primeiro load)
+
+      // Restaura estado se já vem pré-selecionado no HTML (ex: validação server-side)
       if (radio.checked && !tipoNivelAtual) {
         tipoNivelAtual = radio.value;
+        atualizaBtnEnviar();
       }
     });
 

@@ -407,6 +407,15 @@ document.addEventListener('DOMContentLoaded', function () {
    * fetchCampos:
    *   apenasExtras=false → recarrega #campos-dinamicos inteiro (clique na pill)
    *   apenasExtras=true  → substitui apenas o bloco de extras relevante
+   *
+   * Fluxo para tipo=nivel (upgrade/downgrade):
+   *   1. Clique na pill → fetchCampos(tipo, null, false, FALSE)
+   *      → injeta card com radios, NÃO injeta botão de enviar ainda
+   *      → bindSubListeners registra o evento 'change' nos radios
+   *   2. Usuário clica em Upgrade ou Downgrade → onRadioChange(valor)
+   *      → fetchCampos(tipo, valor, souChamp, TRUE)
+   *      → substitui apenas #campos-extras-nivel-server
+   *      → INJETA botão de enviar
    */
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerente, acaoGerenteArea, acaoGerenteEstadoPais) {
     if (!tipo) return;
@@ -437,13 +446,53 @@ document.addEventListener('DOMContentLoaded', function () {
           dinamicos.innerHTML = html;
           setActivePill(tipo);
 
-          /* FIX: radio checked via HTML nunca dispara 'change' — detecta manualmente */
-          if (tipo === 'nivel') {
-            var radioMarcado = dinamicos.querySelector('[data-tipo-nivel-ajax]:checked');
-            if (radioMarcado) { onRadioChange(radioMarcado.value); return; }
-          }
+          /*
+           * Após injetar o HTML completo, registra listeners nos sub-radios.
+           * Para tipos que NÃO precisam de radio secundário (não-nivel, não-gerente),
+           * injeta o botão imediatamente.
+           * Para tipo=nivel ou gerente_*, o botão só aparece após o usuário
+           * escolher upgrade/downgrade/incluir/excluir.
+           */
+          bindSubListeners();
+          animarCampos();
 
-          injetaBotaoEnviar(true);
+          var precisaEscolha = (
+            tipo === 'nivel' ||
+            tipo === 'gerente_area' ||
+            tipo === 'gerente_estado_pais'
+          );
+
+          if (!precisaEscolha) {
+            /* Tipos diretos: injeta botão imediatamente */
+            injetaBotaoEnviar(true);
+          } else {
+            /*
+             * Tipos com radio secundário: verifica se algum radio já está marcado
+             * (caso de re-hidratação após submit inválido).
+             * Se tiver, dispara fetchCampos para extras + injeta botão.
+             * Se não tiver, aguarda o usuário clicar no radio.
+             */
+            if (tipo === 'nivel') {
+              var radioMarcado = dinamicos.querySelector('[data-tipo-nivel-ajax]:checked');
+              if (radioMarcado) {
+                onRadioChange(radioMarcado.value);
+                return; /* onRadioChange já chama injetaBotaoEnviar */
+              }
+            } else if (tipo === 'gerente_area') {
+              var radioMarcadoGA = dinamicos.querySelector('[data-acao-gerente-area-ajax]:checked');
+              if (radioMarcadoGA) {
+                onRadioGerenteAreaChange(radioMarcadoGA.value);
+                return;
+              }
+            } else if (tipo === 'gerente_estado_pais') {
+              var radioMarcadoGEP = dinamicos.querySelector('[data-acao-gerente-estado-pais-ajax]:checked');
+              if (radioMarcadoGEP) {
+                onRadioGerenteEstadoPaisChange(radioMarcadoGEP.value);
+                return;
+              }
+            }
+            /* Nenhum radio pré-marcado: aguarda clique do usuário, sem botão de enviar */
+          }
 
         } else {
           /* Substitui apenas o bloco de extras relevante sem tocar no card do radio */
@@ -457,16 +506,15 @@ document.addEventListener('DOMContentLoaded', function () {
             var inner = tmp.querySelector(serverSelector);
             extrasEl.innerHTML = inner ? inner.innerHTML : tmp.innerHTML;
           };
-          replaceBlock('#campos-extras-nivel-server',               '#card-tipo-nivel-ajax');
-          replaceBlock('#campos-extras-gerente-server',             '#card-acao-gerente-ajax');
-          replaceBlock('#campos-extras-gerente-area-server',        '#card-acao-gerente-area-ajax');
-          replaceBlock('#campos-extras-gerente-estado-pais-server', '#card-acao-gerente-estado-pais-ajax');
+          replaceBlock('#campos-extras-nivel-server',        '#card-tipo-nivel-ajax');
+          replaceBlock('#campos-extras-gerente-server',      '#card-acao-gerente-ajax');
+          replaceBlock('#campos-extras-gerente-area-server', '#card-acao-gerente-area-ajax');
+          replaceBlock('#campos-extras-gerente-ep-server',   '#card-acao-gerente-ep-ajax');
 
           injetaBotaoEnviar(true);
+          bindSubListeners();
+          animarCampos();
         }
-
-        bindSubListeners();
-        animarCampos();
       })
       .catch(function () { if (spinner) spinner.classList.add('d-none'); });
   }
@@ -538,14 +586,14 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /* Radio tipoNivel */
+    /* Radio tipoNivel — clique dispara fetch dos campos extras */
     dinamicos.querySelectorAll('[data-tipo-nivel-ajax]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioChange(radio.value);
       });
     });
 
-    /* Radio acaoGerente (gerente_estado_pais) */
+    /* Radio acaoGerente (gerente_estado_pais legado) */
     dinamicos.querySelectorAll('[data-acao-gerente-ajax]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteChange(radio.value);

@@ -2,7 +2,7 @@
 {% block title %}Solicitações{% endblock %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
-{# ══ Macro: badge de status com ícone ══════════════════════════════════ #}
+{# ══ Macro: badge de status com ícone ══════════════════════════════════════════════════════ #}
 {% macro status_badge(status, label) %}
   {% set iconeMap = {
     'pendente':          'bi-inbox-fill',
@@ -22,13 +22,13 @@
 {% block body %}
 <div class="container py-4" style="max-width:900px">
 
-  {# ══ Cabeçalho ══════════════════════════════════════════════════════ #}
+  {# ══ Cabeçalho ═════════════════════════════════════════════════════════════════ #}
   <div class="sol-hub-header">
     <h4><i class="bi bi-send-fill"></i> Solicitações</h4>
     <p>Envie pedidos ao time Waze Brasil e acompanhe o andamento.</p>
   </div>
 
-  {# ══ Flash messages ══════════════════════════════════════════════════ #}
+  {# ══ Flash messages ════════════════════════════════════════════════════════════════ #}
   {% for label, messages in app.flashes %}
     {% for message in messages %}
       <div class="alert alert-{{ label == 'success' ? 'success' : (label == 'danger' ? 'danger' : 'warning') }} alert-dismissible fade show py-2" role="alert">
@@ -39,7 +39,7 @@
     {% endfor %}
   {% endfor %}
 
-  {# ══ Tabs ════════════════════════════════════════════════════════════ #}
+  {# ══ Tabs ════════════════════════════════════════════════════════════════════════ #}
   <div class="hub-tabs" role="tablist">
     <a href="{{ path('solicitacao_hub', {aba: 'nova'}) }}"
        class="hub-tab{{ abaAtual == 'nova' ? ' active' : '' }}"
@@ -66,7 +66,7 @@
     {% endif %}
   </div>
 
-  {# ══ ABA: NOVA SOLICITAÇÃO ══════════════════════════════════════════ #}
+  {# ══ ABA: NOVA SOLICITAÇÃO ════════════════════════════════════════════════════════════ #}
   {% if abaAtual == 'nova' %}
 
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
@@ -166,7 +166,7 @@
 
   {% endif %}
 
-  {# ══ ABA: MEU HISTÓRICO ════════════════════════════════════════════ #}
+  {# ══ ABA: MEU HISTÓRICO ═══════════════════════════════════════════════════════════════════ #}
   {% if abaAtual == 'historico' %}
     {% if not app.user %}
       <div class="sol-empty">
@@ -199,7 +199,7 @@
     {% endif %}
   {% endif %}
 
-  {# ══ ABA: GESTÃO (admin) ════════════════════════════════════════════ #}
+  {# ══ ABA: GESTÃO (admin) ════════════════════════════════════════════════════════════════ #}
   {% if abaAtual == 'gestao' and isAdmin %}
 
     <div class="gestao-counters">
@@ -335,4 +335,55 @@
                   <input class="form-check-input" type="radio" name="desfecho" id="modal-des-negada" value="negada">
                   <label class="form-check-label text-danger fw-semibold" for="modal-des-negada">
                     <i class="bi bi-x-circle-fill me-1"></i>Negada
-     
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="desfecho" id="modal-des-cancelada" value="cancelada">
+                  <label class="form-check-label text-secondary fw-semibold" for="modal-des-cancelada">
+                    <i class="bi bi-slash-circle-fill me-1"></i>Cancelada
+                  </label>
+                </div>
+              </div>
+
+              <label class="sol-label fw-semibold mb-1" for="resolver-obs">Observação <span class="text-muted fw-normal">(opcional)</span></label>
+              <textarea id="resolver-obs" name="observacao" class="form-control" rows="3"
+                        placeholder="Descreva o que foi feito ou o motivo da negação…"></textarea>
+            </div>
+            <div class="modal-footer" style="border-top:1.5px solid var(--sol-border)">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-check2-square me-1"></i>Confirmar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  {% endif %}{# fim gestao #}
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  {# Preenche o modal resolver com os dados do botão clicado #}
+  var modalEl = document.getElementById('modal-resolver');
+  if (modalEl) {
+    modalEl.addEventListener('show.bs.modal', function (event) {
+      var btn    = event.relatedTarget;
+      var id     = btn.getAttribute('data-id');
+      var label  = btn.getAttribute('data-label');
+      var token  = btn.getAttribute('data-token');
+      var action = btn.getAttribute('data-action');
+      document.getElementById('resolver-label').textContent  = label;
+      document.getElementById('resolver-token').value        = token;
+      document.getElementById('form-resolver').action        = action;
+      {# Reseta para "resolvida" a cada abertura #}
+      document.getElementById('modal-des-resolvida').checked = true;
+      document.getElementById('resolver-obs').value          = '';
+    });
+  }
+});
+</script>
+
+{% endblock %}

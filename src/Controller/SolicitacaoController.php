@@ -28,12 +28,8 @@ class SolicitacaoController extends AbstractController
      *   tipoNivel  – "upgrade" | "downgrade" | (ausente = nenhum escolhido ainda)
      *   souChamp   – "1" se o checkbox de confirmação Champ estiver marcado
      *
-     * Quando tipo=nivel e tipoNivel não for informado, o fragmento retorna
-     * apenas o radio Upgrade/Downgrade (com as opções corretas para o papel
-     * do usuário) e nada mais — sem deslocar os campos do formulário abaixo.
-     *
-     * O radio fica FIXO no #card-tipo-nivel (nova.html.twig) e esta rota
-     * preenche apenas o #campos-sub (abaixo do radio).
+     * ATENÇÃO: se o usuário autenticado já tem ROLE_CHAMP e tipoNivel=downgrade,
+     * souChamp é inferido automaticamente como true — dispensando o checkbox.
      */
     #[Route('/campos', name: 'solicitacao_campos_ajax', methods: ['GET'])]
     public function camposAjax(Request $request): Response
@@ -47,6 +43,12 @@ class SolicitacaoController extends AbstractController
             $tipoNivel = null;
         }
 
+        // Champ fazendo downgrade: infere souChamp automaticamente
+        // O checkbox de confirmação fica oculto/marcado implicitamente
+        if ($isChamp && $tipoNivel === 'downgrade') {
+            $souChamp = true;
+        }
+
         $solicitacao = new Solicitacao();
         try { $solicitacao->setTipo($tipo); } catch (\Throwable) { $tipo = ''; }
 
@@ -58,11 +60,11 @@ class SolicitacaoController extends AbstractController
 
         return new Response(
             $this->renderView('solicitacao/_campos.html.twig', [
-                'form'      => $form->createView(),
-                'tipoAtual' => $tipo,
-                'isChamp'   => $isChamp,
-                // tipoNivel atual para o fragmento poder pré-marcar o radio se necessário
+                'form'           => $form->createView(),
+                'tipoAtual'      => $tipo,
+                'isChamp'        => $isChamp,
                 'tipoNivelAtual' => $tipoNivel,
+                'souChampAuto'   => $isChamp && $tipoNivel === 'downgrade',
             ])
         );
     }
@@ -83,7 +85,6 @@ class SolicitacaoController extends AbstractController
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
-        // Extrai tipo do POST para recriar form com campos corretos após submit inválido
         $postData      = $request->request->all('solicitacao') ?? [];
         $tipoDoPost    = $postData['tipo']             ?? null;
         $tipoNivelPost = $postData['dados_tipoNivel']  ?? null;
@@ -97,6 +98,11 @@ class SolicitacaoController extends AbstractController
             $tipoNivelPost = null;
         }
 
+        // Mesma inferência automática no submit real
+        if ($isChamp && $tipoNivelPost === 'downgrade') {
+            $souChampPost = true;
+        }
+
         $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
             'is_champ'        => $isChamp,
             'ajax_tipo_nivel' => $tipoNivelPost,
@@ -104,7 +110,6 @@ class SolicitacaoController extends AbstractController
         ]);
         $form->handleRequest($request);
 
-        // Submit válido
         if ($form->isSubmitted() && $form->isValid()) {
             $tipoNivelSubmetido = $form->has('dados_tipoNivel')
                 ? $form->get('dados_tipoNivel')->getData()
@@ -143,7 +148,6 @@ class SolicitacaoController extends AbstractController
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
-        // Submit inválido: reexibe form com erros
         if ($form->isSubmitted() && !$form->isValid()) {
             $abaAtual = 'nova';
         }

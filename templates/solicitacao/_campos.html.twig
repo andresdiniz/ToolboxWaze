@@ -7,18 +7,16 @@
     tipoAtual      — tipo da solicitação (ex: "nivel")
     isChamp        — bool
     tipoNivelAtual — "upgrade" | "downgrade" | null
+    souChampAuto   — bool: true quando Champ+downgrade (checkbox oculto/implícito)
 #}
+{% set souChampAuto = souChampAuto ?? false %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
-{# ── Bloco nivel: radio Upgrade/Downgrade + campos dinâmicos ────────────────── #}
+{# ── Bloco nivel: radio Upgrade/Downgrade ───────────────────────────────────── #}
 {% if tipoAtual == 'nivel' %}
   {% if form.dados_tipoNivel is defined %}
     <div class="sol-card campo-animado" id="card-tipo-nivel-ajax">
       <div class="sol-card-body">
-        {#
-          Renderiza o radio do Symfony diretamente, adicionando data-tipo-nivel-ajax
-          em cada <input> para que o JS capture o evento change e dispare o fetch.
-        #}
         {{ form_label(form.dados_tipoNivel) }}
         {% for child in form.dados_tipoNivel %}
           <div class="form-check form-check-inline">
@@ -53,14 +51,32 @@
   {% endif %}
 {% endif %}
 
-{# ── Demais campos (upgrade, downgrade com souChamp, ou outros tipos) ───────── #}
+{# ── Demais campos ───────────────────────────────────────────────────────────── #}
 {% if tipoAtual != 'nivel' or tipoNivelAtual is not null %}
   {% for field in form %}
     {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
-      <div class="sol-card campo-animado">
-        <div class="sol-card-body">
 
-          {% if field.vars.name == 'dados_permalink' %}
+      {# Checkbox souChamp: oculto para Champ+downgrade (inferido automaticamente) #}
+      {% if field.vars.name == 'dados_souChamp' %}
+        {% if souChampAuto %}
+          {# Campo oculto enviado automaticamente com valor 1 — sem interação do usuário #}
+          <input type="hidden" name="{{ field.vars.full_name }}" value="1">
+        {% else %}
+          <div class="sol-card campo-animado">
+            <div class="sol-card-body">
+              <div data-sou-champ-wrapper="1">
+                {{ form_label(field) }}
+                {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
+                {{ form_errors(field) }}
+                {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+      {% elseif field.vars.name == 'dados_permalink' %}
+        <div class="sol-card campo-animado">
+          <div class="sol-card-body">
             <label class="sol-label{% if field.vars.required %} sol-label--required{% endif %}" for="{{ field.vars.id }}">
               {{ field.vars.label }}{% if field.vars.required %} <span class="sol-required" aria-hidden="true">*</span>{% endif %}
             </label>
@@ -72,21 +88,17 @@
             </div>
             {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
             {{ form_errors(field) }}
-
-          {% elseif field.vars.name == 'dados_souChamp' %}
-            <div data-sou-champ-wrapper="1">
-              {{ form_label(field) }}
-              {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
-              {{ form_errors(field) }}
-              {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
-            </div>
-
-          {% else %}
-            {{ form_row(field) }}
-          {% endif %}
-
+          </div>
         </div>
-      </div>
+
+      {% else %}
+        <div class="sol-card campo-animado">
+          <div class="sol-card-body">
+            {{ form_row(field) }}
+          </div>
+        </div>
+      {% endif %}
+
     {% endif %}
   {% endfor %}
 {% endif %}

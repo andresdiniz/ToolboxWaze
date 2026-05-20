@@ -94,7 +94,6 @@
     Carregando campos…
   </div>
 
-  {# #campos-sub: substituído inteiramente pelo AJAX. Inclui radio + campos. #}
   <div id="campos-sub"></div>
 
   <div class="d-flex justify-content-end mt-2 mb-5">
@@ -166,14 +165,13 @@
   const pills     = document.querySelectorAll('.tipo-pill');
 
   let tipoAtual      = '';
-  let tipoNivelAtual = null; // 'upgrade' | 'downgrade' | null
+  let tipoNivelAtual = null;
   let souChampAtual  = false;
-  let fetchController = null; // AbortController para cancelar fetch anterior
+  let fetchController = null;
 
-  /* ── Avalia se o botão Enviar deve ficar habilitado ─────────────────────── */
+  /* ── Avalia se botão Enviar deve ficar habilitado ───────────────────────── */
   function atualizaBtnEnviar() {
     if (!btnEnviar) return;
-    // Para tipo 'nivel': só habilita depois de escolher upgrade ou downgrade
     const podeEnviar = !!tipoAtual && (tipoAtual !== 'nivel' || tipoNivelAtual !== null);
     btnEnviar.disabled = !podeEnviar;
   }
@@ -203,9 +201,8 @@
     });
   }
 
-  /* ── AJAX: substitui #campos-sub inteiro ────────────────────────────────── */
+  /* ── AJAX ───────────────────────────────────────────────────────────────── */
   function fetchCampos() {
-    // Cancela fetch anterior se ainda estiver em andamento
     if (fetchController) fetchController.abort();
     fetchController = new AbortController();
 
@@ -215,7 +212,9 @@
     const url = new URL('/solicitacoes/campos', window.location.origin);
     url.searchParams.set('tipo', tipoAtual);
     if (tipoNivelAtual) url.searchParams.set('tipoNivel', tipoNivelAtual);
-    if (souChampAtual)  url.searchParams.set('souChamp',  '1');
+    // souChampAtual só é enviado se for true (não-Champ com checkbox)
+    // Champ+downgrade: o servidor infere automaticamente
+    if (souChampAtual) url.searchParams.set('souChamp', '1');
 
     fetch(url.toString(), {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -225,7 +224,6 @@
       .then(html => {
         subArea.innerHTML = html;
         subArea.style.opacity = '';
-        // Anima cards
         subArea.querySelectorAll('.sol-card').forEach((el, i) => { el.style.animationDelay = (i * 0.055) + 's'; });
         initPermalinks(subArea);
         bindSubListeners();
@@ -235,29 +233,29 @@
       .finally(() => { spinner.style.display = 'none'; subArea.style.opacity = ''; });
   }
 
-  /* ── Listeners dentro de #campos-sub (rebindados após cada fetch) ────────── */
+  /* ── Listeners dentro de #campos-sub ────────────────────────────────────── */
   function bindSubListeners() {
-    // Radio Upgrade/Downgrade — dispara fetch imediatamente ao selecionar
+    // Radio Upgrade/Downgrade — dispara fetch imediatamente
     subArea.querySelectorAll('[data-tipo-nivel-ajax]').forEach(radio => {
       if (radio.dataset.nivelBound) return;
       radio.dataset.nivelBound = '1';
 
       radio.addEventListener('change', function () {
         if (!this.checked || this.value === tipoNivelAtual) return;
-        tipoNivelAtual = this.value; // ← atualiza ANTES do fetch
-        souChampAtual  = false;
-        atualizaBtnEnviar();        // ← habilita/desabilita enviar imediatamente
-        fetchCampos();              // ← carrega o form correspondente
+        tipoNivelAtual = this.value;  // atualiza ANTES do fetch
+        souChampAtual  = false;       // server infere souChamp para Champ
+        atualizaBtnEnviar();
+        fetchCampos();
       });
 
-      // Restaura estado se já vem pré-selecionado no HTML (ex: validação server-side)
+      // Restaura estado se radio já vem checked (retorno de validação server-side)
       if (radio.checked && !tipoNivelAtual) {
         tipoNivelAtual = radio.value;
         atualizaBtnEnviar();
       }
     });
 
-    // Checkbox souChamp
+    // Checkbox souChamp — só aparece para não-Champ
     const chk = subArea.querySelector('[data-sou-champ]');
     if (chk && !chk.dataset.champBound) {
       chk.dataset.champBound = '1';

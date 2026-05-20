@@ -76,10 +76,12 @@ class SolicitacaoType extends AbstractType
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($isChamp) {
-            $tipo      = $event->getData()['tipo']           ?? null;
-            $cargo     = $event->getData()['dados_cargo']    ?? null;
-            $tipoNivel = $event->getData()['dados_tipoNivel'] ?? null;
-            $this->addDadosDinamicos($event->getForm(), $tipo, $cargo, $tipoNivel, $isChamp);
+            $tipo      = $event->getData()['tipo']             ?? null;
+            $cargo     = $event->getData()['dados_cargo']      ?? null;
+            $tipoNivel = $event->getData()['dados_tipoNivel']  ?? null;
+            // Downgrade só é aceito se is_champ=true E o checkbox foi marcado
+            $souChamp  = !empty($event->getData()['dados_souChamp']);
+            $this->addDadosDinamicos($event->getForm(), $tipo, $cargo, $tipoNivel, $isChamp, $souChamp);
         });
     }
 
@@ -95,15 +97,16 @@ class SolicitacaoType extends AbstractType
     private function addDadosDinamicos(
         \Symfony\Component\Form\FormInterface $form,
         ?string $tipo,
-        ?string $cargo = null,
-        ?string $tipoNivel = null,
-        bool $isChamp = false
+        ?string $cargo      = null,
+        ?string $tipoNivel  = null,
+        bool    $isChamp    = false,
+        bool    $souChamp   = false
     ): void {
         match ($tipo) {
             Solicitacao::TIPO_IMAGEM_SATELITE     => $this->addCamposImagemSatelite($form),
             Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form),
             Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $cargo),
-            Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp),
+            Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp, $souChamp),
             Solicitacao::TIPO_OOPS                => $this->addCamposOops($form),
             Solicitacao::TIPO_BANDEIRA_POSTO      => $this->addCamposBandeiraPosto($form),
             Solicitacao::TIPO_ID_SEGMENTO         => $this->addCamposIdSegmento($form),
@@ -164,7 +167,7 @@ class SolicitacaoType extends AbstractType
                     'autocomplete'   => 'off',
                     'spellcheck'     => 'false',
                 ],
-                'help'        => 'Abra o WME, navegue até a área com zoom ≥15 e copie a URL completa do navegador. A URL deve ser do editor Waze (waze.com/editor).',
+                'help'        => 'Abra o WME, navegue até a área com zoom ≥15 e copie a URL completa do navegador.',
                 'constraints' => $this->permalinkConstraints(required: true),
             ]);
     }
@@ -274,12 +277,20 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // NÍVEL (UPGRADE / DOWNGRADE)
-    // Downgrade: campos referem-se ao editor-alvo; restrito a ROLE_CHAMP
+    //
+    // Fluxo:
+    //   1. Usuário vê o radio Upgrade/Downgrade apenas se is_champ=true
+    //   2. Ao marcar Downgrade, o front exibe o checkbox "Sou Champ" (dados_souChamp)
+    //   3. Ao marcar o checkbox, o front dispara o AJAX que recarrega os campos
+    //   4. Server-side: addCamposDowngrade só é chamado se is_champ=true E souChamp=true
+    //   5. Se alguém tentar forjar o POST, o campo dados_souChamp não existe no form
+    //      (pois is_champ=false), então os campos de downgrade não são validados
     // -------------------------------------------------------------------------
     private function addCamposNivel(
         \Symfony\Component\Form\FormInterface $form,
-        ?string $tipoNivel = null,
-        bool $isChamp = false
+        ?string $tipoNivel  = null,
+        bool    $isChamp    = false,
+        bool    $souChamp   = false
     ): void {
         $form->add('dados_tipoNivel', ChoiceType::class, [
             'label'    => 'É um pedido de…',
@@ -292,17 +303,30 @@ class SolicitacaoType extends AbstractType
             'constraints' => [new Assert\NotBlank()],
         ]);
 
-        // Se o tipo já foi escolhido como downgrade, renderiza o sub-formulário correto
-        if ($tipoNivel === 'downgrade') {
-            $this->addCamposDowngrade($form);
+        if ($tipoNivel === 'downgrade' && $isChamp) {
+            // Checkbox de confirmação: "Confirmo que sou Champ"
+            // Só existe no form quando is_champ=true, bloqueando forja de POST
+            $form->add('dados_souChamp', CheckboxType::class, [
+                'label'    => 'Confirmo que sou Champ e estou autorizado a solicitar downgrade',
+                'mapped'   => false,
+                'required' => true,
+                'attr'     => ['data-sou-champ' => '1'],
+                'constraints' => [
+                    new Assert\IsTrue(message: 'Você precisa confirmar que é Champ para solicitar downgrade.'),
+                ],
+            ]);
+
+            // Só adiciona os campos do downgrade se o checkbox já veio marcado (re-submit / AJAX)
+            if ($souChamp) {
+                $this->addCamposDowngrade($form);
+            }
         } else {
-            // Upgrade (default)
             $this->addCamposUpgrade($form);
         }
     }
 
     // -------------------------------------------------------------------------
-    // UPGRADE — campos originais referem-se ao próprio solicitante
+    // UPGRADE
     // -------------------------------------------------------------------------
     private function addCamposUpgrade(\Symfony\Component\Form\FormInterface $form): void
     {
@@ -404,21 +428,11 @@ class SolicitacaoType extends AbstractType
     }
 
     // -------------------------------------------------------------------------
-    // DOWNGRADE — campos referem-se ao editor-alvo; solicitante é o Champ
+    // DOWNGRADE — editor-alvo; champNome removido (sistema usa usuário logado)
     // -------------------------------------------------------------------------
     private function addCamposDowngrade(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
-            ->add('dados_champNome', TextType::class, [
-                'label'       => 'Seu nome de usuário (Champ solicitante)',
-                'mapped'      => false,
-                'attr'        => ['placeholder' => 'Seu nick no WME/Discuss'],
-                'help'        => 'Informe o seu próprio nick. Apenas Champs podem solicitar downgrade.',
-                'constraints' => [
-                    new Assert\NotBlank(message: 'Informe seu nome de usuário como Champ solicitante.'),
-                    new Assert\Length(['max' => 255]),
-                ],
-            ])
             ->add('dados_editorNome', TextType::class, [
                 'label'       => 'Nome de usuário do editor (alvo do downgrade)',
                 'mapped'      => false,
@@ -436,8 +450,8 @@ class SolicitacaoType extends AbstractType
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Range([
-                        'min'        => 2,
-                        'max'        => 6,
+                        'min'               => 2,
+                        'max'               => 6,
                         'notInRangeMessage' => 'O nível atual deve estar entre 2 e 6.',
                     ]),
                 ],
@@ -450,8 +464,8 @@ class SolicitacaoType extends AbstractType
                 'constraints' => [
                     new Assert\NotBlank(),
                     new Assert\Range([
-                        'min'        => 1,
-                        'max'        => 5,
+                        'min'               => 1,
+                        'max'               => 5,
                         'notInRangeMessage' => 'O nível alvo deve estar entre 1 e 5.',
                     ]),
                 ],
@@ -460,11 +474,11 @@ class SolicitacaoType extends AbstractType
                 'label'  => 'Motivo do downgrade',
                 'mapped' => false,
                 'choices' => [
-                    'Inatividade prolongada'                   => 'inatividade',
-                    'Edições destrutivas recorrentes'          => 'edicoes_destrutivas',
-                    'Desrespeito às normas da comunidade'      => 'normas',
-                    'Solicitação do próprio editor'            => 'pedido_proprio',
-                    'Outro'                                    => 'outro',
+                    'Inatividade prolongada'              => 'inatividade',
+                    'Edições destrutivas recorrentes'     => 'edicoes_destrutivas',
+                    'Desrespeito às normas da comunidade' => 'normas',
+                    'Solicitação do próprio editor'       => 'pedido_proprio',
+                    'Outro'                               => 'outro',
                 ],
                 'placeholder' => 'Escolher',
                 'constraints' => [new Assert\NotBlank(message: 'Selecione o motivo do downgrade.')],
@@ -508,7 +522,6 @@ class SolicitacaoType extends AbstractType
 
     // -------------------------------------------------------------------------
     // OOPS DE EDITOR
-    // Upload de provas é tratado pelo input nativo no template (arquivos_oops[])
     // -------------------------------------------------------------------------
     private function addCamposOops(\Symfony\Component\Form\FormInterface $form): void
     {

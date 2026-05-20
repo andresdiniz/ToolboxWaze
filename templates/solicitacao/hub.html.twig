@@ -96,8 +96,9 @@
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-grid-1x2-fill"></i> Tipo de solicitação</div>
     <div class="sol-card-body">
-      {{ form_widget(form.tipo,   {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
-      {{ form_widget(form.estado, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-estado-select': '1'}}) }}
+      {{ form_widget(form.tipo, {attr: {class: 'd-none', 'aria-hidden': 'true', 'data-tipo-select': '1'}}) }}
+      {# estado removido do FormType — input hidden manual para o JS continuar funcionando #}
+      <input type="hidden" name="estado" id="solicitacao_estado" data-estado-select="1" value="">
       {{ form_errors(form.tipo) }}
       <div class="tipo-grid mt-3" id="tipo-pills">
         {% set iconMap = {
@@ -194,7 +195,7 @@
         <span class="gc-lbl"><i class="bi bi-inbox me-1"></i>Pendentes</span>
       </a>
       <a href="{{ path('solicitacao_hub', {aba: 'gestao', status: 'em_andamento'}) }}"
-         class="gestao-counter gc-andamento{{ filtroStatus == 'em_andamento' ? ' ativo' : '' }}">
+         class="gestao-counter gc-andamento{{ filtroStatus == 'em_andamento' ? ' ativ' : '' }}">
         <span class="gc-num">{{ contadores.em_andamento ?? 0 }}</span>
         <span class="gc-lbl"><i class="bi bi-arrow-repeat me-1"></i>Em andamento</span>
       </a>
@@ -345,11 +346,12 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-  var tipoSelect = document.querySelector('[data-tipo-select]');
-  var pills      = document.querySelectorAll('.tipo-pill');
-  var spinner    = document.getElementById('campos-spinner');
-  var dinamicos  = document.getElementById('campos-dinamicos');
-  var tipoError  = document.getElementById('tipo-error-msg');
+  var tipoSelect   = document.querySelector('[data-tipo-select]');
+  var estadoInput  = document.querySelector('[data-estado-select]');
+  var pills        = document.querySelectorAll('.tipo-pill');
+  var spinner      = document.getElementById('campos-spinner');
+  var dinamicos    = document.getElementById('campos-dinamicos');
+  var tipoError    = document.getElementById('tipo-error-msg');
 
   var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
   var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
@@ -399,9 +401,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tipoError)  tipoError.classList.add('d-none');
   }
 
-  var SEL_NIVEL   = '[data-tipo-nivel-ajax]';
-  var SEL_GA      = '[data-acao-gerente-area-ajax]';
-  var SEL_GEP     = '[data-acao-gerente-ep-ajax]';
+  var SEL_NIVEL = '[data-tipo-nivel-ajax]';
+  var SEL_GA    = '[data-acao-gerente-area-ajax]';
+  var SEL_GEP   = '[data-acao-gerente-ep-ajax]';
 
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerente, acaoGerenteArea, acaoGerenteEstadoPais) {
     if (!tipo) return;
@@ -568,6 +570,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (radio.checked) onRadioGerenteEstadoPaisChange(radio.value);
       });
     });
+
+    /* Sincroniza estado a partir do campo dinsâmico, se houver */
+    var estadoDinamico = dinamicos.querySelector('[data-uf-gerente]');
+    if (estadoDinamico && estadoInput) {
+      estadoDinamico.addEventListener('change', function () {
+        estadoInput.value = estadoDinamico.value;
+      });
+      if (estadoDinamico.value) estadoInput.value = estadoDinamico.value;
+    }
 
     var souChampCb = dinamicos.querySelector('[data-sou-champ]');
     if (souChampCb) {

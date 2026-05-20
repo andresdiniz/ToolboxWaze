@@ -178,7 +178,8 @@
     let podeEnviar = !!tipoAtual;
     if (tipoAtual === 'nivel')               podeEnviar = tipoNivelAtual !== null;
     if (tipoAtual === 'gerente_area')        podeEnviar = acaoGerenteAtual !== null;
-    if (tipoAtual === 'gerente_estado_pais') podeEnviar = acaoGerenteEpAtual !== null;
+    // FIX: exige também cargoAtual para não habilitar o botão antes de escolher cargo
+    if (tipoAtual === 'gerente_estado_pais') podeEnviar = acaoGerenteEpAtual !== null && cargoAtual !== null;
     btnEnviar.disabled = !podeEnviar;
   }
 
@@ -296,7 +297,8 @@
     });
 
     // Radio Gerente de Estado / Gerente de País (tipo=gerente_estado_pais)
-    // Ao mudar o cargo, dispara novo AJAX com ?cargo=... para mostrar/ocultar campo UF
+    // FIX: dispara fetchCampos ao detectar radio checked por padrão para
+    // garantir que o campo UF condicional seja carregado corretamente
     subArea.querySelectorAll('[data-cargo-select] input[type="radio"]').forEach(radio => {
       if (radio.dataset.cargoBound) return;
       radio.dataset.cargoBound = '1';
@@ -307,7 +309,7 @@
       });
       if (radio.checked && !cargoAtual) {
         cargoAtual = radio.value;
-        // Não dispara fetchCampos aqui: o estado já está correto após o fetch anterior
+        fetchCampos(); // necessário: fetch anterior não tinha cargo, campos condicionais podem estar ausentes
       }
     });
 
@@ -322,17 +324,32 @@
     }
   }
 
-  /* ── Bloqueia submit com permalink inválido ─────────────────────────────── */
+  /* ── Validação e bloqueio do submit ─────────────────────────────────────── */
   document.getElementById('form-solicitacao')
     ?.addEventListener('submit', e => {
       let ok = true;
+
+      // FIX: valida campos obrigatórios do solicitante antes de enviar
+      const camposObrigatorios = ['solicitanteNome', 'solicitanteUsuario', 'solicitanteEmail'];
+      camposObrigatorios.forEach(nome => {
+        const el = e.target.querySelector(`[name$="[${nome}]"]`);
+        if (!el) return;
+        const vazio = !el.value.trim();
+        el.classList.toggle('is-invalid', vazio);
+        if (vazio && ok) {
+          ok = false;
+          e.preventDefault();
+          el.focus();
+        }
+      });
+
+      // Valida permalinks
       e.target.querySelectorAll('[data-permalink]').forEach(input => {
         if (!input.value.trim()) return;
         const r = checkPermalink(input.value);
         applyPermalinkFeedback(input, r);
-        if (!r.ok && ok) { ok = false; input.focus(); }
+        if (!r.ok && ok) { ok = false; e.preventDefault(); input.focus(); }
       });
-      if (!ok) e.preventDefault();
     });
 })();
 </script>

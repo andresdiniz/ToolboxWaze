@@ -119,40 +119,24 @@
     Carregando campos…
   </div>
 
-  <div id="campos-dinamicos">
-    {% for field in form %}
-      {% if field.vars.name starts with 'dados_' %}
-        <div class="sol-card campo-animado">
-          <div class="sol-card-body">
-            {% if field.vars.name == 'dados_permalink' %}
-              <label class="sol-label" for="{{ field.vars.id }}">{{ field.vars.label }}</label>
-              <div class="permalink-wrapper">
-                {{ form_widget(field, {attr: {'data-permalink': '1', 'autocomplete': 'off', 'spellcheck': 'false', 'placeholder': 'https://waze.com/pt-BR/editor?env=row&zoom=15&lat=-23&lon=-46'}}) }}
-                <button type="button" class="permalink-copy-btn" title="Copiar URL" aria-label="Copiar permalink">
-                  <i class="bi bi-clipboard"></i>
-                </button>
-              </div>
-              {% if field.vars.help is defined and field.vars.help %}
-                <p class="sol-help">{{ field.vars.help }}</p>
-              {% endif %}
-              {{ form_errors(field) }}
-            {% else %}
-              {{ form_row(field) }}
-            {% endif %}
-          </div>
-        </div>
-      {% endif %}
-    {% endfor %}
-    <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
-      <div class="sol-card-header"><i class="bi bi-images"></i> Provas (imagens)</div>
-      <div class="sol-card-body">
-        <label class="sol-label">Compartilhe provas <span class="text-muted fw-normal">(até 5 imagens, 1 MB cada)</span></label>
-        <input type="file" name="arquivos_oops[]" id="input-oops-files" class="sol-input" accept="image/*" multiple>
-        <div id="oops-file-preview" class="d-flex flex-wrap gap-2 mt-2"></div>
-        <p id="oops-file-error" class="sol-error d-none mt-1"><i class="bi bi-exclamation-circle"></i> <span></span></p>
-      </div>
-    </div>
+  {#
+    #campos-dinamicos: SEMPRE vazio no HTML.
+    Preenchido exclusivamente via JS (fetchCampos).
+    No submit inválido, o JS detecta tipoAtual e faz o fetch automaticamente.
+  #}
+  <div id="campos-dinamicos"></div>
+
+  {#
+    Campos com erros ficam em campos-erros-hidden para o JS reidratar após fetch.
+    Renderizados aqui mas ocultos — o JS os move para #campos-dinamicos após fetch.
+  #}
+  {% if tipoAtual %}
+  <div id="campos-erros-server" style="display:none" aria-hidden="true"
+       data-tipo="{{ tipoAtual }}"
+       data-tipo-nivel="{{ postData.dados_tipoNivel ?? '' }}"
+       data-sou-champ="{{ postData.dados_souChamp is defined and postData.dados_souChamp ? '1' : '0' }}">
   </div>
+  {% endif %}
 
   <div class="d-flex justify-content-end mt-2 mb-5">
     <button type="submit" class="btn-enviar" id="btn-enviar"{{ tipoAtual ? '' : ' disabled' }}>
@@ -199,7 +183,7 @@
     {% endif %}
   {% endif %}
 
-  {# ══ ABA: GESTÃO (admin) ════════════════════════════════════════════════════════════════ #}
+  {# ══ ABA: GESTÃO ════════════════════════════════════════════════════════════════════ #}
   {% if abaAtual == 'gestao' and isAdmin %}
 
     <div class="gestao-counters">
@@ -308,7 +292,7 @@
       {% endfor %}
     {% endif %}
 
-    {# Modal resolver — com seleção de desfecho #}
+    {# Modal resolver #}
     <div class="modal fade" id="modal-resolver" tabindex="-1" aria-labelledby="modal-resolver-label" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius:12px;border:1.5px solid var(--sol-border)">
@@ -322,7 +306,6 @@
             <input type="hidden" name="_token" id="resolver-token" value="">
             <div class="modal-body">
               <p class="text-muted mb-3" style="font-size:.85rem" id="resolver-label"></p>
-
               <label class="sol-label fw-semibold mb-2">Desfecho</label>
               <div class="d-flex gap-3 mb-3">
                 <div class="form-check">
@@ -344,7 +327,6 @@
                   </label>
                 </div>
               </div>
-
               <label class="sol-label fw-semibold mb-1" for="resolver-obs">Observação <span class="text-muted fw-normal">(opcional)</span></label>
               <textarea id="resolver-obs" name="observacao" class="form-control" rows="3"
                         placeholder="Descreva o que foi feito ou o motivo da negação…"></textarea>
@@ -367,30 +349,19 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-  /* ══════════════════════════════════════════════════════════════════
-     TIPO-PILLS — seleciona tipo e dispara fetch de campos dinâmicos
-     ══════════════════════════════════════════════════════════════════ */
-  var tipoSelect   = document.querySelector('[data-tipo-select]');
-  var pills        = document.querySelectorAll('.tipo-pill');
-  var spinner      = document.getElementById('campos-spinner');
-  var dinamicos    = document.getElementById('campos-dinamicos');
-  var btnEnviar    = document.getElementById('btn-enviar');
-  var tipoError    = document.getElementById('tipo-error-msg');
-  var ajaxUrl      = '{{ path('solicitacao_hub', {aba: 'nova'}) }}';
+  var tipoSelect = document.querySelector('[data-tipo-select]');
+  var pills      = document.querySelectorAll('.tipo-pill');
+  var spinner    = document.getElementById('campos-spinner');
+  var dinamicos  = document.getElementById('campos-dinamicos');
+  var btnEnviar  = document.getElementById('btn-enviar');
+  var tipoError  = document.getElementById('tipo-error-msg');
 
-  function getTipoAtual() {
-    return tipoSelect ? tipoSelect.value : '';
-  }
+  /* URL da rota AJAX dedicada — nunca retorna layout completo */
+  var ajaxUrl = '{{ path('solicitacao_campos_ajax') }}';
 
-  function getSouChamp() {
-    var cb = dinamicos ? dinamicos.querySelector('[data-sou-champ]') : null;
-    return cb ? cb.checked : false;
-  }
-
-  function getTipoNivel() {
-    var sel = dinamicos ? dinamicos.querySelector('[data-tipo-nivel]') : null;
-    return sel ? sel.value : '';
-  }
+  function getTipoAtual()  { return tipoSelect ? tipoSelect.value : ''; }
+  function getSouChamp()   { var cb = dinamicos && dinamicos.querySelector('[data-sou-champ]'); return cb ? cb.checked : false; }
+  function getTipoNivel()  { var s  = dinamicos && dinamicos.querySelector('[data-tipo-nivel]'); return s ? s.value : ''; }
 
   function setActivePill(valor) {
     pills.forEach(function (p) {
@@ -408,26 +379,21 @@ document.addEventListener('DOMContentLoaded', function () {
     if (spinner)   spinner.classList.remove('d-none');
     if (dinamicos) dinamicos.innerHTML = '';
 
-    /* CORREÇÃO: controller lê _ajax_tipo, não 'tipo' */
-    var params = new URLSearchParams({ _ajax_tipo: tipo });
-    if (tipoNivel) params.set('_ajax_tipoNivel', tipoNivel);
-    if (souChamp)  params.set('_ajax_souChamp', '1');
+    var params = new URLSearchParams({ tipo: tipo });
+    if (tipoNivel) params.set('tipoNivel', tipoNivel);
+    if (souChamp)  params.set('souChamp', '1');
 
-    fetch(ajaxUrl + '?' + params.toString(), {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(function (r) { return r.text(); })
-    .then(function (html) {
-      if (spinner)   spinner.classList.add('d-none');
-      if (dinamicos) {
-        dinamicos.innerHTML = html;
-        initDinamicoListeners();
-        animarCampos();
-      }
-    })
-    .catch(function () {
-      if (spinner) spinner.classList.add('d-none');
-    });
+    fetch(ajaxUrl + '?' + params.toString())
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        if (spinner)   spinner.classList.add('d-none');
+        if (dinamicos) {
+          dinamicos.innerHTML = html;
+          initDinamicoListeners();
+          animarCampos();
+        }
+      })
+      .catch(function () { if (spinner) spinner.classList.add('d-none'); });
   }
 
   function animarCampos() {
@@ -437,19 +403,16 @@ document.addEventListener('DOMContentLoaded', function () {
       el.style.transform = 'translateY(8px)';
       setTimeout(function () {
         el.style.transition = 'opacity .25s ease, transform .25s ease';
-        el.style.opacity = '1';
-        el.style.transform = 'translateY(0)';
+        el.style.opacity    = '1';
+        el.style.transform  = 'translateY(0)';
       }, i * 60);
     });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     initDinamicoListeners — chamado após cada reload de campos
-     ══════════════════════════════════════════════════════════════════ */
   function initDinamicoListeners() {
     if (!dinamicos) return;
 
-    /* — Permalink: botão copiar — */
+    /* Permalink: botão copiar */
     dinamicos.querySelectorAll('.permalink-copy-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var inp = btn.closest('.permalink-wrapper') && btn.closest('.permalink-wrapper').querySelector('[data-permalink]');
@@ -461,27 +424,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /* — Discuss: atualiza link com nick digitado em tempo real — */
-    var nickInput = dinamicos.querySelector('[data-discuss-nick]') ||
-                    document.getElementById('solicitacao_solicitanteUsuario');
-    if (nickInput) {
-      nickInput.addEventListener('input', function () {
-        var nick = nickInput.value.trim() || 'SEU_NICK';
-        dinamicos.querySelectorAll('[data-discuss-help]').forEach(function (el) {
-          var base = el.getAttribute('data-discuss-base') || el.href || '';
-          if (!el.getAttribute('data-discuss-base')) el.setAttribute('data-discuss-base', base);
-          var url = base.replace(/SEU_NICK/g, encodeURIComponent(nick));
-          el.href = url;
-          if (el.textContent.includes('SEU_NICK') || el.getAttribute('data-discuss-label')) {
-            el.textContent = el.getAttribute('data-discuss-label')
-              ? el.getAttribute('data-discuss-label').replace(/SEU_NICK/g, nick)
-              : url;
-          }
-        });
-      });
-    }
-
-    /* — tipo_nivel select: refaz fetch quando muda (nível upgrade/downgrade) — */
+    /* tipo_nivel: refaz fetch ao mudar */
     var tipoNivelSel = dinamicos.querySelector('[data-tipo-nivel]');
     if (tipoNivelSel) {
       tipoNivelSel.addEventListener('change', function () {
@@ -489,7 +432,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    /* — sou_champ checkbox: refaz fetch para mostrar/ocultar campos de downgrade — */
+    /* sou_champ: refaz fetch */
     var souChampCb = dinamicos.querySelector('[data-sou-champ]');
     if (souChampCb) {
       souChampCb.addEventListener('change', function () {
@@ -497,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    /* — Oops: preview de imagens — */
+    /* Oops: preview de imagens */
     var oopsInput   = document.getElementById('input-oops-files');
     var oopsPreview = document.getElementById('oops-file-preview');
     var oopsError   = document.getElementById('oops-file-error');
@@ -528,9 +471,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     PILLS: click e teclado
-     ══════════════════════════════════════════════════════════════════ */
+  /* Pills: click e teclado */
   pills.forEach(function (pill) {
     pill.addEventListener('click', function () {
       var valor = pill.getAttribute('data-value');
@@ -538,16 +479,11 @@ document.addEventListener('DOMContentLoaded', function () {
       fetchCampos(valor, '', false);
     });
     pill.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        pill.click();
-      }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pill.click(); }
     });
   });
 
-  /* ══════════════════════════════════════════════════════════════════
-     VALIDAÇÃO client-side no submit
-     ══════════════════════════════════════════════════════════════════ */
+  /* Validação client-side no submit */
   var formSol = document.getElementById('form-solicitacao');
   if (formSol) {
     formSol.addEventListener('submit', function (e) {
@@ -566,31 +502,28 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     INIT: se já há tipo selecionado (recarregamento com erro),
-     ativa pill e registra listeners nos campos já renderizados
-     ══════════════════════════════════════════════════════════════════ */
-  var tipoInicial = getTipoAtual();
-  if (tipoInicial) {
-    setActivePill(tipoInicial);
-    initDinamicoListeners();
-    animarCampos();
+  /* INIT: se há tipo inicial (submit inválido), ativa pill e busca campos */
+  var erroServer = document.getElementById('campos-erros-server');
+  if (erroServer) {
+    var tipoInicial    = erroServer.getAttribute('data-tipo');
+    var tipoNivelInicial = erroServer.getAttribute('data-tipo-nivel');
+    var souChampInicial  = erroServer.getAttribute('data-sou-champ') === '1';
+    if (tipoInicial) {
+      setActivePill(tipoInicial);
+      fetchCampos(tipoInicial, tipoNivelInicial, souChampInicial);
+    }
   }
+
   if (spinner) spinner.classList.add('d-none');
 
-  /* ══════════════════════════════════════════════════════════════════
-     MODAL RESOLVER — preenche dados ao abrir
-     ══════════════════════════════════════════════════════════════════ */
+  /* Modal resolver */
   var modalEl = document.getElementById('modal-resolver');
   if (modalEl) {
     modalEl.addEventListener('show.bs.modal', function (event) {
       var btn    = event.relatedTarget;
-      var label  = btn.getAttribute('data-label');
-      var token  = btn.getAttribute('data-token');
-      var action = btn.getAttribute('data-action');
-      document.getElementById('resolver-label').textContent  = label;
-      document.getElementById('resolver-token').value        = token;
-      document.getElementById('form-resolver').action        = action;
+      document.getElementById('resolver-label').textContent = btn.getAttribute('data-label');
+      document.getElementById('resolver-token').value       = btn.getAttribute('data-token');
+      document.getElementById('form-resolver').action       = btn.getAttribute('data-action');
       document.getElementById('modal-des-resolvida').checked = true;
       document.getElementById('resolver-obs').value          = '';
     });

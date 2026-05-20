@@ -20,6 +20,39 @@ class SolicitacaoController extends AbstractController
         private readonly SolicitacaoRepository $solicitacaoRepo,
     ) {}
 
+    /**
+     * Rota AJAX dedicada — retorna APENAS o fragmento de campos dinâmicos.
+     * Chamada pelo JS: GET /solicitacoes/campos?tipo=nivel&tipoNivel=downgrade
+     */
+    #[Route('/campos', name: 'solicitacao_campos_ajax', methods: ['GET'])]
+    public function camposAjax(Request $request): Response
+    {
+        $isChamp   = $this->isGranted('ROLE_CHAMP');
+        $tipo      = $request->query->get('tipo', '');
+        $tipoNivel = $request->query->get('tipoNivel');
+        $souChamp  = (bool) $request->query->get('souChamp');
+
+        if (!in_array($tipoNivel, ['upgrade', 'downgrade', null], true)) {
+            $tipoNivel = null;
+        }
+
+        $solicitacao = new Solicitacao();
+        try { $solicitacao->setTipo($tipo); } catch (\Throwable) { $tipo = ''; }
+
+        $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
+            'is_champ'        => $isChamp,
+            'ajax_tipo_nivel' => $tipoNivel,
+            'ajax_sou_champ'  => $souChamp,
+        ]);
+
+        return new Response(
+            $this->renderView('solicitacao/_campos.html.twig', [
+                'form'      => $form->createView(),
+                'tipoAtual' => $tipo,
+            ])
+        );
+    }
+
     #[Route('', name: 'solicitacao_hub', methods: ['GET', 'POST'])]
     public function hub(Request $request): Response
     {
@@ -36,38 +69,10 @@ class SolicitacaoController extends AbstractController
         $solicitacao = new Solicitacao();
         $tipoAtual   = null;
 
-        // ── AJAX: retorna fragmento de campos dinâmicos ───────────────────────────
-        $ajaxTipo      = $request->query->get('_ajax_tipo');
-        $ajaxTipoNivel = $request->query->get('_ajax_tipoNivel');
-        $ajaxSouChamp  = (bool) $request->query->get('_ajax_souChamp');
-
-        if ($ajaxTipo) {
-            try { $solicitacao->setTipo($ajaxTipo); $tipoAtual = $ajaxTipo; } catch (\Throwable) {}
-
-            if (!in_array($ajaxTipoNivel, ['upgrade', 'downgrade', null], true)) {
-                $ajaxTipoNivel = null;
-            }
-
-            $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-                'is_champ'        => $isChamp,
-                'ajax_tipo_nivel' => $ajaxTipoNivel,
-                'ajax_sou_champ'  => $ajaxSouChamp,
-            ]);
-
-            return new Response(
-                $this->renderView('solicitacao/_campos.html.twig', [
-                    'form'      => $form->createView(),
-                    'tipoAtual' => $tipoAtual,
-                ])
-            );
-        }
-
-        // ── POST: extrai tipo do payload ANTES de criar o form ────────────────────
-        // Isso garante que PRE_SUBMIT e PRE_SET_DATA recebam o tipo correto
-        // e adicionem os campos dados_* antes da validação.
+        // Extrai tipo do POST para recriar form com campos corretos após submit inválido
         $postData      = $request->request->all('solicitacao') ?? [];
-        $tipoDoPost    = $postData['tipo']                        ?? null;
-        $tipoNivelPost = $postData['dados_tipoNivel']             ?? null;
+        $tipoDoPost    = $postData['tipo']             ?? null;
+        $tipoNivelPost = $postData['dados_tipoNivel']  ?? null;
         $souChampPost  = !empty($postData['dados_souChamp']);
 
         if ($tipoDoPost) {
@@ -85,7 +90,7 @@ class SolicitacaoController extends AbstractController
         ]);
         $form->handleRequest($request);
 
-        // ── Submit válido ─────────────────────────────────────────────────────
+        // Submit válido
         if ($form->isSubmitted() && $form->isValid()) {
             $tipoNivelSubmetido = $form->has('dados_tipoNivel')
                 ? $form->get('dados_tipoNivel')->getData()
@@ -108,9 +113,7 @@ class SolicitacaoController extends AbstractController
                 $arquivos = $request->files->get('arquivos_oops', []);
                 $nomes    = [];
                 $dir      = $this->getParameter('kernel.project_dir') . '/public/uploads/oops';
-                if (!is_dir($dir)) {
-                    mkdir($dir, 0775, true);
-                }
+                if (!is_dir($dir)) mkdir($dir, 0775, true);
                 foreach ((array) $arquivos as $file) {
                     if ($file && $file->isValid()) {
                         $nome = uniqid('oops_') . '.' . $file->guessExtension();
@@ -122,18 +125,15 @@ class SolicitacaoController extends AbstractController
             }
 
             $this->solicitacaoService->criar($solicitacao);
-
             $this->addFlash('success', 'Solicitação enviada com sucesso!');
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
-        // ── Submit inválido: reexibe form com erros e campos dinâmicos ─────────
+        // Submit inválido: reexibe form com erros
         if ($form->isSubmitted() && !$form->isValid()) {
             $abaAtual = 'nova';
-            // tipoAtual já foi extraído do POST acima — a pill correta fica ativa
         }
 
-        // ── Histórico / Gestão ───────────────────────────────────────────────────
         $historico = [];
         if ($user && $abaAtual === 'historico') {
             $historico = $this->solicitacaoRepo->findByEmail($user->getEmail());

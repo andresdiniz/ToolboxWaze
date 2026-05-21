@@ -11,9 +11,9 @@
     acaoGerenteEpAtual       — "incluir" | "excluir" | null
     souChampEpAuto           — bool: Champ+excluir-EP confirmado
 #}
-{% set souChampAuto     = souChampAuto   ?? false %}
+{% set souChampAuto       = souChampAuto     ?? false %}
 {% set acaoGerenteEpAtual = acaoGerenteEpAtual ?? null %}
-{% set souChampEpAuto   = souChampEpAuto ?? false %}
+{% set souChampEpAuto     = souChampEpAuto   ?? false %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
 <style>
@@ -80,7 +80,7 @@
 }
 </style>
 
-{# ── Bloco nivel ────────────────────────────────────────────────────────────── #}
+{# ── Bloco nivel ─────────────────────────────────────────────────────────────── #}
 {% if tipoAtual == 'nivel' %}
   {% if form.dados_tipoNivel is defined %}
     <div class="sol-card campo-animado" id="card-tipo-nivel-ajax">
@@ -123,7 +123,7 @@
     </div>
   {% endif %}
 
-{# ── Bloco gerente_area ─────────────────────────────────────────────────────── #}
+{# ── Bloco gerente_area ──────────────────────────────────────────────────────── #}
 {% elseif tipoAtual == 'gerente_area' %}
   <div class="alert alert-info d-flex gap-2 align-items-start mb-3" role="alert" style="font-size:.9rem">
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-info-circle-fill flex-shrink-0 mt-1" viewBox="0 0 16 16">
@@ -140,7 +140,7 @@
     {% endif %}
   {% endfor %}
 
-{# ── Bloco gerente_estado_pais ──────────────────────────────────────────────── #}
+{# ── Bloco gerente_estado_pais ───────────────────────────────────────────────── #}
 {% elseif tipoAtual == 'gerente_estado_pais' %}
   {% if form.dados_acaoGerenteEstadoPais is defined %}
     <div class="sol-card campo-animado" id="card-acao-gerente-ep-ajax">
@@ -183,7 +183,7 @@
     </div>
   {% endif %}
 
-{# ── Demais tipos ────────────────────────────────────────────────────────────── #}
+{# ── Demais tipos ─────────────────────────────────────────────────────────────── #}
 {% else %}
   {% for field in form %}
     {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
@@ -195,7 +195,7 @@
 {# Bloco de provas Oops #}
 <div id="bloco-oops" class="sol-card campo-animado{{ tipoAtual == 'oops' ? '' : ' d-none' }}">
   <div class="sol-card-header">
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 0 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1zM2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>
     Provas (imagens)
   </div>
   <div class="sol-card-body">
@@ -206,22 +206,9 @@
   </div>
 </div>
 
-{# ── JS: pills + gate Discuss ───────────────────────────────────────────────── #}
+{# gate Discuss — sem bindPillActive aqui; os listeners de radio ficam no hub.html.twig #}
 <script>
 (function () {
-  function bindPillActive(groupSelector) {
-    document.querySelectorAll(groupSelector).forEach(function (group) {
-      var pills = group.querySelectorAll('.acao-pill');
-      pills.forEach(function (pill) {
-        pill.addEventListener('click', function () {
-          pills.forEach(function (p) { p.classList.remove('active'); });
-          pill.classList.add('active');
-        });
-      });
-    });
-  }
-  bindPillActive('.acao-pill-group');
-
   var linkDiscuss = document.getElementById('link-discuss-intencao');
   if (linkDiscuss) {
     var checkbox = document.querySelector('[data-discuss-gate="1"]');
@@ -241,13 +228,7 @@
 })();
 </script>
 
-{# ── Macro interna: renderiza um campo genérico ou especializado ─────────────── #}
-{#
-  Parâmetros:
-    field        — FormView do campo
-    souChampAuto — bool: quando true, dados_souChamp vira hidden (downgrade já confirmado)
-    souChampEpAuto — bool: quando true, dados_souChampEp vira hidden (excluir-EP já confirmado)
-#}
+{# ── Macro interna: renderiza um campo genérico ou especializado ──────────────── #}
 {% macro renderField(field, souChampAuto, souChampEpAuto) %}
   {% if field.vars.name == 'dados_souChamp' %}
     {% if souChampAuto %}

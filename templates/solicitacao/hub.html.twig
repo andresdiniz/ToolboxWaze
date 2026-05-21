@@ -2,7 +2,6 @@
 {% block title %}Solicitações{% endblock %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
-{# ══ Macro: badge de status com ícone ═══════════════════════════════════════════════ #}
 {% macro status_badge(status, label) %}
   {% set iconeMap = {
     'pendente':          'bi-inbox-fill',
@@ -22,13 +21,11 @@
 {% block body %}
 <div class="container py-4" style="max-width:900px">
 
-  {# ══ Cabeçalho ════════════════════════════════════════════════════════ #}
   <div class="sol-hub-header">
     <h4><i class="bi bi-send-fill"></i> Solicitações</h4>
     <p>Envie pedidos ao time Waze Brasil e acompanhe o andamento.</p>
   </div>
 
-  {# ══ Flash messages ══════════════════════════════════════════════════════ #}
   {% for label, messages in app.flashes %}
     {% for message in messages %}
       <div class="alert alert-{{ label == 'success' ? 'success' : (label == 'danger' ? 'danger' : 'warning') }} alert-dismissible fade show py-2" role="alert">
@@ -39,7 +36,6 @@
     {% endfor %}
   {% endfor %}
 
-  {# ══ Tabs ══════════════════════════════════════════════════════════════════ #}
   <div class="hub-tabs" role="tablist">
     <a href="{{ path('solicitacao_hub', {aba: 'nova'}) }}"
        class="hub-tab{{ abaAtual == 'nova' ? ' active' : '' }}"
@@ -66,13 +62,11 @@
     {% endif %}
   </div>
 
-  {# ══ ABA: NOVA SOLICITAÇÃO ═══════════════════════════════════════════════════ #}
   {% if abaAtual == 'nova' %}
 
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
-  {# Painel estático "Seus dados" #}
   <div class="sol-card">
     <div class="sol-card-header"><i class="bi bi-person-fill"></i> Seus dados</div>
     <div class="sol-card-body">
@@ -169,7 +163,6 @@
 
   {% endif %}
 
-  {# ══ ABA: MEU HISTÓRICO ══════════════════════════════════════════════════════ #}
   {% if abaAtual == 'historico' %}
     {% if not app.user %}
       <div class="sol-empty">
@@ -202,7 +195,6 @@
     {% endif %}
   {% endif %}
 
-  {# ══ ABA: GESTÃO ═════════════════════════════════════════════════════════════════════ #}
   {% if abaAtual == 'gestao' and isAdmin %}
 
     <div class="gestao-counters">
@@ -311,7 +303,6 @@
       {% endfor %}
     {% endif %}
 
-    {# Modal resolver #}
     <div class="modal fade" id="modal-resolver" tabindex="-1" aria-labelledby="modal-resolver-label" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius:12px;border:1.5px solid var(--sol-border)">
@@ -361,14 +352,13 @@
       </div>
     </div>
 
-  {% endif %}{# fim gestao #}
+  {% endif %}
 
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-  /* ── Bloqueio por usuário Waze não cadastrado ────────────────────────────────── */
   var wazeNicknameInput = document.getElementById('campo-waze-nickname');
   if (wazeNicknameInput) {
     var pillsWaze = document.querySelectorAll('.tipo-pill');
@@ -394,6 +384,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
   var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
 
+  /* Seletores dos radios dinâmicos */
   var SEL_NIVEL = '[data-tipo-nivel-ajax]';
   var SEL_GA    = '[data-acao-gerente-area-ajax]';
   var SEL_GEP   = '[data-acao-gerente-ep-ajax]';
@@ -402,20 +393,20 @@ document.addEventListener('DOMContentLoaded', function () {
   var acaoGerenteAreaAtual       = null;
   var acaoGerenteEstadoPaisAtual = null;
 
+  /* Flag para evitar AJAX duplo num mesmo clique */
+  var fetchEmAndamento = false;
+
   function getTipoAtual() { return tipoSelect ? tipoSelect.value : ''; }
 
-  function getSouChamp(tipoNivel) {
-    if (IS_CHAMP && tipoNivel === 'downgrade') return true;
+  function getSouChamp() {
+    if (IS_CHAMP && tipoNivelAtual === 'downgrade') return true;
     var cb = dinamicos && dinamicos.querySelector('[data-sou-champ]');
     return cb ? cb.checked : false;
   }
 
-  function getSouChampEp(acaoEp) {
-    if (IS_CHAMP && acaoEp === 'excluir') {
-      var cb = dinamicos && dinamicos.querySelector('[data-sou-champ-ep]');
-      return cb ? cb.checked : false;
-    }
-    return false;
+  function getSouChampEp() {
+    var cb = dinamicos && dinamicos.querySelector('[data-sou-champ-ep]');
+    return cb ? cb.checked : false;
   }
 
   function injetaBotaoEnviar(habilitado) {
@@ -450,27 +441,28 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tipoError)  tipoError.classList.add('d-none');
   }
 
-  /* ── fetchCampos ──────────────────────────────────────────────────────────────────
-     tipo                      string  — tipo de solicitação
-     tipoNivel                 string|null
-     souChamp                  bool
-     apenasExtras              bool
-     acaoGerenteArea           string|null
-     acaoGerenteEstadoPais     string|null
-     souChampEp                bool
+  /* ── fetchCampos ──────────────────────────────────────────────────────────
+     Parâmetros:
+       tipo                    string
+       tipoNivel               string|null
+       souChamp                bool
+       apenasExtras            bool  — true = atualização parcial do bloco de extras
+       acaoGerenteArea         string|null
+       acaoGerenteEstadoPais   string|null
+       souChampEp              bool
   ── */
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerenteArea, acaoGerenteEstadoPais, souChampEp) {
-    if (!tipo) return;
+    if (!tipo || fetchEmAndamento) return;
+    fetchEmAndamento = true;
+
     apenasExtras = !!apenasExtras;
     souChampEp   = !!souChampEp;
 
     if (!apenasExtras) {
       tipoNivelAtual = tipoNivel || null;
       if (dinamicos) dinamicos.innerHTML = '';
-      if (spinner)   spinner.classList.remove('d-none');
-    } else {
-      if (spinner) spinner.classList.remove('d-none');
     }
+    if (spinner) spinner.classList.remove('d-none');
 
     var params = new URLSearchParams({ tipo: tipo });
     if (tipoNivel)             params.set('tipoNivel', tipoNivel);
@@ -482,21 +474,18 @@ document.addEventListener('DOMContentLoaded', function () {
     fetch(ajaxUrl + '?' + params.toString())
       .then(function (r) { return r.text(); })
       .then(function (html) {
+        fetchEmAndamento = false;
         if (spinner) spinner.classList.add('d-none');
         if (!dinamicos) return;
 
         if (!apenasExtras) {
-          /* ── Carga inicial do tipo ── */
+          /* Carga inicial do tipo */
           dinamicos.innerHTML = html;
           setActivePill(tipo);
           bindSubListeners();
           animarCampos();
 
-          var precisaEscolha = (
-            tipo === 'nivel' ||
-            tipo === 'gerente_area' ||
-            tipo === 'gerente_estado_pais'
-          );
+          var precisaEscolha = (tipo === 'nivel' || tipo === 'gerente_area' || tipo === 'gerente_estado_pais');
 
           if (!precisaEscolha) {
             injetaBotaoEnviar(true);
@@ -514,33 +503,37 @@ document.addEventListener('DOMContentLoaded', function () {
           }
 
         } else {
-          /* ── Atualização parcial: só o bloco de extras ── */
-          var replaceBlock = function (extrasSelector, cardSelector) {
-            var extrasEl = dinamicos.querySelector(extrasSelector);
+          /* Atualização parcial: só o bloco de extras */
+          var tmp = document.createElement('div');
+          tmp.innerHTML = html;
+
+          var replaceExtras = function (extrasId, cardId) {
+            var extrasEl = dinamicos.querySelector('#' + extrasId);
             if (!extrasEl) return;
-            var tmp = document.createElement('div');
-            tmp.innerHTML = html;
-            var card = tmp.querySelector(cardSelector);
-            if (card) card.remove();
-            var inner = tmp.querySelector(extrasSelector);
-            extrasEl.innerHTML = inner ? inner.innerHTML : tmp.innerHTML;
+            var cardParaRemover = tmp.querySelector('#' + cardId);
+            if (cardParaRemover) cardParaRemover.remove();
+            var inner = tmp.querySelector('#' + extrasId);
+            extrasEl.innerHTML = inner ? inner.innerHTML : '';
           };
 
-          replaceBlock('#campos-extras-nivel-server',        '#card-tipo-nivel-ajax');
-          replaceBlock('#campos-extras-gerente-area-server', '#card-acao-gerente-area-ajax');
-          replaceBlock('#campos-extras-gerente-ep-server',   '#card-acao-gerente-ep-ajax');
+          replaceExtras('campos-extras-nivel-server',        'card-tipo-nivel-ajax');
+          replaceExtras('campos-extras-gerente-area-server', 'card-acao-gerente-area-ajax');
+          replaceExtras('campos-extras-gerente-ep-server',   'card-acao-gerente-ep-ajax');
 
           injetaBotaoEnviar(true);
           bindSubListeners();
           animarCampos();
         }
       })
-      .catch(function () { if (spinner) spinner.classList.add('d-none'); });
+      .catch(function () {
+        fetchEmAndamento = false;
+        if (spinner) spinner.classList.add('d-none');
+      });
   }
 
   function onRadioNivelChange(valor) {
     tipoNivelAtual = valor;
-    fetchCampos(getTipoAtual(), valor, getSouChamp(valor), true, null, null, false);
+    fetchCampos(getTipoAtual(), valor, getSouChamp(), true, null, null, false);
   }
 
   function onRadioGerenteAreaChange(valor) {
@@ -550,7 +543,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function onRadioGerenteEstadoPaisChange(valor) {
     acaoGerenteEstadoPaisAtual = valor;
-    /* incluir → abre campos direto; excluir → abre checkbox de confirmação */
     fetchCampos(getTipoAtual(), null, false, true, null, valor, false);
   }
 
@@ -594,6 +586,17 @@ document.addEventListener('DOMContentLoaded', function () {
   function bindSubListeners() {
     if (!dinamicos) return;
 
+    /* ── Visual das acao-pills (sem disparar AJAX — só CSS) ── */
+    dinamicos.querySelectorAll('.acao-pill-group').forEach(function (group) {
+      var pillsDoGrupo = group.querySelectorAll('.acao-pill');
+      pillsDoGrupo.forEach(function (pill) {
+        pill.addEventListener('click', function () {
+          pillsDoGrupo.forEach(function (p) { p.classList.remove('active'); });
+          pill.classList.add('active');
+        });
+      });
+    });
+
     /* permalink copy */
     dinamicos.querySelectorAll('.permalink-copy-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -622,7 +625,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    /* Radio: gerente_estado_pais */
+    /* Radio: gerente_estado_pais — ouve apenas o change do input radio */
     dinamicos.querySelectorAll(SEL_GEP).forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (radio.checked) onRadioGerenteEstadoPaisChange(radio.value);
@@ -650,15 +653,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var souChampEpCb = dinamicos.querySelector('[data-sou-champ-ep]');
     if (souChampEpCb) {
       souChampEpCb.addEventListener('change', function () {
-        fetchCampos(
-          getTipoAtual(),
-          null,
-          false,
-          true,
-          null,
-          acaoGerenteEstadoPaisAtual,
-          souChampEpCb.checked
-        );
+        fetchCampos(getTipoAtual(), null, false, true, null, acaoGerenteEstadoPaisAtual, souChampEpCb.checked);
       });
     }
 
@@ -693,7 +688,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  /* ── Clique nas tipo-pills ──────────────────────────────────────────────── */
+  /* ── Clique nas tipo-pills ─────────────────────────────────────────────── */
   pills.forEach(function (pill) {
     pill.addEventListener('click', function () {
       var valor = pill.getAttribute('data-value');
@@ -721,9 +716,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var souChampInicial   = IS_CHAMP && tipoNivelInicial === 'downgrade'
       ? true
       : erroServer.getAttribute('data-sou-champ') === '1';
-    var souChampEpInicial = IS_CHAMP && acaoGerenteEstadoPaisInicial === 'excluir'
-      ? erroServer.getAttribute('data-sou-champ-ep') === '1'
-      : false;
+    var souChampEpInicial = erroServer.getAttribute('data-sou-champ-ep') === '1';
 
     if (tipoInicial) {
       tipoNivelAtual             = tipoNivelInicial;
@@ -744,7 +737,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (spinner) spinner.classList.add('d-none');
 
-  /* ── Modal resolver ──────────────────────────────────────────────────── */
+  /* ── Modal resolver ─────────────────────────────────────────────────────── */
   var modalEl = document.getElementById('modal-resolver');
   if (modalEl) {
     modalEl.addEventListener('show.bs.modal', function (event) {

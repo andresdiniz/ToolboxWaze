@@ -264,7 +264,7 @@ class SolicitacaoType extends AbstractType
                     'data-discuss-gate' => '1',
                     'disabled'          => 'disabled',
                 ],
-                'help'      => 'Antes de marcar, <a href="https://www.waze.com/discuss/c/brazil" target="_blank" rel="noopener" id="link-discuss-intencao">clique aqui para abrir o Discuss</a>, '
+                'help'      => 'Antes de marcar, <a href="https://www.waze.com/discuss/c/editors/brasil-estados/4114" target="_blank" rel="noopener" id="link-discuss-intencao">clique aqui para abrir o Discuss</a>, '
                              . 'busque o tópico <em>"Gerente de área ou candidato, se apresente aqui"</em> do seu Estado e publique sua intenção. '
                              . 'O campo será liberado após você abrir o link.',
                 'help_html' => true,

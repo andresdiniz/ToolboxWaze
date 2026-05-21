@@ -75,7 +75,6 @@ class SolicitacaoType extends AbstractType
             $tipo                    = $data['tipo']                         ?? null;
             $cargo                   = $data['dados_cargo']                  ?? null;
             $tipoNivel               = $data['dados_tipoNivel']              ?? null;
-            $acaoGerenteArea         = $data['dados_acaoGerenteArea']        ?? null;
             $acaoGerenteEstadoPais   = $data['dados_acaoGerenteEstadoPais']  ?? null;
 
             $souChamp = !empty($data['dados_souChamp']);
@@ -91,7 +90,7 @@ class SolicitacaoType extends AbstractType
                 $tipoNivel,
                 $isChamp,
                 $souChamp,
-                $acaoGerenteArea,
+                null,
                 $acaoGerenteEstadoPais,
                 null
             );
@@ -128,7 +127,7 @@ class SolicitacaoType extends AbstractType
 
         match ($tipo) {
             Solicitacao::TIPO_IMAGEM_SATELITE     => $this->addCamposImagemSatelite($form),
-            Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form, $acaoGerenteArea),
+            Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form),
             Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $acaoGerenteEstadoPais, $cargoEfetivo),
             Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp, $souChamp),
             Solicitacao::TIPO_OOPS                => $this->addCamposOops($form),
@@ -197,56 +196,38 @@ class SolicitacaoType extends AbstractType
     }
 
     // -------------------------------------------------------------------------
-    // GERENTE DE ÁREA
+    // GERENTE DE ÁREA — campos diretos, sem etapa incluir/excluir
     // -------------------------------------------------------------------------
-    private function addCamposGerenteArea(
-        \Symfony\Component\Form\FormInterface $form,
-        ?string $acaoGerenteArea = null
-    ): void {
-        $form->add('dados_acaoGerenteArea', ChoiceType::class, [
-            'label'    => 'Você deseja…',
-            'mapped'   => false,
-            'choices'  => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
-            'expanded' => true,
-            'attr'     => ['data-acao-gerente-area' => '1'],
-            'constraints' => [new Assert\NotBlank()],
-        ]);
-
-        match ($acaoGerenteArea) {
-            'incluir' => $this->addCamposGerenteAreaIncluir($form),
-            'excluir' => $this->addCamposGerenteAreaExcluir($form),
-            default   => null,
-        };
-    }
-
-    private function addCamposGerenteAreaIncluir(\Symfony\Component\Form\FormInterface $form): void
+    private function addCamposGerenteArea(\Symfony\Component\Form\FormInterface $form): void
     {
         $form
             ->add('dados_mentor', TextType::class, [
-                'label'       => 'Mentor',
+                'label'       => 'Quem foi seu mentor?',
                 'mapped'      => false,
+                'help'        => 'Digite o nome do usuário do seu mentor.',
                 'constraints' => [new Assert\NotBlank()],
             ])
             ->add('dados_recomendadores', TextType::class, [
-                'label'    => 'Editores recomendadores',
+                'label'    => 'Quais editores que podem recomendar sua aptidão à função?',
                 'mapped'   => false,
+                'help'     => 'Escolha os editores que podem recomendar você.',
                 'required' => false,
             ])
             ->add('dados_comentarios', TextareaType::class, [
-                'label'    => 'Comentários',
+                'label'    => 'Comentários:',
                 'mapped'   => false,
                 'required' => false,
                 'attr'     => ['rows' => 3],
                 'help'     => 'Caso necessário, adicione informações relevantes para a sua solicitação.',
             ])
             ->add('dados_poligono', TextareaType::class, [
-                'label'     => 'Polígono da área',
+                'label'     => 'Insira o polígono:',
                 'mapped'    => false,
                 'attr'      => ['rows' => 4],
-                'help'      => 'Compartilhe o polígono gerado por uma dessas ferramentas:<br>'
-                             . '• <a href="https://arthur-e.github.io/Wicket/sandbox-gmaps3.html" target="_blank" rel="noopener">arthur-e.github.io/Wicket</a><br>'
-                             . '• <a href="http://map.wazedev.com/" target="_blank" rel="noopener">map.wazedev.com</a><br>'
-                             . 'O valor deve iniciar com <strong>POLYGON((</strong> ou <strong>LINESTRING(</strong>.',
+                'help'      => 'Cole aqui o <strong>polígono da área</strong>. Utilize uma das páginas abaixo para gerar o polígono:<br>'
+                             . '• <a href="https://arthur-e.github.io/Wicket/sandbox-gmaps3.html" target="_blank" rel="noopener">https://arthur-e.github.io/Wicket/sandbox-gmaps3.html</a><br>'
+                             . '• <a href="http://map.wazedev.com/" target="_blank" rel="noopener">http://map.wazedev.com/</a><br>'
+                             . '<br>O valor informado deve iniciar obrigatoriamente com <strong>POLYGON((</strong> ou <strong>LINESTRING(</strong>.',
                 'help_html' => true,
                 'constraints' => [
                     new Assert\NotBlank(),
@@ -257,60 +238,18 @@ class SolicitacaoType extends AbstractType
                 ],
             ])
             ->add('dados_comunicouIntencao', CheckboxType::class, [
-                'label'    => 'Confirmei minha intenção no Discuss',
+                'label'    => 'Comuniquei minha intenção.',
                 'mapped'   => false,
                 'required' => true,
                 'attr'     => [
                     'data-discuss-gate' => '1',
                     'disabled'          => 'disabled',
                 ],
-                'help'      => 'Antes de marcar, <a href="https://www.waze.com/discuss/c/editors/brasil-estados/4114" target="_blank" rel="noopener" id="link-discuss-intencao">clique aqui para abrir o Discuss</a>, '
-                             . 'busque o tópico <em>"Gerente de área ou candidato, se apresente aqui"</em> do seu Estado e publique sua intenção. '
-                             . 'O campo será liberado após você abrir o link.',
+                'help'      => 'Atenção! Lembre-se de comunicar sua intenção no Discuss do Estado escolhido.<br>'
+                             . '<a href="https://www.waze.com/discuss/c/editors/brasil-estados/4114" target="_blank" rel="noopener" id="link-discuss-intencao">Clique aqui</a> '
+                             . 'e busque o tópico <em>"Gerente de área ou candidato, se apresente aqui"</em> do seu Estado e publique sua intenção.',
                 'help_html' => true,
                 'constraints' => [new Assert\IsTrue(message: 'Você deve comunicar sua intenção no Discuss antes de enviar.')],
-            ]);
-    }
-
-    private function addCamposGerenteAreaExcluir(\Symfony\Component\Form\FormInterface $form): void
-    {
-        $form
-            ->add('dados_editorNome', TextType::class, [
-                'label'       => 'Nome de usuário do Gerente de Área (a ser removido)',
-                'mapped'      => false,
-                'attr'        => ['placeholder' => 'Nick do editor no WME/Discuss'],
-                'constraints' => [
-                    new Assert\NotBlank(message: 'Informe o nome de usuário do Gerente a ser removido.'),
-                    new Assert\Length(['max' => 255]),
-                ],
-            ])
-            ->add('dados_justificativa', TextareaType::class, [
-                'label'  => 'Justificativa',
-                'mapped' => false,
-                'attr'   => [
-                    'rows'              => 4,
-                    'minlength'         => 20,
-                    'maxlength'         => 2000,
-                    'placeholder'       => 'Descreva o motivo da remoção (mínimo 20 caracteres)',
-                    'data-char-counter' => 'true',
-                    'data-char-min'     => '20',
-                ],
-                'help' => 'Informe o motivo pelo qual o Gerente de Área deve ser removido.',
-                'constraints' => [
-                    new Assert\NotBlank(message: 'Preencha a justificativa.'),
-                    new Assert\Length([
-                        'min'        => 20,
-                        'minMessage' => 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 2000,
-                        'maxMessage' => 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
-                    ]),
-                ],
-            ])
-            ->add('dados_comentarios', TextareaType::class, [
-                'label'    => 'Comentários adicionais',
-                'mapped'   => false,
-                'required' => false,
-                'attr'     => ['rows' => 3],
             ]);
     }
 

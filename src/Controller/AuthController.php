@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Message\EnviarEmailConta;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
@@ -58,8 +60,7 @@ class AuthController extends AbstractController
         UserPasswordHasherInterface $hasher,
         EntityManagerInterface $em,
         UserRepository $userRepo,
-        MailerInterface $mailer,
-        UrlGeneratorInterface $urlGenerator,
+        MessageBusInterface $bus,
     ): Response {
         if ($this->getUser()) {
             return $this->redirectToRoute('app_dashboard');
@@ -75,11 +76,10 @@ class AuthController extends AbstractController
             $wazeNickname = trim($req->request->getString('waze_nickname'));
 
             // Estados solicitados: filtra apenas UFs válidas
-            $rawUfs        = $req->request->all('requested_ufs') ?? [];
-            $validUfs      = User::ALL_UFS;
-            $requestedUfs  = array_values(array_filter(
+            $rawUfs       = $req->request->all('requested_ufs') ?? [];
+            $requestedUfs = array_values(array_filter(
                 array_map('strtoupper', (array) $rawUfs),
-                static fn(string $uf): bool => in_array($uf, $validUfs, true)
+                static fn(string $uf): bool => in_array($uf, User::ALL_UFS, true)
             ));
 
             if (!$name)  $errors[] = 'Nome obrigatório.';
@@ -95,32 +95,20 @@ class AuthController extends AbstractController
                 $user->setEmail($email);
                 $user->setPassword($hasher->hashPassword($user, $password));
                 $user->setWazeNickname($wazeNickname);
-                // Salva os estados solicitados em allowedUfs para o admin já ver o pedido
                 if (!empty($requestedUfs)) {
                     $user->setAllowedUfs($requestedUfs);
                 }
                 $user->setStatus(User::STATUS_PENDING);
 
                 $em->persist($user);
-                $em->flush();
+                $em->flush(); // precisa do ID antes de despachar as mensagens
 
-                // Notifica todos os admins aprovados sobre o novo cadastro
-                $admins = $userRepo->findAdmins();
-                $adminUsersUrl = $urlGenerator->generate('admin_users_index', [], UrlGeneratorInterface::ABSOLUTE_URL);
-                foreach ($admins as $admin) {
-                    try {
-                        $adminEmail = (new Email())
-                            ->from($this->getParameter('app.mail_from'))
-                            ->to($admin->getEmail())
-                            ->subject('[ToolboxWaze] Nova solicitação de acesso')
-                            ->html($this->renderView('emails/new_registration.html.twig', [
-                                'admin'         => $admin,
-                                'user'          => $user,
-                                'requestedUfs'  => $requestedUfs,
-                                'adminUsersUrl' => $adminUsersUrl,
-                            ]));
-                        $mailer->send($adminEmail);
-                    } catch (\Throwable) {}
+                // 1) Confirmação ao próprio usuário (via Messenger → async)
+                $bus->dispatch(new EnviarEmailConta('conta_criada', $user->getId()));
+
+                // 2) Notificação a cada admin aprovado (via Messenger → async)
+                foreach ($userRepo->findAdmins() as $admin) {
+                    $bus->dispatch(new EnviarEmailConta('solicitacao_admin', $user->getId(), $admin->getId()));
                 }
 
                 $this->addFlash('success',
@@ -191,7 +179,6 @@ class AuthController extends AbstractController
                 try { $mailer->send($email); } catch (\Throwable) {}
             }
 
-            // Sempre exibe mensagem genérica por segurança
             $sent = true;
         }
 

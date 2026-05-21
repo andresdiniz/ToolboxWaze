@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Solicitação recebida</title></head>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f7f6f2;margin:0;padding:2rem">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
+    <div style="background:#01696f;padding:1.75rem 2rem">
+        <h1 style="color:#fff;font-size:1.25rem;margin:0">✅ Solicitação Recebida</h1>
+        <p style="color:rgba(255,255,255,.8);margin:.5rem 0 0;font-size:.9rem">ToolboxWaze</p>
+    </div>
+    <div style="padding:2rem">
+        <p style="color:#28251d;margin:0 0 1.25rem">Olá <strong>{{ user.name }}</strong>,</p>
+        <p style="color:#5a5957;margin:0 0 1rem">Sua solicitação de acesso ao <strong>ToolboxWaze</strong> foi recebida com sucesso!</p>
+        <p style="color:#5a5957;margin:0 0 1.5rem">Sua conta está <strong>pendente de aprovação</strong>. Você receberá um novo e-mail assim que um administrador analisar seu pedido.</p>
+
+        <div style="background:#f3f0ec;border-radius:8px;padding:1.25rem;margin-bottom:1.75rem">
+            <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem;width:130px">Nome</td><td style="padding:.35rem 0;font-weight:600;color:#28251d">{{ user.name }}</td></tr>
+                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">E-mail</td><td style="padding:.35rem 0;color:#28251d">{{ user.email }}</td></tr>
+                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">Waze Nickname</td><td style="padding:.35rem 0;font-weight:600;color:#01696f">{{ user.wazeNickname ?? '—' }}</td></tr>
+                {% if user.allowedUfs is not empty %}
+                <tr>
+                    <td style="padding:.35rem 0;color:#7a7974;font-size:.875rem;vertical-align:top">Estados solicitados</td>
+                    <td style="padding:.35rem 0">
+                        {% for uf in user.allowedUfs %}<span style="display:inline-block;background:#cedcd8;color:#01696f;border-radius:4px;padding:.1rem .4rem;font-size:.78rem;font-weight:700;margin:.1rem .15rem .1rem 0">{{ uf }}</span>{% endfor %}
+                    </td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+
+        <p style="color:#7a7974;font-size:.875rem;margin:0 0 .5rem">Enquanto aguarda, você pode acessar a página de login a qualquer momento:</p>
+        <a href="{{ app.request.schemeAndHttpHost }}/login"
+           style="display:inline-block;background:#01696f;color:#fff;text-decoration:none;padding:.75rem 1.5rem;border-radius:8px;font-weight:600;font-size:.9rem">
+            Ir para o Login
+        </a>
+
+        <p style="color:#bab9b4;font-size:.8rem;margin-top:2rem">Se você não realizou este cadastro, ignore este e-mail.</p>
+    </div>
+</div>
+</body>
+</html>

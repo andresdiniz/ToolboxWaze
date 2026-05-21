@@ -17,6 +17,16 @@
                 <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">E-mail</td><td style="padding:.35rem 0;color:#28251d">{{ user.email }}</td></tr>
                 <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">Waze Nickname</td><td style="padding:.35rem 0;font-weight:600;color:#01696f">{{ user.wazeNickname ?? '—' }}</td></tr>
                 <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">Solicitado em</td><td style="padding:.35rem 0;color:#28251d">{{ user.createdAt|date('d/m/Y \\à\\s H:i') }}</td></tr>
+                <tr>
+                    <td style="padding:.35rem 0;color:#7a7974;font-size:.875rem;vertical-align:top">Estados solicitados</td>
+                    <td style="padding:.35rem 0;color:#28251d">
+                        {% if requestedUfs is defined and requestedUfs|length > 0 %}
+                            {% for uf in requestedUfs %}<span style="display:inline-block;background:#cedcd8;color:#01696f;border-radius:4px;padding:.1rem .4rem;font-size:.78rem;font-weight:700;margin:.1rem .15rem .1rem 0">{{ uf }}</span>{% endfor %}
+                        {% else %}
+                            <span style="color:#bab9b4">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
             </table>
         </div>
 

@@ -68,13 +68,23 @@ class AuthController extends AbstractController
         $errors = [];
 
         if ($req->isMethod('POST')) {
-            $name     = trim($req->request->getString('name'));
-            $email    = trim($req->request->getString('email'));
-            $password = $req->request->getString('password');
-            $confirm  = $req->request->getString('confirm');
+            $name         = trim($req->request->getString('name'));
+            $email        = trim($req->request->getString('email'));
+            $password     = $req->request->getString('password');
+            $confirm      = $req->request->getString('confirm');
+            $wazeNickname = trim($req->request->getString('waze_nickname'));
+
+            // Estados solicitados: filtra apenas UFs válidas
+            $rawUfs        = $req->request->all('requested_ufs') ?? [];
+            $validUfs      = User::ALL_UFS;
+            $requestedUfs  = array_values(array_filter(
+                array_map('strtoupper', (array) $rawUfs),
+                static fn(string $uf): bool => in_array($uf, $validUfs, true)
+            ));
 
             if (!$name)  $errors[] = 'Nome obrigatório.';
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'E-mail inválido.';
+            if (!$wazeNickname) $errors[] = 'Nickname no Waze obrigatório.';
             if (strlen($password) < 8) $errors[] = 'Senha deve ter pelo menos 8 caracteres.';
             if ($password !== $confirm) $errors[] = 'As senhas não conferem.';
             if ($userRepo->findByEmail($email)) $errors[] = 'Este e-mail já está cadastrado.';
@@ -84,6 +94,11 @@ class AuthController extends AbstractController
                 $user->setName($name);
                 $user->setEmail($email);
                 $user->setPassword($hasher->hashPassword($user, $password));
+                $user->setWazeNickname($wazeNickname);
+                // Salva os estados solicitados em allowedUfs para o admin já ver o pedido
+                if (!empty($requestedUfs)) {
+                    $user->setAllowedUfs($requestedUfs);
+                }
                 $user->setStatus(User::STATUS_PENDING);
 
                 $em->persist($user);
@@ -101,6 +116,7 @@ class AuthController extends AbstractController
                             ->html($this->renderView('emails/new_registration.html.twig', [
                                 'admin'         => $admin,
                                 'user'          => $user,
+                                'requestedUfs'  => $requestedUfs,
                                 'adminUsersUrl' => $adminUsersUrl,
                             ]));
                         $mailer->send($adminEmail);

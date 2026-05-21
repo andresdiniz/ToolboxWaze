@@ -18,7 +18,7 @@ class SolicitacaoComentario
     private Solicitacao $solicitacao;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
-    #[ORM\JoinColumn(nullable: true)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $autor = null;
 
     /** Para solicitantes externos (não têm conta no sistema) */

@@ -65,20 +65,22 @@ class SolicitacaoController extends AbstractController
         if ($isChamp && $tipoNivel === 'downgrade') {
             $souChamp = true;
         }
-        // Champ excluindo gerente EP: infere souChampEp automaticamente
+        // Champ excluindo gerente EP: infere souChampEp automaticamente se já marcou
         if ($isChamp && $acaoGerenteEstadoPais === 'excluir') {
-            // só marca como confirmado se o usuário explicitamente enviou souChampEp=1
-            // (não faz auto-confirm — o checkbox precisa ser marcado)
+            // souChampEp já vem do query param — não força true aqui,
+            // só passa o valor para o form renderizar o checkbox ou os campos
         }
 
         $solicitacao = new Solicitacao();
         try { $solicitacao->setTipo($tipo); } catch (\Throwable) { $tipo = ''; }
 
         $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-            'is_champ'        => $isChamp,
-            'ajax_tipo_nivel' => $tipoNivel,
-            'ajax_sou_champ'  => $souChamp,
-            'ajax_cargo'      => $cargo,
+            'is_champ'               => $isChamp,
+            'ajax_tipo_nivel'        => $tipoNivel,
+            'ajax_sou_champ'         => $souChamp,
+            'ajax_cargo'             => $cargo,
+            'ajax_acao_gerente_ep'   => $acaoGerenteEstadoPais,
+            'ajax_sou_champ_ep'      => $souChampEp,
         ]);
 
         return new Response(
@@ -148,9 +150,11 @@ class SolicitacaoController extends AbstractController
         }
 
         $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-            'is_champ'        => $isChamp,
-            'ajax_tipo_nivel' => $tipoNivelPost,
-            'ajax_sou_champ'  => $souChampPost,
+            'is_champ'               => $isChamp,
+            'ajax_tipo_nivel'        => $tipoNivelPost,
+            'ajax_sou_champ'         => $souChampPost,
+            'ajax_acao_gerente_ep'   => $acaoGerenteEstadoPaisPost,
+            'ajax_sou_champ_ep'      => $souChampEpPost,
         ]);
         $form->handleRequest($request);
 

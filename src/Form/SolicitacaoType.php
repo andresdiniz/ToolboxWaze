@@ -37,10 +37,12 @@ class SolicitacaoType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $isChamp       = $options['is_champ'];
-        $ajaxTipoNivel = $options['ajax_tipo_nivel'];
-        $ajaxSouChamp  = $options['ajax_sou_champ'];
-        $ajaxCargo     = $options['ajax_cargo'];
+        $isChamp            = $options['is_champ'];
+        $ajaxTipoNivel      = $options['ajax_tipo_nivel'];
+        $ajaxSouChamp       = $options['ajax_sou_champ'];
+        $ajaxCargo          = $options['ajax_cargo'];
+        $ajaxAcaoGerenteEp  = $options['ajax_acao_gerente_ep'];
+        $ajaxSouChampEp     = $options['ajax_sou_champ_ep'];
 
         $builder
             ->add('tipo', ChoiceType::class, [
@@ -51,7 +53,7 @@ class SolicitacaoType extends AbstractType
             ]);
 
         $builder->addEventListener(FormEvents::PRE_SET_DATA, function (FormEvent $event)
-            use ($isChamp, $ajaxTipoNivel, $ajaxSouChamp, $ajaxCargo) {
+            use ($isChamp, $ajaxTipoNivel, $ajaxSouChamp, $ajaxCargo, $ajaxAcaoGerenteEp, $ajaxSouChampEp) {
             $solicitacao = $event->getData();
             $tipo = null;
             if ($solicitacao instanceof Solicitacao) {
@@ -65,8 +67,8 @@ class SolicitacaoType extends AbstractType
                 $isChamp,
                 $ajaxSouChamp,
                 null,
-                null,
-                false,
+                $ajaxAcaoGerenteEp,
+                $ajaxSouChampEp,
                 $ajaxCargo
             );
         });
@@ -106,16 +108,20 @@ class SolicitacaoType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            'data_class'      => Solicitacao::class,
-            'is_champ'        => false,
-            'ajax_tipo_nivel' => null,
-            'ajax_sou_champ'  => false,
-            'ajax_cargo'      => null,
+            'data_class'           => Solicitacao::class,
+            'is_champ'             => false,
+            'ajax_tipo_nivel'      => null,
+            'ajax_sou_champ'       => false,
+            'ajax_cargo'           => null,
+            'ajax_acao_gerente_ep' => null,
+            'ajax_sou_champ_ep'    => false,
         ]);
         $resolver->setAllowedTypes('is_champ', 'bool');
         $resolver->setAllowedValues('ajax_tipo_nivel', [null, 'upgrade', 'downgrade']);
         $resolver->setAllowedTypes('ajax_sou_champ', 'bool');
         $resolver->setAllowedValues('ajax_cargo', [null, 'gerente_estado', 'gerente_pais']);
+        $resolver->setAllowedValues('ajax_acao_gerente_ep', [null, 'incluir', 'excluir']);
+        $resolver->setAllowedTypes('ajax_sou_champ_ep', 'bool');
     }
 
     private function addDadosDinamicos(

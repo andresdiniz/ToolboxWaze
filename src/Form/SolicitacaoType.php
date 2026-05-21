@@ -66,21 +66,26 @@ class SolicitacaoType extends AbstractType
                 $ajaxSouChamp,
                 null,
                 null,
+                false,
                 $ajaxCargo
             );
         });
 
         $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($isChamp) {
-            $data                    = $event->getData();
-            $tipo                    = $data['tipo']                         ?? null;
-            $cargo                   = $data['dados_cargo']                  ?? null;
-            $tipoNivel               = $data['dados_tipoNivel']              ?? null;
-            $acaoGerenteEstadoPais   = $data['dados_acaoGerenteEstadoPais']  ?? null;
+            $data                  = $event->getData();
+            $tipo                  = $data['tipo']                        ?? null;
+            $cargo                 = $data['dados_cargo']                 ?? null;
+            $tipoNivel             = $data['dados_tipoNivel']             ?? null;
+            $acaoGerenteEstadoPais = $data['dados_acaoGerenteEstadoPais'] ?? null;
 
-            $souChamp = !empty($data['dados_souChamp']);
+            $souChamp   = !empty($data['dados_souChamp']);
+            $souChampEp = !empty($data['dados_souChampEp']);
 
             if ($isChamp && $tipoNivel === 'downgrade') {
                 $souChamp = true;
+            }
+            if ($isChamp && $acaoGerenteEstadoPais === 'excluir') {
+                $souChampEp = true;
             }
 
             $this->addDadosDinamicos(
@@ -92,6 +97,7 @@ class SolicitacaoType extends AbstractType
                 $souChamp,
                 null,
                 $acaoGerenteEstadoPais,
+                $souChampEp,
                 null
             );
         });
@@ -115,20 +121,21 @@ class SolicitacaoType extends AbstractType
     private function addDadosDinamicos(
         \Symfony\Component\Form\FormInterface $form,
         ?string $tipo,
-        ?string $cargo                  = null,
-        ?string $tipoNivel              = null,
-        bool    $isChamp                = false,
-        bool    $souChamp               = false,
-        ?string $acaoGerenteArea        = null,
-        ?string $acaoGerenteEstadoPais  = null,
-        ?string $ajaxCargo              = null
+        ?string $cargo                 = null,
+        ?string $tipoNivel             = null,
+        bool    $isChamp               = false,
+        bool    $souChamp              = false,
+        ?string $acaoGerenteArea       = null,
+        ?string $acaoGerenteEstadoPais = null,
+        bool    $souChampEp            = false,
+        ?string $ajaxCargo             = null
     ): void {
         $cargoEfetivo = $cargo ?? $ajaxCargo;
 
         match ($tipo) {
             Solicitacao::TIPO_IMAGEM_SATELITE     => $this->addCamposImagemSatelite($form),
             Solicitacao::TIPO_GERENTE_AREA        => $this->addCamposGerenteArea($form),
-            Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $acaoGerenteEstadoPais, $cargoEfetivo),
+            Solicitacao::TIPO_GERENTE_ESTADO_PAIS => $this->addCamposGerenteEstadoPais($form, $isChamp, $acaoGerenteEstadoPais, $souChampEp, $cargoEfetivo),
             Solicitacao::TIPO_NIVEL               => $this->addCamposNivel($form, $tipoNivel, $isChamp, $souChamp),
             Solicitacao::TIPO_OOPS                => $this->addCamposOops($form),
             Solicitacao::TIPO_BANDEIRA_POSTO      => $this->addCamposBandeiraPosto($form),
@@ -254,27 +261,44 @@ class SolicitacaoType extends AbstractType
     }
 
     // -------------------------------------------------------------------------
-    // GERENTE DE ESTADO OU PAÍS
+    // GERENTE DE ESTADO OU PAÍS — mesma lógica de Nível
+    // incluir → campos direto | excluir → só Champ, confirmação antes
     // -------------------------------------------------------------------------
     private function addCamposGerenteEstadoPais(
         \Symfony\Component\Form\FormInterface $form,
+        bool    $isChamp               = false,
         ?string $acaoGerenteEstadoPais = null,
+        bool    $souChampEp            = false,
         ?string $cargo                 = null
     ): void {
         $form->add('dados_acaoGerenteEstadoPais', ChoiceType::class, [
             'label'    => 'Você deseja…',
             'mapped'   => false,
-            'choices'  => ['Incluir' => 'incluir', 'Excluir' => 'excluir'],
+            'choices'  => $isChamp
+                ? ['Incluir' => 'incluir', 'Excluir' => 'excluir']
+                : ['Incluir' => 'incluir'],
             'expanded' => true,
             'attr'     => ['data-acao-gerente-ep-ajax' => '1'],
             'constraints' => [new Assert\NotBlank()],
         ]);
 
-        match ($acaoGerenteEstadoPais) {
-            'incluir' => $this->addCamposGerenteEstadoPaisIncluir($form, $cargo),
-            'excluir' => $this->addCamposGerenteEstadoPaisExcluir($form, $cargo),
-            default   => null,
-        };
+        if ($acaoGerenteEstadoPais === 'excluir' && $isChamp) {
+            if ($souChampEp) {
+                $this->addCamposGerenteEstadoPaisExcluir($form, $cargo);
+            } else {
+                $form->add('dados_souChampEp', CheckboxType::class, [
+                    'label'    => 'Confirmo que sou Champ e estou autorizado a solicitar a exclusão deste Gerente',
+                    'mapped'   => false,
+                    'required' => true,
+                    'attr'     => ['data-sou-champ-ep' => '1'],
+                    'constraints' => [
+                        new Assert\IsTrue(message: 'Você precisa confirmar que é Champ para solicitar a exclusão.'),
+                    ],
+                ]);
+            }
+        } elseif ($acaoGerenteEstadoPais === 'incluir') {
+            $this->addCamposGerenteEstadoPaisIncluir($form, $cargo);
+        }
     }
 
     private function addCamposGerenteEstadoPaisIncluir(

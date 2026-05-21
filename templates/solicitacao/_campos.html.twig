@@ -4,30 +4,16 @@
 
   Variáveis:
     form                     — FormView de SolicitacaoType
-    tipoAtual                — tipo da solicitação (ex: "nivel", "gerente_estado_pais")
+    tipoAtual                — tipo da solicitação
     isChamp                  — bool
-    tipoNivelAtual           — "upgrade" | "downgrade" | null  (só tipo nivel)
-    souChampAuto             — bool: true quando Champ+downgrade (campo oculto/implícito)
-    acaoGerenteAreaAtual     — "incluir" | "excluir" | null  (gerente_area)
-    acaoGerenteEpAtual       — "incluir" | "excluir" | null  (gerente_estado_pais)
-
-  Estrutura para tipo="nivel":
-    <div id="card-tipo-nivel-ajax">               ← sempre presente, nunca destruído
-    <div id="campos-extras-nivel-server">         ← campos extras; vazio quando null
-
-  Estrutura para tipo="gerente_area":
-    <div id="card-acao-gerente-area-ajax">        ← sempre presente, nunca destruído
-    <div id="campos-extras-gerente-area-server"> ← campos extras; vazio quando null
-
-  Estrutura para tipo="gerente_estado_pais":
-    <div id="card-acao-gerente-ep-ajax">          ← sempre presente, nunca destruído
-    <div id="campos-extras-gerente-ep-server">   ← campos extras; vazio quando null
-
-  Para outros tipos: campos direto, sem wrapping especial.
+    tipoNivelAtual           — "upgrade" | "downgrade" | null
+    souChampAuto             — bool: Champ+downgrade confirmado
+    acaoGerenteEpAtual       — "incluir" | "excluir" | null
+    souChampEpAuto           — bool: Champ+excluir-EP confirmado
 #}
-{% set souChampAuto           = souChampAuto ?? false %}
-{% set acaoGerenteAreaAtual   = acaoGerenteAreaAtual ?? null %}
-{% set acaoGerenteEpAtual     = acaoGerenteEpAtual ?? null %}
+{% set souChampAuto     = souChampAuto   ?? false %}
+{% set acaoGerenteEpAtual = acaoGerenteEpAtual ?? null %}
+{% set souChampEpAuto   = souChampEpAuto ?? false %}
 {% form_theme form 'form/sol_theme.html.twig' %}
 
 <style>
@@ -130,7 +116,7 @@
       {% if tipoNivelAtual is not null %}
         {% for field in form %}
           {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
-            {{ _self.renderField(field, souChampAuto) }}
+            {{ _self.renderField(field, souChampAuto, false) }}
           {% endif %}
         {% endfor %}
       {% endif %}
@@ -139,7 +125,6 @@
 
 {# ── Bloco gerente_area ─────────────────────────────────────────────────────── #}
 {% elseif tipoAtual == 'gerente_area' %}
-  {# Alerta informativo #}
   <div class="alert alert-info d-flex gap-2 align-items-start mb-3" role="alert" style="font-size:.9rem">
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-info-circle-fill flex-shrink-0 mt-1" viewBox="0 0 16 16">
       <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2"/>
@@ -149,49 +134,11 @@
       Recomenda-se a leitura deste <a href="https://www.waze.com/discuss/t/new-regras-e-normas-para-niveis-cargos-e-areas/282152" target="_blank" rel="noopener" class="alert-link">tópico</a> para assegurar o atendimento aos requisitos.
     </div>
   </div>
-
-  {% if form.dados_acaoGerenteArea is defined %}
-    <div class="sol-card campo-animado" id="card-acao-gerente-area-ajax">
-      <div class="sol-card-body">
-        {{ form_label(form.dados_acaoGerenteArea) }}
-        <div class="acao-pill-group" role="radiogroup">
-          {% for child in form.dados_acaoGerenteArea %}
-            {% set isActive = acaoGerenteAreaAtual == child.vars.value %}
-            <label class="acao-pill{% if child.vars.value == 'excluir' %} acao-pill--excluir{% endif %}{% if isActive %} active{% endif %}"
-                   for="{{ child.vars.id }}">
-              <input type="radio" id="{{ child.vars.id }}" name="{{ child.vars.full_name }}"
-                     value="{{ child.vars.value }}" data-acao-gerente-area-ajax {{ isActive ? 'checked' : '' }}>
-              <span>{% if child.vars.value == 'incluir' %}📌{% else %}🗑️{% endif %} {{ child.vars.label }}</span>
-              <svg class="pill-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425z"/>
-              </svg>
-            </label>
-          {% endfor %}
-        </div>
-        {{ form_errors(form.dados_acaoGerenteArea) }}
-        {% if acaoGerenteAreaAtual is null %}
-          <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
-            Selecione a <strong>Ação</strong> desejada para continuar preenchendo o formulário.
-          </p>
-        {% endif %}
-      </div>
-    </div>
-    <div id="campos-extras-gerente-area-server">
-      {% if acaoGerenteAreaAtual is not null %}
-        {% for field in form %}
-          {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_acaoGerenteArea' %}
-            {{ _self.renderField(field, false) }}
-          {% endif %}
-        {% endfor %}
-      {% endif %}
-    </div>
-  {% else %}
-    {% for field in form %}
-      {% if field.vars.name starts with 'dados_' %}
-        {{ _self.renderField(field, false) }}
-      {% endif %}
-    {% endfor %}
-  {% endif %}
+  {% for field in form %}
+    {% if field.vars.name starts with 'dados_' %}
+      {{ _self.renderField(field, false, false) }}
+    {% endif %}
+  {% endfor %}
 
 {# ── Bloco gerente_estado_pais ──────────────────────────────────────────────── #}
 {% elseif tipoAtual == 'gerente_estado_pais' %}
@@ -216,7 +163,11 @@
         {{ form_errors(form.dados_acaoGerenteEstadoPais) }}
         {% if acaoGerenteEpAtual is null %}
           <p style="margin:.75rem 0 0;font-size:.85rem;color:var(--bs-secondary-color,#6c757d)">
-            Selecione a <strong>Ação</strong> desejada para continuar preenchendo o formulário.
+            {% if isChamp %}
+              Selecione <strong>Incluir</strong> ou <strong>Excluir</strong> para continuar.
+            {% else %}
+              Selecione <strong>Incluir</strong> para continuar preenchendo o formulário.
+            {% endif %}
           </p>
         {% endif %}
       </div>
@@ -225,24 +176,18 @@
       {% if acaoGerenteEpAtual is not null %}
         {% for field in form %}
           {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_acaoGerenteEstadoPais' %}
-            {{ _self.renderField(field, false) }}
+            {{ _self.renderField(field, false, souChampEpAuto) }}
           {% endif %}
         {% endfor %}
       {% endif %}
     </div>
-  {% else %}
-    {% for field in form %}
-      {% if field.vars.name starts with 'dados_' %}
-        {{ _self.renderField(field, false) }}
-      {% endif %}
-    {% endfor %}
   {% endif %}
 
 {# ── Demais tipos ────────────────────────────────────────────────────────────── #}
 {% else %}
   {% for field in form %}
     {% if field.vars.name starts with 'dados_' and field.vars.name != 'dados_tipoNivel' %}
-      {{ _self.renderField(field, souChampAuto) }}
+      {{ _self.renderField(field, souChampAuto, false) }}
     {% endif %}
   {% endfor %}
 {% endif %}
@@ -297,7 +242,13 @@
 </script>
 
 {# ── Macro interna: renderiza um campo genérico ou especializado ─────────────── #}
-{% macro renderField(field, souChampAuto) %}
+{#
+  Parâmetros:
+    field        — FormView do campo
+    souChampAuto — bool: quando true, dados_souChamp vira hidden (downgrade já confirmado)
+    souChampEpAuto — bool: quando true, dados_souChampEp vira hidden (excluir-EP já confirmado)
+#}
+{% macro renderField(field, souChampAuto, souChampEpAuto) %}
   {% if field.vars.name == 'dados_souChamp' %}
     {% if souChampAuto %}
       <input type="hidden" name="{{ field.vars.full_name }}" value="1">
@@ -307,6 +258,22 @@
           <div data-sou-champ-wrapper="1">
             {{ form_label(field) }}
             {{ form_widget(field, {attr: {'data-sou-champ': '1'}}) }}
+            {{ form_errors(field) }}
+            {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+  {% elseif field.vars.name == 'dados_souChampEp' %}
+    {% if souChampEpAuto %}
+      <input type="hidden" name="{{ field.vars.full_name }}" value="1">
+    {% else %}
+      <div class="sol-card campo-animado">
+        <div class="sol-card-body">
+          <div data-sou-champ-ep-wrapper="1">
+            {{ form_label(field) }}
+            {{ form_widget(field, {attr: {'data-sou-champ-ep': '1'}}) }}
             {{ form_errors(field) }}
             {% if field.vars.help is defined and field.vars.help %}<p class="sol-help">{{ field.vars.help }}</p>{% endif %}
           </div>

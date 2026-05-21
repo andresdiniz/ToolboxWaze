@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\Solicitacao;
+use App\Entity\SolicitacaoComentario;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -216,6 +217,13 @@ class AdminUserController extends AbstractController
         }
 
         $name = $user->getName();
+
+        // Desvincula autor dos comentários antes de deletar (a FK do banco é RESTRICT)
+        // Preserva o histórico: comentários ficam com autor_id = NULL
+        $this->em->createQuery(
+            'UPDATE App\Entity\SolicitacaoComentario c SET c.autor = NULL WHERE c.autor = :user'
+        )->setParameter('user', $user)->execute();
+
         $this->em->remove($user);
         $this->em->flush();
 

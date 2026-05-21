@@ -28,7 +28,8 @@ final class EnviarEmailContaHandler
         private readonly UserRepository          $userRepo,
         private readonly LoggerInterface         $emailQueueLogger,
         private readonly UrlGeneratorInterface   $urlGenerator,
-        private readonly string                  $mailerFrom = '',
+        private readonly string                  $mailerFrom  = '',
+        private readonly string                  $appBaseUrl  = '', // mantido para compatibilidade com services.yaml do servidor
     ) {}
 
     public function __invoke(EnviarEmailConta $message): void

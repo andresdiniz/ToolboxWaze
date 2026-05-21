@@ -34,7 +34,7 @@ services:
         arguments:
             $emailQueueLogger: '@monolog.logger.email_queue'
             $mailerFrom: '%env(MAILER_FROM)%'
-            $appBaseUrl: '%env(APP_BASE_URL)%'
+            # $urlGenerator e $userRepo são autowired automaticamente
 
     App\MessageHandler\EnviarEmailRadarVencidoHandler:
         arguments:

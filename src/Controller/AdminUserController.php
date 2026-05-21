@@ -5,26 +5,25 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\Solicitacao;
-use App\Entity\SolicitacaoComentario;
 use App\Entity\User;
+use App\Message\EnviarEmailConta;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 #[Route('/admin/users', name: 'admin_users_')]
 class AdminUserController extends AbstractController
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly UserRepository $userRepo,
-        private readonly MailerInterface $mailer,
-        private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly UserRepository         $userRepo,
+        private readonly MessageBusInterface    $bus,
+        private readonly LoggerInterface        $emailQueueLogger,
     ) {}
 
     #[Route('', name: 'index')]
@@ -33,35 +32,30 @@ class AdminUserController extends AbstractController
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
         return $this->render('admin/users/index.html.twig', [
-            'pending'   => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
-            'approved'  => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
-            'rejected'  => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
-            'allPerms'  => User::ALL_PERMISSIONS,
-            'allUfs'    => User::ALL_UFS,
-            'allTipos'  => Solicitacao::TIPOS,
+            'pending'    => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
+            'approved'   => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
+            'rejected'   => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
+            'allPerms'   => User::ALL_PERMISSIONS,
+            'allUfs'     => User::ALL_UFS,
+            'allTipos'   => Solicitacao::TIPOS,
             'champTipos' => User::CHAMP_DOWNGRADE_TIPOS,
         ]);
     }
 
     // -------------------------------------------------------------------------
-    // Helper: monta array de roles a partir do request
-    // -------------------------------------------------------------------------
+
     private function buildRoles(Request $request): array
     {
         $roles = ['ROLE_USER'];
         if ($request->request->getBoolean('is_admin')) {
             $roles[] = 'ROLE_ADMIN';
         }
-        // ROLE_CHAMP é independente de ROLE_ADMIN
         if ($request->request->getBoolean('is_champ')) {
             $roles[] = 'ROLE_CHAMP';
         }
         return array_unique($roles);
     }
 
-    // -------------------------------------------------------------------------
-    // Helper: aplica configurações de permissões (comum a approve e updatePermissions)
-    // -------------------------------------------------------------------------
     private function applyPermissions(User $user, Request $request): void
     {
         $permissions = $request->request->all('permissions') ?? [];
@@ -85,7 +79,6 @@ class AdminUserController extends AbstractController
              ->setAllowedUfs($allowedUfs)
              ->setSolicitacaoTipos($solicitacaoTipos);
 
-        // Configurações do perfil Champ (só persistidas se is_champ estiver marcado)
         $isChamp = $request->request->getBoolean('is_champ');
         if ($isChamp) {
             $limitDay = $request->request->get('champ_limit_day');
@@ -95,15 +88,31 @@ class AdminUserController extends AbstractController
             $user->setChampLimitMonth($limitMonth !== '' && $limitMonth !== null ? (int) $limitMonth : null);
 
             $champTipos = (array) $request->request->all('champ_downgrade_tipos');
-            // null = todos os tipos liberados quando nenhum foi marcado
             $user->setChampDowngradeTipos(!empty($champTipos) ? $champTipos : null);
         } else {
-            // Ao remover o perfil Champ, limpa os dados de configuração
             $user->setChampLimitDay(null)
                  ->setChampLimitMonth(null)
                  ->setChampDowngradeTipos(null);
         }
     }
+
+    // -------------------------------------------------------------------------
+
+    private function dispatchEmail(string $tipo, int $userId): void
+    {
+        try {
+            $this->bus->dispatch(new EnviarEmailConta($tipo, $userId));
+        } catch (\Throwable $e) {
+            $this->emailQueueLogger->error('AdminUserController: falha ao despachar email', [
+                'tipo'    => $tipo,
+                'user_id' => $userId,
+                'error'   => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    // -------------------------------------------------------------------------
 
     #[Route('/{id}/approve', name: 'approve', methods: ['POST'])]
     public function approve(User $user, Request $request): Response
@@ -119,23 +128,9 @@ class AdminUserController extends AbstractController
              ->setApprovedAt(new \DateTimeImmutable());
 
         $this->applyPermissions($user, $request);
-
         $this->em->flush();
 
-        $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
-        try {
-            $email = (new Email())
-                ->from($this->getParameter('app.mail_from'))
-                ->to($user->getEmail())
-                ->subject('[ToolboxWaze] Seu acesso foi aprovado!')
-                ->html($this->renderView('emails/user_approved.html.twig', [
-                    'user'       => $user,
-                    'allowedUfs' => $user->getAllowedUfs(),
-                    'loginUrl'   => $loginUrl,
-                ]));
-            $this->mailer->send($email);
-        } catch (\Throwable) {}
+        $this->dispatchEmail('aprovado', $user->getId());
 
         $ufsLabel = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
         $isChamp  = in_array('ROLE_CHAMP', $user->getRoles(), true);
@@ -156,16 +151,7 @@ class AdminUserController extends AbstractController
         $user->setStatus(User::STATUS_REJECTED);
         $this->em->flush();
 
-        try {
-            $email = (new Email())
-                ->from($this->getParameter('app.mail_from'))
-                ->to($user->getEmail())
-                ->subject('[ToolboxWaze] Atualização sobre sua solicitação de acesso')
-                ->html($this->renderView('emails/user_rejected.html.twig', [
-                    'user' => $user,
-                ]));
-            $this->mailer->send($email);
-        } catch (\Throwable) {}
+        $this->dispatchEmail('rejeitado', $user->getId());
 
         $this->addFlash('warning', "Usuário {$user->getName()} rejeitado.");
         return $this->redirectToRoute('admin_users_index');
@@ -182,23 +168,9 @@ class AdminUserController extends AbstractController
         }
 
         $this->applyPermissions($user, $request);
-
         $this->em->flush();
 
-        $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
-        try {
-            $email = (new Email())
-                ->from($this->getParameter('app.mail_from'))
-                ->to($user->getEmail())
-                ->subject('[ToolboxWaze] Suas permissões foram atualizadas')
-                ->html($this->renderView('emails/user_permissions_updated.html.twig', [
-                    'user'       => $user,
-                    'allowedUfs' => $user->getAllowedUfs(),
-                    'loginUrl'   => $loginUrl,
-                ]));
-            $this->mailer->send($email);
-        } catch (\Throwable) {}
+        $this->dispatchEmail('permissoes_atualizadas', $user->getId());
 
         $ufsLabel = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
         $isChamp  = in_array('ROLE_CHAMP', $user->getRoles(), true);
@@ -218,8 +190,6 @@ class AdminUserController extends AbstractController
 
         $name = $user->getName();
 
-        // Desvincula autor dos comentários antes de deletar (a FK do banco é RESTRICT)
-        // Preserva o histórico: comentários ficam com autor_id = NULL
         $this->em->createQuery(
             'UPDATE App\Entity\SolicitacaoComentario c SET c.autor = NULL WHERE c.autor = :user'
         )->setParameter('user', $user)->execute();

@@ -5,15 +5,14 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Message\EnviarEmailConta;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Address;
-use Symfony\Component\Mime\Email;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -22,10 +21,9 @@ class RegistrationController extends AbstractController
     public function __construct(
         private readonly EntityManagerInterface      $em,
         private readonly UserPasswordHasherInterface $hasher,
-        private readonly MailerInterface             $mailer,
+        private readonly MessageBusInterface         $bus,
         private readonly UserRepository              $userRepo,
         private readonly LoggerInterface             $logger,
-        private readonly string                      $mailFrom,
     ) {}
 
     #[Route('/register', name: 'app_register')]
@@ -41,6 +39,10 @@ class RegistrationController extends AbstractController
                 'waze_nickname' => trim($request->request->get('waze_nickname', '')),
                 'password'      => $request->request->get('password', ''),
                 'password2'     => $request->request->get('password2', ''),
+                'requested_ufs' => array_values(array_filter(
+                    (array) $request->request->all('requested_ufs'),
+                    fn($v) => in_array($v, User::ALL_UFS, true)
+                )),
             ];
 
             if (empty($values['name']))          $errors[] = 'Nome é obrigatório.';
@@ -63,11 +65,26 @@ class RegistrationController extends AbstractController
                      ->setStatus(User::STATUS_PENDING)
                      ->setRoles([]);
 
+                // Salva os estados solicitados (null = nenhum selecionado, array = selecionados)
+                $user->setAllowedUfs(!empty($values['requested_ufs']) ? $values['requested_ufs'] : []);
+
                 $this->em->persist($user);
                 $this->em->flush();
 
-                // Notifica todos os admins sobre a nova solicitação
-                $this->notifyAdmins($user);
+                // 1. Confirmação para o próprio usuário
+                $this->dispatchEmail('conta_criada', $user->getId());
+
+                // 2. Notificação para cada admin
+                $admins = $this->userRepo->findAdmins();
+                if (empty($admins)) {
+                    $this->logger->warning('[Registration] Nenhum admin encontrado para notificar. Usuário: {email}', [
+                        'email' => $user->getEmail(),
+                    ]);
+                } else {
+                    foreach ($admins as $admin) {
+                        $this->dispatchEmail('solicitacao_admin', $user->getId(), $admin->getId());
+                    }
+                }
 
                 return $this->render('auth/register.html.twig', ['sent' => true]);
             }
@@ -82,48 +99,18 @@ class RegistrationController extends AbstractController
 
     // -------------------------------------------------------------------------
 
-    private function notifyAdmins(User $newUser): void
+    private function dispatchEmail(string $tipo, int $userId, ?int $adminId = null): void
     {
-        $admins = $this->userRepo->findAdmins();
-
-        if (empty($admins)) {
-            $this->logger->warning(
-                '[Registration] Nenhum admin encontrado para notificar. Usuário: {email}',
-                ['email' => $newUser->getEmail()]
-            );
-            return;
-        }
-
-        foreach ($admins as $admin) {
-            try {
-                $fromAddress = new Address($this->mailFrom, 'ToolboxWaze');
-
-                $email = (new Email())
-                    ->from($fromAddress)
-                    ->to(new Address($admin->getEmail()))
-                    ->subject('[ToolboxWaze] Nova solicitação de acesso — ' . $newUser->getName())
-                    ->html($this->renderView('emails/new_registration.html.twig', [
-                        'user'  => $newUser,
-                        'admin' => $admin,
-                    ]));
-
-                $this->mailer->send($email);
-
-                $this->logger->info(
-                    '[Registration] E-mail de notificação enviado para admin {admin} sobre usuário {user}',
-                    ['admin' => $admin->getEmail(), 'user' => $newUser->getEmail()]
-                );
-            } catch (\Throwable $e) {
-                // Não bloqueia o registro, mas loga o erro com detalhes
-                $this->logger->error(
-                    '[Registration] Falha ao enviar e-mail para {admin}: {error}',
-                    [
-                        'admin' => $admin->getEmail(),
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
-                    ]
-                );
-            }
+        try {
+            $this->bus->dispatch(new EnviarEmailConta($tipo, $userId, $adminId));
+        } catch (\Throwable $e) {
+            $this->logger->error('[Registration] Falha ao despachar email via Messenger', [
+                'tipo'     => $tipo,
+                'user_id'  => $userId,
+                'admin_id' => $adminId,
+                'error'    => $e->getMessage(),
+                'trace'    => $e->getTraceAsString(),
+            ]);
         }
     }
 }

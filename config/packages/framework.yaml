@@ -1,15 +1,6 @@
-# see https://symfony.com/doc/current/reference/configuration/framework.html
-framework:
-    secret: '%env(APP_SECRET)%'
-    csrf_protection:
-        enabled: true
-
-    # Sessão — necessária para armazenar o token CSRF
-    # O token é gerenciado pela sessão PHP (não cookie double-submit)
-    session: true
-
-when@test:
-    framework:
-        test: true
-        session:
-            storage_factory_id: session.storage.factory.mock_file
+# Inclua este bloco no seu framework.yaml existente (merge manual se necessário)
+# router:
+#     request_context:
+#         host: '%env(APP_HOST)%'
+#         scheme: 'https'
+#         base_url: ''

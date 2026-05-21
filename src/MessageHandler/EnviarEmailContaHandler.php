@@ -57,6 +57,7 @@ final class EnviarEmailContaHandler
         } catch (\Throwable $e) {
             $this->emailQueueLogger->error('EnviarEmailConta: falha ao processar', array_merge($context, [
                 'exception' => $e->getMessage(),
+                'trace'     => $e->getTraceAsString(),
             ]));
             throw $e;
         }
@@ -66,12 +67,23 @@ final class EnviarEmailContaHandler
 
     private function enviarContaCriada(object $user, Address $from, array $context): void
     {
+        // Gera URL absoluta — funciona com sync:// porque UrlGenerator usa
+        // o router_request_context configurado em framework.router
+        $loginUrl = $this->urlGenerator->generate(
+            'app_login',
+            [],
+            UrlGeneratorInterface::ABSOLUTE_URL
+        );
+
         $email = (new TemplatedEmail())
             ->from($from)
             ->to(new Address($user->getEmail(), $user->getName()))
             ->subject('[ToolboxWaze] Solicitação recebida — aguardando aprovação')
             ->htmlTemplate('emails/conta_criada.html.twig')
-            ->context(['user' => $user]);
+            ->context([
+                'user'     => $user,
+                'loginUrl' => $loginUrl,
+            ]);
 
         $this->mailer->send($email);
 

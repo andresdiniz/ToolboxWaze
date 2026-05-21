@@ -384,17 +384,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
   var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
 
-  /* Seletores dos radios dinâmicos */
-  var SEL_NIVEL = '[data-tipo-nivel-ajax]';
-  var SEL_GA    = '[data-acao-gerente-area-ajax]';
-  var SEL_GEP   = '[data-acao-gerente-ep-ajax]';
-
   var tipoNivelAtual             = null;
   var acaoGerenteAreaAtual       = null;
   var acaoGerenteEstadoPaisAtual = null;
-
-  /* Flag para evitar AJAX duplo num mesmo clique */
-  var fetchEmAndamento = false;
+  var fetchEmAndamento           = false;
 
   function getTipoAtual() { return tipoSelect ? tipoSelect.value : ''; }
 
@@ -441,16 +434,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tipoError)  tipoError.classList.add('d-none');
   }
 
-  /* ── fetchCampos ──────────────────────────────────────────────────────────
-     Parâmetros:
-       tipo                    string
-       tipoNivel               string|null
-       souChamp                bool
-       apenasExtras            bool  — true = atualização parcial do bloco de extras
-       acaoGerenteArea         string|null
-       acaoGerenteEstadoPais   string|null
-       souChampEp              bool
-  ── */
+  /* ── fetchCampos ─────────────────────────────────────────────────────── */
   function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerenteArea, acaoGerenteEstadoPais, souChampEp) {
     if (!tipo || fetchEmAndamento) return;
     fetchEmAndamento = true;
@@ -479,31 +463,17 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!dinamicos) return;
 
         if (!apenasExtras) {
-          /* Carga inicial do tipo */
           dinamicos.innerHTML = html;
           setActivePill(tipo);
           bindSubListeners();
           animarCampos();
 
           var precisaEscolha = (tipo === 'nivel' || tipo === 'gerente_area' || tipo === 'gerente_estado_pais');
-
           if (!precisaEscolha) {
             injetaBotaoEnviar(true);
-          } else {
-            if (tipo === 'nivel') {
-              var rm = dinamicos.querySelector(SEL_NIVEL + ':checked');
-              if (rm) { onRadioNivelChange(rm.value); return; }
-            } else if (tipo === 'gerente_area') {
-              var rmGA = dinamicos.querySelector(SEL_GA + ':checked');
-              if (rmGA) { onRadioGerenteAreaChange(rmGA.value); return; }
-            } else if (tipo === 'gerente_estado_pais') {
-              var rmGEP = dinamicos.querySelector(SEL_GEP + ':checked');
-              if (rmGEP) { onRadioGerenteEstadoPaisChange(rmGEP.value); return; }
-            }
           }
 
         } else {
-          /* Atualização parcial: só o bloco de extras */
           var tmp = document.createElement('div');
           tmp.innerHTML = html;
 
@@ -529,21 +499,6 @@ document.addEventListener('DOMContentLoaded', function () {
         fetchEmAndamento = false;
         if (spinner) spinner.classList.add('d-none');
       });
-  }
-
-  function onRadioNivelChange(valor) {
-    tipoNivelAtual = valor;
-    fetchCampos(getTipoAtual(), valor, getSouChamp(), true, null, null, false);
-  }
-
-  function onRadioGerenteAreaChange(valor) {
-    acaoGerenteAreaAtual = valor;
-    fetchCampos(getTipoAtual(), null, false, true, valor, null, false);
-  }
-
-  function onRadioGerenteEstadoPaisChange(valor) {
-    acaoGerenteEstadoPaisAtual = valor;
-    fetchCampos(getTipoAtual(), null, false, true, null, valor, false);
   }
 
   function animarCampos() {
@@ -583,16 +538,37 @@ document.addEventListener('DOMContentLoaded', function () {
     if (btn)        btn.disabled = true;
   }
 
+  /* ── bindSubListeners ────────────────────────────────────────────────── */
   function bindSubListeners() {
     if (!dinamicos) return;
 
-    /* ── Visual das acao-pills (sem disparar AJAX — só CSS) ── */
+    /* Visual das acao-pills + disparo AJAX no clique da pill (não no change do radio) */
     dinamicos.querySelectorAll('.acao-pill-group').forEach(function (group) {
       var pillsDoGrupo = group.querySelectorAll('.acao-pill');
       pillsDoGrupo.forEach(function (pill) {
         pill.addEventListener('click', function () {
+          /* CSS ativo */
           pillsDoGrupo.forEach(function (p) { p.classList.remove('active'); });
           pill.classList.add('active');
+
+          /* Radio dentro da pill */
+          var radio = pill.querySelector('input[type="radio"]');
+          if (!radio) return;
+          var valor = radio.value;
+
+          /* Dispara AJAX conforme o grupo */
+          if (radio.hasAttribute('data-tipo-nivel-ajax')) {
+            tipoNivelAtual = valor;
+            fetchCampos(getTipoAtual(), valor, getSouChamp(), true, null, null, false);
+
+          } else if (radio.hasAttribute('data-acao-gerente-area-ajax')) {
+            acaoGerenteAreaAtual = valor;
+            fetchCampos(getTipoAtual(), null, false, true, valor, null, false);
+
+          } else if (radio.hasAttribute('data-acao-gerente-ep-ajax')) {
+            acaoGerenteEstadoPaisAtual = valor;
+            fetchCampos(getTipoAtual(), null, false, true, null, valor, false);
+          }
         });
       });
     });
@@ -608,27 +584,6 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>';
           }, 2000);
         });
-      });
-    });
-
-    /* Radio: nível */
-    dinamicos.querySelectorAll(SEL_NIVEL).forEach(function (radio) {
-      radio.addEventListener('change', function () {
-        if (radio.checked) onRadioNivelChange(radio.value);
-      });
-    });
-
-    /* Radio: gerente_area */
-    dinamicos.querySelectorAll(SEL_GA).forEach(function (radio) {
-      radio.addEventListener('change', function () {
-        if (radio.checked) onRadioGerenteAreaChange(radio.value);
-      });
-    });
-
-    /* Radio: gerente_estado_pais — ouve apenas o change do input radio */
-    dinamicos.querySelectorAll(SEL_GEP).forEach(function (radio) {
-      radio.addEventListener('change', function () {
-        if (radio.checked) onRadioGerenteEstadoPaisChange(radio.value);
       });
     });
 
@@ -688,7 +643,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  /* ── Clique nas tipo-pills ─────────────────────────────────────────────── */
+  /* ── Clique nas tipo-pills ────────────────────────────────────────────── */
   pills.forEach(function (pill) {
     pill.addEventListener('click', function () {
       var valor = pill.getAttribute('data-value');
@@ -706,7 +661,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var formSol = document.getElementById('form-solicitacao');
   if (formSol) formSol.addEventListener('submit', onFormSubmit);
 
-  /* ── Repostagem com erro de servidor: restaura estado anterior ──────────── */
+  /* ── Repostagem com erro de servidor ─────────────────────────────────── */
   var erroServer = document.getElementById('campos-erros-server');
   if (erroServer) {
     var tipoInicial                  = erroServer.getAttribute('data-tipo');
@@ -737,7 +692,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (spinner) spinner.classList.add('d-none');
 
-  /* ── Modal resolver ─────────────────────────────────────────────────────── */
+  /* ── Modal resolver ──────────────────────────────────────────────────── */
   var modalEl = document.getElementById('modal-resolver');
   if (modalEl) {
     modalEl.addEventListener('show.bs.modal', function (event) {

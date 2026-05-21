@@ -11,7 +11,6 @@ use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Address;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * Processa envios de e-mail relacionados a contas de usuário.
@@ -27,12 +26,11 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 final class EnviarEmailContaHandler
 {
     public function __construct(
-        private readonly MailerInterface       $mailer,
-        private readonly UserRepository        $userRepo,
-        private readonly LoggerInterface       $emailQueueLogger,
-        private readonly UrlGeneratorInterface $urlGenerator,
-        private readonly string                $mailerFrom = '',
-        private readonly string                $appBaseUrl = '',
+        private readonly MailerInterface $mailer,
+        private readonly UserRepository  $userRepo,
+        private readonly LoggerInterface $emailQueueLogger,
+        private readonly string          $mailerFrom  = '',
+        private readonly string          $appBaseUrl  = '',
     ) {}
 
     public function __invoke(EnviarEmailConta $message): void
@@ -50,14 +48,17 @@ final class EnviarEmailContaHandler
                 return;
             }
 
-            $from = $this->parseFrom();
+            $from       = $this->parseFrom();
+            $base       = rtrim($this->appBaseUrl, '/');
+            $loginUrl   = $base . '/login';
+            $adminUrl   = $base . '/admin/users';
 
             match ($message->tipo) {
-                'conta_criada'           => $this->enviarContaCriada($user, $from, $context),
-                'solicitacao_admin'      => $this->enviarSolicitacaoAdmin($message, $user, $from, $context),
-                'aprovado'               => $this->enviarAprovado($user, $from, $context),
+                'conta_criada'           => $this->enviarContaCriada($user, $from, $loginUrl, $context),
+                'solicitacao_admin'      => $this->enviarSolicitacaoAdmin($message, $user, $from, $adminUrl, $context),
+                'aprovado'               => $this->enviarAprovado($user, $from, $loginUrl, $context),
                 'rejeitado'              => $this->enviarRejeitado($user, $from, $context),
-                'permissoes_atualizadas' => $this->enviarPermissoesAtualizadas($user, $from, $context),
+                'permissoes_atualizadas' => $this->enviarPermissoesAtualizadas($user, $from, $loginUrl, $context),
                 default                  => $this->emailQueueLogger->warning('EnviarEmailConta: tipo desconhecido', $context),
             };
         } catch (\Throwable $e) {
@@ -71,25 +72,23 @@ final class EnviarEmailContaHandler
 
     // ---------------------------------------------------------------
 
-    private function enviarContaCriada(object $user, Address $from, array $context): void
+    private function enviarContaCriada(object $user, Address $from, string $loginUrl, array $context): void
     {
-        $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
-        $email = (new TemplatedEmail())
-            ->from($from)
-            ->to(new Address($user->getEmail(), $user->getName()))
-            ->subject('[ToolboxWaze] Solicitação recebida — aguardando aprovação')
-            ->htmlTemplate('emails/conta_criada.html.twig')
-            ->context(['user' => $user, 'loginUrl' => $loginUrl]);
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            (new TemplatedEmail())
+                ->from($from)
+                ->to(new Address($user->getEmail(), $user->getName()))
+                ->subject('[ToolboxWaze] Solicitação recebida — aguardando aprovação')
+                ->htmlTemplate('emails/conta_criada.html.twig')
+                ->context(['user' => $user, 'loginUrl' => $loginUrl])
+        );
 
         $this->emailQueueLogger->info('Email [conta_criada] enviado', array_merge($context, [
             'destinatario' => $user->getEmail(),
         ]));
     }
 
-    private function enviarSolicitacaoAdmin(EnviarEmailConta $message, object $user, Address $from, array $context): void
+    private function enviarSolicitacaoAdmin(EnviarEmailConta $message, object $user, Address $from, string $adminUrl, array $context): void
     {
         if (!$message->adminId) {
             $this->emailQueueLogger->warning('EnviarEmailConta[solicitacao_admin]: adminId ausente', $context);
@@ -102,21 +101,19 @@ final class EnviarEmailContaHandler
             return;
         }
 
-        $adminUsersUrl = $this->urlGenerator->generate('admin_users_index', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
-        $email = (new TemplatedEmail())
-            ->from($from)
-            ->to(new Address($admin->getEmail(), $admin->getName()))
-            ->subject('[ToolboxWaze] Nova solicitação de acesso: ' . $user->getName())
-            ->htmlTemplate('emails/new_registration.html.twig')
-            ->context([
-                'admin'         => $admin,
-                'user'          => $user,
-                'requestedUfs'  => $user->getAllowedUfs() ?? [],
-                'adminUsersUrl' => $adminUsersUrl,
-            ]);
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            (new TemplatedEmail())
+                ->from($from)
+                ->to(new Address($admin->getEmail(), $admin->getName()))
+                ->subject('[ToolboxWaze] Nova solicitação de acesso: ' . $user->getName())
+                ->htmlTemplate('emails/new_registration.html.twig')
+                ->context([
+                    'admin'         => $admin,
+                    'user'          => $user,
+                    'requestedUfs'  => $user->getAllowedUfs() ?? [],
+                    'adminUsersUrl' => $adminUrl,
+                ])
+        );
 
         $this->emailQueueLogger->info('Email [solicitacao_admin] enviado', array_merge($context, [
             'destinatario' => $admin->getEmail(),
@@ -124,22 +121,20 @@ final class EnviarEmailContaHandler
         ]));
     }
 
-    private function enviarAprovado(object $user, Address $from, array $context): void
+    private function enviarAprovado(object $user, Address $from, string $loginUrl, array $context): void
     {
-        $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
-        $email = (new TemplatedEmail())
-            ->from($from)
-            ->to(new Address($user->getEmail(), $user->getName()))
-            ->subject('[ToolboxWaze] Seu acesso foi aprovado!')
-            ->htmlTemplate('emails/user_approved.html.twig')
-            ->context([
-                'user'       => $user,
-                'allowedUfs' => $user->getAllowedUfs(),
-                'loginUrl'   => $loginUrl,
-            ]);
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            (new TemplatedEmail())
+                ->from($from)
+                ->to(new Address($user->getEmail(), $user->getName()))
+                ->subject('[ToolboxWaze] Seu acesso foi aprovado!')
+                ->htmlTemplate('emails/user_approved.html.twig')
+                ->context([
+                    'user'       => $user,
+                    'allowedUfs' => $user->getAllowedUfs(),
+                    'loginUrl'   => $loginUrl,
+                ])
+        );
 
         $this->emailQueueLogger->info('Email [aprovado] enviado', array_merge($context, [
             'destinatario' => $user->getEmail(),
@@ -148,36 +143,34 @@ final class EnviarEmailContaHandler
 
     private function enviarRejeitado(object $user, Address $from, array $context): void
     {
-        $email = (new TemplatedEmail())
-            ->from($from)
-            ->to(new Address($user->getEmail(), $user->getName()))
-            ->subject('[ToolboxWaze] Atualização sobre sua solicitação de acesso')
-            ->htmlTemplate('emails/user_rejected.html.twig')
-            ->context(['user' => $user]);
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            (new TemplatedEmail())
+                ->from($from)
+                ->to(new Address($user->getEmail(), $user->getName()))
+                ->subject('[ToolboxWaze] Atualização sobre sua solicitação de acesso')
+                ->htmlTemplate('emails/user_rejected.html.twig')
+                ->context(['user' => $user])
+        );
 
         $this->emailQueueLogger->info('Email [rejeitado] enviado', array_merge($context, [
             'destinatario' => $user->getEmail(),
         ]));
     }
 
-    private function enviarPermissoesAtualizadas(object $user, Address $from, array $context): void
+    private function enviarPermissoesAtualizadas(object $user, Address $from, string $loginUrl, array $context): void
     {
-        $loginUrl = $this->urlGenerator->generate('app_login', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
-        $email = (new TemplatedEmail())
-            ->from($from)
-            ->to(new Address($user->getEmail(), $user->getName()))
-            ->subject('[ToolboxWaze] Suas permissões foram atualizadas')
-            ->htmlTemplate('emails/user_permissions_updated.html.twig')
-            ->context([
-                'user'       => $user,
-                'allowedUfs' => $user->getAllowedUfs(),
-                'loginUrl'   => $loginUrl,
-            ]);
-
-        $this->mailer->send($email);
+        $this->mailer->send(
+            (new TemplatedEmail())
+                ->from($from)
+                ->to(new Address($user->getEmail(), $user->getName()))
+                ->subject('[ToolboxWaze] Suas permissões foram atualizadas')
+                ->htmlTemplate('emails/user_permissions_updated.html.twig')
+                ->context([
+                    'user'       => $user,
+                    'allowedUfs' => $user->getAllowedUfs(),
+                    'loginUrl'   => $loginUrl,
+                ])
+        );
 
         $this->emailQueueLogger->info('Email [permissoes_atualizadas] enviado', array_merge($context, [
             'destinatario' => $user->getEmail(),

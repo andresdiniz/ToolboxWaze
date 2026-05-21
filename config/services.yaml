@@ -19,10 +19,7 @@ services:
     # Controllers
     # ---------------------------------------------------------------
 
-    # RegistrationController: MailerInterface removido, MessageBusInterface é autowired.
-    # Nenhuma injeção explícita necessária aqui.
-
-    # AdminUserController: usa MessageBusInterface (autowired) e emailQueueLogger (explícito)
+    # AdminUserController: emailQueueLogger não é autowired (canal customizado)
     App\Controller\AdminUserController:
         arguments:
             $emailQueueLogger: '@monolog.logger.email_queue'
@@ -34,10 +31,11 @@ services:
     App\MessageHandler\EnviarEmailContaHandler:
         arguments:
             $emailQueueLogger: '@monolog.logger.email_queue'
-            $mailerFrom: '%env(MAILER_FROM)%'
+            $mailerFrom:       '%env(MAILER_FROM)%'
+            $appBaseUrl:       '%env(APP_BASE_URL)%'
 
     App\MessageHandler\EnviarEmailRadarVencidoHandler:
         arguments:
             $emailQueueLogger: '@monolog.logger.email_queue'
-            $mailerFrom: '%env(MAILER_FROM)%'
-            $appBaseUrl: '%env(APP_BASE_URL)%'
+            $mailerFrom:       '%env(MAILER_FROM)%'
+            $appBaseUrl:       '%env(APP_BASE_URL)%'

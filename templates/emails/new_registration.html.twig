@@ -1,43 +1,67 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"><title>Nova solicitação de acesso</title></head>
-<body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f7f6f2;margin:0;padding:2rem">
-<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
-    <div style="background:#01696f;padding:1.75rem 2rem">
-        <h1 style="color:#fff;font-size:1.25rem;margin:0">📬 Nova Solicitação de Acesso</h1>
-        <p style="color:rgba(255,255,255,.8);margin:.5rem 0 0;font-size:.9rem">ToolboxWaze</p>
-    </div>
-    <div style="padding:2rem">
-        <p style="color:#28251d;margin:0 0 1.25rem">Olá <strong>{{ admin.name }}</strong>,</p>
-        <p style="color:#5a5957;margin:0 0 1.5rem">Um novo usuário solicitou acesso à plataforma ToolboxWaze e aguarda sua aprovação.</p>
+<head><meta charset="UTF-8"><title>Nova solicitação de acesso — ToolboxWaze</title></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Helvetica Neue',Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:32px 16px">
+  <tr><td align="center">
+    <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:520px;width:100%">
 
-        <div style="background:#f3f0ec;border-radius:8px;padding:1.25rem;margin-bottom:1.75rem">
-            <table style="width:100%;border-collapse:collapse">
-                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem;width:130px">Nome</td><td style="padding:.35rem 0;font-weight:600;color:#28251d">{{ user.name }}</td></tr>
-                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">E-mail</td><td style="padding:.35rem 0;color:#28251d">{{ user.email }}</td></tr>
-                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">Waze Nickname</td><td style="padding:.35rem 0;font-weight:600;color:#01696f">{{ user.wazeNickname ?? '—' }}</td></tr>
-                <tr><td style="padding:.35rem 0;color:#7a7974;font-size:.875rem">Solicitado em</td><td style="padding:.35rem 0;color:#28251d">{{ user.createdAt|date('d/m/Y \\à\\s H:i') }}</td></tr>
-                <tr>
-                    <td style="padding:.35rem 0;color:#7a7974;font-size:.875rem;vertical-align:top">Estados solicitados</td>
-                    <td style="padding:.35rem 0;color:#28251d">
-                        {% if requestedUfs is defined and requestedUfs|length > 0 %}
-                            {% for uf in requestedUfs %}<span style="display:inline-block;background:#cedcd8;color:#01696f;border-radius:4px;padding:.1rem .4rem;font-size:.78rem;font-weight:700;margin:.1rem .15rem .1rem 0">{{ uf }}</span>{% endfor %}
-                        {% else %}
-                            <span style="color:#bab9b4">—</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            </table>
-        </div>
+      {# Cabeçalho #}
+      <tr><td style="background:#0c4e54;padding:28px 32px">
+        <p style="margin:0;color:#fff;font-size:1.3rem;font-weight:700">&#128239; Nova Solicitação de Acesso</p>
+        <p style="margin:6px 0 0;color:rgba(255,255,255,.75);font-size:.85rem">ToolboxWaze &mdash; Painel Administrativo</p>
+      </td></tr>
 
-        {# adminUsersUrl é gerado pelo controller com UrlGeneratorInterface::ABSOLUTE_URL #}
-        <a href="{{ adminUsersUrl }}"
-           style="display:inline-block;background:#01696f;color:#fff;text-decoration:none;padding:.75rem 1.5rem;border-radius:8px;font-weight:600;font-size:.9rem">
-            Gerenciar Usuários →
-        </a>
+      {# Corpo #}
+      <tr><td style="padding:32px">
+        <p style="margin:0 0 12px;color:#28251d;font-size:1rem">Olá, <strong>{{ admin.name }}</strong>!</p>
+        <p style="margin:0 0 24px;color:#5a5957;font-size:.95rem;line-height:1.6">
+          Um novo usuário solicitou acesso à plataforma e <strong>aguarda sua aprovação</strong>.
+        </p>
 
-        <p style="color:#bab9b4;font-size:.8rem;margin-top:2rem">Você recebeu este e-mail por ser administrador do ToolboxWaze.</p>
-    </div>
-</div>
+        {# Dados do solicitante #}
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f6f2;border-radius:8px;padding:16px;margin-bottom:28px">
+          <tr>
+            <td style="padding:6px 0;color:#7a7974;font-size:.82rem;width:130px">Nome</td>
+            <td style="padding:6px 0;color:#28251d;font-weight:600;font-size:.9rem">{{ user.name }}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#7a7974;font-size:.82rem">E-mail</td>
+            <td style="padding:6px 0;color:#28251d;font-size:.9rem">{{ user.email }}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#7a7974;font-size:.82rem">Nickname Waze</td>
+            <td style="padding:6px 0;color:#01696f;font-weight:600;font-size:.9rem">{{ user.wazeNickname ?? '—' }}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#7a7974;font-size:.82rem">Solicitado em</td>
+            <td style="padding:6px 0;color:#28251d;font-size:.9rem">{{ user.createdAt|date('d/m/Y \\à\\s H:i') }}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#7a7974;font-size:.82rem;vertical-align:top">Estados solicitados</td>
+            <td style="padding:6px 0">
+              {% if requestedUfs is defined and requestedUfs|length > 0 %}
+                {% for uf in requestedUfs %}<span style="display:inline-block;background:#cedcd8;color:#01696f;border-radius:4px;padding:2px 7px;font-size:.75rem;font-weight:700;margin:2px 3px 2px 0">{{ uf }}</span>{% endfor %}
+              {% else %}
+                <span style="color:#bab9b4">Não informado</span>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin:0 0 16px;color:#5a5957;font-size:.9rem">Acesse o painel administrativo para aprovar ou rejeitar esta solicitação:</p>
+        <a href="{{ adminUsersUrl }}" style="display:inline-block;background:#0c4e54;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:.95rem">Gerenciar Usuários &rarr;</a>
+
+        <p style="margin:28px 0 0;color:#bab9b4;font-size:.78rem">Você recebeu este e-mail por ser administrador do ToolboxWaze.</p>
+      </td></tr>
+
+      {# Rodapé #}
+      <tr><td style="background:#f7f6f2;border-top:1px solid #e8e6e1;padding:16px 32px;font-size:.78rem;color:#aaa;text-align:center">
+        ToolboxWaze &mdash; sistema interno de gestão Waze
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
 </body>
 </html>

@@ -26,9 +26,10 @@ class SolicitacaoController extends AbstractController
      * Parâmetros GET:
      *   tipo                    – tipo da solicitação (ex: "nivel")
      *   tipoNivel               – "upgrade" | "downgrade" | (ausente)
-     *   souChamp                – "1" se o checkbox de confirmação Champ estiver marcado
+     *   souChamp                – "1" se o checkbox de confirmação Champ estiver marcado (nivel/downgrade)
      *   acaoGerenteArea         – "incluir" | "excluir" | (ausente)
      *   acaoGerenteEstadoPais   – "incluir" | "excluir" | (ausente)
+     *   souChampEp              – "1" se o checkbox de confirmação Champ EP estiver marcado (gerente_ep/excluir)
      *   cargo                   – "gerente_estado" | "gerente_pais" | (ausente)
      */
     #[Route('/campos', name: 'solicitacao_campos_ajax', methods: ['GET'])]
@@ -41,6 +42,7 @@ class SolicitacaoController extends AbstractController
 
         $acaoGerenteArea       = $request->query->get('acaoGerenteArea');
         $acaoGerenteEstadoPais = $request->query->get('acaoGerenteEstadoPais');
+        $souChampEp            = (bool) $request->query->get('souChampEp');
         $cargo                 = $request->query->get('cargo');
 
         $valoresAcao  = ['incluir', 'excluir', null];
@@ -63,6 +65,11 @@ class SolicitacaoController extends AbstractController
         if ($isChamp && $tipoNivel === 'downgrade') {
             $souChamp = true;
         }
+        // Champ excluindo gerente EP: infere souChampEp automaticamente
+        if ($isChamp && $acaoGerenteEstadoPais === 'excluir') {
+            // só marca como confirmado se o usuário explicitamente enviou souChampEp=1
+            // (não faz auto-confirm — o checkbox precisa ser marcado)
+        }
 
         $solicitacao = new Solicitacao();
         try { $solicitacao->setTipo($tipo); } catch (\Throwable) { $tipo = ''; }
@@ -83,6 +90,7 @@ class SolicitacaoController extends AbstractController
                 'souChampAuto'         => $isChamp && $tipoNivel === 'downgrade',
                 'acaoGerenteAtual'     => $acaoGerenteArea,
                 'acaoGerenteEpAtual'   => $acaoGerenteEstadoPais,
+                'souChampEpAuto'       => $souChampEp,
                 'cargoAtual'           => $cargo,
             ])
         );
@@ -103,8 +111,6 @@ class SolicitacaoController extends AbstractController
 
         $solicitacao = new Solicitacao();
 
-        // Pré-preenche os dados do solicitante a partir do usuário logado.
-        // Getters: getName(), getWazeNickname(), getEmail() — todos existem na entidade User.
         if ($user instanceof \App\Entity\User) {
             if ($user->getName()) {
                 $solicitacao->setSolicitanteNome($user->getName());
@@ -119,10 +125,12 @@ class SolicitacaoController extends AbstractController
 
         $tipoAtual = null;
 
-        $postData      = $request->request->all('solicitacao') ?? [];
-        $tipoDoPost    = $postData['tipo']             ?? null;
-        $tipoNivelPost = $postData['dados_tipoNivel']  ?? null;
-        $souChampPost  = !empty($postData['dados_souChamp']);
+        $postData                  = $request->request->all('solicitacao') ?? [];
+        $tipoDoPost                = $postData['tipo']                        ?? null;
+        $tipoNivelPost             = $postData['dados_tipoNivel']              ?? null;
+        $souChampPost              = !empty($postData['dados_souChamp']);
+        $acaoGerenteEstadoPaisPost = $postData['dados_acaoGerenteEstadoPais']  ?? null;
+        $souChampEpPost            = !empty($postData['dados_souChampEp']);
 
         if ($tipoDoPost) {
             try { $solicitacao->setTipo($tipoDoPost); $tipoAtual = $tipoDoPost; } catch (\Throwable) {}
@@ -132,9 +140,11 @@ class SolicitacaoController extends AbstractController
             $tipoNivelPost = null;
         }
 
-        // Mesma inferência automática no submit real
         if ($isChamp && $tipoNivelPost === 'downgrade') {
             $souChampPost = true;
+        }
+        if ($isChamp && $acaoGerenteEstadoPaisPost === 'excluir') {
+            $souChampEpPost = true;
         }
 
         $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
@@ -151,6 +161,15 @@ class SolicitacaoController extends AbstractController
 
             if ($tipoNivelSubmetido === 'downgrade' && !$isChamp) {
                 $this->addFlash('danger', 'Apenas Champs podem solicitar downgrade de nível.');
+                return $this->redirectToRoute('solicitacao_hub');
+            }
+
+            $acaoEpSubmetida = $form->has('dados_acaoGerenteEstadoPais')
+                ? $form->get('dados_acaoGerenteEstadoPais')->getData()
+                : null;
+
+            if ($acaoEpSubmetida === 'excluir' && !$isChamp) {
+                $this->addFlash('danger', 'Apenas Champs podem solicitar exclusão de Gerente.');
                 return $this->redirectToRoute('solicitacao_hub');
             }
 

@@ -150,8 +150,16 @@ final class RadarController extends AbstractController
     public function show(int $id, Request $req): Response
     {
         /** @var User|null $user */
-        $user  = $this->getUser();
-        $radar = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$id]);
+        $user = $this->getUser();
+
+        // BUG FIX: SELECT * não retornava data_validade_iso; o Twig comparava
+        // 'd/m/Y' com 'Y-m-d' lexicograficamente → badges de vencido/vencendo errados.
+        $dv    = $this->dateConv('data_validade');
+        $radar = $this->db->fetchAssociative(
+            "SELECT *, DATE_FORMAT($dv, '%Y-%m-%d') AS data_validade_iso
+             FROM radar_medidor WHERE id = ?",
+            [$id]
+        );
 
         if (!$radar) {
             throw $this->createNotFoundException('Radar não encontrado.');
@@ -193,6 +201,9 @@ final class RadarController extends AbstractController
         $wazeErrors   = $session->remove('_waze_errors_' . $id) ?? [];
         $wazeFormData = $session->remove('_waze_form_'   . $id) ?? [];
 
+        $hoje = (new \DateTimeImmutable())->format('Y-m-d');
+        $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+
         return $this->render('radar/show.html.twig', [
             'radar'        => $radar,
             'faixas'       => $faixas,
@@ -201,6 +212,8 @@ final class RadarController extends AbstractController
             'wazeLog'      => $wazeLog,
             'wazeErrors'   => $wazeErrors,
             'wazeFormData' => $wazeFormData,
+            'hoje'         => $hoje,
+            'em30'         => $em30,
         ]);
     }
 
@@ -219,8 +232,13 @@ final class RadarController extends AbstractController
             throw $this->createNotFoundException('Radar não encontrado.');
         }
 
+        // BUG FIX: verificação de acesso à UF também no POST (estava só no show GET)
         /** @var User $user */
-        $user   = $this->getUser();
+        $user = $this->getUser();
+        if (!$user->canAccessUf((string) ($radar['sigla_uf'] ?? ''))) {
+            throw $this->createAccessDeniedException('Você não tem acesso a dados deste estado.');
+        }
+
         $userId = $user->getId();
         $now    = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
@@ -311,6 +329,15 @@ final class RadarController extends AbstractController
         return $serie !== '' ? 'LEFT JOIN radar_faixa rf ON rf.radar_medidor_id = rm.id' : '';
     }
 
+    /**
+     * Escapa caracteres especiais do LIKE (%, _) nos valores de filtro de texto livre.
+     * Evita que o usuário passe '%' e varra a tabela inteira ou '_%' para bypass.
+     */
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
     private function buildWhere(
         string $uf,
         string $municipio,
@@ -340,8 +367,9 @@ final class RadarController extends AbstractController
             $params[] = $uf;
         }
         if ($municipio !== '') {
+            // BUG FIX: escapa % e _ literais para não virar wildcards acidentais
             $parts[]  = 'rm.municipio LIKE ?';
-            $params[] = "%$municipio%";
+            $params[] = '%' . $this->escapeLike($municipio) . '%';
         }
         if ($resultado !== '') {
             $parts[]  = 'rm.ultimo_resultado = ?';
@@ -352,9 +380,11 @@ final class RadarController extends AbstractController
             $params[] = $tipo;
         }
         if ($serie !== '') {
+            // BUG FIX: idem para busca de série/inmetro
+            $escaped  = $this->escapeLike($serie);
             $parts[]  = '(rf.numero_serie LIKE ? OR rf.numero_inmetro LIKE ?)';
-            $params[] = "%$serie%";
-            $params[] = "%$serie%";
+            $params[] = "%$escaped%";
+            $params[] = "%$escaped%";
         }
 
         // data_validade está em d/m/Y → converter com STR_TO_DATE para comparar

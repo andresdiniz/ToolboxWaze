@@ -11,8 +11,12 @@
     </ol>
 </nav>
 
-{% set hoje = 'now'|date('Y-m-d') %}
-{% set em30 = 'now'|date_modify('+30 days')|date('Y-m-d') %}
+{#
+  BUG FIX: antes usávamos radar.data_validade (formato 'd/m/Y') para comparar com $hoje
+  (formato 'Y-m-d'), resultando em comparação lexicográfica errada.
+  Agora o controller retorna radar.data_validade_iso (Y-m-d) e as variáveis
+  hoje/em30 também vêm do controller para garantir consistência.
+#}
 
 {# ── Cabeçalho ── #}
 <div class="d-flex align-items-start justify-content-between mb-4 gap-3 flex-wrap">
@@ -34,13 +38,13 @@
             <span class="badge bg-secondary fs-6 px-3 py-2">{{ radar.ultimo_resultado }}</span>
         {% endif %}
 
-        {# Badge de validade no cabeçalho #}
-        {% if radar.data_validade %}
-            {% if radar.data_validade < hoje %}
+        {# Badge de validade no cabeçalho — usa data_validade_iso (Y-m-d) para comparação correta #}
+        {% if radar.data_validade_iso %}
+            {% if radar.data_validade_iso < hoje %}
                 <span class="badge bg-danger fs-6 px-3 py-2">
                     <i class="bi bi-exclamation-triangle-fill me-1"></i>VENCIDO
                 </span>
-            {% elseif radar.data_validade <= em30 %}
+            {% elseif radar.data_validade_iso <= em30 %}
                 <span class="badge bg-warning text-dark fs-6 px-3 py-2">
                     <i class="bi bi-clock me-1"></i>VENCE EM BREVE
                 </span>
@@ -94,13 +98,14 @@
                     <div class="col-sm-6">
                         <div class="detail-label">Validade</div>
                         <div class="detail-value">
+                            {# Exibe no formato original d/m/Y, mas compara com iso #}
                             {% if radar.data_validade %}
-                                {% if radar.data_validade < hoje %}
+                                {% if radar.data_validade_iso < hoje %}
                                     <span class="text-danger fw-semibold">
                                         <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ radar.data_validade }}
                                         <span class="badge bg-danger ms-1">Vencido</span>
                                     </span>
-                                {% elseif radar.data_validade <= em30 %}
+                                {% elseif radar.data_validade_iso <= em30 %}
                                     <span class="text-warning fw-semibold">
                                         <i class="bi bi-clock me-1"></i>{{ radar.data_validade }}
                                         <span class="badge bg-warning text-dark ms-1">Vence em breve</span>
@@ -309,10 +314,17 @@
                             <label class="form-label fw-semibold small">
                                 Link do Editor Waze <span class="text-danger">*</span>
                             </label>
+                            {#
+                              BUG FIX: antes era `wazeLink ? wazeLink.waze_link : wazeFormData...`
+                              Se havia erro de validação (wazeErrors), o campo mostrava o link
+                              salvo no banco em vez do valor que o usuário digitou.
+                              Agora: se há wazeFormData (redirect após erro), usa isso.
+                              Senão, pré-popula com o link atual do banco (modo edição normal).
+                            #}
                             <input type="url"
                                    name="waze_link"
                                    id="waze-link-input"
-                                   value="{{ wazeLink ? wazeLink.waze_link : wazeFormData.waze_link|default('') }}"
+                                   value="{{ wazeFormData.waze_link is defined ? wazeFormData.waze_link : (wazeLink ? wazeLink.waze_link : '') }}"
                                    class="form-control form-control-sm font-monospace {{ wazeErrors.waze_link is defined ? 'is-invalid' : '' }}"
                                    placeholder="https://waze.com/pt-BR/editor?…&permanentHazards=272464"
                                    required>

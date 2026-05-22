@@ -28,8 +28,9 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  *
  * Campos atualizados por esta fonte:
  *   municipio, local_verificacao, data_ultima_verificacao,
- *   data_validade, ultimo_resultado, tipo_medidor,
- *   faixas_json, identity_hash, raw_data, row_hash, updated_at
+ *   data_validade, data_verificacao_efetiva, ultimo_resultado,
+ *   tipo_medidor, faixas_json, identity_hash, raw_data,
+ *   row_hash, updated_at
  *
  * Campos PRESERVADOS (não tocados pelo UPDATE):
  *   estado, proprietario_nome, proprietario_municipio,
@@ -42,40 +43,27 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * Cabeçalho esperado:
  *   Município, Data Verificação, Data Validade, Resultado,
  *   Local, Tipo, Faixa, Inmetro, Série, Sentido, Velocidade
- *
- * O CSV pode ter MÚLTIPLAS LINHAS para o mesmo radar (uma por faixa).
- * O handler agrupa faixas pelo identity_hash antes de gravar.
  */
 #[AsMessageHandler]
 final class ImportRadarGoogleSheetsHandler
 {
     private const CURL_TIMEOUT = 120;
-    private const BATCH_SIZE   = 100; // radares por lote (não linhas CSV)
+    private const BATCH_SIZE   = 100;
 
-    /**
-     * Colunas inseridas quando o radar não existe no BD.
-     * Inclui apenas campos disponíveis no CSV + metadados.
-     * NÃO inclui: estado, proprietario_*, historico_json
-     * (esses campos ficam NULL em novos registros vindos do Sheets).
-     */
     private const INSERT_COLS = [
         'sigla_uf', 'municipio', 'local_verificacao',
-        'data_ultima_verificacao', 'data_validade', 'ultimo_resultado', 'tipo_medidor',
+        'data_ultima_verificacao', 'data_validade', 'data_verificacao_efetiva',
+        'ultimo_resultado', 'tipo_medidor',
         'faixas_json',
         'row_hash', 'identity_hash', 'raw_data', 'imported_at', 'updated_at',
     ];
 
-    /**
-     * Colunas atualizadas quando o radar JÁ EXISTE (pelo identity_hash).
-     * Preserva: estado, proprietario_nome, proprietario_municipio,
-     *           proprietario_estado, historico_json
-     */
     private const UPDATE_COLS = [
         'sigla_uf', 'municipio', 'local_verificacao',
-        'data_ultima_verificacao', 'data_validade', 'ultimo_resultado', 'tipo_medidor',
+        'data_ultima_verificacao', 'data_validade', 'data_verificacao_efetiva',
+        'ultimo_resultado', 'tipo_medidor',
         'faixas_json',
         'identity_hash', 'raw_data', 'updated_at',
-        // row_hash é incluído separadamente no UPDATE para manter o UNIQUE constraint
     ];
 
     private int $countInserted = 0;
@@ -108,7 +96,6 @@ final class ImportRadarGoogleSheetsHandler
             return;
         }
 
-        // Processa em lotes
         foreach (array_chunk(array_values($radarMap), self::BATCH_SIZE) as $batch) {
             $this->processBatch($batch);
         }
@@ -167,12 +154,6 @@ final class ImportRadarGoogleSheetsHandler
     // Parse CSV — agrupa múltiplas linhas (faixas) por radar
     // ════════════════════════════════════════════════════════════
 
-    /**
-     * Lê o CSV e retorna um mapa [ identity_hash => radar_row ].
-     * Múltiplas linhas do mesmo radar (uma por faixa) são agrupadas.
-     *
-     * @return array<string, array<string, mixed>>
-     */
     private function parseCsv(string $path, string $uf, string $importedAt): array
     {
         $fh = fopen($path, 'rb');
@@ -181,13 +162,11 @@ final class ImportRadarGoogleSheetsHandler
             throw new \RuntimeException("Não foi possível abrir: {$path}");
         }
 
-        // Descarta BOM UTF-8 se presente
         $bom = fread($fh, 3);
         if ($bom !== "\xEF\xBB\xBF") {
             rewind($fh);
         }
 
-        // Lê e normaliza cabeçalho
         $rawHeader = fgetcsv($fh);
 
         if ($rawHeader === false || $rawHeader === null) {
@@ -210,33 +189,32 @@ final class ImportRadarGoogleSheetsHandler
                 continue;
             }
 
-            $municipio   = $this->str($data['municipio']       ?? null);
-            $local       = $this->str($data['local']           ?? null);
-            $tipo        = $this->str($data['tipo']            ?? null);
-            $dataVerif   = $this->str($data['dataverificacao'] ?? null);
-            $dataValid   = $this->str($data['datavalidade']    ?? null);
-            $resultado   = $this->str($data['resultado']       ?? null);
+            $municipio = $this->str($data['municipio']       ?? null);
+            $local     = $this->str($data['local']           ?? null);
+            $tipo      = $this->str($data['tipo']            ?? null);
+            $dataVerif = $this->str($data['dataverificacao'] ?? null);
+            $dataValid = $this->str($data['datavalidade']    ?? null);
+            $resultado = $this->str($data['resultado']       ?? null);
 
-            // Mesmo algoritmo do RBMLQ handler — compatível com dados existentes
             $identityHash = $this->buildIdentityHash($uf, $local, $tipo);
 
             if (!isset($radarMap[$identityHash])) {
                 $radarMap[$identityHash] = [
-                    'sigla_uf'                => strtoupper($uf),
-                    'municipio'               => $municipio,
-                    'local_verificacao'       => $local,
-                    'data_ultima_verificacao' => $dataVerif,
-                    'data_validade'           => $dataValid,
-                    'ultimo_resultado'        => $resultado,
-                    'tipo_medidor'            => $tipo,
-                    'identity_hash'           => $identityHash,
-                    'imported_at'             => $importedAt,
-                    'updated_at'              => $importedAt,
-                    '_faixas'                 => [],
+                    'sigla_uf'                  => strtoupper($uf),
+                    'municipio'                 => $municipio,
+                    'local_verificacao'         => $local,
+                    'data_ultima_verificacao'   => $dataVerif,
+                    'data_validade'             => $dataValid,
+                    'data_verificacao_efetiva'  => $this->resolveDataVerificacao($dataVerif, $dataValid),
+                    'ultimo_resultado'          => $resultado,
+                    'tipo_medidor'              => $tipo,
+                    'identity_hash'             => $identityHash,
+                    'imported_at'               => $importedAt,
+                    'updated_at'                => $importedAt,
+                    '_faixas'                   => [],
                 ];
             }
 
-            // Acumula faixas desta linha
             $radarMap[$identityHash]['_faixas'][] = [
                 'NumeroFaixa'       => $this->str($data['faixa']      ?? null),
                 'NumeroInmetro'     => $this->str($data['inmetro']    ?? null),
@@ -248,31 +226,26 @@ final class ImportRadarGoogleSheetsHandler
 
         fclose($fh);
 
-        // Finaliza os campos derivados (faixas_json, raw_data, row_hash)
         foreach ($radarMap as &$radar) {
             $faixasJson = json_encode($radar['_faixas'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-            // raw_data: apenas os campos desta fonte (sem proprietario, sem historico)
             $rawPayload = [
-                'sigla_uf'                => $radar['sigla_uf'],
-                'municipio'               => $radar['municipio'],
-                'local_verificacao'       => $radar['local_verificacao'],
-                'data_ultima_verificacao' => $radar['data_ultima_verificacao'],
-                'data_validade'           => $radar['data_validade'],
-                'ultimo_resultado'        => $radar['ultimo_resultado'],
-                'tipo_medidor'            => $radar['tipo_medidor'],
-                'faixas'                  => $radar['_faixas'],
+                'sigla_uf'                  => $radar['sigla_uf'],
+                'municipio'                 => $radar['municipio'],
+                'local_verificacao'         => $radar['local_verificacao'],
+                'data_ultima_verificacao'   => $radar['data_ultima_verificacao'],
+                'data_validade'             => $radar['data_validade'],
+                'data_verificacao_efetiva'  => $radar['data_verificacao_efetiva'],
+                'ultimo_resultado'          => $radar['ultimo_resultado'],
+                'tipo_medidor'              => $radar['tipo_medidor'],
+                'faixas'                    => $radar['_faixas'],
             ];
 
             $rawJson = json_encode($rawPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
             $radar['faixas_json'] = $faixasJson;
             $radar['raw_data']    = $rawJson;
-
-            // row_hash sobre os dados desta fonte — difere do RBMLQ intencionalmente:
-            // ao voltar para o RBMLQ, o hash muda e o handler RBMLQ atualiza o registro
-            // restaurando proprietario_*, historico_json, estado.
-            $radar['row_hash'] = hash('sha256', $rawJson);
+            $radar['row_hash']    = hash('sha256', $rawJson);
         }
         unset($radar);
 
@@ -288,10 +261,7 @@ final class ImportRadarGoogleSheetsHandler
         $rowHashes      = array_column($rows, 'row_hash');
         $identityHashes = array_column($rows, 'identity_hash');
 
-        // row_hashes já existentes → registro sem mudança (pula)
         $existingRowHashes  = $this->fetchExistingRowHashes($rowHashes);
-
-        // registros existentes pelo identity_hash → candidatos a UPDATE
         $existingByIdentity = $this->fetchExistingByIdentity($identityHashes);
 
         $toInsert = [];
@@ -299,7 +269,6 @@ final class ImportRadarGoogleSheetsHandler
 
         foreach ($rows as $row) {
             if (\in_array($row['row_hash'], $existingRowHashes, true)) {
-                // Dados idênticos aos do BD — nada a fazer
                 $this->countSkipped++;
                 continue;
             }
@@ -307,10 +276,8 @@ final class ImportRadarGoogleSheetsHandler
             $existing = $existingByIdentity[$row['identity_hash']] ?? null;
 
             if ($existing === null) {
-                // Radar novo — INSERT
                 $toInsert[] = $row;
             } else {
-                // Radar existente com dados diferentes — UPDATE parcial
                 $row['_db_id'] = $existing['id'];
                 $toUpdate[]    = $row;
             }
@@ -333,7 +300,6 @@ final class ImportRadarGoogleSheetsHandler
                 $this->countUpdated++;
             }
 
-            // Sync faixas para todos os registros inseridos ou atualizados
             $changed = array_merge($toInsert, $toUpdate);
 
             foreach ($changed as $row) {
@@ -398,10 +364,6 @@ final class ImportRadarGoogleSheetsHandler
         return $map;
     }
 
-    /**
-     * INSERT em lote com IGNORE (evita erro em duplicatas de row_hash).
-     * Usa as colunas de INSERT_COLS — sem estado, proprietario_*, historico_json.
-     */
     private function insertBatch(array $rows): void
     {
         $cols      = self::INSERT_COLS;
@@ -424,11 +386,6 @@ final class ImportRadarGoogleSheetsHandler
         );
     }
 
-    /**
-     * UPDATE parcial — atualiza apenas campos disponíveis no CSV.
-     * PRESERVA: estado, proprietario_nome, proprietario_municipio,
-     *           proprietario_estado, historico_json
-     */
     private function updateRadar(array $row): void
     {
         $cols     = array_merge(self::UPDATE_COLS, ['row_hash']);
@@ -484,11 +441,6 @@ final class ImportRadarGoogleSheetsHandler
     // Helpers
     // ════════════════════════════════════════════════════════════
 
-    /**
-     * Mesmo algoritmo do ImportRadarMedidoresHandler.
-     * SHA-256( UF | LOCAL_VERIFICACAO | TIPO_MEDIDOR )
-     * Garante que um radar existente seja reconhecido entre as duas fontes.
-     */
     private function buildIdentityHash(string $uf, ?string $local, ?string $tipo): string
     {
         return hash('sha256', implode('|', [
@@ -499,13 +451,30 @@ final class ImportRadarGoogleSheetsHandler
     }
 
     /**
-     * Normaliza chave do cabeçalho CSV.
-     * Remove acentos, espaços e caracteres especiais → lowercase sem separadores.
-     * Exemplos:
-     *   "Data Verificação" => "dataverificacao"
-     *   "Série"            => "serie"
-     *   "Município"        => "municipio"
+     * Calcula a data de verificação efetiva (dd/mm/aaaa).
+     *
+     * Regra:
+     *   1. Se $dataVerif não é vazia → retorna ela.
+     *   2. Se $dataValid não é vazia → retorna dataValid - 1 ano.
+     *   3. Ambas nulas/vazias → retorna null.
      */
+    private function resolveDataVerificacao(?string $dataVerif, ?string $dataValid): ?string
+    {
+        if ($dataVerif !== null && $dataVerif !== '') {
+            return $dataVerif;
+        }
+
+        if ($dataValid !== null && $dataValid !== '') {
+            $dt = \DateTimeImmutable::createFromFormat('d/m/Y', $dataValid);
+
+            if ($dt !== false) {
+                return $dt->modify('-1 year')->format('d/m/Y');
+            }
+        }
+
+        return null;
+    }
+
     private function normalizeKey(string $col): string
     {
         $col = mb_strtolower(trim($col), 'UTF-8');

@@ -23,6 +23,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'idx_radar_proprietario_nome',        columns: ['proprietario_nome'])]
 #[ORM\Index(name: 'idx_radar_ultimo_resultado',         columns: ['ultimo_resultado'])]
 #[ORM\Index(name: 'idx_radar_data_validade',            columns: ['data_validade'])]
+#[ORM\Index(name: 'idx_radar_data_verificacao_efetiva', columns: ['data_verificacao_efetiva'])]
 class RadarMedidor
 {
     #[ORM\Id]
@@ -49,6 +50,20 @@ class RadarMedidor
 
     #[ORM\Column(name: 'data_validade', type: 'string', length: 20, nullable: true)]
     private ?string $dataValidade = null;
+
+    /**
+     * Data de verificação efetiva — campo calculado na importação.
+     *
+     * REGRA:
+     *   - Se data_ultima_verificacao não é nula/vazia → usa ela.
+     *   - Caso contrário → data_validade - 1 ano (validade INMETRO = verificação + 1 ano).
+     *   - Se ambas nulas → NULL.
+     *
+     * Formato: dd/mm/aaaa (varchar, igual aos campos originais).
+     * Indexado para que o filtro "recentes" seja uma busca simples.
+     */
+    #[ORM\Column(name: 'data_verificacao_efetiva', type: 'string', length: 20, nullable: true)]
+    private ?string $dataVerificacaoEfetiva = null;
 
     #[ORM\Column(name: 'ultimo_resultado', type: 'string', length: 50, nullable: true)]
     private ?string $ultimoResultado = null;
@@ -106,6 +121,7 @@ class RadarMedidor
     public function getLocalVerificacao(): ?string            { return $this->localVerificacao; }
     public function getDataUltimaVerificacao(): ?string       { return $this->dataUltimaVerificacao; }
     public function getDataValidade(): ?string                { return $this->dataValidade; }
+    public function getDataVerificacaoEfetiva(): ?string      { return $this->dataVerificacaoEfetiva; }
     public function getUltimoResultado(): ?string             { return $this->ultimoResultado; }
     public function getTipoMedidor(): ?string                 { return $this->tipoMedidor; }
     public function getProprietarioNome(): ?string            { return $this->proprietarioNome; }
@@ -127,6 +143,7 @@ class RadarMedidor
     public function setLocalVerificacao(?string $v): static              { $this->localVerificacao = $v; return $this; }
     public function setDataUltimaVerificacao(?string $v): static         { $this->dataUltimaVerificacao = $v; return $this; }
     public function setDataValidade(?string $v): static                  { $this->dataValidade = $v; return $this; }
+    public function setDataVerificacaoEfetiva(?string $v): static        { $this->dataVerificacaoEfetiva = $v; return $this; }
     public function setUltimoResultado(?string $v): static               { $this->ultimoResultado = $v; return $this; }
     public function setTipoMedidor(?string $v): static                   { $this->tipoMedidor = $v; return $this; }
     public function setProprietarioNome(?string $v): static              { $this->proprietarioNome = $v; return $this; }
@@ -139,4 +156,33 @@ class RadarMedidor
     public function setRawData(?array $v): static                        { $this->rawData = $v; return $this; }
     public function setImportedAt(\DateTimeImmutable $v): static         { $this->importedAt = $v; return $this; }
     public function setUpdatedAt(?\DateTimeImmutable $v): static         { $this->updatedAt = $v; return $this; }
+
+    // ----- Helper de exibição -----
+
+    /**
+     * Retorna true se este radar foi verificado nos últimos $days dias
+     * (usa data_verificacao_efetiva já calculada no BD).
+     */
+    public function isRecente(int $days = 30): bool
+    {
+        if ($this->dataVerificacaoEfetiva === null) {
+            return false;
+        }
+
+        $parts = explode('/', $this->dataVerificacaoEfetiva);
+
+        if (count($parts) !== 3) {
+            return false;
+        }
+
+        try {
+            $data  = \DateTimeImmutable::createFromFormat('d/m/Y', $this->dataVerificacaoEfetiva);
+            $limit = new \DateTimeImmutable("-{$days} days");
+            $today = new \DateTimeImmutable('today');
+
+            return $data >= $limit && $data <= $today;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
 }

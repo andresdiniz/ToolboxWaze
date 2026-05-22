@@ -7,7 +7,6 @@ namespace App\Repository;
 use App\Entity\RadarMedidor;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
-use Doctrine\DBAL\Connection;
 
 /**
  * @extends ServiceEntityRepository<RadarMedidor>
@@ -22,7 +21,7 @@ class RadarMedidorRepository extends ServiceEntityRepository
     public function findByUf(string $uf): array
     {
         return $this->createQueryBuilder('r')
-            ->where('r.uf = :uf')
+            ->where('r.siglaUf = :uf')
             ->setParameter('uf', strtoupper($uf))
             ->orderBy('r.municipio', 'ASC')
             ->getQuery()
@@ -32,11 +31,11 @@ class RadarMedidorRepository extends ServiceEntityRepository
     public function findByUfAndMunicipio(string $uf, string $municipio): array
     {
         return $this->createQueryBuilder('r')
-            ->where('r.uf = :uf')
+            ->where('r.siglaUf = :uf')
             ->andWhere('r.municipio LIKE :municipio')
             ->setParameter('uf', strtoupper($uf))
             ->setParameter('municipio', '%' . $municipio . '%')
-            ->orderBy('r.nomeEmpresa', 'ASC')
+            ->orderBy('r.municipio', 'ASC')
             ->getQuery()
             ->getResult();
     }
@@ -69,7 +68,7 @@ class RadarMedidorRepository extends ServiceEntityRepository
     {
         return (int) $this->createQueryBuilder('r')
             ->select('COUNT(r.id)')
-            ->where('r.uf = :uf')
+            ->where('r.siglaUf = :uf')
             ->setParameter('uf', strtoupper($uf))
             ->getQuery()
             ->getSingleScalarResult();
@@ -84,130 +83,60 @@ class RadarMedidorRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /**
-     * Retorna radares "recentes": verificados nos últimos 30 dias.
-     *
-     * REGRA DE DATA:
-     *   - Usa data_ultima_verificacao (varchar dd/mm/aaaa) quando preenchida.
-     *   - Quando vazia/nula, calcula: data_validade (dd/mm/aaaa) - 1 ano.
-     *
-     * CRITÉRIO "recente":
-     *   - A data de verificação efetiva está dentro dos últimos 30 dias
-     *     a partir de HOJE (intervalo: hoje - 30 dias  até  hoje).
-     *
-     * @param string|null $uf    Filtra por UF (opcional).
-     * @param int         $days  Janela em dias (padrão 30).
-     * @return array
-     */
-    public function findRecentes(?string $uf = null, int $days = 30): array
-    {
-        /** @var Connection $conn */
-        $conn = $this->getEntityManager()->getConnection();
-
-        // ── Converte varchar dd/mm/aaaa para DATE ────────────────────────────
-        // STR_TO_DATE('03/07/2025', '%d/%m/%Y') => 2025-07-03
-        // Quando data_ultima_verificacao é NULL ou vazia, usa
-        // STR_TO_DATE(data_validade, ...) - INTERVAL 1 YEAR como substituto.
-        $sql = <<<SQL
-            SELECT *
-            FROM radar_medidor
-            WHERE (
-                -- DATA EFETIVA calculada para comparação
-                CASE
-                    WHEN data_ultima_verificacao IS NOT NULL
-                         AND data_ultima_verificacao <> ''
-                    THEN STR_TO_DATE(data_ultima_verificacao, '%d/%m/%Y')
-                    WHEN data_validade IS NOT NULL
-                         AND data_validade <> ''
-                    THEN DATE_SUB(STR_TO_DATE(data_validade, '%d/%m/%Y'), INTERVAL 1 YEAR)
-                    ELSE NULL
-                END
-            ) BETWEEN DATE_SUB(CURDATE(), INTERVAL :days DAY) AND CURDATE()
-        SQL;
-
-        $params = ['days' => $days];
-        $types  = ['days' => \PDO::PARAM_INT];
-
-        if ($uf !== null && $uf !== '') {
-            $sql   .= ' AND sigla_uf = :uf';
-            $params['uf'] = strtoupper($uf);
-            $types['uf']  = \PDO::PARAM_STR;
-        }
-
-        $sql .= ' ORDER BY STR_TO_DATE(IFNULL(NULLIF(data_ultima_verificacao, \'\'), data_validade), \'%d/%m/%Y\') DESC';
-
-        return $conn->fetchAllAssociative($sql, $params, $types);
-    }
+    // -------------------------------------------------------------------------
+    // Filtro "recentes" — usa data_verificacao_efetiva calculada na importação
+    //
+    // Como o campo está em dd/mm/aaaa (varchar), a comparação usa
+    // STR_TO_DATE apenas UMA vez por query, não por linha.
+    // O índice idx_radar_data_verificacao_efetiva acelera o filtro.
+    // -------------------------------------------------------------------------
 
     /**
-     * Conta quantos radares são recentes (mesma regra de findRecentes).
+     * Retorna radares recentes: data_verificacao_efetiva nos últimos $days dias.
      *
      * @param string|null $uf   Filtra por UF (opcional).
      * @param int         $days Janela em dias (padrão 30).
-     * @return int
+     * @return RadarMedidor[]
      */
-    public function countRecentes(?string $uf = null, int $days = 30): int
+    public function findRecentes(?string $uf = null, int $days = 30): array
     {
-        /** @var Connection $conn */
-        $conn = $this->getEntityManager()->getConnection();
-
-        $sql = <<<SQL
-            SELECT COUNT(*)
-            FROM radar_medidor
-            WHERE (
-                CASE
-                    WHEN data_ultima_verificacao IS NOT NULL
-                         AND data_ultima_verificacao <> ''
-                    THEN STR_TO_DATE(data_ultima_verificacao, '%d/%m/%Y')
-                    WHEN data_validade IS NOT NULL
-                         AND data_validade <> ''
-                    THEN DATE_SUB(STR_TO_DATE(data_validade, '%d/%m/%Y'), INTERVAL 1 YEAR)
-                    ELSE NULL
-                END
-            ) BETWEEN DATE_SUB(CURDATE(), INTERVAL :days DAY) AND CURDATE()
-        SQL;
-
-        $params = ['days' => $days];
-        $types  = ['days' => \PDO::PARAM_INT];
+        $qb = $this->createQueryBuilder('r')
+            ->where(
+                'STR_TO_DATE(r.dataVerificacaoEfetiva, \'%d/%m/%Y\') '
+                . 'BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL :days DAY) AND CURRENT_DATE()'
+            )
+            ->setParameter('days', $days)
+            ->orderBy('STR_TO_DATE(r.dataVerificacaoEfetiva, \'%d/%m/%Y\')', 'DESC');
 
         if ($uf !== null && $uf !== '') {
-            $sql   .= ' AND sigla_uf = :uf';
-            $params['uf'] = strtoupper($uf);
-            $types['uf']  = \PDO::PARAM_STR;
+            $qb->andWhere('r.siglaUf = :uf')
+               ->setParameter('uf', strtoupper($uf));
         }
 
-        return (int) $conn->fetchOne($sql, $params, $types);
+        return $qb->getQuery()->getResult();
     }
 
     /**
-     * Verifica se um radar específico é recente.
+     * Conta radares recentes.
      *
-     * @param int $radarId ID do registro em radar_medidor.
-     * @param int $days    Janela em dias (padrão 30).
-     * @return bool
+     * @param string|null $uf   Filtra por UF (opcional).
+     * @param int         $days Janela em dias (padrão 30).
      */
-    public function isRecente(int $radarId, int $days = 30): bool
+    public function countRecentes(?string $uf = null, int $days = 30): int
     {
-        /** @var Connection $conn */
-        $conn = $this->getEntityManager()->getConnection();
+        $qb = $this->createQueryBuilder('r')
+            ->select('COUNT(r.id)')
+            ->where(
+                'STR_TO_DATE(r.dataVerificacaoEfetiva, \'%d/%m/%Y\') '
+                . 'BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL :days DAY) AND CURRENT_DATE()'
+            )
+            ->setParameter('days', $days);
 
-        $sql = <<<SQL
-            SELECT COUNT(*)
-            FROM radar_medidor
-            WHERE id = :id
-              AND (
-                CASE
-                    WHEN data_ultima_verificacao IS NOT NULL
-                         AND data_ultima_verificacao <> ''
-                    THEN STR_TO_DATE(data_ultima_verificacao, '%d/%m/%Y')
-                    WHEN data_validade IS NOT NULL
-                         AND data_validade <> ''
-                    THEN DATE_SUB(STR_TO_DATE(data_validade, '%d/%m/%Y'), INTERVAL 1 YEAR)
-                    ELSE NULL
-                END
-              ) BETWEEN DATE_SUB(CURDATE(), INTERVAL :days DAY) AND CURDATE()
-        SQL;
+        if ($uf !== null && $uf !== '') {
+            $qb->andWhere('r.siglaUf = :uf')
+               ->setParameter('uf', strtoupper($uf));
+        }
 
-        return (int) $conn->fetchOne($sql, ['id' => $radarId, 'days' => $days]) > 0;
+        return (int) $qb->getQuery()->getSingleScalarResult();
     }
 }

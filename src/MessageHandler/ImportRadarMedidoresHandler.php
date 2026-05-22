@@ -27,7 +27,8 @@ final class ImportRadarMedidoresHandler
 
     private const RADAR_INSERT_COLS = [
         'sigla_uf', 'estado', 'municipio', 'local_verificacao',
-        'data_ultima_verificacao', 'data_validade', 'ultimo_resultado', 'tipo_medidor',
+        'data_ultima_verificacao', 'data_validade', 'data_verificacao_efetiva',
+        'ultimo_resultado', 'tipo_medidor',
         'proprietario_nome', 'proprietario_municipio', 'proprietario_estado',
         'faixas_json', 'historico_json',
         'row_hash', 'identity_hash', 'raw_data', 'imported_at', 'updated_at',
@@ -35,7 +36,8 @@ final class ImportRadarMedidoresHandler
 
     private const RADAR_UPDATE_COLS = [
         'sigla_uf', 'estado', 'municipio', 'local_verificacao',
-        'data_ultima_verificacao', 'data_validade', 'ultimo_resultado', 'tipo_medidor',
+        'data_ultima_verificacao', 'data_validade', 'data_verificacao_efetiva',
+        'ultimo_resultado', 'tipo_medidor',
         'proprietario_nome', 'proprietario_municipio', 'proprietario_estado',
         'faixas_json', 'historico_json',
         'identity_hash', 'raw_data', 'updated_at',
@@ -119,17 +121,6 @@ final class ImportRadarMedidoresHandler
 
     // -------------------------------------------------------------------------
     // Parse linha-por-linha — RAM constante ~2-3MB
-    //
-    // A API RBMLQ gera JSON no formato:
-    //   [
-    //   {"SiglaUf":"SP",...},
-    //   {"SiglaUf":"SP",...},
-    //   ...
-    //   ]
-    //
-    // Cada objeto ocupa exatamente uma linha, então fazemos json_decode
-    // por linha, descartando linhas que sejam apenas "[", "]" ou ",".
-    // Nunca mais de um objeto na RAM ao mesmo tempo.
     // -------------------------------------------------------------------------
 
     private function processFile(string $path, string $uf, string $importedAt): void
@@ -149,15 +140,12 @@ final class ImportRadarMedidoresHandler
                 break;
             }
 
-            // Remove vírgula final e espaços — linhas como "  }," viram "  }"
             $line = rtrim(trim($line), ',');
 
-            // Descarta linhas que não são objetos JSON
             if ($line === '' || $line === '[' || $line === ']') {
                 continue;
             }
 
-            // Deve começar com { para ser um objeto
             if ($line[0] !== '{') {
                 continue;
             }
@@ -169,7 +157,7 @@ final class ImportRadarMedidoresHandler
             }
 
             $batch[] = $this->mapItem($item, $uf, $importedAt);
-            unset($item); // libera imediatamente
+            unset($item);
 
             if (count($batch) >= self::BATCH_SIZE) {
                 $this->processBatch($batch);
@@ -199,27 +187,31 @@ final class ImportRadarMedidoresHandler
         $historicoJson = json_encode($historico, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $siglaUf       = strtoupper($this->str($item['SiglaUf'] ?? null) ?? $uf);
 
+        $dataVerif  = $this->str($item['DataUltimaVerificacao'] ?? null);
+        $dataValid  = $this->str($item['DataValidade']          ?? null);
+
         return [
-            'sigla_uf'                => $siglaUf,
-            'estado'                  => $this->str($item['Estado']                ?? null),
-            'municipio'               => $this->str($item['Municipio']             ?? null),
-            'local_verificacao'       => $this->str($item['LocalVerificacao']      ?? null),
-            'data_ultima_verificacao' => $this->str($item['DataUltimaVerificacao'] ?? null),
-            'data_validade'           => $this->str($item['DataValidade']          ?? null),
-            'ultimo_resultado'        => $this->str($item['UltimoResultado']       ?? null),
-            'tipo_medidor'            => $this->str($item['TipoMedidor']           ?? null),
-            'proprietario_nome'       => $this->str($prop['Nome']                  ?? null),
-            'proprietario_municipio'  => $this->str($prop['Municipio']             ?? null),
-            'proprietario_estado'     => $this->str($prop['Estado']                ?? null),
-            'faixas_json'             => $faixasJson,
-            'historico_json'          => $historicoJson,
-            'row_hash'                => hash('sha256', $rawJson),
-            'identity_hash'           => $this->buildIdentityHash($item, $siglaUf),
-            'raw_data'                => $rawJson,
-            'imported_at'             => $importedAt,
-            'updated_at'              => $importedAt,
-            '_faixas'                 => $faixas,
-            '_historico'              => $historico,
+            'sigla_uf'                   => $siglaUf,
+            'estado'                     => $this->str($item['Estado']           ?? null),
+            'municipio'                  => $this->str($item['Municipio']        ?? null),
+            'local_verificacao'          => $this->str($item['LocalVerificacao'] ?? null),
+            'data_ultima_verificacao'    => $dataVerif,
+            'data_validade'              => $dataValid,
+            'data_verificacao_efetiva'   => $this->resolveDataVerificacao($dataVerif, $dataValid),
+            'ultimo_resultado'           => $this->str($item['UltimoResultado']  ?? null),
+            'tipo_medidor'               => $this->str($item['TipoMedidor']      ?? null),
+            'proprietario_nome'          => $this->str($prop['Nome']             ?? null),
+            'proprietario_municipio'     => $this->str($prop['Municipio']        ?? null),
+            'proprietario_estado'        => $this->str($prop['Estado']           ?? null),
+            'faixas_json'                => $faixasJson,
+            'historico_json'             => $historicoJson,
+            'row_hash'                   => hash('sha256', $rawJson),
+            'identity_hash'              => $this->buildIdentityHash($item, $siglaUf),
+            'raw_data'                   => $rawJson,
+            'imported_at'                => $importedAt,
+            'updated_at'                 => $importedAt,
+            '_faixas'                    => $faixas,
+            '_historico'                 => $historico,
         ];
     }
 
@@ -333,7 +325,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // INSERT IGNORE em lote — positional params, 30 linhas × 18 cols = 540 params
+    // INSERT IGNORE em lote
     // -------------------------------------------------------------------------
 
     private function insertBatch(array $rows): void
@@ -359,7 +351,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // UPDATE individual — positional params
+    // UPDATE individual
     // -------------------------------------------------------------------------
 
     private function updateRadar(array $row): void
@@ -458,6 +450,34 @@ final class ImportRadarMedidoresHandler
             strtoupper(trim((string) ($item['LocalVerificacao'] ?? ''))),
             strtoupper(trim((string) ($item['TipoMedidor']     ?? ''))),
         ]));
+    }
+
+    /**
+     * Calcula a data de verificação efetiva (dd/mm/aaaa).
+     *
+     * Regra:
+     *   1. Se $dataVerif não é vazia → retorna ela.
+     *   2. Se $dataValid não é vazia → retorna dataValid - 1 ano.
+     *   3. Ambas nulas/vazias → retorna null.
+     */
+    private function resolveDataVerificacao(?string $dataVerif, ?string $dataValid): ?string
+    {
+        // Caso 1: verificação preenchida
+        if ($dataVerif !== null && $dataVerif !== '') {
+            return $dataVerif;
+        }
+
+        // Caso 2: calcula a partir da validade
+        if ($dataValid !== null && $dataValid !== '') {
+            $dt = \DateTimeImmutable::createFromFormat('d/m/Y', $dataValid);
+
+            if ($dt !== false) {
+                return $dt->modify('-1 year')->format('d/m/Y');
+            }
+        }
+
+        // Caso 3: sem dados
+        return null;
     }
 
     private function str(mixed $value): ?string

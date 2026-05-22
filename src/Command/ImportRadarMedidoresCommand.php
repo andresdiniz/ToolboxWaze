@@ -17,19 +17,29 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Itera os 27 estados e processa cada um diretamente via handler.
+ * Itera os 27 estados e importa radares via handler direto.
  *
- * Fonte de dados controlada pela flag USE_GOOGLE_SHEETS_SOURCE:
- *   true  → Google Sheets CSV  (nova fonte — subconjunto de campos)
+ * ════════════════════════════════════════════════════════════
+ * CHAVE DE FONTE — USE_GOOGLE_SHEETS_SOURCE
+ * ════════════════════════════════════════════════════════════
+ *
+ *   true  → Google Sheets CSV  (nova fonte)
  *   false → API RBMLQ/INMETRO  (fonte original — todos os campos)
  *
- * A flag pode ser alterada a qualquer momento sem perda de dados:
- *   - Campos não disponíveis no Sheets (estado, proprietario_*, historico_json)
- *     são PRESERVADOS no BD se já foram importados pelo RBMLQ.
- *   - O identity_hash é compatível entre as duas fontes,
- *     então o diff incremental funciona corretamente ao alternar.
+ * Pode ser trocada a qualquer momento sem perda de dados:
  *
- * Uso:
+ *   • Ao usar Sheets:  atualiza campos disponíveis no CSV.
+ *                      Estado, proprietario_* e historico_json
+ *                      FICAM INTACTOS se já vieram do RBMLQ.
+ *
+ *   • Ao voltar ao RBMLQ: o row_hash muda (pois o JSON completo
+ *                      difere do CSV), então o RBMLQ detecta a
+ *                      diferença e restaura todos os campos.
+ *
+ * ════════════════════════════════════════════════════════════
+ * USO
+ * ════════════════════════════════════════════════════════════
+ *
  *   php bin/console app:import-radar-medidores           # todos os estados
  *   php bin/console app:import-radar-medidores --uf=SP   # só São Paulo
  *   php bin/console app:import-radar-medidores --uf=SP --uf=RJ
@@ -41,13 +51,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 final class ImportRadarMedidoresCommand extends Command
 {
     /**
-     * ⚙️  CHAVE DE FONTE
+     * ⚙️  TROQUE AQUI PARA MUDAR A FONTE DE DADOS
      *
-     * true  → usa o Google Sheets CSV (nova fonte)
-     * false → usa a API RBMLQ/INMETRO  (fonte original)
-     *
-     * Troque o valor para alternar entre as fontes a qualquer momento.
-     * O banco de dados é preservado em ambos os casos.
+     * true  → Google Sheets CSV  (nova fonte)
+     * false → API RBMLQ/INMETRO  (fonte original)
      */
     private const USE_GOOGLE_SHEETS_SOURCE = true;
 
@@ -74,17 +81,25 @@ final class ImportRadarMedidoresCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        $fonte = self::USE_GOOGLE_SHEETS_SOURCE ? 'Google Sheets CSV' : 'RBMLQ/INMETRO API';
+        $fonte = self::USE_GOOGLE_SHEETS_SOURCE
+            ? 'Google Sheets CSV'
+            : 'RBMLQ/INMETRO API';
+
         $io->title(sprintf('Importação Radares — Fonte: %s', $fonte));
 
         if (self::USE_GOOGLE_SHEETS_SOURCE) {
             $io->note([
-                'Fonte: Google Sheets CSV',
-                'Campos preservados do RBMLQ (não sobrescritos): estado, proprietario_*, historico_json',
-                'URL: ' . ImportRadarGoogleSheetsMessage::BASE_URL,
+                'Fonte ativa : Google Sheets CSV',
+                'Preservados : estado, proprietario_*, historico_json',
+                'URL base    : ' . ImportRadarGoogleSheetsMessage::BASE_URL,
+                'Para trocar : altere USE_GOOGLE_SHEETS_SOURCE = false neste arquivo.',
             ]);
         } else {
-            $io->note('Fonte: ' . ImportRadarMedidoresMessage::BASE_URL);
+            $io->note([
+                'Fonte ativa : RBMLQ/INMETRO API (fonte original)',
+                'URL base    : ' . ImportRadarMedidoresMessage::BASE_URL,
+                'Para trocar : altere USE_GOOGLE_SHEETS_SOURCE = true neste arquivo.',
+            ]);
         }
 
         $requestedUfs = array_map('strtoupper', $input->getOption('uf'));

@@ -21,29 +21,53 @@ namespace App\Message;
 final class ImportRadarGoogleSheetsMessage
 {
     /**
-     * URL base do CSV publicado — substitua por sua URL.
+     * URL base do CSV publicado.
+     *
      * Para selecionar uma aba específica use o parâmetro &gid=<gid_da_aba>.
-     *
-     * Exemplo com aba única (sem gid, carrega a primeira aba):
-     *   https://docs.google.com/spreadsheets/d/e/<ID>/pub?output=csv
-     *
-     * Exemplo selecionando aba por gid:
-     *   https://docs.google.com/spreadsheets/d/e/<ID>/pub?output=csv&gid=12345
+     * Como descobrir o gid: abra a planilha no navegador e clique em cada
+     * aba — o número aparece na URL: #gid=<número>.
      */
     public const BASE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS4vA88i8iSLxf0jxatyMI2hHQG_U8AIc5D8qSAMvH2Q8kPS1k3BWxlGCZVNOP3RkwTgNBlp84i-6zx/pub?output=csv';
 
     /**
      * Mapa de UF => gid da aba correspondente na planilha.
-     * Adicione / ajuste conforme as abas da sua planilha.
-     * Se a UF não estiver aqui, será usada a aba padrão (sem &gid).
      *
-     * Como descobrir o gid: abra a planilha no navegador e veja a URL
-     * quando clicar em cada aba: #gid=<número>.
+     * Preencha com os gids reais da sua planilha.
+     * Se a UF não estiver aqui, usa a aba padrão (sem &gid).
+     *
+     * Exemplo:
+     *   'AC' => '0',
+     *   'AL' => '1234567890',
+     *   'SP' => '9876543210',
      */
     public const UF_GID_MAP = [
-        // 'AC' => '0',    // primeira aba — ajuste os gids reais
-        // 'AL' => '12345',
-        // 'SP' => '67890',
+        // 'AC' => '0',
+        // 'AL' => '',
+        // 'AM' => '',
+        // 'AP' => '',
+        // 'BA' => '',
+        // 'CE' => '',
+        // 'DF' => '',
+        // 'ES' => '',
+        // 'GO' => '',
+        // 'MA' => '',
+        // 'MG' => '',
+        // 'MS' => '',
+        // 'MT' => '',
+        // 'PA' => '',
+        // 'PB' => '',
+        // 'PE' => '',
+        // 'PI' => '',
+        // 'PR' => '',
+        // 'RJ' => '',
+        // 'RN' => '',
+        // 'RO' => '',
+        // 'RR' => '',
+        // 'RS' => '',
+        // 'SC' => '',
+        // 'SE' => '',
+        // 'SP' => '',
+        // 'TO' => '',
     ];
 
     public function __construct(

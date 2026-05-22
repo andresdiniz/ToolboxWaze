@@ -109,12 +109,13 @@
                 </div>
 
                 <div class="col-6 col-md-2">
-                    <label class="form-label mb-1 detail-label">Validade</label>
+                    <label class="form-label mb-1 detail-label">Validade / Verificação</label>
                     <select name="validade" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todas</option>
-                        <option value="valido"  {{ filters.validade == 'valido'  ? 'selected' }}>✓ Dentro do prazo</option>
-                        <option value="30dias"  {{ filters.validade == '30dias'  ? 'selected' }}>⚠ Vence em 30 dias</option>
-                        <option value="vencido" {{ filters.validade == 'vencido' ? 'selected' }}>✗ Vencido</option>
+                        <option value="valido"      {{ filters.validade == 'valido'      ? 'selected' }}>✓ Dentro do prazo</option>
+                        <option value="30dias"      {{ filters.validade == '30dias'      ? 'selected' }}>⚠ Vence em 30 dias</option>
+                        <option value="vencido"     {{ filters.validade == 'vencido'     ? 'selected' }}>✗ Vencido</option>
+                        <option value="recentes30"  {{ filters.validade == 'recentes30'  ? 'selected' }}>🕐 Verificados (últ. 30 dias)</option>
                     </select>
                 </div>
 
@@ -165,7 +166,7 @@
                     </span>
                 {% endif %}
                 {% if filters.validade %}
-                    {% set labelValidade = {valido: 'Dentro do prazo', vencido: 'Vencido', '30dias': 'Vence em 30 dias'} %}
+                    {% set labelValidade = {valido: 'Dentro do prazo', vencido: 'Vencido', '30dias': 'Vence em 30 dias', recentes30: 'Verificados (últ. 30 dias)'} %}
                     <span class="badge bg-light text-dark border">
                         Validade: <strong>{{ labelValidade[filters.validade] ?? filters.validade }}</strong>
                         <a href="{{ path('radar_index', filters|merge({validade: '', page: 1})) }}" class="text-danger ms-1">×</a>
@@ -229,8 +230,33 @@
             </thead>
             <tbody>
                 {% for row in rows %}
-                {# data_validade_iso é Y-m-d retornado pelo controller — comparação correta com hoje/em30 #}
                 {% set dvIso = row.data_validade_iso ?? '' %}
+
+                {#
+                    Lógica da coluna "Ú. Verificação":
+                    - Usa data_ultima_verificacao se preenchida.
+                    - Caso vazia, usa data_verificacao_efetiva (calculada na importação: validade - 1 ano).
+                    - Se nenhuma estiver disponível, exibe '—'.
+                    - Badge "Recente" aparece quando a data efetiva cai nos últimos 30 dias.
+                #}
+                {% set dataVerifExibir = row.data_ultima_verificacao is not empty
+                    ? row.data_ultima_verificacao
+                    : (row.data_verificacao_efetiva is not empty ? row.data_verificacao_efetiva : null) %}
+
+                {#
+                    Para o badge "Recente", compara data_verificacao_efetiva (Y-m-d):
+                    necessário converter dd/mm/yyyy para yyyy-mm-dd no Twig.
+                    Se data_verificacao_efetiva estiver no formato dd/mm/yyyy,
+                    extrai as partes e remonta.
+                #}
+                {% set dveRaw = row.data_verificacao_efetiva ?? '' %}
+                {% set dveIso = '' %}
+                {% if dveRaw matches '/^\\d{2}\\/\\d{2}\\/\\d{4}$/' %}
+                    {% set dveParts = dveRaw|split('/') %}
+                    {% set dveIso = dveParts[2] ~ '-' ~ dveParts[1] ~ '-' ~ dveParts[0] %}
+                {% endif %}
+                {% set isRecente = dveIso != '' and dveIso >= ha30dias and dveIso <= hoje %}
+
                 <tr>
                     <td class="ps-3">
                         <span class="badge bg-secondary">{{ row.sigla_uf }}</span>
@@ -249,7 +275,15 @@
                             <span class="text-muted small">{{ row.ultimo_resultado ?? '—' }}</span>
                         {% endif %}
                     </td>
-                    <td class="text-muted small text-nowrap">{{ row.data_ultima_verificacao ?? '—' }}</td>
+                    <td class="text-nowrap">
+                        <span class="text-muted small">{{ dataVerifExibir ?? '—' }}</span>
+                        {% if row.data_ultima_verificacao is empty and row.data_verificacao_efetiva is not empty %}
+                            <span class="badge bg-secondary ms-1" style="font-size:.65rem" title="Calculado: validade − 1 ano">calc.</span>
+                        {% endif %}
+                        {% if isRecente %}
+                            <span class="badge bg-info text-dark ms-1" style="font-size:.65rem">Recente</span>
+                        {% endif %}
+                    </td>
                     <td class="text-nowrap">
                         {% if row.data_validade and dvIso %}
                             {% if dvIso < hoje %}

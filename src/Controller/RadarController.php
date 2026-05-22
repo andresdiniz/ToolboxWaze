@@ -17,9 +17,9 @@ final class RadarController extends AbstractController
     private const PER_PAGE = 25;
 
     /**
-     * data_validade está armazenada no banco como string 'd/m/Y' (ex: '03/11/2026').
+     * data_validade e data_verificacao_efetiva estão armazenadas no banco
+     * como string 'd/m/Y' (ex: '03/11/2026').
      * Para comparações de data, sempre converter com STR_TO_DATE(col, '%d/%m/%Y').
-     * Para o Twig comparar datas nas rows, retornamos também data_validade_iso (Y-m-d).
      */
     private const DATE_CONV = "STR_TO_DATE(%s, '%%d/%%m/%%Y')";
 
@@ -27,7 +27,6 @@ final class RadarController extends AbstractController
         private readonly Connection $db,
     ) {}
 
-    // Gera a expressão SQL de conversão para uma coluna/alias
     private function dateConv(string $col): string
     {
         return sprintf(self::DATE_CONV, $col);
@@ -63,11 +62,12 @@ final class RadarController extends AbstractController
             $params
         );
 
-        // data_validade_iso: versão Y-m-d para o Twig poder comparar corretamente com $hoje/$em30
         $dv = $this->dateConv('rm.data_validade');
         $rows = $this->db->fetchAllAssociative(
             "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
-                    rm.local_verificacao, rm.data_ultima_verificacao,
+                    rm.local_verificacao,
+                    rm.data_ultima_verificacao,
+                    rm.data_verificacao_efetiva,
                     rm.data_validade,
                     DATE_FORMAT($dv, '%Y-%m-%d') AS data_validade_iso,
                     rm.ultimo_resultado,
@@ -99,12 +99,11 @@ final class RadarController extends AbstractController
             'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL ORDER BY tipo_medidor'
         ), 'tipo_medidor');
 
-        $hoje = (new \DateTimeImmutable())->format('Y-m-d');
-        $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $hoje        = (new \DateTimeImmutable())->format('Y-m-d');
+        $em30        = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $ha30dias    = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
 
         // ── Stats ─────────────────────────────────────────────────────────────
-        // data_validade está em d/m/Y → usar STR_TO_DATE para comparar datas
-        // corretamente. Ordem dos ? posicionais: datas primeiro, UFs depois.
         $dv = $this->dateConv('data_validade');
         $statsSql = "SELECT COUNT(*) AS total,
                             SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
@@ -142,6 +141,7 @@ final class RadarController extends AbstractController
             'stats'      => $stats,
             'hoje'       => $hoje,
             'em30'       => $em30,
+            'ha30dias'   => $ha30dias,
             'allowedUfs' => $allowedUfs,
         ]);
     }
@@ -152,8 +152,6 @@ final class RadarController extends AbstractController
         /** @var User|null $user */
         $user = $this->getUser();
 
-        // BUG FIX: SELECT * não retornava data_validade_iso; o Twig comparava
-        // 'd/m/Y' com 'Y-m-d' lexicograficamente → badges de vencido/vencendo errados.
         $dv    = $this->dateConv('data_validade');
         $radar = $this->db->fetchAssociative(
             "SELECT *, DATE_FORMAT($dv, '%Y-%m-%d') AS data_validade_iso
@@ -201,8 +199,9 @@ final class RadarController extends AbstractController
         $wazeErrors   = $session->remove('_waze_errors_' . $id) ?? [];
         $wazeFormData = $session->remove('_waze_form_'   . $id) ?? [];
 
-        $hoje = (new \DateTimeImmutable())->format('Y-m-d');
-        $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $hoje     = (new \DateTimeImmutable())->format('Y-m-d');
+        $em30     = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $ha30dias = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
 
         return $this->render('radar/show.html.twig', [
             'radar'        => $radar,
@@ -214,6 +213,7 @@ final class RadarController extends AbstractController
             'wazeFormData' => $wazeFormData,
             'hoje'         => $hoje,
             'em30'         => $em30,
+            'ha30dias'     => $ha30dias,
         ]);
     }
 
@@ -232,7 +232,6 @@ final class RadarController extends AbstractController
             throw $this->createNotFoundException('Radar não encontrado.');
         }
 
-        // BUG FIX: verificação de acesso à UF também no POST (estava só no show GET)
         /** @var User $user */
         $user = $this->getUser();
         if (!$user->canAccessUf((string) ($radar['sigla_uf'] ?? ''))) {
@@ -329,10 +328,6 @@ final class RadarController extends AbstractController
         return $serie !== '' ? 'LEFT JOIN radar_faixa rf ON rf.radar_medidor_id = rm.id' : '';
     }
 
-    /**
-     * Escapa caracteres especiais do LIKE (%, _) nos valores de filtro de texto livre.
-     * Evita que o usuário passe '%' e varra a tabela inteira ou '_%' para bypass.
-     */
     private function escapeLike(string $value): string
     {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
@@ -367,7 +362,6 @@ final class RadarController extends AbstractController
             $params[] = $uf;
         }
         if ($municipio !== '') {
-            // BUG FIX: escapa % e _ literais para não virar wildcards acidentais
             $parts[]  = 'rm.municipio LIKE ?';
             $params[] = '%' . $this->escapeLike($municipio) . '%';
         }
@@ -380,14 +374,12 @@ final class RadarController extends AbstractController
             $params[] = $tipo;
         }
         if ($serie !== '') {
-            // BUG FIX: idem para busca de série/inmetro
             $escaped  = $this->escapeLike($serie);
             $parts[]  = '(rf.numero_serie LIKE ? OR rf.numero_inmetro LIKE ?)';
             $params[] = "%$escaped%";
             $params[] = "%$escaped%";
         }
 
-        // data_validade está em d/m/Y → converter com STR_TO_DATE para comparar
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $dv   = $this->dateConv('rm.data_validade');
@@ -402,6 +394,15 @@ final class RadarController extends AbstractController
             $parts[]  = "$dv >= ? AND $dv <= ?";
             $params[] = $hoje;
             $params[] = $em30;
+        } elseif ($validade === 'recentes30') {
+            // Filtra por data_verificacao_efetiva nos últimos 30 dias.
+            // Usa o campo calculado na importação (não data_ultima_verificacao)
+            // para cobrir também radares em que só a validade está preenchida.
+            $ha30dias = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+            $dve      = $this->dateConv('rm.data_verificacao_efetiva');
+            $parts[]  = "rm.data_verificacao_efetiva IS NOT NULL AND $dve >= ? AND $dve <= ?";
+            $params[] = $ha30dias;
+            $params[] = $hoje;
         }
 
         return [implode(' AND ', $parts), $params];

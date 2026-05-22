@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Message\ImportRadarGoogleSheetsMessage;
 use App\Message\ImportRadarMedidoresMessage;
+use App\MessageHandler\ImportRadarGoogleSheetsHandler;
 use App\MessageHandler\ImportRadarMedidoresHandler;
 use App\Repository\BrazilianStateRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -17,11 +19,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * Itera os 27 estados e processa cada um diretamente via handler.
  *
- * Por quê não usar o MessageBus?
- *   O transporte está configurado como sync:// — o bus executa o handler
- *   imediatamente e qualquer exceção num estado interrompe os demais.
- *   Chamando o handler diretamente com try/catch por estado, um erro
- *   em AC não impede AL, AM... e assim por diante.
+ * Fonte de dados controlada pela flag USE_GOOGLE_SHEETS_SOURCE:
+ *   true  → Google Sheets CSV  (nova fonte — subconjunto de campos)
+ *   false → API RBMLQ/INMETRO  (fonte original — todos os campos)
+ *
+ * A flag pode ser alterada a qualquer momento sem perda de dados:
+ *   - Campos não disponíveis no Sheets (estado, proprietario_*, historico_json)
+ *     são PRESERVADOS no BD se já foram importados pelo RBMLQ.
+ *   - O identity_hash é compatível entre as duas fontes,
+ *     então o diff incremental funciona corretamente ao alternar.
  *
  * Uso:
  *   php bin/console app:import-radar-medidores           # todos os estados
@@ -30,13 +36,25 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 #[AsCommand(
     name: 'app:import-radar-medidores',
-    description: 'Importa medidores RBMLQ/INMETRO de todos os estados (ou UFs específicas)',
+    description: 'Importa medidores de todos os estados (RBMLQ ou Google Sheets)',
 )]
 final class ImportRadarMedidoresCommand extends Command
 {
+    /**
+     * ⚙️  CHAVE DE FONTE
+     *
+     * true  → usa o Google Sheets CSV (nova fonte)
+     * false → usa a API RBMLQ/INMETRO  (fonte original)
+     *
+     * Troque o valor para alternar entre as fontes a qualquer momento.
+     * O banco de dados é preservado em ambos os casos.
+     */
+    private const USE_GOOGLE_SHEETS_SOURCE = true;
+
     public function __construct(
-        private readonly ImportRadarMedidoresHandler  $handler,
-        private readonly BrazilianStateRepository     $stateRepository,
+        private readonly ImportRadarMedidoresHandler    $rbmlqHandler,
+        private readonly ImportRadarGoogleSheetsHandler $sheetsHandler,
+        private readonly BrazilianStateRepository       $stateRepository,
     ) {
         parent::__construct();
     }
@@ -55,7 +73,19 @@ final class ImportRadarMedidoresCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $io->title('Importação RBMLQ — Medidores por Estado');
+
+        $fonte = self::USE_GOOGLE_SHEETS_SOURCE ? 'Google Sheets CSV' : 'RBMLQ/INMETRO API';
+        $io->title(sprintf('Importação Radares — Fonte: %s', $fonte));
+
+        if (self::USE_GOOGLE_SHEETS_SOURCE) {
+            $io->note([
+                'Fonte: Google Sheets CSV',
+                'Campos preservados do RBMLQ (não sobrescritos): estado, proprietario_*, historico_json',
+                'URL: ' . ImportRadarGoogleSheetsMessage::BASE_URL,
+            ]);
+        } else {
+            $io->note('Fonte: ' . ImportRadarMedidoresMessage::BASE_URL);
+        }
 
         $requestedUfs = array_map('strtoupper', $input->getOption('uf'));
 
@@ -73,9 +103,9 @@ final class ImportRadarMedidoresCommand extends Command
             }
         }
 
-        $total   = count($ufs);
-        $ok      = 0;
-        $errors  = [];
+        $total  = count($ufs);
+        $ok     = 0;
+        $errors = [];
 
         $io->text(sprintf('Estados a processar: <info>%s</info>', implode(', ', $ufs)));
         $io->newLine();
@@ -83,7 +113,11 @@ final class ImportRadarMedidoresCommand extends Command
 
         foreach ($ufs as $uf) {
             try {
-                ($this->handler)(new ImportRadarMedidoresMessage($uf));
+                if (self::USE_GOOGLE_SHEETS_SOURCE) {
+                    ($this->sheetsHandler)(new ImportRadarGoogleSheetsMessage($uf));
+                } else {
+                    ($this->rbmlqHandler)(new ImportRadarMedidoresMessage($uf));
+                }
                 $ok++;
             } catch (\Throwable $e) {
                 $errors[$uf] = $e->getMessage();
@@ -102,10 +136,10 @@ final class ImportRadarMedidoresCommand extends Command
         }
 
         $io->success(sprintf(
-            '%d/%d estado(s) importado(s) com sucesso. URL base: %s',
+            '%d/%d estado(s) importado(s) com sucesso via %s.',
             $ok,
             $total,
-            ImportRadarMedidoresMessage::BASE_URL
+            $fonte
         ));
 
         return $errors === [] ? Command::SUCCESS : Command::FAILURE;

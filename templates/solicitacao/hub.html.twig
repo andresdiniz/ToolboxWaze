@@ -357,355 +357,375 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+(function () {
 
-  var wazeNicknameInput = document.getElementById('campo-waze-nickname');
-  if (wazeNicknameInput) {
-    var pillsWaze = document.querySelectorAll('.tipo-pill');
-    function atualizaBloqueio() {
-      var vazio = wazeNicknameInput.value.trim() === '';
-      pillsWaze.forEach(function (p) {
-        p.style.opacity       = vazio ? '0.45' : '';
-        p.style.pointerEvents = vazio ? 'none' : '';
-        p.title = vazio ? 'Preencha seu usuário Waze antes de escolher o tipo' : '';
+  var _inicializado = false;
+
+  function inicializar() {
+    /* Evita dupla inicialização caso DOMContentLoaded e pageshow disparem juntos */
+    _inicializado = true;
+
+    var wazeNicknameInput = document.getElementById('campo-waze-nickname');
+    if (wazeNicknameInput) {
+      var pillsWaze = document.querySelectorAll('.tipo-pill');
+      function atualizaBloqueio() {
+        var vazio = wazeNicknameInput.value.trim() === '';
+        pillsWaze.forEach(function (p) {
+          p.style.opacity       = vazio ? '0.45' : '';
+          p.style.pointerEvents = vazio ? 'none' : '';
+          p.title = vazio ? 'Preencha seu usuário Waze antes de escolher o tipo' : '';
+        });
+      }
+      wazeNicknameInput.addEventListener('input', atualizaBloqueio);
+      atualizaBloqueio();
+    }
+
+    var tipoSelect  = document.querySelector('[data-tipo-select]');
+    var estadoInput = document.querySelector('[data-estado-select]');
+    var pills       = document.querySelectorAll('.tipo-pill');
+    var spinner     = document.getElementById('campos-spinner');
+    var dinamicos   = document.getElementById('campos-dinamicos');
+    var tipoError   = document.getElementById('tipo-error-msg');
+
+    var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
+    var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
+
+    var tipoNivelAtual             = null;
+    var acaoGerenteAreaAtual       = null;
+    var acaoGerenteEstadoPaisAtual = null;
+    var fetchEmAndamento           = false;
+
+    function getTipoAtual() { return tipoSelect ? tipoSelect.value : ''; }
+
+    function getSouChamp() {
+      if (IS_CHAMP && tipoNivelAtual === 'downgrade') return true;
+      var cb = dinamicos && dinamicos.querySelector('[data-sou-champ]');
+      return cb ? cb.checked : false;
+    }
+
+    function getSouChampEp() {
+      var cb = dinamicos && dinamicos.querySelector('[data-sou-champ-ep]');
+      return cb ? cb.checked : false;
+    }
+
+    function injetaBotaoEnviar(habilitado) {
+      if (!dinamicos) return;
+      var antigo = document.getElementById('btn-enviar-wrapper');
+      if (antigo) antigo.remove();
+      var wrapper = document.createElement('div');
+      wrapper.id = 'btn-enviar-wrapper';
+      wrapper.className = 'd-flex justify-content-end mt-2 mb-5';
+      wrapper.innerHTML =
+        '<button type="submit" class="btn-enviar" id="btn-enviar"' + (habilitado ? '' : ' disabled') + '>' +
+          '<span id="btn-enviar-text"><i class="bi bi-send-fill"></i> Enviar solicitação</span>' +
+          '<span id="btn-enviar-loading" class="d-none">' +
+            '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando…' +
+          '</span>' +
+        '</button>';
+      dinamicos.appendChild(wrapper);
+      var formSol = document.getElementById('form-solicitacao');
+      if (formSol) {
+        formSol.onsubmit = null;
+        formSol.addEventListener('submit', onFormSubmit);
+      }
+    }
+
+    function setActivePill(valor) {
+      pills.forEach(function (p) {
+        var active = p.getAttribute('data-value') === valor;
+        p.classList.toggle('active', active);
+        p.setAttribute('aria-pressed', active ? 'true' : 'false');
       });
+      if (tipoSelect) tipoSelect.value = valor;
+      if (tipoError)  tipoError.classList.add('d-none');
     }
-    wazeNicknameInput.addEventListener('input', atualizaBloqueio);
-    atualizaBloqueio();
-  }
 
-  var tipoSelect  = document.querySelector('[data-tipo-select]');
-  var estadoInput = document.querySelector('[data-estado-select]');
-  var pills       = document.querySelectorAll('.tipo-pill');
-  var spinner     = document.getElementById('campos-spinner');
-  var dinamicos   = document.getElementById('campos-dinamicos');
-  var tipoError   = document.getElementById('tipo-error-msg');
+    /* ── fetchCampos ─────────────────────────────────────────────────────── */
+    function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerenteArea, acaoGerenteEstadoPais, souChampEp) {
+      if (!tipo || fetchEmAndamento) return;
+      fetchEmAndamento = true;
 
-  var IS_CHAMP = {{ isChamp ? 'true' : 'false' }};
-  var ajaxUrl  = '{{ path('solicitacao_campos_ajax') }}';
+      apenasExtras = !!apenasExtras;
+      souChampEp   = !!souChampEp;
 
-  var tipoNivelAtual             = null;
-  var acaoGerenteAreaAtual       = null;
-  var acaoGerenteEstadoPaisAtual = null;
-  var fetchEmAndamento           = false;
+      if (!apenasExtras) {
+        tipoNivelAtual = tipoNivel || null;
+        if (dinamicos) dinamicos.innerHTML = '';
+      }
+      if (spinner) spinner.classList.remove('d-none');
 
-  function getTipoAtual() { return tipoSelect ? tipoSelect.value : ''; }
+      var params = new URLSearchParams({ tipo: tipo });
+      if (tipoNivel)             params.set('tipoNivel', tipoNivel);
+      if (souChamp)              params.set('souChamp', '1');
+      if (acaoGerenteArea)       params.set('acaoGerenteArea', acaoGerenteArea);
+      if (acaoGerenteEstadoPais) params.set('acaoGerenteEstadoPais', acaoGerenteEstadoPais);
+      if (souChampEp)            params.set('souChampEp', '1');
 
-  function getSouChamp() {
-    if (IS_CHAMP && tipoNivelAtual === 'downgrade') return true;
-    var cb = dinamicos && dinamicos.querySelector('[data-sou-champ]');
-    return cb ? cb.checked : false;
-  }
+      fetch(ajaxUrl + '?' + params.toString())
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          fetchEmAndamento = false;
+          if (spinner) spinner.classList.add('d-none');
+          if (!dinamicos) return;
 
-  function getSouChampEp() {
-    var cb = dinamicos && dinamicos.querySelector('[data-sou-champ-ep]');
-    return cb ? cb.checked : false;
-  }
+          if (!apenasExtras) {
+            dinamicos.innerHTML = html;
+            setActivePill(tipo);
+            bindSubListeners();
+            animarCampos();
 
-  function injetaBotaoEnviar(habilitado) {
-    if (!dinamicos) return;
-    var antigo = document.getElementById('btn-enviar-wrapper');
-    if (antigo) antigo.remove();
-    var wrapper = document.createElement('div');
-    wrapper.id = 'btn-enviar-wrapper';
-    wrapper.className = 'd-flex justify-content-end mt-2 mb-5';
-    wrapper.innerHTML =
-      '<button type="submit" class="btn-enviar" id="btn-enviar"' + (habilitado ? '' : ' disabled') + '>' +
-        '<span id="btn-enviar-text"><i class="bi bi-send-fill"></i> Enviar solicitação</span>' +
-        '<span id="btn-enviar-loading" class="d-none">' +
-          '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando…' +
-        '</span>' +
-      '</button>';
-    dinamicos.appendChild(wrapper);
-    var formSol = document.getElementById('form-solicitacao');
-    if (formSol) {
-      formSol.onsubmit = null;
-      formSol.addEventListener('submit', onFormSubmit);
-    }
-  }
+            var precisaEscolha = (tipo === 'nivel' || tipo === 'gerente_area' || tipo === 'gerente_estado_pais');
+            if (!precisaEscolha) {
+              injetaBotaoEnviar(true);
+            }
 
-  function setActivePill(valor) {
-    pills.forEach(function (p) {
-      var active = p.getAttribute('data-value') === valor;
-      p.classList.toggle('active', active);
-      p.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
-    if (tipoSelect) tipoSelect.value = valor;
-    if (tipoError)  tipoError.classList.add('d-none');
-  }
+          } else {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
 
-  /* ── fetchCampos ─────────────────────────────────────────────────────── */
-  function fetchCampos(tipo, tipoNivel, souChamp, apenasExtras, acaoGerenteArea, acaoGerenteEstadoPais, souChampEp) {
-    if (!tipo || fetchEmAndamento) return;
-    fetchEmAndamento = true;
+            var replaceExtras = function (extrasId, cardId) {
+              var extrasEl = dinamicos.querySelector('#' + extrasId);
+              if (!extrasEl) return;
+              var cardParaRemover = tmp.querySelector('#' + cardId);
+              if (cardParaRemover) cardParaRemover.remove();
+              var inner = tmp.querySelector('#' + extrasId);
+              extrasEl.innerHTML = inner ? inner.innerHTML : '';
+            };
 
-    apenasExtras = !!apenasExtras;
-    souChampEp   = !!souChampEp;
+            replaceExtras('campos-extras-nivel-server',        'card-tipo-nivel-ajax');
+            replaceExtras('campos-extras-gerente-area-server', 'card-acao-gerente-area-ajax');
+            replaceExtras('campos-extras-gerente-ep-server',   'card-acao-gerente-ep-ajax');
 
-    if (!apenasExtras) {
-      tipoNivelAtual = tipoNivel || null;
-      if (dinamicos) dinamicos.innerHTML = '';
-    }
-    if (spinner) spinner.classList.remove('d-none');
-
-    var params = new URLSearchParams({ tipo: tipo });
-    if (tipoNivel)             params.set('tipoNivel', tipoNivel);
-    if (souChamp)              params.set('souChamp', '1');
-    if (acaoGerenteArea)       params.set('acaoGerenteArea', acaoGerenteArea);
-    if (acaoGerenteEstadoPais) params.set('acaoGerenteEstadoPais', acaoGerenteEstadoPais);
-    if (souChampEp)            params.set('souChampEp', '1');
-
-    fetch(ajaxUrl + '?' + params.toString())
-      .then(function (r) { return r.text(); })
-      .then(function (html) {
-        fetchEmAndamento = false;
-        if (spinner) spinner.classList.add('d-none');
-        if (!dinamicos) return;
-
-        if (!apenasExtras) {
-          dinamicos.innerHTML = html;
-          setActivePill(tipo);
-          bindSubListeners();
-          animarCampos();
-
-          var precisaEscolha = (tipo === 'nivel' || tipo === 'gerente_area' || tipo === 'gerente_estado_pais');
-          if (!precisaEscolha) {
             injetaBotaoEnviar(true);
+            bindSubListeners();
+            animarCampos();
           }
+        })
+        .catch(function () {
+          fetchEmAndamento = false;
+          if (spinner) spinner.classList.add('d-none');
+        });
+    }
 
-        } else {
-          var tmp = document.createElement('div');
-          tmp.innerHTML = html;
-
-          var replaceExtras = function (extrasId, cardId) {
-            var extrasEl = dinamicos.querySelector('#' + extrasId);
-            if (!extrasEl) return;
-            var cardParaRemover = tmp.querySelector('#' + cardId);
-            if (cardParaRemover) cardParaRemover.remove();
-            var inner = tmp.querySelector('#' + extrasId);
-            extrasEl.innerHTML = inner ? inner.innerHTML : '';
-          };
-
-          replaceExtras('campos-extras-nivel-server',        'card-tipo-nivel-ajax');
-          replaceExtras('campos-extras-gerente-area-server', 'card-acao-gerente-area-ajax');
-          replaceExtras('campos-extras-gerente-ep-server',   'card-acao-gerente-ep-ajax');
-
-          injetaBotaoEnviar(true);
-          bindSubListeners();
-          animarCampos();
-        }
-      })
-      .catch(function () {
-        fetchEmAndamento = false;
-        if (spinner) spinner.classList.add('d-none');
+    function animarCampos() {
+      if (!dinamicos) return;
+      dinamicos.querySelectorAll('.campo-animado').forEach(function (el, i) {
+        el.style.opacity   = '0';
+        el.style.transform = 'translateY(8px)';
+        setTimeout(function () {
+          el.style.transition = 'opacity .25s ease, transform .25s ease';
+          el.style.opacity    = '1';
+          el.style.transform  = 'translateY(0)';
+        }, i * 60);
       });
-  }
-
-  function animarCampos() {
-    if (!dinamicos) return;
-    dinamicos.querySelectorAll('.campo-animado').forEach(function (el, i) {
-      el.style.opacity   = '0';
-      el.style.transform = 'translateY(8px)';
-      setTimeout(function () {
-        el.style.transition = 'opacity .25s ease, transform .25s ease';
-        el.style.opacity    = '1';
-        el.style.transform  = 'translateY(0)';
-      }, i * 60);
-    });
-  }
-
-  function onFormSubmit(e) {
-    var ni = document.getElementById('campo-waze-nickname');
-    if (ni && ni.value.trim() === '') {
-      e.preventDefault();
-      ni.classList.add('is-invalid');
-      ni.focus();
-      return;
     }
-    var tipo = getTipoAtual();
-    if (!tipo) {
-      e.preventDefault();
-      if (tipoError) tipoError.classList.remove('d-none');
-      var pillsEl = document.getElementById('tipo-pills');
-      if (pillsEl) pillsEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
+
+    function onFormSubmit(e) {
+      var ni = document.getElementById('campo-waze-nickname');
+      if (ni && ni.value.trim() === '') {
+        e.preventDefault();
+        ni.classList.add('is-invalid');
+        ni.focus();
+        return;
+      }
+      var tipo = getTipoAtual();
+      if (!tipo) {
+        e.preventDefault();
+        if (tipoError) tipoError.classList.remove('d-none');
+        var pillsEl = document.getElementById('tipo-pills');
+        if (pillsEl) pillsEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      var btnText    = document.getElementById('btn-enviar-text');
+      var btnLoading = document.getElementById('btn-enviar-loading');
+      var btn        = document.getElementById('btn-enviar');
+      if (btnText)    btnText.classList.add('d-none');
+      if (btnLoading) btnLoading.classList.remove('d-none');
+      if (btn)        btn.disabled = true;
     }
-    var btnText    = document.getElementById('btn-enviar-text');
-    var btnLoading = document.getElementById('btn-enviar-loading');
-    var btn        = document.getElementById('btn-enviar');
-    if (btnText)    btnText.classList.add('d-none');
-    if (btnLoading) btnLoading.classList.remove('d-none');
-    if (btn)        btn.disabled = true;
-  }
 
-  /* ── bindSubListeners ────────────────────────────────────────────────── */
-  function bindSubListeners() {
-    if (!dinamicos) return;
+    /* ── bindSubListeners ────────────────────────────────────────────────── */
+    function bindSubListeners() {
+      if (!dinamicos) return;
 
-    /* Visual das acao-pills + disparo AJAX no clique da pill (não no change do radio) */
-    dinamicos.querySelectorAll('.acao-pill-group').forEach(function (group) {
-      var pillsDoGrupo = group.querySelectorAll('.acao-pill');
-      pillsDoGrupo.forEach(function (pill) {
-        pill.addEventListener('click', function () {
-          /* CSS ativo */
-          pillsDoGrupo.forEach(function (p) { p.classList.remove('active'); });
-          pill.classList.add('active');
+      dinamicos.querySelectorAll('.acao-pill-group').forEach(function (group) {
+        var pillsDoGrupo = group.querySelectorAll('.acao-pill');
+        pillsDoGrupo.forEach(function (pill) {
+          pill.addEventListener('click', function () {
+            pillsDoGrupo.forEach(function (p) { p.classList.remove('active'); });
+            pill.classList.add('active');
 
-          /* Radio dentro da pill */
-          var radio = pill.querySelector('input[type="radio"]');
-          if (!radio) return;
-          var valor = radio.value;
+            var radio = pill.querySelector('input[type="radio"]');
+            if (!radio) return;
+            var valor = radio.value;
 
-          /* Dispara AJAX conforme o grupo */
-          if (radio.hasAttribute('data-tipo-nivel-ajax')) {
-            tipoNivelAtual = valor;
-            fetchCampos(getTipoAtual(), valor, getSouChamp(), true, null, null, false);
+            if (radio.hasAttribute('data-tipo-nivel-ajax')) {
+              tipoNivelAtual = valor;
+              fetchCampos(getTipoAtual(), valor, getSouChamp(), true, null, null, false);
 
-          } else if (radio.hasAttribute('data-acao-gerente-area-ajax')) {
-            acaoGerenteAreaAtual = valor;
-            fetchCampos(getTipoAtual(), null, false, true, valor, null, false);
+            } else if (radio.hasAttribute('data-acao-gerente-area-ajax')) {
+              acaoGerenteAreaAtual = valor;
+              fetchCampos(getTipoAtual(), null, false, true, valor, null, false);
 
-          } else if (radio.hasAttribute('data-acao-gerente-ep-ajax')) {
-            acaoGerenteEstadoPaisAtual = valor;
-            fetchCampos(getTipoAtual(), null, false, true, null, valor, false);
+            } else if (radio.hasAttribute('data-acao-gerente-ep-ajax')) {
+              acaoGerenteEstadoPaisAtual = valor;
+              fetchCampos(getTipoAtual(), null, false, true, null, valor, false);
+            }
+          });
+        });
+      });
+
+      /* permalink copy */
+      dinamicos.querySelectorAll('.permalink-copy-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var inp = btn.closest('.permalink-wrapper') && btn.closest('.permalink-wrapper').querySelector('[data-permalink]');
+          if (!inp || !inp.value) return;
+          navigator.clipboard.writeText(inp.value).then(function () {
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425z"/></svg>';
+            setTimeout(function () {
+              btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>';
+            }, 2000);
+          });
+        });
+      });
+
+      /* Sincroniza campo estado (UF) */
+      var estadoDinamico = dinamicos.querySelector('[data-uf-gerente]');
+      if (estadoDinamico && estadoInput) {
+        estadoDinamico.addEventListener('change', function () {
+          estadoInput.value = estadoDinamico.value;
+        });
+        if (estadoDinamico.value) estadoInput.value = estadoDinamico.value;
+      }
+
+      /* Checkbox sou Champ (nivel/downgrade) */
+      var souChampCb = dinamicos.querySelector('[data-sou-champ]');
+      if (souChampCb) {
+        souChampCb.addEventListener('change', function () {
+          fetchCampos(getTipoAtual(), tipoNivelAtual, souChampCb.checked, true, null, null, false);
+        });
+      }
+
+      /* Checkbox sou Champ EP (gerente_ep/excluir) */
+      var souChampEpCb = dinamicos.querySelector('[data-sou-champ-ep]');
+      if (souChampEpCb) {
+        souChampEpCb.addEventListener('change', function () {
+          fetchCampos(getTipoAtual(), null, false, true, null, acaoGerenteEstadoPaisAtual, souChampEpCb.checked);
+        });
+      }
+
+      /* Upload oops */
+      var oopsInput   = document.getElementById('input-oops-files');
+      var oopsPreview = document.getElementById('oops-file-preview');
+      var oopsError   = document.getElementById('oops-file-error');
+      if (oopsInput) {
+        oopsInput.addEventListener('change', function () {
+          if (oopsPreview) oopsPreview.innerHTML = '';
+          if (oopsError)   oopsError.classList.add('d-none');
+          var files = Array.from(oopsInput.files);
+          var erros = [];
+          if (files.length > 5) erros.push('Máximo 5 imagens.');
+          files.slice(0, 5).forEach(function (f) {
+            if (f.size > 1048576) { erros.push(f.name + ' excede 1 MB.'); return; }
+            var reader = new FileReader();
+            reader.onload = function (ev) {
+              if (!oopsPreview) return;
+              var img = document.createElement('img');
+              img.src = ev.target.result;
+              img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--sol-border)';
+              oopsPreview.appendChild(img);
+            };
+            reader.readAsDataURL(f);
+          });
+          if (erros.length && oopsError) {
+            oopsError.querySelector('span').textContent = erros.join(' ');
+            oopsError.classList.remove('d-none');
           }
         });
+      }
+    }
+
+    /* ── Clique nas tipo-pills ────────────────────────────────────────────── */
+    pills.forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        var valor = pill.getAttribute('data-value');
+        tipoNivelAtual             = null;
+        acaoGerenteAreaAtual       = null;
+        acaoGerenteEstadoPaisAtual = null;
+        setActivePill(valor);
+        fetchCampos(valor, '', false, false, null, null, false);
+      });
+      pill.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pill.click(); }
       });
     });
 
-    /* permalink copy */
-    dinamicos.querySelectorAll('.permalink-copy-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var inp = btn.closest('.permalink-wrapper') && btn.closest('.permalink-wrapper').querySelector('[data-permalink]');
-        if (!inp || !inp.value) return;
-        navigator.clipboard.writeText(inp.value).then(function () {
-          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425z"/></svg>';
-          setTimeout(function () {
-            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/></svg>';
-          }, 2000);
-        });
-      });
-    });
+    var formSol = document.getElementById('form-solicitacao');
+    if (formSol) formSol.addEventListener('submit', onFormSubmit);
 
-    /* Sincroniza campo estado (UF) */
-    var estadoDinamico = dinamicos.querySelector('[data-uf-gerente]');
-    if (estadoDinamico && estadoInput) {
-      estadoDinamico.addEventListener('change', function () {
-        estadoInput.value = estadoDinamico.value;
-      });
-      if (estadoDinamico.value) estadoInput.value = estadoDinamico.value;
+    /* ── Repostagem com erro de servidor ─────────────────────────────────── */
+    var erroServer = document.getElementById('campos-erros-server');
+    if (erroServer) {
+      var tipoInicial                  = erroServer.getAttribute('data-tipo');
+      var tipoNivelInicial             = erroServer.getAttribute('data-tipo-nivel') || null;
+      var acaoGerenteAreaInicial       = erroServer.getAttribute('data-acao-gerente-area') || null;
+      var acaoGerenteEstadoPaisInicial = erroServer.getAttribute('data-acao-gerente-estado-pais') || null;
+      var souChampInicial   = IS_CHAMP && tipoNivelInicial === 'downgrade'
+        ? true
+        : erroServer.getAttribute('data-sou-champ') === '1';
+      var souChampEpInicial = erroServer.getAttribute('data-sou-champ-ep') === '1';
+
+      if (tipoInicial) {
+        tipoNivelAtual             = tipoNivelInicial;
+        acaoGerenteAreaAtual       = acaoGerenteAreaInicial;
+        acaoGerenteEstadoPaisAtual = acaoGerenteEstadoPaisInicial;
+        setActivePill(tipoInicial);
+        fetchCampos(
+          tipoInicial,
+          tipoNivelInicial,
+          souChampInicial,
+          false,
+          acaoGerenteAreaInicial,
+          acaoGerenteEstadoPaisInicial,
+          souChampEpInicial
+        );
+      }
     }
 
-    /* Checkbox sou Champ (nivel/downgrade) */
-    var souChampCb = dinamicos.querySelector('[data-sou-champ]');
-    if (souChampCb) {
-      souChampCb.addEventListener('change', function () {
-        fetchCampos(getTipoAtual(), tipoNivelAtual, souChampCb.checked, true, null, null, false);
-      });
-    }
+    if (spinner) spinner.classList.add('d-none');
 
-    /* Checkbox sou Champ EP (gerente_ep/excluir) */
-    var souChampEpCb = dinamicos.querySelector('[data-sou-champ-ep]');
-    if (souChampEpCb) {
-      souChampEpCb.addEventListener('change', function () {
-        fetchCampos(getTipoAtual(), null, false, true, null, acaoGerenteEstadoPaisAtual, souChampEpCb.checked);
-      });
-    }
-
-    /* Upload oops */
-    var oopsInput   = document.getElementById('input-oops-files');
-    var oopsPreview = document.getElementById('oops-file-preview');
-    var oopsError   = document.getElementById('oops-file-error');
-    if (oopsInput) {
-      oopsInput.addEventListener('change', function () {
-        if (oopsPreview) oopsPreview.innerHTML = '';
-        if (oopsError)   oopsError.classList.add('d-none');
-        var files = Array.from(oopsInput.files);
-        var erros = [];
-        if (files.length > 5) erros.push('Máximo 5 imagens.');
-        files.slice(0, 5).forEach(function (f) {
-          if (f.size > 1048576) { erros.push(f.name + ' excede 1 MB.'); return; }
-          var reader = new FileReader();
-          reader.onload = function (ev) {
-            if (!oopsPreview) return;
-            var img = document.createElement('img');
-            img.src = ev.target.result;
-            img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--sol-border)';
-            oopsPreview.appendChild(img);
-          };
-          reader.readAsDataURL(f);
-        });
-        if (erros.length && oopsError) {
-          oopsError.querySelector('span').textContent = erros.join(' ');
-          oopsError.classList.remove('d-none');
-        }
+    /* ── Modal resolver ──────────────────────────────────────────────────── */
+    var modalEl = document.getElementById('modal-resolver');
+    if (modalEl) {
+      modalEl.addEventListener('show.bs.modal', function (event) {
+        var btn = event.relatedTarget;
+        document.getElementById('resolver-label').textContent = btn.getAttribute('data-label');
+        document.getElementById('resolver-token').value       = btn.getAttribute('data-token');
+        document.getElementById('form-resolver').action       = btn.getAttribute('data-action');
+        document.getElementById('modal-des-resolvida').checked = true;
+        document.getElementById('resolver-obs').value          = '';
       });
     }
   }
 
-  /* ── Clique nas tipo-pills ────────────────────────────────────────────── */
-  pills.forEach(function (pill) {
-    pill.addEventListener('click', function () {
-      var valor = pill.getAttribute('data-value');
-      tipoNivelAtual             = null;
-      acaoGerenteAreaAtual       = null;
-      acaoGerenteEstadoPaisAtual = null;
-      setActivePill(valor);
-      fetchCampos(valor, '', false, false, null, null, false);
-    });
-    pill.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pill.click(); }
-    });
+  /* ── Inicialização: DOMContentLoaded + pageshow (bfcache) ────────────── */
+  document.addEventListener('DOMContentLoaded', function () {
+    inicializar();
   });
 
-  var formSol = document.getElementById('form-solicitacao');
-  if (formSol) formSol.addEventListener('submit', onFormSubmit);
-
-  /* ── Repostagem com erro de servidor ─────────────────────────────────── */
-  var erroServer = document.getElementById('campos-erros-server');
-  if (erroServer) {
-    var tipoInicial                  = erroServer.getAttribute('data-tipo');
-    var tipoNivelInicial             = erroServer.getAttribute('data-tipo-nivel') || null;
-    var acaoGerenteAreaInicial       = erroServer.getAttribute('data-acao-gerente-area') || null;
-    var acaoGerenteEstadoPaisInicial = erroServer.getAttribute('data-acao-gerente-estado-pais') || null;
-    var souChampInicial   = IS_CHAMP && tipoNivelInicial === 'downgrade'
-      ? true
-      : erroServer.getAttribute('data-sou-champ') === '1';
-    var souChampEpInicial = erroServer.getAttribute('data-sou-champ-ep') === '1';
-
-    if (tipoInicial) {
-      tipoNivelAtual             = tipoNivelInicial;
-      acaoGerenteAreaAtual       = acaoGerenteAreaInicial;
-      acaoGerenteEstadoPaisAtual = acaoGerenteEstadoPaisInicial;
-      setActivePill(tipoInicial);
-      fetchCampos(
-        tipoInicial,
-        tipoNivelInicial,
-        souChampInicial,
-        false,
-        acaoGerenteAreaInicial,
-        acaoGerenteEstadoPaisInicial,
-        souChampEpInicial
-      );
+  /**
+   * pageshow dispara quando a página é restaurada do bfcache (ex: botão Voltar).
+   * Nesse caso o DOMContentLoaded NÃO é disparado novamente, por isso
+   * precisamos reinicializar o formulário manualmente via event.persisted.
+   */
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+      _inicializado = false;
+      inicializar();
     }
-  }
+  });
 
-  if (spinner) spinner.classList.add('d-none');
-
-  /* ── Modal resolver ──────────────────────────────────────────────────── */
-  var modalEl = document.getElementById('modal-resolver');
-  if (modalEl) {
-    modalEl.addEventListener('show.bs.modal', function (event) {
-      var btn = event.relatedTarget;
-      document.getElementById('resolver-label').textContent = btn.getAttribute('data-label');
-      document.getElementById('resolver-token').value       = btn.getAttribute('data-token');
-      document.getElementById('form-resolver').action       = btn.getAttribute('data-action');
-      document.getElementById('modal-des-resolvida').checked = true;
-      document.getElementById('resolver-obs').value          = '';
-    });
-  }
-
-});
+}());
 </script>
 
 {% endblock %}

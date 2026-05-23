@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Entity\RadarWazeLink;
+use App\Entity\User;
 use App\Repository\RadarFaixaRepository;
 use App\Repository\RadarWazeLinkRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -25,9 +26,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   col 1  (B)  Nº DA LINHA
  *   col 2  (C)  Nº DE SÉRIE      ← chave de busca
  *   col 3  (D)  OBSERVAÇÃO
- *   col 4  (E)  vazio
- *   col 5  (F)  vazio
- *   col 6  (G)  vazio
+ *   col 4-6     (vazias)
  *   col 7  (H)  PERMALINK        ← URL Waze
  *   col 8  (I)  LATITUDE
  *   col 9  (J)  LONGITUDE
@@ -35,13 +34,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   col 11 (L)  CIDADE
  *
  * Dados começam na linha 7 (linhas 1-6 = logo/cabeçalho).
- *
- * Uso:
- *   php bin/console app:import-radar-waze-link-planilha
- *   php bin/console app:import-radar-waze-link-planilha --dry-run
- *   php bin/console app:import-radar-waze-link-planilha --url="https://..."
- *   php bin/console app:import-radar-waze-link-planilha --atualizar
- *   php bin/console app:import-radar-waze-link-planilha --apenas-ativos
  */
 #[AsCommand(
     name: 'app:import-radar-waze-link-planilha',
@@ -50,13 +42,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class ImportRadarWazeLinkPlanilhaCommand extends Command
 {
     // Colunas (0-based) — verificadas no CSV bruto
-    private const COL_STATUS    = 0;   // A → ATIVO | DELETAR RADAR
-    private const COL_SERIE     = 2;   // C → Nº de Série
-    private const COL_OBS       = 3;   // D → Observação
-    private const COL_PERMALINK = 7;   // H → URL Waze (4 colunas vazias entre obs e permalink)
+    private const COL_STATUS    = 0;
+    private const COL_SERIE     = 2;
+    private const COL_OBS       = 3;
+    private const COL_PERMALINK = 7;
 
-    // Linhas a pular (1-based, como na planilha): logo + cabeçalhos
     private const PRIMEIRA_LINHA_DADOS = 7;
+
+    /** E-mail do usuário usado como "inserted_by" nas importações automáticas */
+    private const IMPORTADOR_EMAIL = 'andresoaresdiniz201218@gmail.com';
 
     private const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcjyVJXsqv6YgCNHobs46Y2Au002IjlKl3n0JCWQqEUyJM0s2TaCrw8N_D7Hbcu52rtaEIcxQb23Y/pub?gid=0&single=true&output=csv';
 
@@ -95,7 +89,23 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         }
 
         // ------------------------------------------------------------------
-        // 1. Download
+        // 1. Resolve o usuário importador (inserted_by)
+        // ------------------------------------------------------------------
+        $userImportador = $this->em->getRepository(User::class)
+            ->findOneBy(['email' => self::IMPORTADOR_EMAIL]);
+
+        if ($userImportador === null) {
+            $io->error(sprintf(
+                'Usuário importador não encontrado no banco: %s\nCrie o usuário ou ajuste a constante IMPORTADOR_EMAIL.',
+                self::IMPORTADOR_EMAIL
+            ));
+            return Command::FAILURE;
+        }
+
+        $io->text(sprintf('Usuário importador: %s (id=%d)', $userImportador->getEmail(), $userImportador->getId()));
+
+        // ------------------------------------------------------------------
+        // 2. Download
         // ------------------------------------------------------------------
         $io->section('Baixando CSV...');
         $io->text('URL: ' . $url);
@@ -108,17 +118,16 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         }
 
         // ------------------------------------------------------------------
-        // 2. Parse
+        // 3. Parse
         // ------------------------------------------------------------------
         $todasLinhas = $this->parseCsv($csv);
         $io->text(sprintf('Total de linhas no CSV (incluindo cabeçalho): %d', count($todasLinhas)));
 
-        // Pula as (PRIMEIRA_LINHA_DADOS - 1) primeiras linhas de cabeçalho
         $linhasDados = array_slice($todasLinhas, self::PRIMEIRA_LINHA_DADOS - 1);
         $io->text(sprintf('Linhas de dados (a partir da linha %d): %d', self::PRIMEIRA_LINHA_DADOS, count($linhasDados)));
 
         // ------------------------------------------------------------------
-        // 3. Processar
+        // 4. Processar
         // ------------------------------------------------------------------
         $io->section('Processando...');
 
@@ -141,19 +150,16 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
             $permalink   = $this->col($cols, self::COL_PERMALINK);
             $observacao  = $this->col($cols, self::COL_OBS);
 
-            // Filtra status se a flag estiver ativa
             if ($apenasAtivos && mb_strtoupper($status) !== 'ATIVO') {
                 $stats['pulados_status']++;
                 continue;
             }
 
-            // Pula linhas sem número de série
             if ($numeroSerie === '') {
                 $stats['sem_serie']++;
                 continue;
             }
 
-            // Pula linhas sem permalink válido
             if ($permalink === '' || !str_starts_with($permalink, 'http')) {
                 $io->text(sprintf(
                     '  <comment>[SEM LINK]</comment>     Linha %d | Série %s | status=%s',
@@ -163,7 +169,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                 continue;
             }
 
-            // Valida se tem permanentHazards no link
             $hazardId = RadarWazeLink::extractPermanentHazardId($permalink);
             if ($hazardId === null) {
                 $io->text(sprintf(
@@ -174,7 +179,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                 continue;
             }
 
-            // Busca pelo número de série
             $faixa = $this->faixaRepo->findOneBy(['numeroSerie' => $numeroSerie]);
 
             if ($faixa === null) {
@@ -203,6 +207,7 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                 if ($existing !== null) {
                     $existing->setWazeLink($permalink);
                     $existing->setUpdatedAt(new \DateTimeImmutable());
+                    $existing->setUpdatedBy($userImportador);
                     if ($observacao !== '') {
                         $existing->setObservacao($observacao);
                     }
@@ -216,7 +221,8 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                     $link = (new RadarWazeLink())
                         ->setRadarMedidor($radar)
                         ->setWazeLink($permalink)
-                        ->setInsertedAt(new \DateTimeImmutable());
+                        ->setInsertedAt(new \DateTimeImmutable())
+                        ->setInsertedBy($userImportador);
 
                     if ($observacao !== '') {
                         $link->setObservacao($observacao);
@@ -244,7 +250,7 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         }
 
         // ------------------------------------------------------------------
-        // 4. Relatório
+        // 5. Relatório
         // ------------------------------------------------------------------
         $io->section('Resultado');
         $io->definitionList(
@@ -274,15 +280,11 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     // Helpers
     // -------------------------------------------------------------------------
 
-    /** Retorna a coluna $idx da linha, ou '' se não existir. */
     private function col(array $cols, int $idx): string
     {
         return isset($cols[$idx]) ? trim($cols[$idx]) : '';
     }
 
-    /**
-     * Download via cURL (com fallback para file_get_contents).
-     */
     private function downloadCsv(string $url, ?string &$erro = null): ?string
     {
         if (!function_exists('curl_init')) {
@@ -335,11 +337,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         return (string) $content;
     }
 
-    /**
-     * Parseia CSV → array de linhas (array de colunas).
-     *
-     * @return array<int, array<int, string>>
-     */
     private function parseCsv(string $csv): array
     {
         $linhas = [];

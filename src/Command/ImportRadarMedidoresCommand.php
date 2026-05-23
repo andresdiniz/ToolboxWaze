@@ -9,6 +9,7 @@ use App\Message\ImportRadarMedidoresMessage;
 use App\MessageHandler\ImportRadarGoogleSheetsHandler;
 use App\MessageHandler\ImportRadarMedidoresHandler;
 use App\Repository\BrazilianStateRepository;
+use Doctrine\DBAL\Connection;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -26,15 +27,19 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   true  → Google Sheets CSV  (nova fonte)
  *   false → API RBMLQ/INMETRO  (fonte original — todos os campos)
  *
- * Pode ser trocada a qualquer momento sem perda de dados:
+ * ════════════════════════════════════════════════════════════
+ * BACKFILL AUTOMÁTICO
+ * ════════════════════════════════════════════════════════════
  *
- *   • Ao usar Sheets:  atualiza campos disponíveis no CSV.
- *                      Estado, proprietario_* e historico_json
- *                      FICAM INTACTOS se já vieram do RBMLQ.
+ * Ao final de cada execução (independente da fonte), o command
+ * percorre todos os registros com data_verificacao_efetiva = NULL
+ * e preenche automaticamente usando:
  *
- *   • Ao voltar ao RBMLQ: o row_hash muda (pois o JSON completo
- *                      difere do CSV), então o RBMLQ detecta a
- *                      diferença e restaura todos os campos.
+ *   1. data_ultima_verificacao  (se preenchida)
+ *   2. data_validade - 1 ano    (se data_ultima_verificacao vazia)
+ *
+ * O cálculo de "validade - 1 ano" é feito via SQL com DATE_SUB +
+ * STR_TO_DATE (formato d/m/Y armazenado como VARCHAR).
  *
  * ════════════════════════════════════════════════════════════
  * USO
@@ -62,6 +67,7 @@ final class ImportRadarMedidoresCommand extends Command
         private readonly ImportRadarMedidoresHandler    $rbmlqHandler,
         private readonly ImportRadarGoogleSheetsHandler $sheetsHandler,
         private readonly BrazilianStateRepository       $stateRepository,
+        private readonly Connection                     $connection,
     ) {
         parent::__construct();
     }
@@ -142,6 +148,61 @@ final class ImportRadarMedidoresCommand extends Command
         }
 
         $io->progressFinish();
+
+        // ════════════════════════════════════════════════════════════
+        // BACKFILL: preenche data_verificacao_efetiva nos registros
+        // que ainda estão com NULL após a importação.
+        //
+        // Regra (mesma do resolveDataVerificacao dos handlers):
+        //   1. data_ultima_verificacao preenchida → usa ela.
+        //   2. data_ultima_verificacao vazia + data_validade preenchida
+        //      → usa DATE_FORMAT(DATE_SUB(STR_TO_DATE(data_validade, '%d/%m/%Y'), INTERVAL 1 YEAR), '%d/%m/%Y')
+        //   3. Ambas vazias → permanece NULL.
+        //
+        // O UPDATE só toca registros com data_verificacao_efetiva IS NULL,
+        // nunca sobrescreve valores já calculados/importados.
+        // ════════════════════════════════════════════════════════════
+        $io->section('Backfill: calculando data_verificacao_efetiva ausente...');
+
+        // Passo 1 — copia data_ultima_verificacao quando preenchida
+        $affected1 = (int) $this->connection->executeStatement(
+            "UPDATE radar_medidor
+             SET    data_verificacao_efetiva = data_ultima_verificacao
+             WHERE  data_verificacao_efetiva IS NULL
+               AND  data_ultima_verificacao  IS NOT NULL
+               AND  data_ultima_verificacao  <> ''"
+        );
+
+        // Passo 2 — calcula validade - 1 ano para quem ainda ficou NULL
+        $affected2 = (int) $this->connection->executeStatement(
+            "UPDATE radar_medidor
+             SET    data_verificacao_efetiva = DATE_FORMAT(
+                        DATE_SUB(
+                            STR_TO_DATE(data_validade, '%d/%m/%Y'),
+                            INTERVAL 1 YEAR
+                        ),
+                        '%d/%m/%Y'
+                    )
+             WHERE  data_verificacao_efetiva IS NULL
+               AND  data_validade IS NOT NULL
+               AND  data_validade <> ''
+               AND  STR_TO_DATE(data_validade, '%d/%m/%Y') IS NOT NULL"
+        );
+
+        $totalBackfill = $affected1 + $affected2;
+
+        if ($totalBackfill > 0) {
+            $io->success(sprintf(
+                'Backfill concluído: %d registro(s) atualizados (data_verificacao = %d, validade-1ano = %d).',
+                $totalBackfill,
+                $affected1,
+                $affected2
+            ));
+        } else {
+            $io->text('<info>✔ Nenhum registro pendente de backfill.</info>');
+        }
+
+        // ════════════════════════════════════════════════════════════
 
         if ($errors !== []) {
             $io->warning(sprintf('%d estado(s) com erro:', count($errors)));

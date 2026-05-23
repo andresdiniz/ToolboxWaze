@@ -61,8 +61,8 @@ final class ImportRadarGoogleSheetsMessage
         'RS' => '1570302815',
         'SC' => '1070009330',
         'SE' => '473072021',
-        // 'SP' => '',   // gid pendente
-        // 'TO' => '',   // gid pendente
+        'SP' => '1492817692',   
+        'TO' => '846230006',   
     ];
 
     public function __construct(

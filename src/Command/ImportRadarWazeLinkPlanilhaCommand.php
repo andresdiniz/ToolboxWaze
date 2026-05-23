@@ -34,6 +34,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   col 11 (L)  CIDADE
  *
  * Dados começam na linha 7 (linhas 1-6 = logo/cabeçalho).
+ *
+ * NOTA: a planilha pode ter várias linhas com séries diferentes que pertencem
+ * ao mesmo RadarMedidor. O comando rastreia radar_id já processados no batch
+ * para evitar UniqueConstraintViolationException em uq_waze_link_radar.
  */
 #[AsCommand(
     name: 'app:import-radar-waze-link-planilha',
@@ -41,7 +45,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class ImportRadarWazeLinkPlanilhaCommand extends Command
 {
-    // Colunas (0-based) — verificadas no CSV bruto
     private const COL_STATUS    = 0;
     private const COL_SERIE     = 2;
     private const COL_OBS       = 3;
@@ -49,7 +52,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
 
     private const PRIMEIRA_LINHA_DADOS = 7;
 
-    /** E-mail do usuário usado como "inserted_by" nas importações automáticas */
     private const IMPORTADOR_EMAIL = 'andresoaresdiniz201218@gmail.com';
 
     private const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcjyVJXsqv6YgCNHobs46Y2Au002IjlKl3n0JCWQqEUyJM0s2TaCrw8N_D7Hbcu52rtaEIcxQb23Y/pub?gid=0&single=true&output=csv';
@@ -89,14 +91,14 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         }
 
         // ------------------------------------------------------------------
-        // 1. Resolve o usuário importador (inserted_by)
+        // 1. Resolve usuário importador
         // ------------------------------------------------------------------
         $userImportador = $this->em->getRepository(User::class)
             ->findOneBy(['email' => self::IMPORTADOR_EMAIL]);
 
         if ($userImportador === null) {
             $io->error(sprintf(
-                'Usuário importador não encontrado no banco: %s\nCrie o usuário ou ajuste a constante IMPORTADOR_EMAIL.',
+                'Usuário importador não encontrado: %s',
                 self::IMPORTADOR_EMAIL
             ));
             return Command::FAILURE;
@@ -111,7 +113,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         $io->text('URL: ' . $url);
 
         $csv = $this->downloadCsv($url, $erro);
-
         if ($csv === null) {
             $io->error(sprintf('Falha ao baixar o CSV: %s', $erro ?? 'erro desconhecido'));
             return Command::FAILURE;
@@ -132,16 +133,26 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         $io->section('Processando...');
 
         $stats = [
-            'vinculados'      => 0,
-            'atualizados'     => 0,
-            'ja_tem_link'     => 0,
-            'serie_nao_found' => 0,
-            'link_invalido'   => 0,
-            'pulados_status'  => 0,
-            'sem_serie'       => 0,
+            'vinculados'       => 0,
+            'atualizados'      => 0,
+            'ja_tem_link'      => 0,
+            'radar_duplicado'  => 0,  // mesmo radar aparece 2x na planilha
+            'serie_nao_found'  => 0,
+            'link_invalido'    => 0,
+            'pulados_status'   => 0,
+            'sem_serie'        => 0,
         ];
 
         $naoEncontrados = [];
+
+        /**
+         * Rastreia radar_ids já processados neste batch para evitar
+         * UniqueConstraintViolationException em uq_waze_link_radar.
+         * Chave = radar_id, valor = número da linha que o processou primeiro.
+         *
+         * @var array<int, int>
+         */
+        $radarIdProcessado = [];
 
         foreach ($linhasDados as $idx => $cols) {
             $linhaNum    = self::PRIMEIRA_LINHA_DADOS + $idx;
@@ -180,7 +191,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
             }
 
             $faixa = $this->faixaRepo->findOneBy(['numeroSerie' => $numeroSerie]);
-
             if ($faixa === null) {
                 $io->text(sprintf(
                     '  <comment>[NÃO ENCONTRADO]</comment> Linha %d | Série %s',
@@ -191,17 +201,33 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                 continue;
             }
 
-            $radar    = $faixa->getRadarMedidor();
+            $radar   = $faixa->getRadarMedidor();
+            $radarId = $radar->getId();
+
+            // Guarda
             $existing = $this->wazeLinkRepo->findOneBy(['radarMedidor' => $radar]);
+
+            // Verifica se este radar já foi processado neste batch (sem estar no BD)
+            if ($existing === null && isset($radarIdProcessado[$radarId])) {
+                $io->text(sprintf(
+                    '  <comment>[RADAR DUPLICADO]</comment> Linha %d | Série %s → Radar #%d já vinculado na linha %d desta importação',
+                    $linhaNum, $numeroSerie, $radarId, $radarIdProcessado[$radarId]
+                ));
+                $stats['radar_duplicado']++;
+                continue;
+            }
 
             if ($existing !== null && !$update) {
                 $io->text(sprintf(
                     '  <info>[JÁ TEM LINK]</info>   Linha %d | Série %s → Radar #%d (use --atualizar)',
-                    $linhaNum, $numeroSerie, $radar->getId()
+                    $linhaNum, $numeroSerie, $radarId
                 ));
                 $stats['ja_tem_link']++;
                 continue;
             }
+
+            // Marca radar como processado neste batch
+            $radarIdProcessado[$radarId] = $linhaNum;
 
             if (!$dryRun) {
                 if ($existing !== null) {
@@ -215,7 +241,7 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                     $stats['atualizados']++;
                     $io->text(sprintf(
                         '  <comment>[ATUALIZADO]</comment>  Linha %d | Série %s → Radar #%d | hazard=%d',
-                        $linhaNum, $numeroSerie, $radar->getId(), $hazardId
+                        $linhaNum, $numeroSerie, $radarId, $hazardId
                     ));
                 } else {
                     $link = (new RadarWazeLink())
@@ -232,14 +258,14 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                     $stats['vinculados']++;
                     $io->text(sprintf(
                         '  <info>[VINCULADO]</info>   Linha %d | Série %s → Radar #%d | hazard=%d | status=%s',
-                        $linhaNum, $numeroSerie, $radar->getId(), $hazardId, $status
+                        $linhaNum, $numeroSerie, $radarId, $hazardId, $status
                     ));
                 }
             } else {
                 $acao = $existing ? 'ATUALIZARIA' : 'VINCULARIA';
                 $io->text(sprintf(
                     '  <info>[DRY-RUN %s]</info> Linha %d | Série %s → Radar #%d | hazard=%d | status=%s',
-                    $acao, $linhaNum, $numeroSerie, $radar->getId(), $hazardId, $status
+                    $acao, $linhaNum, $numeroSerie, $radarId, $hazardId, $status
                 ));
                 $existing ? $stats['atualizados']++ : $stats['vinculados']++;
             }
@@ -254,13 +280,14 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         // ------------------------------------------------------------------
         $io->section('Resultado');
         $io->definitionList(
-            ['Vinculados (novos)'            => $stats['vinculados']],
-            ['Atualizados'                   => $stats['atualizados']],
-            ['Já tinham link (pulados)'      => $stats['ja_tem_link']],
-            ['Série não encontrada no BD'    => $stats['serie_nao_found']],
-            ['Sem permalink / link inválido' => $stats['link_invalido']],
-            ['Pulados por status'            => $stats['pulados_status']],
-            ['Sem número de série (vazios)'  => $stats['sem_serie']],
+            ['Vinculados (novos)'                   => $stats['vinculados']],
+            ['Atualizados'                          => $stats['atualizados']],
+            ['Já tinham link (pulados)'             => $stats['ja_tem_link']],
+            ['Radar duplicado na planilha (pulados)' => $stats['radar_duplicado']],
+            ['Série não encontrada no BD'           => $stats['serie_nao_found']],
+            ['Sem permalink / link inválido'        => $stats['link_invalido']],
+            ['Pulados por status'                   => $stats['pulados_status']],
+            ['Sem número de série (vazios)'         => $stats['sem_serie']],
         );
 
         if (!empty($naoEncontrados)) {

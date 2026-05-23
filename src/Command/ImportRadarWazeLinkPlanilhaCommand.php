@@ -33,7 +33,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   php bin/console app:import-radar-waze-link-planilha
  *   php bin/console app:import-radar-waze-link-planilha --dry-run
  *   php bin/console app:import-radar-waze-link-planilha --url="https://..."
- *   php bin/console app:import-radar-waze-link-planilha --atualizar   # sobrescreve links existentes
+ *   php bin/console app:import-radar-waze-link-planilha --atualizar
  */
 #[AsCommand(
     name: 'app:import-radar-waze-link-planilha',
@@ -42,10 +42,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class ImportRadarWazeLinkPlanilhaCommand extends Command
 {
     /**
-     * URL padrão da planilha publicada em CSV.
-     * Troque pelo ID correto ou passe via --url.
+     * URL pública do CSV (aba "Permalink" — gid=0).
+     * Gerada via: Arquivo → Compartilhar → Publicar na Web → CSV.
      */
-    private const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1GnT_huUS1H1My7-y4TJypSrjKYxTnaDBvfabTQzdvdQ/export?format=csv&gid=0';
+    private const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcjyVJXsqv6YgCNHobs46Y2Au002IjlKl3n0JCWQqEUyJM0s2TaCrw8N_D7Hbcu52rtaEIcxQb23Y/pub?gid=0&single=true&output=csv';
 
     public function __construct(
         private readonly EntityManagerInterface  $em,
@@ -58,17 +58,17 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('url',      null, InputOption::VALUE_REQUIRED, 'URL do CSV da planilha (substitui o padrão)')
-            ->addOption('dry-run',  null, InputOption::VALUE_NONE,     'Simula sem gravar no banco')
-            ->addOption('atualizar', null, InputOption::VALUE_NONE,    'Sobrescreve links Waze já existentes');
+            ->addOption('url',       null, InputOption::VALUE_REQUIRED, 'URL do CSV da planilha (substitui o padrão)')
+            ->addOption('dry-run',   null, InputOption::VALUE_NONE,     'Simula sem gravar no banco')
+            ->addOption('atualizar', null, InputOption::VALUE_NONE,     'Sobrescreve links Waze já existentes');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io      = new SymfonyStyle($input, $output);
-        $dryRun  = (bool) $input->getOption('dry-run');
-        $update  = (bool) $input->getOption('atualizar');
-        $url     = $input->getOption('url') ?? self::DEFAULT_URL;
+        $io     = new SymfonyStyle($input, $output);
+        $dryRun = (bool) $input->getOption('dry-run');
+        $update = (bool) $input->getOption('atualizar');
+        $url    = $input->getOption('url') ?? self::DEFAULT_URL;
 
         $io->title('Importar Links Waze via Planilha');
 
@@ -77,13 +77,15 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         }
 
         // ------------------------------------------------------------------
-        // 1. Download do CSV
+        // 1. Download do CSV via cURL (mais confiável em hospedagem compartilhada)
         // ------------------------------------------------------------------
         $io->section('Baixando CSV...');
-        $csv = $this->downloadCsv($url);
+        $io->text('URL: ' . $url);
+
+        $csv = $this->downloadCsv($url, $erro);
 
         if ($csv === null) {
-            $io->error('Falha ao baixar o CSV. Verifique a URL e tente novamente.');
+            $io->error(sprintf('Falha ao baixar o CSV: %s', $erro ?? 'erro desconhecido'));
             return Command::FAILURE;
         }
 
@@ -93,9 +95,14 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         // ------------------------------------------------------------------
         // 2. Montar mapa: permalink → [nºSerie, nºSerie, ...]
         // ------------------------------------------------------------------
-        $grupos   = $this->agruparPorPermalink($linhas, $io);
+        $grupos      = $this->agruparPorPermalink($linhas, $io);
         $totalGrupos = count($grupos);
         $io->text(sprintf('Grupos (Permalink → séries): %d', $totalGrupos));
+
+        if ($totalGrupos === 0) {
+            $io->warning('Nenhum grupo encontrado. Verifique o formato da planilha.');
+            return Command::SUCCESS;
+        }
 
         // ------------------------------------------------------------------
         // 3. Processar cada série
@@ -103,18 +110,17 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         $io->section('Processando...');
 
         $stats = [
-            'vinculados'       => 0,
-            'atualizados'      => 0,
-            'ja_tem_link'      => 0,
-            'serie_nao_found'  => 0,
-            'link_invalido'    => 0,
+            'vinculados'      => 0,
+            'atualizados'     => 0,
+            'ja_tem_link'     => 0,
+            'serie_nao_found' => 0,
+            'link_invalido'   => 0,
         ];
 
         $naoEncontrados = [];
 
         foreach ($grupos as ['permalink' => $permalink, 'series' => $series]) {
 
-            // Valida o permalink antes de processar o grupo
             $hazardId = RadarWazeLink::extractPermanentHazardId($permalink);
             if ($hazardId === null) {
                 $io->warning(sprintf('Permalink inválido (sem permanentHazards): %s', $permalink));
@@ -124,7 +130,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
 
             foreach ($series as $numeroSerie) {
 
-                // Busca a faixa pelo número de série
                 $faixa = $this->faixaRepo->findOneBy(['numeroSerie' => $numeroSerie]);
 
                 if ($faixa === null) {
@@ -149,7 +154,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
 
                 if (!$dryRun) {
                     if ($existing !== null) {
-                        // Atualiza link existente
                         $existing->setWazeLink($permalink);
                         $existing->setUpdatedAt(new \DateTimeImmutable());
                         $this->em->persist($existing);
@@ -159,17 +163,13 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                             $numeroSerie, $radar->getId(), $hazardId
                         ));
                     } else {
-                        // Cria novo link
                         $link = (new RadarWazeLink())
                             ->setRadarMedidor($radar)
                             ->setWazeLink($permalink)
                             ->setInsertedAt(new \DateTimeImmutable());
 
-                        // insertedBy é obrigatório na entidade — usamos null workaround:
-                        // o campo é nullable=false mas como este é um import automático,
-                        // você pode ajustar a entidade para nullable=true ou criar um User "system".
-                        // Por ora, tentamos sem setar (vai falhar na validação Doctrine se não nullable).
-                        // TODO: passar um User "sistema" como insertedBy.
+                        // insertedBy é nullable=false na entidade.
+                        // TODO: criar User "sistema" e setar aqui com setInsertedBy($userSistema).
                         $this->em->persist($link);
                         $stats['vinculados']++;
                         $io->text(sprintf(
@@ -178,7 +178,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                         ));
                     }
                 } else {
-                    // dry-run: só mostra o que faria
                     $acao = $existing ? 'ATUALIZARIA' : 'VINCULARIA';
                     $io->text(sprintf(
                         '  <info>[DRY-RUN %s]</info> Série %s → Radar #%d  hazard=%d',
@@ -198,11 +197,11 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         // ------------------------------------------------------------------
         $io->section('Resultado');
         $io->definitionList(
-            ['Vinculados (novos)'      => $stats['vinculados']],
-            ['Atualizados'             => $stats['atualizados']],
-            ['Já tinham link (pulados)'=> $stats['ja_tem_link']],
-            ['Série não encontrada'    => $stats['serie_nao_found']],
-            ['Link inválido (sem hazard)'=> $stats['link_invalido']],
+            ['Vinculados (novos)'         => $stats['vinculados']],
+            ['Atualizados'                => $stats['atualizados']],
+            ['Já tinham link (pulados)'   => $stats['ja_tem_link']],
+            ['Série não encontrada'       => $stats['serie_nao_found']],
+            ['Link inválido (sem hazard)' => $stats['link_invalido']],
         );
 
         if (!empty($naoEncontrados)) {
@@ -223,26 +222,73 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     // -------------------------------------------------------------------------
 
     /**
-     * Faz o download do CSV via HTTP.
-     * Usa stream_context para simular um browser (Google pode bloquear curl puro).
+     * Faz o download do CSV via cURL com follow de redirecionamentos.
+     * Mais confiável que file_get_contents em hospedagem compartilhada.
+     *
+     * @param string      $url
+     * @param string|null $erro  Preenchido com mensagem de erro em caso de falha
      */
-    private function downloadCsv(string $url): ?string
+    private function downloadCsv(string $url, ?string &$erro = null): ?string
     {
-        $ctx = stream_context_create([
-            'http' => [
-                'method'          => 'GET',
-                'follow_location' => 1,
-                'timeout'         => 30,
-                'header'          => implode("\r\n", [
-                    'User-Agent: Mozilla/5.0 (compatible; ToolboxWaze/1.0)',
-                    'Accept: text/csv,text/plain,*/*',
-                ]),
+        if (!function_exists('curl_init')) {
+            // Fallback para file_get_contents se cURL não estiver disponível
+            $ctx = stream_context_create([
+                'http' => [
+                    'method'          => 'GET',
+                    'follow_location' => 1,
+                    'timeout'         => 30,
+                    'header'          => implode("\r\n", [
+                        'User-Agent: Mozilla/5.0 (compatible; ToolboxWaze/1.0)',
+                        'Accept: text/csv,text/plain,*/*',
+                    ]),
+                ],
+            ]);
+
+            $content = @file_get_contents($url, false, $ctx);
+
+            if ($content === false || strlen($content) === 0) {
+                $erro = 'file_get_contents falhou e cURL não está disponível';
+                return null;
+            }
+
+            return $content;
+        }
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,  // segue redirecionamentos do Google
+            CURLOPT_MAXREDIRS      => 5,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; ToolboxWaze/1.0)',
+            CURLOPT_HTTPHEADER     => [
+                'Accept: text/csv,text/plain,*/*',
             ],
         ]);
 
-        $content = @file_get_contents($url, false, $ctx);
+        $content  = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErro = curl_error($ch);
+        curl_close($ch);
 
-        return ($content !== false && strlen($content) > 0) ? $content : null;
+        if ($content === false || $curlErro !== '') {
+            $erro = sprintf('cURL error: %s', $curlErro);
+            return null;
+        }
+
+        if ($httpCode !== 200) {
+            $erro = sprintf('HTTP %d ao acessar a planilha', $httpCode);
+            return null;
+        }
+
+        if (strlen((string) $content) === 0) {
+            $erro = 'Resposta vazia';
+            return null;
+        }
+
+        return (string) $content;
     }
 
     /**
@@ -254,7 +300,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     {
         $linhas = [];
 
-        // Normaliza quebras de linha
         $csv = str_replace(["\r\n", "\r"], "\n", $csv);
 
         foreach (explode("\n", $csv) as $linha) {
@@ -263,8 +308,7 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                 continue;
             }
 
-            // str_getcsv trata aspas e vírgulas dentro de campos corretamente
-            $cols = str_getcsv($linha, ',', '"');
+            $cols     = str_getcsv($linha, ',', '"');
             $linhas[] = array_map('trim', $cols);
         }
 
@@ -274,21 +318,20 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     /**
      * Agrupa as linhas do CSV em grupos de [permalink, [series]].
      *
-     * Regra de agrupamento:
-     *  - Linha cujo col[0] começa com "http" → é um Permalink (abre novo grupo)
-     *  - Linha cujo col[1] tem conteúdo não-vazio e não-cabeçalho → Nº de Série
-     *    pertence ao grupo atual
+     * Regra:
+     *  - col[0] começa com "http" → Permalink (abre novo grupo)
+     *  - col[1] não-vazio e não-cabeçalho → Nº de Série do grupo atual
      *
      * @param  array<int, array<int, string>> $linhas
      * @return array<int, array{permalink: string, series: list<string>}>
      */
     private function agruparPorPermalink(array $linhas, SymfonyStyle $io): array
     {
-        $grupos          = [];
-        $permalinkAtual  = null;
-        $seriesAtuais    = [];
+        $grupos         = [];
+        $permalinkAtual = null;
+        $seriesAtuais   = [];
 
-        $cabeçalhos = ['nº de série', 'numero de serie', 'série', 'serie', 'permalink', 'link'];
+        $cabecalhos = ['nº de série', 'numero de serie', 'série', 'serie', 'permalink', 'link', 'nº serie', 'n serie'];
 
         foreach ($linhas as $i => $cols) {
             $colA = $cols[0] ?? '';
@@ -297,7 +340,6 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
             $isPermalink = str_starts_with($colA, 'http');
 
             if ($isPermalink) {
-                // Fecha grupo anterior
                 if ($permalinkAtual !== null && !empty($seriesAtuais)) {
                     $grupos[] = ['permalink' => $permalinkAtual, 'series' => $seriesAtuais];
                 }
@@ -305,38 +347,33 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
                 $permalinkAtual = $colA;
                 $seriesAtuais   = [];
 
-                // A própria linha pode já ter um Nº de Série na coluna B
-                if ($colB !== '' && !in_array(mb_strtolower($colB), $cabeçalhos, true)) {
+                // Mesma linha pode já ter série na col B
+                if ($colB !== '' && !in_array(mb_strtolower($colB), $cabecalhos, true)) {
                     $seriesAtuais[] = $colB;
                 }
 
                 continue;
             }
 
-            // Verifica se a coluna B tem um Nº de Série válido
-            $serie = $colB;
-
-            if ($serie === '' || in_array(mb_strtolower($serie), $cabeçalhos, true)) {
-                // Tenta coluna A como Nº de Série (planilha sem coluna A definida)
-                $serie = $colA;
-            }
+            // Tenta col B primeiro, depois col A
+            $serie = ($colB !== '') ? $colB : $colA;
 
             if ($serie === ''
-                || in_array(mb_strtolower($serie), $cabeçalhos, true)
+                || in_array(mb_strtolower($serie), $cabecalhos, true)
                 || mb_strtolower($serie) === 'link'
             ) {
-                continue; // linha de cabeçalho ou vazia
+                continue;
             }
 
             if ($permalinkAtual === null) {
-                $io->note(sprintf('Linha %d: Nº de Série "%s" sem Permalink anterior — ignorado.', $i + 1, $serie));
+                $io->note(sprintf('Linha %d: Série "%s" sem Permalink anterior — ignorada.', $i + 1, $serie));
                 continue;
             }
 
             $seriesAtuais[] = $serie;
         }
 
-        // Fecha o último grupo
+        // Fecha último grupo
         if ($permalinkAtual !== null && !empty($seriesAtuais)) {
             $grupos[] = ['permalink' => $permalinkAtual, 'series' => $seriesAtuais];
         }

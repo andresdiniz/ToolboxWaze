@@ -19,21 +19,27 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * Importa links Waze (Permalink) para radares existentes no BD
  * a partir de uma planilha Google Sheets publicada em CSV.
  *
- * Estrutura esperada da planilha (duas colunas):
- *   Coluna A: Permalink (URL do Waze Editor com permanentHazards=XXXXX)
- *             OU texto "LINK" / vazio (será ignorado)
- *   Coluna B: Nº de Série (ex: 11309, 2800123, R15408, J06544…)
- *             OU vazio (linha de cabeçalho / separador)
+ * Estrutura real da planilha (cabeçalho na linha 6, dados a partir da linha 7):
  *
- * O CSV publicado pelo Google tem as duas colunas por linha.
- * O comando agrupa: cada Permalink válido se aplica a todos os
- * Nº de Série que vierem nas linhas seguintes até o próximo Permalink.
+ *   col 0  (A)  STATUS           → "ATIVO" | "DELETAR RADAR" | ...
+ *   col 1  (B)  Nº DA LINHA      → número sequencial (ignorado)
+ *   col 2  (C)  Nº DE SÉRIE     → chave de busca em radar_faixa.numero_serie
+ *   col 3  (D)  (vazio)
+ *   col 4  (E)  OBSERVAÇÃO      → texto livre (opcional, guardado em observacao)
+ *   col 5  (F)  PERMALINK        → URL do Waze Editor (permanentHazards=XXXXX)
+ *   col 6  (G)  LATITUDE         → ignorada (já está no link)
+ *   col 7  (H)  LONGITUDE        → ignorada
+ *   col 8  (I)  (vazio)
+ *   col 9  (J)  Nº DO ID         → permanentHazardId (redundante com o link)
+ *   col 10 (K)  (vazio)
+ *   col 11 (L)  CIDADE           → ignorada
  *
  * Uso:
  *   php bin/console app:import-radar-waze-link-planilha
  *   php bin/console app:import-radar-waze-link-planilha --dry-run
  *   php bin/console app:import-radar-waze-link-planilha --url="https://..."
  *   php bin/console app:import-radar-waze-link-planilha --atualizar
+ *   php bin/console app:import-radar-waze-link-planilha --apenas-ativos
  */
 #[AsCommand(
     name: 'app:import-radar-waze-link-planilha',
@@ -41,10 +47,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class ImportRadarWazeLinkPlanilhaCommand extends Command
 {
-    /**
-     * URL pública do CSV (aba "Permalink" — gid=0).
-     * Gerada via: Arquivo → Compartilhar → Publicar na Web → CSV.
-     */
+    // Colunas (0-based)
+    private const COL_STATUS    = 0;  // A → ATIVO | DELETAR RADAR
+    private const COL_SERIE     = 2;  // C → Nº de Série
+    private const COL_OBS       = 4;  // E → Observação
+    private const COL_PERMALINK = 5;  // F → URL Waze
+
+    // Linhas a pular (1-based, como na planilha)
+    private const PRIMEIRA_LINHA_DADOS = 7;  // linhas 1-6 são cabeçalho/logo
+
     private const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcjyVJXsqv6YgCNHobs46Y2Au002IjlKl3n0JCWQqEUyJM0s2TaCrw8N_D7Hbcu52rtaEIcxQb23Y/pub?gid=0&single=true&output=csv';
 
     public function __construct(
@@ -58,26 +69,32 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('url',       null, InputOption::VALUE_REQUIRED, 'URL do CSV da planilha (substitui o padrão)')
-            ->addOption('dry-run',   null, InputOption::VALUE_NONE,     'Simula sem gravar no banco')
-            ->addOption('atualizar', null, InputOption::VALUE_NONE,     'Sobrescreve links Waze já existentes');
+            ->addOption('url',          null, InputOption::VALUE_REQUIRED, 'URL do CSV da planilha (substitui o padrão)')
+            ->addOption('dry-run',      null, InputOption::VALUE_NONE,     'Simula sem gravar no banco')
+            ->addOption('atualizar',    null, InputOption::VALUE_NONE,     'Sobrescreve links Waze já existentes')
+            ->addOption('apenas-ativos',null, InputOption::VALUE_NONE,     'Processa apenas linhas com STATUS=ATIVO (ignora DELETAR RADAR etc.)'
+        );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io     = new SymfonyStyle($input, $output);
-        $dryRun = (bool) $input->getOption('dry-run');
-        $update = (bool) $input->getOption('atualizar');
-        $url    = $input->getOption('url') ?? self::DEFAULT_URL;
+        $io           = new SymfonyStyle($input, $output);
+        $dryRun       = (bool) $input->getOption('dry-run');
+        $update       = (bool) $input->getOption('atualizar');
+        $apenasAtivos = (bool) $input->getOption('apenas-ativos');
+        $url          = $input->getOption('url') ?? self::DEFAULT_URL;
 
         $io->title('Importar Links Waze via Planilha');
 
         if ($dryRun) {
             $io->warning('Modo DRY-RUN — nenhuma alteração será gravada.');
         }
+        if ($apenasAtivos) {
+            $io->note('Filtrando: apenas linhas com STATUS = ATIVO.');
+        }
 
         // ------------------------------------------------------------------
-        // 1. Download do CSV via cURL (mais confiável em hospedagem compartilhada)
+        // 1. Download
         // ------------------------------------------------------------------
         $io->section('Baixando CSV...');
         $io->text('URL: ' . $url);
@@ -89,23 +106,19 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
             return Command::FAILURE;
         }
 
-        $linhas = $this->parseCsv($csv);
-        $io->text(sprintf('Total de linhas lidas: %d', count($linhas)));
+        // ------------------------------------------------------------------
+        // 2. Parse e filtragem de linhas
+        // ------------------------------------------------------------------
+        $todasLinhas  = $this->parseCsv($csv);
+        $totalLinhas  = count($todasLinhas);
+        $io->text(sprintf('Total de linhas no CSV (incluindo cabeçalho): %d', $totalLinhas));
+
+        // Pula as primeiras (PRIMEIRA_LINHA_DADOS - 1) linhas de cabeçalho
+        $linhasDados = array_slice($todasLinhas, self::PRIMEIRA_LINHA_DADOS - 1);
+        $io->text(sprintf('Linhas de dados (a partir da linha %d): %d', self::PRIMEIRA_LINHA_DADOS, count($linhasDados)));
 
         // ------------------------------------------------------------------
-        // 2. Montar mapa: permalink → [nºSerie, nºSerie, ...]
-        // ------------------------------------------------------------------
-        $grupos      = $this->agruparPorPermalink($linhas, $io);
-        $totalGrupos = count($grupos);
-        $io->text(sprintf('Grupos (Permalink → séries): %d', $totalGrupos));
-
-        if ($totalGrupos === 0) {
-            $io->warning('Nenhum grupo encontrado. Verifique o formato da planilha.');
-            return Command::SUCCESS;
-        }
-
-        // ------------------------------------------------------------------
-        // 3. Processar cada série
+        // 3. Processar
         // ------------------------------------------------------------------
         $io->section('Processando...');
 
@@ -115,76 +128,116 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
             'ja_tem_link'     => 0,
             'serie_nao_found' => 0,
             'link_invalido'   => 0,
+            'pulados_status'  => 0,
+            'sem_serie'       => 0,
         ];
 
         $naoEncontrados = [];
 
-        foreach ($grupos as ['permalink' => $permalink, 'series' => $series]) {
+        foreach ($linhasDados as $idx => $cols) {
+            $linhaNum   = self::PRIMEIRA_LINHA_DADOS + $idx;
+            $status     = $this->col($cols, self::COL_STATUS);
+            $numeroSerie = $this->col($cols, self::COL_SERIE);
+            $permalink  = $this->col($cols, self::COL_PERMALINK);
+            $observacao = $this->col($cols, self::COL_OBS);
 
-            $hazardId = RadarWazeLink::extractPermanentHazardId($permalink);
-            if ($hazardId === null) {
-                $io->warning(sprintf('Permalink inválido (sem permanentHazards): %s', $permalink));
-                $stats['link_invalido'] += count($series);
+            // Pula linhas de status não-ativo se a flag estiver ativa
+            if ($apenasAtivos && mb_strtoupper($status) !== 'ATIVO') {
+                $stats['pulados_status']++;
                 continue;
             }
 
-            foreach ($series as $numeroSerie) {
+            // Pula linhas sem número de série
+            if ($numeroSerie === '') {
+                $stats['sem_serie']++;
+                continue;
+            }
 
-                $faixa = $this->faixaRepo->findOneBy(['numeroSerie' => $numeroSerie]);
+            // Pula linhas sem permalink
+            if ($permalink === '' || !str_starts_with($permalink, 'http')) {
+                $io->text(sprintf(
+                    '  <comment>[SEM LINK]</comment>     Linha %d | Série %s | status=%s',
+                    $linhaNum, $numeroSerie, $status
+                ));
+                $stats['link_invalido']++;
+                continue;
+            }
 
-                if ($faixa === null) {
-                    $io->text(sprintf('  <comment>[NÃO ENCONTRADO]</comment> Série: %s', $numeroSerie));
-                    $stats['serie_nao_found']++;
-                    $naoEncontrados[] = $numeroSerie;
-                    continue;
-                }
+            // Valida o permalink (deve ter permanentHazards)
+            $hazardId = RadarWazeLink::extractPermanentHazardId($permalink);
+            if ($hazardId === null) {
+                $io->text(sprintf(
+                    '  <comment>[LINK INVÁLIDO]</comment> Linha %d | Série %s | sem permanentHazards no link',
+                    $linhaNum, $numeroSerie
+                ));
+                $stats['link_invalido']++;
+                continue;
+            }
 
-                $radar    = $faixa->getRadarMedidor();
-                $existing = $this->wazeLinkRepo->findOneBy(['radarMedidor' => $radar]);
+            // Busca pelo número de série na tabela radar_faixa
+            $faixa = $this->faixaRepo->findOneBy(['numeroSerie' => $numeroSerie]);
 
-                if ($existing !== null && !$update) {
-                    $io->text(sprintf(
-                        '  <info>[JÁ TEM LINK]</info> Série %s → Radar #%d (use --atualizar para sobrescrever)',
-                        $numeroSerie,
-                        $radar->getId()
-                    ));
-                    $stats['ja_tem_link']++;
-                    continue;
-                }
+            if ($faixa === null) {
+                $io->text(sprintf(
+                    '  <comment>[NÃO ENCONTRADO]</comment> Linha %d | Série %s',
+                    $linhaNum, $numeroSerie
+                ));
+                $stats['serie_nao_found']++;
+                $naoEncontrados[] = sprintf('Linha %d: %s (status=%s)', $linhaNum, $numeroSerie, $status);
+                continue;
+            }
 
-                if (!$dryRun) {
-                    if ($existing !== null) {
-                        $existing->setWazeLink($permalink);
-                        $existing->setUpdatedAt(new \DateTimeImmutable());
-                        $this->em->persist($existing);
-                        $stats['atualizados']++;
-                        $io->text(sprintf(
-                            '  <comment>[ATUALIZADO]</comment>  Série %s → Radar #%d  hazard=%d',
-                            $numeroSerie, $radar->getId(), $hazardId
-                        ));
-                    } else {
-                        $link = (new RadarWazeLink())
-                            ->setRadarMedidor($radar)
-                            ->setWazeLink($permalink)
-                            ->setInsertedAt(new \DateTimeImmutable());
+            $radar    = $faixa->getRadarMedidor();
+            $existing = $this->wazeLinkRepo->findOneBy(['radarMedidor' => $radar]);
 
-                        // insertedBy é nullable=false na entidade.
-                        // TODO: criar User "sistema" e setar aqui com setInsertedBy($userSistema).
-                        $this->em->persist($link);
-                        $stats['vinculados']++;
-                        $io->text(sprintf(
-                            '  <info>[VINCULADO]</info>   Série %s → Radar #%d  hazard=%d',
-                            $numeroSerie, $radar->getId(), $hazardId
-                        ));
+            if ($existing !== null && !$update) {
+                $io->text(sprintf(
+                    '  <info>[JÁ TEM LINK]</info>   Linha %d | Série %s → Radar #%d (use --atualizar)',
+                    $linhaNum, $numeroSerie, $radar->getId()
+                ));
+                $stats['ja_tem_link']++;
+                continue;
+            }
+
+            if (!$dryRun) {
+                if ($existing !== null) {
+                    $existing->setWazeLink($permalink);
+                    $existing->setUpdatedAt(new \DateTimeImmutable());
+                    if ($observacao !== '') {
+                        $existing->setObservacao($observacao);
                     }
-                } else {
-                    $acao = $existing ? 'ATUALIZARIA' : 'VINCULARIA';
+                    $this->em->persist($existing);
+                    $stats['atualizados']++;
                     $io->text(sprintf(
-                        '  <info>[DRY-RUN %s]</info> Série %s → Radar #%d  hazard=%d',
-                        $acao, $numeroSerie, $radar->getId(), $hazardId
+                        '  <comment>[ATUALIZADO]</comment>  Linha %d | Série %s → Radar #%d | hazard=%d',
+                        $linhaNum, $numeroSerie, $radar->getId(), $hazardId
                     ));
-                    $existing ? $stats['atualizados']++ : $stats['vinculados']++;
+                } else {
+                    $link = (new RadarWazeLink())
+                        ->setRadarMedidor($radar)
+                        ->setWazeLink($permalink)
+                        ->setInsertedAt(new \DateTimeImmutable());
+
+                    if ($observacao !== '') {
+                        $link->setObservacao($observacao);
+                    }
+
+                    // insertedBy é nullable=false na entidade.
+                    // TODO: setar um User "sistema" com setInsertedBy($userSistema).
+                    $this->em->persist($link);
+                    $stats['vinculados']++;
+                    $io->text(sprintf(
+                        '  <info>[VINCULADO]</info>   Linha %d | Série %s → Radar #%d | hazard=%d | status=%s',
+                        $linhaNum, $numeroSerie, $radar->getId(), $hazardId, $status
+                    ));
                 }
+            } else {
+                $acao = $existing ? 'ATUALIZARIA' : 'VINCULARIA';
+                $io->text(sprintf(
+                    '  <info>[DRY-RUN %s]</info> Linha %d | Série %s → Radar #%d | hazard=%d | status=%s',
+                    $acao, $linhaNum, $numeroSerie, $radar->getId(), $hazardId, $status
+                ));
+                $existing ? $stats['atualizados']++ : $stats['vinculados']++;
             }
         }
 
@@ -193,15 +246,17 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         }
 
         // ------------------------------------------------------------------
-        // 4. Relatório final
+        // 4. Relatório
         // ------------------------------------------------------------------
         $io->section('Resultado');
         $io->definitionList(
-            ['Vinculados (novos)'         => $stats['vinculados']],
-            ['Atualizados'                => $stats['atualizados']],
-            ['Já tinham link (pulados)'   => $stats['ja_tem_link']],
-            ['Série não encontrada'       => $stats['serie_nao_found']],
-            ['Link inválido (sem hazard)' => $stats['link_invalido']],
+            ['Vinculados (novos)'             => $stats['vinculados']],
+            ['Atualizados'                    => $stats['atualizados']],
+            ['Já tinham link (pulados)'       => $stats['ja_tem_link']],
+            ['Série não encontrada no BD'    => $stats['serie_nao_found']],
+            ['Sem permalink / link inválido'  => $stats['link_invalido']],
+            ['Pulados por status'             => $stats['pulados_status']],
+            ['Sem número de série (vazios)'  => $stats['sem_serie']],
         );
 
         if (!empty($naoEncontrados)) {
@@ -218,39 +273,34 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     }
 
     // -------------------------------------------------------------------------
-    // Helpers privados
+    // Helpers
     // -------------------------------------------------------------------------
 
+    /** Retorna a coluna $idx da linha, ou '' se não existir. */
+    private function col(array $cols, int $idx): string
+    {
+        return isset($cols[$idx]) ? trim($cols[$idx]) : '';
+    }
+
     /**
-     * Faz o download do CSV via cURL com follow de redirecionamentos.
-     * Mais confiável que file_get_contents em hospedagem compartilhada.
-     *
-     * @param string      $url
-     * @param string|null $erro  Preenchido com mensagem de erro em caso de falha
+     * Download via cURL (com fallback para file_get_contents).
      */
     private function downloadCsv(string $url, ?string &$erro = null): ?string
     {
         if (!function_exists('curl_init')) {
-            // Fallback para file_get_contents se cURL não estiver disponível
             $ctx = stream_context_create([
                 'http' => [
                     'method'          => 'GET',
                     'follow_location' => 1,
                     'timeout'         => 30,
-                    'header'          => implode("\r\n", [
-                        'User-Agent: Mozilla/5.0 (compatible; ToolboxWaze/1.0)',
-                        'Accept: text/csv,text/plain,*/*',
-                    ]),
+                    'header'          => "User-Agent: Mozilla/5.0 (compatible; ToolboxWaze/1.0)\r\nAccept: text/csv,*/*",
                 ],
             ]);
-
             $content = @file_get_contents($url, false, $ctx);
-
             if ($content === false || strlen($content) === 0) {
                 $erro = 'file_get_contents falhou e cURL não está disponível';
                 return null;
             }
-
             return $content;
         }
 
@@ -258,14 +308,12 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         curl_setopt_array($ch, [
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,  // segue redirecionamentos do Google
+            CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS      => 5,
             CURLOPT_TIMEOUT        => 30,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; ToolboxWaze/1.0)',
-            CURLOPT_HTTPHEADER     => [
-                'Accept: text/csv,text/plain,*/*',
-            ],
+            CURLOPT_HTTPHEADER     => ['Accept: text/csv,text/plain,*/*'],
         ]);
 
         $content  = curl_exec($ch);
@@ -274,15 +322,13 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
         curl_close($ch);
 
         if ($content === false || $curlErro !== '') {
-            $erro = sprintf('cURL error: %s', $curlErro);
+            $erro = 'cURL error: ' . $curlErro;
             return null;
         }
-
         if ($httpCode !== 200) {
-            $erro = sprintf('HTTP %d ao acessar a planilha', $httpCode);
+            $erro = sprintf('HTTP %d', $httpCode);
             return null;
         }
-
         if (strlen((string) $content) === 0) {
             $erro = 'Resposta vazia';
             return null;
@@ -292,92 +338,23 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
     }
 
     /**
-     * Parseia o CSV em array de linhas (cada linha = array de colunas).
+     * Parseia CSV → array de linhas (array de colunas).
      *
      * @return array<int, array<int, string>>
      */
     private function parseCsv(string $csv): array
     {
         $linhas = [];
-
-        $csv = str_replace(["\r\n", "\r"], "\n", $csv);
+        $csv    = str_replace(["\r\n", "\r"], "\n", $csv);
 
         foreach (explode("\n", $csv) as $linha) {
             $linha = trim($linha);
             if ($linha === '') {
                 continue;
             }
-
-            $cols     = str_getcsv($linha, ',', '"');
-            $linhas[] = array_map('trim', $cols);
+            $linhas[] = array_map('trim', str_getcsv($linha, ',', '"'));
         }
 
         return $linhas;
-    }
-
-    /**
-     * Agrupa as linhas do CSV em grupos de [permalink, [series]].
-     *
-     * Regra:
-     *  - col[0] começa com "http" → Permalink (abre novo grupo)
-     *  - col[1] não-vazio e não-cabeçalho → Nº de Série do grupo atual
-     *
-     * @param  array<int, array<int, string>> $linhas
-     * @return array<int, array{permalink: string, series: list<string>}>
-     */
-    private function agruparPorPermalink(array $linhas, SymfonyStyle $io): array
-    {
-        $grupos         = [];
-        $permalinkAtual = null;
-        $seriesAtuais   = [];
-
-        $cabecalhos = ['nº de série', 'numero de serie', 'série', 'serie', 'permalink', 'link', 'nº serie', 'n serie'];
-
-        foreach ($linhas as $i => $cols) {
-            $colA = $cols[0] ?? '';
-            $colB = $cols[1] ?? '';
-
-            $isPermalink = str_starts_with($colA, 'http');
-
-            if ($isPermalink) {
-                if ($permalinkAtual !== null && !empty($seriesAtuais)) {
-                    $grupos[] = ['permalink' => $permalinkAtual, 'series' => $seriesAtuais];
-                }
-
-                $permalinkAtual = $colA;
-                $seriesAtuais   = [];
-
-                // Mesma linha pode já ter série na col B
-                if ($colB !== '' && !in_array(mb_strtolower($colB), $cabecalhos, true)) {
-                    $seriesAtuais[] = $colB;
-                }
-
-                continue;
-            }
-
-            // Tenta col B primeiro, depois col A
-            $serie = ($colB !== '') ? $colB : $colA;
-
-            if ($serie === ''
-                || in_array(mb_strtolower($serie), $cabecalhos, true)
-                || mb_strtolower($serie) === 'link'
-            ) {
-                continue;
-            }
-
-            if ($permalinkAtual === null) {
-                $io->note(sprintf('Linha %d: Série "%s" sem Permalink anterior — ignorada.', $i + 1, $serie));
-                continue;
-            }
-
-            $seriesAtuais[] = $serie;
-        }
-
-        // Fecha último grupo
-        if ($permalinkAtual !== null && !empty($seriesAtuais)) {
-            $grupos[] = ['permalink' => $permalinkAtual, 'series' => $seriesAtuais];
-        }
-
-        return $grupos;
     }
 }

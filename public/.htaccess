@@ -2,3 +2,47 @@ RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [QSA,L]
+
+# ── Segurança: HTTP Security Headers ──────────────────────────────────────
+<IfModule mod_headers.c>
+    # Impede MIME-type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Impede clickjacking (iframes de outros domínios)
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Controla informação de referrer em requests externos
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Restringe acesso a APIs sensíveis do browser
+    Header always set Permissions-Policy "geolocation=(), camera=(), microphone=(), payment=()"
+
+    # XSS protection (legado, mas ainda útil em IE/Edge antigo)
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # HSTS: força HTTPS por 6 meses (ative somente quando HTTPS estiver funcionando)
+    # Header always set Strict-Transport-Security "max-age=15552000; includeSubDomains"
+
+    # Remove headers que expõem tecnologia do servidor
+    Header unset X-Powered-By
+    Header unset Server
+</IfModule>
+
+# ── Cache: arquivos estáticos com hash ────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    # Assets com hash no nome → cache longo
+    <FilesMatch "\.[a-f0-9]{8}\.(css|js|woff2?)$">
+        ExpiresDefault "access plus 1 year"
+        Header append Cache-Control "public, immutable"
+    </FilesMatch>
+    # Imagens
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico)$">
+        ExpiresDefault "access plus 30 days"
+    </FilesMatch>
+</IfModule>
+
+# ── Uploads: bloqueia execução de PHP dentro de /uploads ─────────────────
+<IfModule mod_rewrite.c>
+    RewriteRule ^uploads/.*\.(php[0-9]?|phtml|phar)$ - [F,L]
+</IfModule>

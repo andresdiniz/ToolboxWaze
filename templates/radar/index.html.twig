@@ -273,12 +273,12 @@
                     : (row.data_verificacao_efetiva is not empty ? row.data_verificacao_efetiva : null) %}
 
                 {#
-                  NOTA: Twig não interpreta \d em strings — usar [0-9] no lugar de \d
-                  para evitar o erro "Unknown modifier 'd'".
+                  Usar delimitador # em vez de / para não precisar escapar as barras
+                  do formato dd/mm/yyyy. Ex: '#^[0-9]{2}/[0-9]{2}/[0-9]{4}$#'
                 #}
                 {% set dveRaw = row.data_verificacao_efetiva ?? '' %}
                 {% set dveIso = '' %}
-                {% if dveRaw matches '/^[0-9]{2}\/[0-9]{2}\/[0-9]{4}$/' %}
+                {% if dveRaw matches '#^[0-9]{2}/[0-9]{2}/[0-9]{4}$#' %}
                     {% set dveParts = dveRaw|split('/') %}
                     {% set dveIso = dveParts[2] ~ '-' ~ dveParts[1] ~ '-' ~ dveParts[0] %}
                 {% endif %}

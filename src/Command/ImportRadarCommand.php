@@ -30,12 +30,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * ════════════════════════════════════════════════════════════
  * ETAPA 2 — Importa links Waze (aba REFERENCIA.UF)
  * ════════════════════════════════════════════════════════════
- *   Para cada estado processado, baixa a aba REFERENCIA.<UF>
- *   da mesma planilha e cruza pelo Nº de Série para preencher
- *   radar_medidor.link_waze.
+ *   Fonte: banco (brazilian_state.link_referencia_radares)
+ *   Cruza: REFERENCIA.Nº DE SÉRIE = radar_faixa.numero_serie
+ *   Grava: radar_medidor.link_waze
  *
  *   Colunas esperadas na aba REFERENCIA.UF:
  *     LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE | USUÁRIO | VERIFICADO | ALTERADO | AÇÃO
+ *
+ *   Para configurar: acesse o EasyAdmin → BrazilianState → edite o estado
+ *   e preencha o campo "Link Referência Radares" com a URL CSV da aba REFERENCIA.UF.
  *
  * ════════════════════════════════════════════════════════════
  * BACKFILL AUTOMÁTICO
@@ -57,40 +60,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 final class ImportRadarCommand extends Command
 {
-    /**
-     * GID das abas REFERENCIA por estado na planilha Google Sheets.
-     * Preencha conforme descobrir os gids das abas REFERENCIA.
-     */
-    private const REFERENCIA_GID_MAP = [
-        'AC' => '',  // preencher quando disponível
-        'AL' => '',
-        'AM' => '',
-        'AP' => '',
-        'BA' => '',
-        'CE' => '',
-        'DF' => '',
-        'ES' => '',
-        'GO' => '',
-        'MA' => '',
-        'MG' => '',
-        'MS' => '',
-        'MT' => '',
-        'PA' => '',
-        'PB' => '',
-        'PE' => '',
-        'PI' => '',
-        'PR' => '',
-        'RJ' => '',
-        'RN' => '',
-        'RO' => '',
-        'RR' => '',
-        'RS' => '',
-        'SC' => '',
-        'SE' => '',
-        'SP' => '',
-        'TO' => '',
-    ];
-
     private const CURL_TIMEOUT = 120;
 
     public function __construct(
@@ -145,15 +114,17 @@ final class ImportRadarCommand extends Command
             }
         }
 
-        // ── Links customizados do banco (para fonte sheets) ───────────────────
-        $linkMap = $useSheets ? $this->stateRepository->findLinkMapRadares() : [];
+        // ── Links do banco ────────────────────────────────────────────────────
+        $linkMapRadares    = $useSheets ? $this->stateRepository->findLinkMapRadares() : [];
+        $linkMapReferencia = $skipWaze  ? [] : $this->stateRepository->findLinkMapReferencia();
 
         $fonte = $useSheets ? 'Google Sheets CSV' : 'RBMLQ/INMETRO API';
         $io->note([
-            'Fonte         : ' . $fonte,
-            'Estados       : ' . implode(', ', $ufs),
-            'Links no BD   : ' . count($linkMap) . ' estado(s) com URL personalizada',
-            'Etapa Waze    : ' . ($skipWaze ? 'PULADA (--skip-waze)' : 'ATIVA'),
+            'Fonte           : ' . $fonte,
+            'Estados         : ' . implode(', ', $ufs),
+            'Links radares   : ' . count($linkMapRadares) . ' estado(s) com URL personalizada',
+            'Links referencia: ' . count($linkMapReferencia) . ' estado(s) com URL de referência',
+            'Etapa Waze      : ' . ($skipWaze ? 'PULADA (--skip-waze)' : 'ATIVA'),
         ]);
 
         // ════════════════════════════════════════════════════════════
@@ -170,7 +141,7 @@ final class ImportRadarCommand extends Command
         foreach ($ufs as $uf) {
             try {
                 if ($useSheets) {
-                    $customUrl = $linkMap[$uf] ?? null;
+                    $customUrl = $linkMapRadares[$uf] ?? null;
                     ($this->sheetsHandler)(new ImportRadarGoogleSheetsMessage($uf, $customUrl));
                 } else {
                     ($this->rbmlqHandler)(new ImportRadarMedidoresMessage($uf));
@@ -199,19 +170,26 @@ final class ImportRadarCommand extends Command
         // ════════════════════════════════════════════════════════════
         if (!$skipWaze) {
             $io->section('Etapa 2 — Importando links Waze (aba REFERENCIA.UF)');
+
             $wazeOk     = 0;
             $wazeErrors = [];
+            $wazeSkip   = 0;
 
             foreach ($ufs as $uf) {
-                $gid = self::REFERENCIA_GID_MAP[$uf] ?? '';
+                $referenciaUrl = $linkMapReferencia[$uf] ?? null;
 
-                if ($gid === '') {
-                    $io->text(sprintf('  <comment>[%s]</comment> GID da aba REFERENCIA não configurado — pulando.', $uf));
+                if ($referenciaUrl === null) {
+                    $io->text(sprintf(
+                        '  <comment>[%s]</comment> link_referencia_radares não configurado — pulando.' .
+                        ' (Configure em: EasyAdmin → Estado → "%s")',
+                        $uf, $uf
+                    ));
+                    $wazeSkip++;
                     continue;
                 }
 
                 try {
-                    $updated = $this->importLinksWaze($uf, $gid);
+                    $updated = $this->importLinksWaze($uf, $referenciaUrl);
                     $io->text(sprintf('  <info>[%s]</info> %d link(s) Waze atualizados.', $uf, $updated));
                     $wazeOk++;
                 } catch (\Throwable $e) {
@@ -222,9 +200,12 @@ final class ImportRadarCommand extends Command
 
             if ($wazeErrors !== []) {
                 $io->warning(sprintf('%d estado(s) com erro na etapa 2 (links Waze).', count($wazeErrors)));
-            } else {
-                $io->text(sprintf('<info>✔ Etapa 2 concluída: %d estado(s) processados.</info>', $wazeOk));
             }
+
+            $io->text(sprintf(
+                '<info>✔ Etapa 2: %d processado(s), %d pulado(s) sem URL, %d erro(s).</info>',
+                $wazeOk, $wazeSkip, count($wazeErrors)
+            ));
         }
 
         // ════════════════════════════════════════════════════════════
@@ -271,11 +252,11 @@ final class ImportRadarCommand extends Command
 
     // ════════════════════════════════════════════════════════════
     // Importa links Waze da aba REFERENCIA.UF
+    // URL completa vinda do banco (link_referencia_radares)
     // ════════════════════════════════════════════════════════════
 
-    private function importLinksWaze(string $uf, string $gid): int
+    private function importLinksWaze(string $uf, string $url): int
     {
-        $url     = ImportRadarGoogleSheetsMessage::BASE_URL . '&gid=' . $gid;
         $tmpFile = $this->downloadToTempFile($url, $uf);
 
         try {
@@ -313,6 +294,7 @@ final class ImportRadarCommand extends Command
         if ($colLink  === false) { $colLink  = array_search('linkwaze', $header, true); }
         if ($colSerie === false) { $colSerie = array_search('serie',    $header, true); }
         if ($colSerie === false) { $colSerie = array_search('noserie',  $header, true); }
+        if ($colSerie === false) { $colSerie = array_search('ndeserie', $header, true); }
 
         if ($colLink === false || $colSerie === false) {
             fclose($fh);

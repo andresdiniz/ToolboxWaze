@@ -16,23 +16,23 @@ final class Version20260524_radar_merge extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // Coluna que aponta para o sobrevivente (NULL = não foi mesclado)
+        // merged_into_id: aponta para o sobrevivente (NULL = não foi mesclado)
+        // Sem AFTER — adiciona no fim da tabela, compatível com qualquer schema
         $this->addSql(
-            "ALTER TABLE radar_medidor
-             ADD COLUMN merged_into_id BIGINT UNSIGNED NULL DEFAULT NULL
-             AFTER situacao"
+            'ALTER TABLE radar_medidor
+             ADD COLUMN merged_into_id BIGINT UNSIGNED NULL DEFAULT NULL'
         );
 
-        // Tabela de auditoria
+        // Tabela de auditoria dos merges
         $this->addSql("
-            CREATE TABLE radar_merge_log (
-                id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-                survivor_id     BIGINT UNSIGNED NOT NULL,
-                absorbed_id     BIGINT UNSIGNED NOT NULL,
-                absorbed_snapshot JSON           NULL,
-                fields_overwritten JSON          NULL,
-                merged_by       VARCHAR(150)    NOT NULL,
-                merged_at       DATETIME        NOT NULL,
+            CREATE TABLE IF NOT EXISTS radar_merge_log (
+                id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                survivor_id         BIGINT UNSIGNED NOT NULL,
+                absorbed_id         BIGINT UNSIGNED NOT NULL,
+                absorbed_snapshot   JSON           NULL,
+                fields_overwritten  JSON           NULL,
+                merged_by           VARCHAR(150)   NOT NULL,
+                merged_at           DATETIME       NOT NULL,
                 PRIMARY KEY (id),
                 INDEX idx_merge_survivor (survivor_id),
                 INDEX idx_merge_absorbed (absorbed_id)

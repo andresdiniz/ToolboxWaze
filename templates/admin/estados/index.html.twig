@@ -31,7 +31,7 @@
                         <th>Região</th>
                         <th>Link Base (aba UF)</th>
                         <th>Link Referência (aba REFERENCIA.UF)</th>
-                        <th class="text-center" style="width:160px">Ações</th>
+                        <th class="text-center" style="width:180px">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -81,30 +81,19 @@
                                 <i class="fas fa-pen"></i>
                             </a>
 
-                            {# Forçar importação completa #}
-                            <form method="post"
-                                  action="{{ path('admin_estados_importar', {id: state.id}) }}"
-                                  class="d-inline"
-                                  onsubmit="return confirm('Forçar importação de {{ state.uf }}? Isso pode demorar alguns segundos.')">
-                                <input type="hidden" name="_token"
-                                       value="{{ csrf_token('importar_state_' ~ state.id) }}">
-                                <button class="btn btn-sm btn-success" title="Importar radares + Waze">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
-                            </form>
+                            {# Importar completo (abre tela de log) #}
+                            <a href="{{ path('admin_estados_importar', {id: state.id}) }}"
+                               class="btn btn-sm btn-success"
+                               title="Importar radares + Waze">
+                                <i class="fas fa-sync-alt"></i>
+                            </a>
 
-                            {# Forçar importação só radares (sem Waze) #}
-                            <form method="post"
-                                  action="{{ path('admin_estados_importar', {id: state.id}) }}"
-                                  class="d-inline"
-                                  onsubmit="return confirm('Importar só radares de {{ state.uf }} (sem links Waze)?')">
-                                <input type="hidden" name="_token"
-                                       value="{{ csrf_token('importar_state_' ~ state.id) }}">
-                                <input type="hidden" name="skip_waze" value="1">
-                                <button class="btn btn-sm btn-outline-secondary" title="Importar só radares (sem Waze)">
-                                    <i class="fas fa-database"></i>
-                                </button>
-                            </form>
+                            {# Importar só radares sem Waze (abre tela de log) #}
+                            <a href="{{ path('admin_estados_importar', {id: state.id, skip_waze: '1'}) }}"
+                               class="btn btn-sm btn-outline-secondary"
+                               title="Importar só radares (sem Waze)">
+                                <i class="fas fa-database"></i>
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}

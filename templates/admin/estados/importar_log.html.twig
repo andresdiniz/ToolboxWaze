@@ -1,0 +1,142 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Importando {{ state.uf }} — Log{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <a href="{{ path('admin_estados_index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Voltar
+        </a>
+        <h1 class="h4 mb-0">
+            <i class="fas fa-terminal me-2 text-success"></i>
+            Importação — <strong>{{ state.name }} ({{ state.uf }})</strong>
+            {% if skip_waze %}
+                <span class="badge bg-secondary ms-2">sem links Waze</span>
+            {% endif %}
+        </h1>
+    </div>
+
+    {# Terminal #}
+    <div class="card bg-dark border-0 shadow-lg">
+        <div class="card-header bg-black d-flex align-items-center justify-content-between py-2 px-3">
+            <div class="d-flex gap-2">
+                <span style="width:12px;height:12px;border-radius:50%;background:#ff5f56;display:inline-block"></span>
+                <span style="width:12px;height:12px;border-radius:50%;background:#ffbd2e;display:inline-block"></span>
+                <span style="width:12px;height:12px;border-radius:50%;background:#27c93f;display:inline-block"></span>
+            </div>
+            <span class="text-muted small font-monospace">app:import-radares --uf={{ state.uf }}</span>
+            <div class="d-flex gap-2 align-items-center">
+                <span id="status-badge" class="badge bg-warning text-dark">
+                    <i class="fas fa-spinner fa-spin me-1"></i> Executando…
+                </span>
+                <button id="btn-copy" class="btn btn-sm btn-outline-secondary py-0" title="Copiar log">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+        </div>
+        <div id="terminal"
+             class="p-3 font-monospace"
+             style="background:#0d1117;color:#c9d1d9;min-height:400px;max-height:70vh;
+                    overflow-y:auto;font-size:0.8rem;line-height:1.6;white-space:pre-wrap;word-break:break-all">
+            <span class="text-secondary">Aguardando início do processo…</span>
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2" id="done-actions" style="display:none!important">
+        <a href="{{ path('admin_estados_index') }}" class="btn btn-outline-primary">
+            <i class="fas fa-list me-1"></i> Voltar à lista
+        </a>
+        <button id="btn-reimport" class="btn btn-outline-warning">
+            <i class="fas fa-redo me-1"></i> Reimportar
+        </button>
+    </div>
+
+</div>
+
+<style>
+.log-line        { display:block; padding: 1px 0; }
+.log-ok          { color: #3fb950; }
+.log-warn        { color: #d29922; }
+.log-err         { color: #f85149; }
+.log-info        { color: #58a6ff; }
+.log-muted       { color: #8b949e; }
+.badge-skip      { background:#6c757d;color:#fff;padding:2px 6px;border-radius:4px;font-size:.75em; }
+</style>
+
+<script>
+(function () {
+    const terminal  = document.getElementById('terminal');
+    const badge     = document.getElementById('status-badge');
+    const doneBar   = document.getElementById('done-actions');
+    const btnCopy   = document.getElementById('btn-copy');
+    const btnRe     = document.getElementById('btn-reimport');
+    const streamUrl = {{ stream_url|json_encode|raw }};
+
+    terminal.innerHTML = '';
+
+    function classify(text) {
+        const t = text.toLowerCase();
+        if (/\[ok\]|sucesso|concluíd|✅/.test(t))  return 'log-ok';
+        if (/\[warning\]|⚠️|deprecated|warning/.test(t)) return 'log-warn';
+        if (/\[error\]|❌|exception|fatal|erro/.test(t))  return 'log-err';
+        if (/🚀|importand|iniciand|\[notice\]/.test(t))   return 'log-info';
+        return 'log-muted';
+    }
+
+    function addLine(html) {
+        const span = document.createElement('span');
+        span.className = 'log-line ' + classify(html);
+        span.innerHTML = html
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            // restaura as tags que enviamos intencionalmente
+            .replace(/&lt;strong&gt;/g,'<strong>').replace(/&lt;\/strong&gt;/g,'</strong>')
+            .replace(/&lt;span class=&quot;badge-skip&quot;&gt;/g,'<span class="badge-skip">')
+            .replace(/&lt;\/span&gt;/g,'</span>');
+        terminal.appendChild(span);
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    const es = new EventSource(streamUrl);
+
+    es.onmessage = function (e) {
+        addLine(e.data);
+    };
+
+    es.addEventListener('done', function (e) {
+        es.close();
+        const code = parseInt(e.data, 10);
+        if (code === 0) {
+            badge.className = 'badge bg-success';
+            badge.innerHTML = '<i class="fas fa-check me-1"></i> Concluído';
+        } else {
+            badge.className = 'badge bg-danger';
+            badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro (exit ' + code + ')';
+        }
+        doneBar.style.removeProperty('display');
+    });
+
+    es.onerror = function () {
+        es.close();
+        addLine('❌ Conexão perdida com o servidor.');
+        badge.className = 'badge bg-danger';
+        badge.innerHTML = '<i class="fas fa-times me-1"></i> Desconectado';
+        doneBar.style.removeProperty('display');
+    };
+
+    btnCopy.addEventListener('click', function () {
+        const text = Array.from(terminal.querySelectorAll('.log-line'))
+            .map(el => el.textContent).join('\n');
+        navigator.clipboard.writeText(text).then(() => {
+            btnCopy.innerHTML = '<i class="fas fa-check"></i>';
+            setTimeout(() => btnCopy.innerHTML = '<i class="fas fa-copy"></i>', 1500);
+        });
+    });
+
+    btnRe.addEventListener('click', function () {
+        location.reload();
+    });
+}());
+</script>
+{% endblock %}

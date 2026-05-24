@@ -45,16 +45,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * ════════════════════════════════════════════════════════════
  * USO
  * ════════════════════════════════════════════════════════════
- *   php bin/console app:import-radar                      # todos os estados
- *   php bin/console app:import-radar --uf=SP              # só SP
- *   php bin/console app:import-radar --uf=SP --uf=RJ
- *   php bin/console app:import-radar --skip-waze          # pula etapa 2
- *   php bin/console app:import-radar --source=rbmlq       # usa API INMETRO
+ *   php bin/console app:import-radares                    # todos os estados
+ *   php bin/console app:import-radares --uf=SP            # só SP
+ *   php bin/console app:import-radares --uf=SP --uf=RJ
+ *   php bin/console app:import-radares --skip-waze        # pula etapa 2
+ *   php bin/console app:import-radares --source=rbmlq     # usa API INMETRO
  */
 #[AsCommand(
-    name: 'app:import-radar',
+    name: 'app:import-radares',
     description: 'Importa radares (medidores + links Waze) para todos os estados',
-    aliases: ['app:import-radar-medidores'],  // mantém alias do command antigo
 )]
 final class ImportRadarCommand extends Command
 {
@@ -126,10 +125,10 @@ final class ImportRadarCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io     = new SymfonyStyle($input, $output);
-        $source = strtolower((string) $input->getOption('source'));
-        $useSheets  = $source !== 'rbmlq';
-        $skipWaze   = (bool) $input->getOption('skip-waze');
+        $io        = new SymfonyStyle($input, $output);
+        $source    = strtolower((string) $input->getOption('source'));
+        $useSheets = $source !== 'rbmlq';
+        $skipWaze  = (bool) $input->getOption('skip-waze');
 
         $io->title('Importação Radares — Unificada');
 
@@ -272,18 +271,11 @@ final class ImportRadarCommand extends Command
 
     // ════════════════════════════════════════════════════════════
     // Importa links Waze da aba REFERENCIA.UF
-    //
-    // Colunas esperadas (linha 1 = cabeçalho):
-    //   LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE | USUÁRIO | VERIFICADO | ALTERADO | AÇÃO
-    //
-    // Cruza pelo Nº DE SÉRIE com radar_faixa.numero_serie
-    // e atualiza radar_medidor.link_waze.
     // ════════════════════════════════════════════════════════════
+
     private function importLinksWaze(string $uf, string $gid): int
     {
-        $baseUrl = ImportRadarGoogleSheetsMessage::BASE_URL;
-        $url     = $baseUrl . '&gid=' . $gid;
-
+        $url     = ImportRadarGoogleSheetsMessage::BASE_URL . '&gid=' . $gid;
         $tmpFile = $this->downloadToTempFile($url, $uf);
 
         try {
@@ -307,7 +299,6 @@ final class ImportRadarCommand extends Command
             rewind($fh);
         }
 
-        // Lê cabeçalho
         $rawHeader = fgetcsv($fh);
         if ($rawHeader === false || $rawHeader === null) {
             fclose($fh);
@@ -316,11 +307,9 @@ final class ImportRadarCommand extends Command
 
         $header = array_map(fn($h) => $this->normalizeKey((string) $h), $rawHeader);
 
-        // Descobre índices das colunas LINK e Nº DE SÉRIE
         $colLink  = array_search('link',     $header, true);
         $colSerie = array_search('ndeserie', $header, true);
 
-        // Fallbacks para variações comuns do cabeçalho
         if ($colLink  === false) { $colLink  = array_search('linkwaze', $header, true); }
         if ($colSerie === false) { $colSerie = array_search('serie',    $header, true); }
         if ($colSerie === false) { $colSerie = array_search('noserie',  $header, true); }
@@ -333,7 +322,6 @@ final class ImportRadarCommand extends Command
             );
         }
 
-        // Monta mapa série => link
         $linkMap = [];
 
         while (($row = fgetcsv($fh)) !== false) {
@@ -357,12 +345,9 @@ final class ImportRadarCommand extends Command
             return 0;
         }
 
-        // Cruza numero_serie da radar_faixa com radar_medidor
-        // UPDATE radar_medidor via JOIN com radar_faixa pelo numero_serie
         $updated = 0;
 
         foreach ($linkMap as $serie => $linkWaze) {
-            // Busca o radar_medidor_id pelo numero_serie na radar_faixa
             $radarId = $this->connection->fetchOne(
                 'SELECT rf.radar_medidor_id
                  FROM   radar_faixa rf
@@ -377,12 +362,10 @@ final class ImportRadarCommand extends Command
                 continue;
             }
 
-            $rows = (int) $this->connection->executeStatement(
+            $updated += (int) $this->connection->executeStatement(
                 'UPDATE radar_medidor SET link_waze = ? WHERE id = ?',
                 [$linkWaze, (int) $radarId]
             );
-
-            $updated += $rows;
         }
 
         return $updated;

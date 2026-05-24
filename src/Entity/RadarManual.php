@@ -15,11 +15,17 @@ use Doctrine\ORM\Mapping as ORM;
  *   mesclado  → identity_hash bateu com um radar_medidor durante a importação;
  *               os dados oficiais foram copiados para radar_medidor e este
  *               registro é marcado como mesclado (referência mantida para auditoria).
+ *
+ * Chaves de merge (ordem de prioridade):
+ *   1. numero_serie  — identificador mais confiável; único por faixa na fonte RBMLQ
+ *   2. identity_hash — SHA-256(UF|LOCAL_VERIFICACAO|TIPO_MEDIDOR); fallback quando
+ *                      o número de série não for informado ou ainda não estiver na fonte
  */
 #[ORM\Entity(repositoryClass: RadarManualRepository::class)]
 #[ORM\Table(name: 'radar_manual')]
 #[ORM\Index(columns: ['identity_hash'], name: 'idx_radar_manual_identity')]
-#[ORM\Index(columns: ['status'], name: 'idx_radar_manual_status')]
+#[ORM\Index(columns: ['status'],        name: 'idx_radar_manual_status')]
+#[ORM\Index(columns: ['numero_serie'],  name: 'idx_radar_manual_serie')]
 class RadarManual
 {
     public const STATUS_PENDENTE = 'pendente';
@@ -46,6 +52,27 @@ class RadarManual
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $tipoMedidor = null;
 
+    /** Marca do equipamento (ex: PARDINI, CINEMOMETER) */
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $marca = null;
+
+    /**
+     * Número de série do equipamento.
+     * É a chave de merge mais confiável: único por RadarFaixa na fonte RBMLQ.
+     * Quando preenchido, o sistema primeiro tenta localizar o radar_medidor
+     * via JOIN em radar_faixa.numero_serie antes de usar o identity_hash.
+     */
+    #[ORM\Column(name: 'numero_serie', length: 100, nullable: true)]
+    private ?string $numeroSerie = null;
+
+    /**
+     * Fonte da informação usada para cadastrar este radar.
+     * Pode ser uma URL (Diretran, prefeitura, notícia, Waze) ou texto livre.
+     * Exibida na interface e gravada no log de merge para rastreabilidade.
+     */
+    #[ORM\Column(name: 'fonte', type: 'string', length: 1000, nullable: true)]
+    private ?string $fonte = null;
+
     /** Velocidade máxima (opcional, informativo) */
     #[ORM\Column(nullable: true)]
     private ?int $velocidade = null;
@@ -59,8 +86,9 @@ class RadarManual
     private ?string $observacoes = null;
 
     /**
-     * SHA-256( UF | LOCAL_VERIFICACAO | TIPO_MEDIDOR ) — mesmo algoritmo
-     * usado pelos handlers de importação para identificar o radar.
+     * SHA-256( UF | LOCAL_VERIFICACAO | TIPO_MEDIDOR [¦ NUMERO_SERIE] )
+     * Se numero_serie estiver preenchido, ele entra no hash para reduzir
+     * colisões entre radares do mesmo local com equipamentos diferentes.
      */
     #[ORM\Column(length: 64)]
     private string $identityHash = '';
@@ -89,7 +117,7 @@ class RadarManual
         $this->criadoEm = new \DateTimeImmutable();
     }
 
-    // ── Getters / Setters ─────────────────────────────────────
+    // ── Getters / Setters ───────────────────────────────────────────────────
 
     public function getId(): ?int { return $this->id; }
 
@@ -104,6 +132,15 @@ class RadarManual
 
     public function getTipoMedidor(): ?string { return $this->tipoMedidor; }
     public function setTipoMedidor(?string $v): static { $this->tipoMedidor = $v; return $this; }
+
+    public function getMarca(): ?string { return $this->marca; }
+    public function setMarca(?string $v): static { $this->marca = $v ?: null; return $this; }
+
+    public function getNumeroSerie(): ?string { return $this->numeroSerie; }
+    public function setNumeroSerie(?string $v): static { $this->numeroSerie = $v ? trim($v) : null; return $this; }
+
+    public function getFonte(): ?string { return $this->fonte; }
+    public function setFonte(?string $v): static { $this->fonte = $v ?: null; return $this; }
 
     public function getVelocidade(): ?int { return $this->velocidade; }
     public function setVelocidade(?int $v): static { $this->velocidade = $v; return $this; }
@@ -134,16 +171,45 @@ class RadarManual
     public function getCriadoPor(): ?User { return $this->criadoPor; }
     public function setCriadoPor(?User $v): static { $this->criadoPor = $v; return $this; }
 
+    // ── Helpers ────────────────────────────────────────────────────────────
+
     /**
      * Recalcula e grava o identity_hash a partir dos campos atuais.
      * Chamar sempre antes de persistir.
+     *
+     * Hash = SHA-256( UF | LOCAL_VERIFICACAO | TIPO_MEDIDOR [| NUMERO_SERIE] )
+     * O número de série só entra no hash quando fornecido, para que registros
+     * antigos sem série ainda batam corretamente com a fonte.
      */
     public function recalcIdentityHash(): void
     {
-        $this->identityHash = hash('sha256', implode('|', [
+        $parts = [
             strtoupper($this->siglaUf),
             strtoupper(trim($this->localVerificacao)),
             strtoupper(trim((string) $this->tipoMedidor)),
-        ]));
+        ];
+
+        if ($this->numeroSerie !== null && $this->numeroSerie !== '') {
+            $parts[] = strtoupper(trim($this->numeroSerie));
+        }
+
+        $this->identityHash = hash('sha256', implode('|', $parts));
+    }
+
+    /**
+     * Retorna o nível de confiança do merge para exibir na UI.
+     * Alto   = tem número de série (match exato via radar_faixa)
+     * Médio  = tem local + tipo (identity_hash)
+     * Baixo  = só local (sem tipo informado)
+     */
+    public function getMergeQuality(): string
+    {
+        if ($this->numeroSerie !== null && $this->numeroSerie !== '') {
+            return 'alto';
+        }
+        if ($this->tipoMedidor !== null) {
+            return 'medio';
+        }
+        return 'baixo';
     }
 }

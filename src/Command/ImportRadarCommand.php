@@ -37,6 +37,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   Colunas esperadas na aba REFERENCIA.UF:
  *     LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE | USUÁRIO | VERIFICADO | ALTERADO | AÇÃO
  *
+ *   As primeiras linhas podem conter metadados (ex: nome do estado, totais).
+ *   O cabeçalho real é detectado automaticamente — é a primeira linha que
+ *   contenha "link" ou "ndeserie" após normalização.
+ *
  *   Para configurar: acesse o EasyAdmin → BrazilianState → edite o estado
  *   e preencha o campo "Link Referência Radares" com a URL CSV da aba REFERENCIA.UF.
  *
@@ -280,28 +284,53 @@ final class ImportRadarCommand extends Command
             rewind($fh);
         }
 
-        // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
-        $rawHeader = fgetcsv($fh, 0, ',', '"', '');
-        if ($rawHeader === false || $rawHeader === null) {
-            fclose($fh);
-            throw new \RuntimeException("CSV da aba REFERENCIA.{$uf} sem cabeçalho.");
+        // ── Detecta o cabeçalho real ──────────────────────────────────
+        // A planilha pode ter metadados nas primeiras linhas (nome do estado,
+        // totais, etc.). O cabeçalho real é a primeira linha que contenha
+        // "link" ou "ndeserie" (após normalização). Pulamos até 20 linhas.
+        $header   = null;
+        $colLink  = false;
+        $colSerie = false;
+        $attempts = 0;
+
+        while ($attempts < 20) {
+            // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
+            $rawRow = fgetcsv($fh, 0, ',', '"', '');
+
+            if ($rawRow === false) {
+                break; // EOF
+            }
+
+            $attempts++;
+
+            if ($rawRow === null || $rawRow === [null]) {
+                continue; // linha vazia
+            }
+
+            $normalized = array_map(fn($h) => $this->normalizeKey((string) $h), $rawRow);
+
+            $lk  = array_search('link',     $normalized, true);
+            $ls  = array_search('ndeserie', $normalized, true);
+
+            if ($lk  === false) { $lk  = array_search('linkwaze', $normalized, true); }
+            if ($ls  === false) { $ls  = array_search('serie',    $normalized, true); }
+            if ($ls  === false) { $ls  = array_search('noserie',  $normalized, true); }
+
+            // Linha com pelo menos uma das colunas-chave → é o cabeçalho
+            if ($lk !== false || $ls !== false) {
+                $header   = $normalized;
+                $colLink  = $lk;
+                $colSerie = $ls;
+                break;
+            }
         }
 
-        $header = array_map(fn($h) => $this->normalizeKey((string) $h), $rawHeader);
-
-        $colLink  = array_search('link',     $header, true);
-        $colSerie = array_search('ndeserie', $header, true);
-
-        if ($colLink  === false) { $colLink  = array_search('linkwaze', $header, true); }
-        if ($colSerie === false) { $colSerie = array_search('serie',    $header, true); }
-        if ($colSerie === false) { $colSerie = array_search('noserie',  $header, true); }
-        if ($colSerie === false) { $colSerie = array_search('ndeserie', $header, true); }
-
-        if ($colLink === false || $colSerie === false) {
+        if ($header === null || $colLink === false || $colSerie === false) {
             fclose($fh);
             throw new \RuntimeException(
-                "Colunas LINK/Nº DE SÉRIE não encontradas na aba REFERENCIA.{$uf}. " .
-                "Cabeçalho detectado: " . implode(', ', $header)
+                "Colunas LINK/Nº DE SÉRIE não encontradas na aba REFERENCIA.{$uf} " .
+                "(verificadas {$attempts} linha(s)). " .
+                "Último cabeçalho detectado: " . implode(', ', $header ?? [])
             );
         }
 

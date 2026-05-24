@@ -49,7 +49,7 @@
                                 <a href="{{ state.linkBaseRadares }}" target="_blank" rel="noopener"
                                    class="text-success text-break" title="{{ state.linkBaseRadares }}">
                                     <i class="fas fa-check-circle me-1"></i>
-                                    {{ state.linkBaseRadares|u.truncate(50, '…') }}
+                                    {{ state.linkBaseRadares|length > 50 ? state.linkBaseRadares|slice(0,50) ~ '…' : state.linkBaseRadares }}
                                 </a>
                             {% else %}
                                 <span class="text-muted fst-italic">
@@ -64,7 +64,7 @@
                                 <a href="{{ state.linkReferenciaRadares }}" target="_blank" rel="noopener"
                                    class="text-info text-break" title="{{ state.linkReferenciaRadares }}">
                                     <i class="fas fa-check-circle me-1"></i>
-                                    {{ state.linkReferenciaRadares|u.truncate(50, '…') }}
+                                    {{ state.linkReferenciaRadares|length > 50 ? state.linkReferenciaRadares|slice(0,50) ~ '…' : state.linkReferenciaRadares }}
                                 </a>
                             {% else %}
                                 <span class="text-muted fst-italic">

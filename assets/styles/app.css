@@ -83,7 +83,6 @@ body, button, input, select, textarea {
 [data-theme="dark"] {
     --tw:              #4f98a3;
     --tw-d:            #3a8290;
-    /* FIX: era #7ec8cf — muito saturado/claro em superfícies escuras */
     --tw-dark:         #a8d8dc;
     --tw-light:        #1a2f31;
     --tw-border:       #2a3f41;
@@ -95,9 +94,7 @@ body, button, input, select, textarea {
     --color-surface-2: #1e2b2d;
     --color-border:    rgba(255,255,255,.10);
     --color-text:      #d4e0e1;
-    /* FIX: era #7a9a9d — baixo contraste em labels e cabeçalhos de tabela */
     --color-text-muted:#94b5b8;
-    /* FIX: era #405557 — quase invisível sobre --color-surface #182224 */
     --color-text-faint:#6a8c8f;
 
     --sol-bg:          var(--color-surface);
@@ -117,6 +114,28 @@ body, button, input, select, textarea {
     --shadow-sm:  0 1px 3px rgba(0,0,0,.25);
     --shadow-md:  0 4px 12px rgba(0,0,0,.35);
     --shadow-lg:  0 8px 28px rgba(0,0,0,.45);
+
+    /* =====================================================
+       FIX CRÍTICO: Bootstrap 5 usa --bs-table-bg e
+       --bs-table-color em .table e variantes (table-light,
+       table-hover etc.) com valores hardcoded em hex.
+       Redefinir aqui garante que TODAS as variantes do
+       Bootstrap herdem as cores corretas no dark mode.
+       ===================================================== */
+    --bs-table-bg:           #182224;
+    --bs-table-color:        #d4e0e1;
+    --bs-table-border-color: rgba(255,255,255,.08);
+    --bs-table-striped-bg:   rgba(255,255,255,.03);
+    --bs-table-striped-color:#d4e0e1;
+    --bs-table-active-bg:    rgba(255,255,255,.07);
+    --bs-table-active-color: #d4e0e1;
+    --bs-table-hover-bg:     rgba(255,255,255,.05);
+    --bs-table-hover-color:  #d4e0e1;
+
+    /* table-light no dark mode — Bootstrap sobrescreve com hex fixo */
+    --bs-light-bg-subtle:    #1e2b2d;
+    --bs-light-text-emphasis:#d4e0e1;
+    --bs-light-border-subtle:rgba(255,255,255,.08);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -150,6 +169,18 @@ body, button, input, select, textarea {
         --shadow-sm:  0 1px 3px rgba(0,0,0,.25);
         --shadow-md:  0 4px 12px rgba(0,0,0,.35);
         --shadow-lg:  0 8px 28px rgba(0,0,0,.45);
+        --bs-table-bg:           #182224;
+        --bs-table-color:        #d4e0e1;
+        --bs-table-border-color: rgba(255,255,255,.08);
+        --bs-table-striped-bg:   rgba(255,255,255,.03);
+        --bs-table-striped-color:#d4e0e1;
+        --bs-table-active-bg:    rgba(255,255,255,.07);
+        --bs-table-active-color: #d4e0e1;
+        --bs-table-hover-bg:     rgba(255,255,255,.05);
+        --bs-table-hover-color:  #d4e0e1;
+        --bs-light-bg-subtle:    #1e2b2d;
+        --bs-light-text-emphasis:#d4e0e1;
+        --bs-light-border-subtle:rgba(255,255,255,.08);
     }
 }
 
@@ -423,9 +454,6 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     color: var(--tw-d);
 }
 
-/* FIX dark mode: stat-card usa --tw-highlight como fundo e --tw-dark/--tw-d como texto.
-   Em dark mode, --tw-highlight=#1d3537 e --tw-d=#3a8290 — contraste insuficiente.
-   Sobrepomos aqui com valores mais claros. */
 [data-theme="dark"] .stat-card .stat-value { color: var(--color-text); }
 [data-theme="dark"] .stat-card .stat-label  { color: var(--color-text-muted); }
 
@@ -443,8 +471,6 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     font-weight: 700;
     letter-spacing: .03em;
 }
-/* FIX dark mode: --tw em dark é #4f98a3 — contraste com #fff é ~3.0:1 (insuficiente).
-   Aumentamos a opacidade do fundo e garantimos texto branco. */
 [data-theme="dark"] .badge-uf {
     background: #2a6b74;
     color: #e8f6f7;
@@ -452,7 +478,7 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
 }
 
 /* =========================================================
-   Tabelas
+   Tabelas — estilos base
    ========================================================= */
 .table {
     color: var(--color-text);
@@ -460,8 +486,8 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     --bs-table-hover-bg: rgba(1,105,111,.06);
 }
 .table thead th {
-    background: var(--color-surface-2);
-    color: var(--color-text-muted);
+    background: var(--color-surface-2) !important;
+    color: var(--color-text-muted) !important;
     font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: .05em;
@@ -473,24 +499,63 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     border-color: var(--color-border);
     padding: .7rem 1rem;
     vertical-align: middle;
+    color: var(--color-text);
 }
 .row-link:hover td {
     background: rgba(1,105,111,.05);
     cursor: pointer;
 }
 
-/* FIX dark mode: hover quase invisível + separador de thead fraco */
+/* =========================================================
+   Tabelas — dark mode
+   FIX: Bootstrap aplica background/color hardcoded em hex
+   via .table-light, .table-hover, td inline styles.
+   Forçamos tudo via seletores específicos aqui.
+   ========================================================= */
 [data-theme="dark"] .table {
-    --bs-table-hover-bg: rgba(255,255,255,.04);
+    --bs-table-bg:           #182224;
+    --bs-table-color:        #d4e0e1;
+    --bs-table-border-color: rgba(255,255,255,.08);
+    --bs-table-hover-bg:     rgba(255,255,255,.05);
+    --bs-table-hover-color:  #d4e0e1;
+    --bs-table-striped-bg:   rgba(255,255,255,.03);
+    --bs-table-striped-color:#d4e0e1;
+    color: #d4e0e1;
 }
+
+/* Garante que TODAS as células (td e th) em dark mode
+   nunca recebam cor/fundo hardcoded do Bootstrap */
+[data-theme="dark"] .table td,
+[data-theme="dark"] .table th {
+    color: var(--color-text) !important;
+    border-color: rgba(255,255,255,.08) !important;
+}
+
 [data-theme="dark"] .table thead th {
-    border-bottom: 1px solid rgba(255,255,255,.13);
+    background: var(--color-surface-2) !important;
+    color: var(--color-text-muted) !important;
+    border-bottom: 1px solid rgba(255,255,255,.13) !important;
 }
+
+[data-theme="dark"] .table tbody td {
+    background: transparent !important;
+}
+
+[data-theme="dark"] .table tbody tr:hover td {
+    background: rgba(255,255,255,.05) !important;
+}
+
 [data-theme="dark"] .table tbody tr + tr td {
     border-top: 1px solid rgba(255,255,255,.05);
 }
+
 [data-theme="dark"] .row-link:hover td {
-    background: rgba(255,255,255,.04);
+    background: rgba(255,255,255,.04) !important;
+}
+
+/* text-muted dentro de tabelas no dark mode */
+[data-theme="dark"] .table .text-muted {
+    color: var(--color-text-muted) !important;
 }
 
 /* =========================================================
@@ -514,7 +579,6 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     box-shadow: 0 0 0 3px rgba(1,105,111,.15) !important;
 }
 
-/* FIX dark mode: placeholder escuro demais e borda quase invisível */
 [data-theme="dark"] .form-control::placeholder,
 [data-theme="dark"] .form-select::placeholder,
 [data-theme="dark"] input::placeholder {
@@ -972,7 +1036,6 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
 }
 .tipo-pill.active .tipo-icon { background: var(--tw); color: #fff; }
 .tipo-label { font-size: .82rem; font-weight: 500; color: var(--color-text); line-height: 1.3; }
-/* FIX: era --tw-dark que em dark mode era #7ec8cf (muito claro sobre fundo teal) */
 .tipo-pill.active .tipo-label { color: var(--tw-dark); font-weight: 600; }
 
 /* ---------------------------------------------------------

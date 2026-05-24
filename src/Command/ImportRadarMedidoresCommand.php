@@ -28,6 +28,16 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   false → API RBMLQ/INMETRO  (fonte original — todos os campos)
  *
  * ════════════════════════════════════════════════════════════
+ * URL POR ESTADO (prioridade decrescente)
+ * ════════════════════════════════════════════════════════════
+ *
+ *   1. BrazilianState::linkBaseRadares (banco de dados)
+ *      → gerenciável pelo admin sem deploy.
+ *
+ *   2. ImportRadarGoogleSheetsMessage::UF_GID_MAP (fallback hardcoded)
+ *      → para estados sem link no banco.
+ *
+ * ════════════════════════════════════════════════════════════
  * BACKFILL AUTOMÁTICO
  * ════════════════════════════════════════════════════════════
  *
@@ -37,9 +47,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  *   1. data_ultima_verificacao  (se preenchida)
  *   2. data_validade - 1 ano    (se data_ultima_verificacao vazia)
- *
- * O cálculo de "validade - 1 ano" é feito via SQL com DATE_SUB +
- * STR_TO_DATE (formato d/m/Y armazenado como VARCHAR).
  *
  * ════════════════════════════════════════════════════════════
  * USO
@@ -93,12 +100,18 @@ final class ImportRadarMedidoresCommand extends Command
 
         $io->title(sprintf('Importação Radares — Fonte: %s', $fonte));
 
+        // Carrega mapa de links customizados do banco (UF => URL)
+        $linkMap = self::USE_GOOGLE_SHEETS_SOURCE
+            ? $this->stateRepository->findLinkMapRadares()
+            : [];
+
         if (self::USE_GOOGLE_SHEETS_SOURCE) {
             $io->note([
-                'Fonte ativa : Google Sheets CSV',
-                'Preservados : estado, proprietario_*, historico_json',
-                'URL base    : ' . ImportRadarGoogleSheetsMessage::BASE_URL,
-                'Para trocar : altere USE_GOOGLE_SHEETS_SOURCE = false neste arquivo.',
+                'Fonte ativa  : Google Sheets CSV',
+                'Preservados  : estado, proprietario_*, historico_json',
+                'Links no BD  : ' . count($linkMap) . ' estado(s) com URL personalizada',
+                'URL fallback : ' . ImportRadarGoogleSheetsMessage::BASE_URL,
+                'Para trocar  : altere USE_GOOGLE_SHEETS_SOURCE = false neste arquivo.',
             ]);
         } else {
             $io->note([
@@ -135,7 +148,10 @@ final class ImportRadarMedidoresCommand extends Command
         foreach ($ufs as $uf) {
             try {
                 if (self::USE_GOOGLE_SHEETS_SOURCE) {
-                    ($this->sheetsHandler)(new ImportRadarGoogleSheetsMessage($uf));
+                    // Prioridade 1: link personalizado do banco
+                    // Prioridade 2: fallback do UF_GID_MAP (dentro do getUrl())
+                    $customUrl = $linkMap[$uf] ?? null;
+                    ($this->sheetsHandler)(new ImportRadarGoogleSheetsMessage($uf, $customUrl));
                 } else {
                     ($this->rbmlqHandler)(new ImportRadarMedidoresMessage($uf));
                 }
@@ -152,19 +168,9 @@ final class ImportRadarMedidoresCommand extends Command
         // ════════════════════════════════════════════════════════════
         // BACKFILL: preenche data_verificacao_efetiva nos registros
         // que ainda estão com NULL após a importação.
-        //
-        // Regra (mesma do resolveDataVerificacao dos handlers):
-        //   1. data_ultima_verificacao preenchida → usa ela.
-        //   2. data_ultima_verificacao vazia + data_validade preenchida
-        //      → usa DATE_FORMAT(DATE_SUB(STR_TO_DATE(data_validade, '%d/%m/%Y'), INTERVAL 1 YEAR), '%d/%m/%Y')
-        //   3. Ambas vazias → permanece NULL.
-        //
-        // O UPDATE só toca registros com data_verificacao_efetiva IS NULL,
-        // nunca sobrescreve valores já calculados/importados.
         // ════════════════════════════════════════════════════════════
         $io->section('Backfill: calculando data_verificacao_efetiva ausente...');
 
-        // Passo 1 — copia data_ultima_verificacao quando preenchida
         $affected1 = (int) $this->connection->executeStatement(
             "UPDATE radar_medidor
              SET    data_verificacao_efetiva = data_ultima_verificacao
@@ -173,7 +179,6 @@ final class ImportRadarMedidoresCommand extends Command
                AND  data_ultima_verificacao  <> ''"
         );
 
-        // Passo 2 — calcula validade - 1 ano para quem ainda ficou NULL
         $affected2 = (int) $this->connection->executeStatement(
             "UPDATE radar_medidor
              SET    data_verificacao_efetiva = DATE_FORMAT(
@@ -201,8 +206,6 @@ final class ImportRadarMedidoresCommand extends Command
         } else {
             $io->text('<info>✔ Nenhum registro pendente de backfill.</info>');
         }
-
-        // ════════════════════════════════════════════════════════════
 
         if ($errors !== []) {
             $io->warning(sprintf('%d estado(s) com erro:', count($errors)));

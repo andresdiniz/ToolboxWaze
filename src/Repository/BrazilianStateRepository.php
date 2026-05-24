@@ -18,40 +18,41 @@ class BrazilianStateRepository extends ServiceEntityRepository
         parent::__construct($registry, BrazilianState::class);
     }
 
-    /** Retorna todos os estados ordenados pela sigla UF. */
-    public function findAllOrderedByUf(): array
+    /** Retorna todas as siglas UF ordenadas alfabeticamente. */
+    public function findAllUfs(): array
     {
         return $this->createQueryBuilder('s')
+            ->select('s.uf')
+            ->orderBy('s.uf', 'ASC')
+            ->getQuery()
+            ->getSingleColumnResult();
+    }
+
+    /**
+     * Retorna mapa ['UF' => 'https://...'] para todos os estados
+     * que possuem link_base_radares preenchido.
+     *
+     * @return array<string, string>  ['MG' => 'https://...', ...]
+     */
+    public function findLinkMapRadares(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('s.uf', 's.linkBaseRadares')
+            ->where('s.linkBaseRadares IS NOT NULL')
             ->orderBy('s.uf', 'ASC')
             ->getQuery()
             ->getResult();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['uf']] = $row['linkBaseRadares'];
+        }
+        return $map;
     }
 
-    /** Retorna apenas as siglas (strings), em ordem alfabética. */
-    public function findAllUfs(): array
-    {
-        return array_column(
-            $this->createQueryBuilder('s')
-                ->select('s.uf')
-                ->orderBy('s.uf', 'ASC')
-                ->getQuery()
-                ->getArrayResult(),
-            'uf'
-        );
-    }
-
+    /** Retorna o estado completo pela sigla UF (case-insensitive). */
     public function findByUf(string $uf): ?BrazilianState
     {
         return $this->findOneBy(['uf' => strtoupper($uf)]);
-    }
-
-    public function findByRegion(string $region): array
-    {
-        return $this->createQueryBuilder('s')
-            ->where('s.region = :region')
-            ->setParameter('region', $region)
-            ->orderBy('s.uf', 'ASC')
-            ->getQuery()
-            ->getResult();
     }
 }

@@ -146,7 +146,7 @@
 
             </div>
 
-            {# Tags dos filtros ativos — usar estilo theme-aware ao invés de bg-light text-dark #}
+            {# Tags dos filtros ativos #}
             {% if activeCount > 0 %}
             <div class="mt-2 d-flex flex-wrap gap-1">
                 {% if filters.uf %}
@@ -204,7 +204,7 @@
 </div>
 {% endif %}
 
-{# ── Barra flutuante de mesclagem (oculta inicialmente) ── #}
+{# ── Barra flutuante de mesclagem ── #}
 <div id="mergeBar"
      style="display:none;position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);
             z-index:1050;min-width:320px;max-width:90vw"
@@ -272,9 +272,13 @@
                     ? row.data_ultima_verificacao
                     : (row.data_verificacao_efetiva is not empty ? row.data_verificacao_efetiva : null) %}
 
+                {#
+                  NOTA: Twig não interpreta \d em strings — usar [0-9] no lugar de \d
+                  para evitar o erro "Unknown modifier 'd'".
+                #}
                 {% set dveRaw = row.data_verificacao_efetiva ?? '' %}
                 {% set dveIso = '' %}
-                {% if dveRaw matches '/^\d{2}\/\d{2}\/\d{4}$/' %}
+                {% if dveRaw matches '/^[0-9]{2}\/[0-9]{2}\/[0-9]{4}$/' %}
                     {% set dveParts = dveRaw|split('/') %}
                     {% set dveIso = dveParts[2] ~ '-' ~ dveParts[1] ~ '-' ~ dveParts[0] %}
                 {% endif %}
@@ -404,13 +408,12 @@
     const btnClear  = document.getElementById('btnClearMerge');
     const checkAll  = document.getElementById('checkAll');
 
-    let selected = {}; // id => label
+    let selected = {};
 
     function updateBar() {
         const ids = Object.keys(selected);
         countEl.textContent = ids.length;
 
-        // Chips
         chips.innerHTML = ids.map(id =>
             `<span class="badge bg-warning text-dark">${selected[id]}
                 <button type="button" class="btn-close btn-close-sm ms-1"
@@ -435,7 +438,7 @@
             btnGo.disabled = false;
         } else if (ids.length === 1) {
             bar.style.display = 'block';
-            btnGo.disabled = true; // precisa de ≥2
+            btnGo.disabled = true;
         } else {
             bar.style.display = 'none';
         }
@@ -448,7 +451,6 @@
             : '';
     }
 
-    // Checkbox individual
     document.querySelectorAll('.radar-check').forEach(cb => {
         cb.addEventListener('change', () => {
             const id    = cb.value;
@@ -469,7 +471,6 @@
         });
     });
 
-    // Selecionar todos da página
     checkAll?.addEventListener('change', () => {
         document.querySelectorAll('.radar-check').forEach(cb => {
             if (checkAll.checked) {
@@ -489,7 +490,6 @@
         updateBar();
     });
 
-    // Ir para mesclagem
     btnGo?.addEventListener('click', () => {
         const ids = Object.keys(selected);
         if (ids.length < 2) return;
@@ -497,7 +497,6 @@
         window.location.href = `${mergeUrl}?${params}`;
     });
 
-    // Limpar seleção
     btnClear?.addEventListener('click', () => {
         selected = {};
         document.querySelectorAll('.radar-check').forEach(cb => { cb.checked = false; });

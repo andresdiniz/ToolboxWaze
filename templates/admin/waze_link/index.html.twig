@@ -80,7 +80,8 @@
                             <span class="badge bg-info text-dark">#{{ row.permanent_hazard_id }}</span>
                         </td>
                         <td class="small text-muted">
-                            {{ row.observacao|default('—')|u.truncate(50, '…') }}
+                            {% set obs = row.observacao|default('') %}
+                            {{ obs ? (obs|length > 50 ? obs|slice(0,50) ~ '…' : obs) : '—' }}
                         </td>
                         <td class="small">{{ row.inserted_by_email }}</td>
                         <td class="small text-nowrap">

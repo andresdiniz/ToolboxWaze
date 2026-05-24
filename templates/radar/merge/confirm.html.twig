@@ -1,0 +1,192 @@
+{% extends 'base.html.twig' %}
+{% block title %}Mesclar Radares — ToolboxWaze{% endblock %}
+
+{% block body %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="h4 mb-0 fw-bold">
+            <i class="bi bi-intersect text-warning me-2"></i>Mesclar Radares
+        </h1>
+        <small class="text-muted">{{ radares|length }} radares selecionados — escolha o sobrevivente e os valores que prevalecerão</small>
+    </div>
+    <a href="{{ path('radar_index') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Cancelar
+    </a>
+</div>
+
+<div class="alert alert-warning py-2 px-3 small mb-4">
+    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+    <strong>Atenção:</strong> Os radares absorvidos serão marcados como <code>MESCLADO</code> e suas faixas
+    serão transferidas para o sobrevivente. Esta ação é registrada no log mas <strong>não pode ser desfeita automaticamente</strong>.
+</div>
+
+<form method="post" action="{{ path('radar_merge_index') }}" id="mergeForm">
+    <input type="hidden" name="_token" value="{{ csrf_token('radar_merge') }}">
+    {% for id in ids %}
+        <input type="hidden" name="ids[]" value="{{ id }}">
+    {% endfor %}
+
+    {# ── Escolha do Sobrevivente ── #}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold py-2">
+            <i class="bi bi-star me-1 text-success"></i>1. Escolha o radar sobrevivente (que manterá o ID)
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                {% for r in radares %}
+                <div class="col-12 col-md-6 col-lg-4">
+                    <label class="survivor-card card h-100 p-3 cursor-pointer border-2"
+                           style="cursor:pointer;transition:border-color .15s,background .15s"
+                           for="survivor_{{ r.id }}">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <input type="radio" name="survivor_id" id="survivor_{{ r.id }}"
+                                   value="{{ r.id }}" class="form-check-input survivor-radio mt-0"
+                                   {{ loop.first ? 'checked' }}>
+                            <span class="badge-uf">{{ r.sigla_uf }}</span>
+                            <strong class="small">#{{ r.id }}</strong>
+                            {% if r.situacao == 'MESCLADO' %}
+                                <span class="badge bg-secondary ms-auto">MESCLADO</span>
+                            {% endif %}
+                        </div>
+                        <div class="small text-muted mb-1">{{ r.municipio ?? '—' }}</div>
+                        <div class="small text-truncate" title="{{ r.logradouro }}">{{ r.logradouro ?? '—' }}</div>
+                        <div class="small mt-1">
+                            <span class="text-muted">Faixas:</span>
+                            <strong>{{ r.total_faixas }}</strong>
+                            <span class="text-muted ms-2">Tipo:</span> {{ r.tipo_medidor ?? '—' }}
+                        </div>
+                        {% if r.link_waze %}
+                            <div class="small mt-1">
+                                <i class="bi bi-link-45deg text-primary"></i>
+                                <a href="{{ r.link_waze }}" target="_blank" rel="noopener" class="text-primary">Link Waze</a>
+                            </div>
+                        {% endif %}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Comparação campo a campo ── #}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold py-2">
+            <i class="bi bi-table me-1"></i>2. Resolva os campos conflitantes
+            <small class="text-muted ms-2">(campos idênticos são ignorados)</small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th class="ps-3" style="width:14%">Campo</th>
+                        {% for r in radares %}
+                        <th class="survivor-col-{{ r.id }}">
+                            <span class="badge bg-secondary me-1">#{{ r.id }}</span>
+                            {{ r.municipio ?? r.sigla_uf }}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for field, label in comparableFields %}
+                    {# Verificar se há divergência #}
+                    {% set values = [] %}
+                    {% for r in radares %}
+                        {% set values = values|merge([(r[field] ?? '')]) %}
+                    {% endfor %}
+                    {% set uniqueValues = values|unique %}
+
+                    <tr class="{{ uniqueValues|length > 1 ? 'table-warning' : '' }}">
+                        <td class="ps-3 fw-semibold small">{{ label }}</td>
+                        {% for r in radares %}
+                        {% set rIdx = loop.index %}
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if uniqueValues|length > 1 %}
+                                {# Campo conflitante: mostrar radio de escolha #}
+                                <input type="radio"
+                                       name="field_choice[{{ field }}]"
+                                       value="{{ loop.first ? 'survivor' : 'absorbed_' ~ (rIdx - 1) }}"
+                                       class="form-check-input mt-0 field-radio"
+                                       data-field="{{ field }}"
+                                       {{ loop.first ? 'checked' }}>
+                                {% else %}
+                                <input type="hidden" name="field_choice[{{ field }}]" value="survivor">
+                                {% endif %}
+                                <span class="small {{ (r[field] ?? '') == '' ? 'text-muted fst-italic' : '' }}">
+                                    {{ (r[field] ?? '') != '' ? r[field] : '(vazio)' }}
+                                </span>
+                            </div>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# ── Resumo das faixas ── #}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold py-2">
+            <i class="bi bi-layout-three-columns me-1"></i>3. Faixas — todas serão transferidas para o sobrevivente
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                {% for r in radares %}
+                <div class="col-auto">
+                    <div class="border rounded p-2 small text-center" style="min-width:120px">
+                        <div class="fw-semibold">#{{ r.id }}</div>
+                        <div class="text-muted">{{ r.total_faixas }} faixa(s)</div>
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="col-auto d-flex align-items-center">
+                    <i class="bi bi-arrow-right fs-4 text-muted mx-2"></i>
+                    <div class="border rounded p-2 small text-center bg-success bg-opacity-10 border-success" style="min-width:120px">
+                        <div class="fw-semibold text-success">Sobrevivente</div>
+                        <div class="text-muted">todas as faixas</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Botão de confirmação ── #}
+    <div class="d-flex gap-2 justify-content-end">
+        <a href="{{ path('radar_index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-x-lg me-1"></i>Cancelar
+        </a>
+        <button type="submit" class="btn btn-danger" id="btnConfirm">
+            <i class="bi bi-intersect me-1"></i>Confirmar Mesclagem
+        </button>
+    </div>
+</form>
+
+<script>
+// Destaca visualmente o card do sobrevivente selecionado
+document.querySelectorAll('.survivor-radio').forEach(radio => {
+    radio.addEventListener('change', () => {
+        document.querySelectorAll('.survivor-card').forEach(card => {
+            card.classList.remove('border-success');
+            card.style.background = '';
+        });
+        const label = document.querySelector(`label[for="survivor_${radio.value}"]`);
+        if (label) {
+            label.classList.add('border-success');
+            label.style.background = 'color-mix(in oklab, var(--bs-success, #198754) 8%, transparent)';
+        }
+    });
+    if (radio.checked) radio.dispatchEvent(new Event('change'));
+});
+
+// Confirmação antes de submeter
+document.getElementById('mergeForm').addEventListener('submit', e => {
+    const survivorId = document.querySelector('input[name="survivor_id"]:checked')?.value;
+    if (!survivorId) { e.preventDefault(); alert('Selecione o radar sobrevivente.'); return; }
+    if (!confirm(`Confirma a mesclagem?\n\nO radar #${survivorId} será o sobrevivente.\nEsta ação não pode ser desfeita automaticamente.`)) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}

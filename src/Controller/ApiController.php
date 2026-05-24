@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -12,213 +13,232 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * API JSON pública (somente leitura).
- * Todos os endpoints retornam JSON; não requerem autenticação.
- * Rate-limiting deve ser configurado no nginx/proxy externo se necessário.
+ * API JSON interna — usada pela busca global da navbar e por integrações externas.
+ *
+ * Todas as rotas são somente-leitura (GET).
+ * Rotas públicas: /api/busca  (autocomplete)
+ * Rotas protegidas: /api/radares  /api/postos
  */
-#[Route('/api/v1', name: 'api_v1_')]
+#[Route('/api', name: 'api_')]
 final class ApiController extends AbstractController
 {
-    private const PER_PAGE = 50;
+    private const LIMIT_AUTOCOMPLETE = 8;
+    private const LIMIT_LIST        = 100;
 
     public function __construct(
         private readonly Connection $db,
     ) {}
 
-    // ───────────────────────────────────────────────────────────────
-    // RADARES
-    // ───────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────
+    //  Busca global para autocomplete da navbar
+    // ─────────────────────────────────────────────────────────────────────
 
-    /** GET /api/v1/radares */
-    #[Route('/radares', name: 'radares', methods: ['GET'])]
-    public function radares(Request $req): JsonResponse
-    {
-        $page      = max(1, (int) $req->query->get('page', 1));
-        $perPage   = min((int) ($req->query->get('per_page', self::PER_PAGE)), 200);
-        $offset    = ($page - 1) * $perPage;
-        $uf        = strtoupper(trim((string) $req->query->get('uf', '')));
-        $resultado = trim((string) $req->query->get('resultado', ''));
-        $municipio = trim((string) $req->query->get('municipio', ''));
-        $comWaze   = $req->query->has('com_waze');
-        $semWaze   = $req->query->has('sem_waze');
-
-        [$where, $params] = $this->radarWhere($uf, $resultado, $municipio, $comWaze, $semWaze);
-        $wc = $where ? "WHERE $where" : '';
-        $join = ($comWaze || $semWaze) ? 'LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id' : '';
-
-        $total = (int) $this->db->fetchOne("SELECT COUNT(*) FROM radar_medidor rm $join $wc", $params);
-        $lim   = (int) $perPage;
-        $off   = (int) $offset;
-
-        $rows = $this->db->fetchAllAssociative(
-            "SELECT rm.id, rm.sigla_uf, rm.municipio, rm.local_verificacao,
-                    rm.ultimo_resultado, rm.tipo_medidor, rm.proprietario_nome,
-                    rm.data_validade, rm.data_ultima_verificacao,
-                    rwl.waze_link, rwl.permanent_hazard_id
-             FROM radar_medidor rm $join
-             $wc
-             ORDER BY rm.sigla_uf, rm.municipio
-             LIMIT $lim OFFSET $off",
-            $params
-        );
-
-        return $this->json([
-            'data'       => $rows,
-            'pagination' => [
-                'page'     => $page,
-                'per_page' => $perPage,
-                'total'    => $total,
-                'pages'    => (int) ceil($total / $perPage),
-            ],
-        ]);
-    }
-
-    /** GET /api/v1/radares/{id} */
-    #[Route('/radares/{id}', name: 'radar_show', requirements: ['id' => '\d+'], methods: ['GET'])]
-    public function radarShow(int $id): JsonResponse
-    {
-        $row = $this->db->fetchAssociative(
-            'SELECT rm.*, rwl.waze_link, rwl.permanent_hazard_id
-             FROM radar_medidor rm
-             LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
-             WHERE rm.id = ?',
-            [$id]
-        );
-
-        if (!$row) {
-            return $this->json(['error' => 'Radar não encontrado.'], Response::HTTP_NOT_FOUND);
-        }
-
-        $faixas = $this->db->fetchAllAssociative(
-            'SELECT * FROM radar_faixa WHERE radar_medidor_id = ? ORDER BY numero_faixa', [$id]
-        );
-
-        return $this->json(['data' => $row, 'faixas' => $faixas]);
-    }
-
-    /** GET /api/v1/radares/stats */
-    #[Route('/radares/stats', name: 'radar_stats', methods: ['GET'])]
-    public function radarStats(): JsonResponse
-    {
-        $hoje = (new \DateTimeImmutable())->format('Y-m-d');
-        $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
-        $dv   = "STR_TO_DATE(data_validade, '%d/%m/%Y')";
-
-        $stats = $this->db->fetchAssociative(
-            "SELECT COUNT(*) AS total,
-                    SUM(ultimo_resultado='APROVADO')  AS aprovados,
-                    SUM(ultimo_resultado='REPROVADO') AS reprovados,
-                    SUM(data_validade IS NOT NULL AND $dv < ?)            AS vencidos,
-                    SUM(data_validade IS NOT NULL AND $dv BETWEEN ? AND ?) AS vencendo,
-                    COUNT(DISTINCT sigla_uf) AS estados
-             FROM radar_medidor",
-            [$hoje, $hoje, $em30]
-        );
-
-        $comWaze = (int) $this->db->fetchOne('SELECT COUNT(*) FROM radar_waze_link');
-        $stats['com_waze'] = $comWaze;
-        $stats['sem_waze'] = (int)$stats['total'] - $comWaze;
-
-        return $this->json(['data' => $stats]);
-    }
-
-    // ───────────────────────────────────────────────────────────────
-    // POSTOS
-    // ───────────────────────────────────────────────────────────────
-
-    /** GET /api/v1/postos */
-    #[Route('/postos', name: 'postos', methods: ['GET'])]
-    public function postos(Request $req): JsonResponse
-    {
-        $page    = max(1, (int) $req->query->get('page', 1));
-        $perPage = min((int) ($req->query->get('per_page', self::PER_PAGE)), 200);
-        $offset  = ($page - 1) * $perPage;
-        $uf      = strtoupper(trim((string) $req->query->get('uf', '')));
-        $mun     = trim((string) $req->query->get('municipio', ''));
-        $semWaze = $req->query->has('sem_waze');
-        $comWaze = $req->query->has('com_waze');
-
-        $parts  = [];
-        $params = [];
-
-        if ($uf !== '') { $parts[] = 'frr.uf = ?'; $params[] = $uf; }
-        if ($mun !== '') { $parts[] = 'frr.municipio LIKE ?'; $params[] = "%$mun%"; }
-        if ($semWaze) { $parts[] = 'pwl.posto_id IS NULL'; }
-        if ($comWaze) { $parts[] = 'pwl.posto_id IS NOT NULL'; }
-
-        $wc   = $parts ? 'WHERE ' . implode(' AND ', $parts) : '';
-        $join = 'LEFT JOIN posto_waze_link pwl ON pwl.posto_id = frr.id';
-
-        $total = (int) $this->db->fetchOne("SELECT COUNT(*) FROM fuel_reseller_raw frr $join $wc", $params);
-        $lim   = (int) $perPage;
-        $off   = (int) $offset;
-
-        $rows = $this->db->fetchAllAssociative(
-            "SELECT frr.id, frr.cnpj, frr.razao_social, frr.nome_fantasia,
-                    frr.bandeira, frr.municipio, frr.uf, frr.endereco,
-                    frr.status, pwl.waze_link, pwl.permanent_hazard_id
-             FROM fuel_reseller_raw frr $join
-             $wc
-             ORDER BY frr.uf, frr.municipio
-             LIMIT $lim OFFSET $off",
-            $params
-        );
-
-        return $this->json([
-            'data'       => $rows,
-            'pagination' => compact('page', 'perPage', 'total') + ['pages' => (int) ceil($total / $perPage)],
-        ]);
-    }
-
-    // ───────────────────────────────────────────────────────────────
-    // BUSCA GLOBAL (autocomplete)
-    // ───────────────────────────────────────────────────────────────
-
-    /** GET /api/v1/busca?q=texto — retorna até 5 radares + 5 postos */
+    /**
+     * GET /api/busca?q=texto
+     *
+     * Retorna até 8 resultados combinados de radares e postos.
+     * Sem autenticação obrigatória — resultado filtrado pela UF do usuário se logado.
+     */
     #[Route('/busca', name: 'busca', methods: ['GET'])]
     public function busca(Request $req): JsonResponse
     {
         $q = trim((string) $req->query->get('q', ''));
-        if (strlen($q) < 2) {
-            return $this->json(['radares' => [], 'postos' => []]);
+        if (mb_strlen($q) < 2) {
+            return $this->json([]);
         }
 
-        $like = '%' . str_replace(['%', '_', '\\'], ['\\%', '\\_', '\\\\'], $q) . '%';
+        /** @var User|null $user */
+        $user       = $this->getUser();
+        $allowedUfs = $user?->getUfsForQuery();
+
+        $like = '%' . $this->escapeLike($q) . '%';
+        $lim  = (int) self::LIMIT_AUTOCOMPLETE;
+
+        // ── Radares ────────────────────────────────────────────────────
+        [$ufWhere, $ufParams] = $this->ufFilter($allowedUfs, 'sigla_uf');
+        $radarWhere = $ufWhere ? "($ufWhere) AND" : '';
 
         $radares = $this->db->fetchAllAssociative(
-            "SELECT id, sigla_uf AS uf, municipio, local_verificacao AS local, ultimo_resultado
+            "SELECT id, sigla_uf AS uf, municipio, local_verificacao AS local,
+                    ultimo_resultado AS resultado, 'radar' AS tipo
              FROM radar_medidor
-             WHERE municipio LIKE ? OR local_verificacao LIKE ?
-             LIMIT 5",
-            [$like, $like]
+             WHERE $radarWhere (municipio LIKE ? OR local_verificacao LIKE ?)
+             ORDER BY sigla_uf, municipio
+             LIMIT $lim",
+            array_merge($ufParams, [$like, $like])
         );
+
+        // ── Postos ─────────────────────────────────────────────────────
+        [$ufWhere2, $ufParams2] = $this->ufFilter($allowedUfs, 'uf');
+        $postoWhere = $ufWhere2 ? "($ufWhere2) AND" : '';
 
         $postos = $this->db->fetchAllAssociative(
-            "SELECT id, uf, municipio, razao_social AS nome, nome_fantasia
+            "SELECT id, uf, municipio, razao_social AS local,
+                    bandeira AS resultado, 'posto' AS tipo
              FROM fuel_reseller_raw
-             WHERE razao_social LIKE ? OR nome_fantasia LIKE ? OR municipio LIKE ?
-             LIMIT 5",
-            [$like, $like, $like]
+             WHERE $postoWhere (razao_social LIKE ? OR municipio LIKE ?)
+             ORDER BY uf, municipio
+             LIMIT $lim",
+            array_merge($ufParams2, [$like, $like])
         );
 
-        return $this->json(['radares' => $radares, 'postos' => $postos]);
+        $results = array_merge(
+            array_map(fn($r) => [
+                'tipo'     => 'radar',
+                'id'       => (int) $r['id'],
+                'label'    => "{$r['uf']} — {$r['municipio']}: {$r['local']}",
+                'badge'    => $r['resultado'],
+                'url'      => '/radares/' . $r['id'],
+            ], $radares),
+            array_map(fn($r) => [
+                'tipo'     => 'posto',
+                'id'       => (int) $r['id'],
+                'label'    => "{$r['uf']} — {$r['municipio']}: {$r['local']}",
+                'badge'    => $r['resultado'],
+                'url'      => '/postos/' . $r['id'],
+            ], $postos)
+        );
+
+        // ordena por label e limita ao total
+        usort($results, fn($a, $b) => strcmp($a['label'], $b['label']));
+        $results = array_slice($results, 0, (int) self::LIMIT_AUTOCOMPLETE * 2);
+
+        return $this->json($results, Response::HTTP_OK, [
+            'Cache-Control' => 'no-store',
+        ]);
     }
 
-    // ───────────────────────────────────────────────────────────────
-    // Helpers
-    // ───────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────
+    //  API pública de Radares
+    // ─────────────────────────────────────────────────────────────────────
 
-    private function radarWhere(string $uf, string $resultado, string $municipio, bool $comWaze, bool $semWaze): array
+    /**
+     * GET /api/radares?uf=SP&resultado=APROVADO&page=1
+     *
+     * Requer autenticação.
+     */
+    #[Route('/radares', name: 'radares', methods: ['GET'])]
+    public function radares(Request $req): JsonResponse
     {
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
+
+        /** @var User $user */
+        $user       = $this->getUser();
+        $allowedUfs = $user->getUfsForQuery();
+
+        $uf        = strtoupper(trim((string) $req->query->get('uf', '')));
+        $municipio = trim((string) $req->query->get('municipio', ''));
+        $resultado = trim((string) $req->query->get('resultado', ''));
+        $page      = max(1, (int) $req->query->get('page', 1));
+        $limit     = min((int) $req->query->get('limit', 50), self::LIMIT_LIST);
+        $offset    = ($page - 1) * $limit;
+
         $parts  = [];
         $params = [];
 
-        if ($uf !== '')        { $parts[] = 'rm.sigla_uf = ?';       $params[] = $uf; }
-        if ($resultado !== '') { $parts[] = 'rm.ultimo_resultado = ?'; $params[] = $resultado; }
-        if ($municipio !== '') { $parts[] = 'rm.municipio LIKE ?';   $params[] = "%$municipio%"; }
-        if ($semWaze)          { $parts[] = 'rwl.id IS NULL'; }
-        if ($comWaze)          { $parts[] = 'rwl.id IS NOT NULL'; }
+        if ($allowedUfs !== null) {
+            if (count($allowedUfs) === 0) { return $this->json(['data' => [], 'total' => 0]); }
+            $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
+            $parts[] = "sigla_uf IN ($ph)";
+            foreach ($allowedUfs as $u) { $params[] = $u; }
+        }
+        if ($uf !== '') { $parts[] = 'sigla_uf = ?'; $params[] = $uf; }
+        if ($municipio !== '') { $parts[] = 'municipio LIKE ?'; $params[] = '%' . $this->escapeLike($municipio) . '%'; }
+        if ($resultado !== '') { $parts[] = 'ultimo_resultado = ?'; $params[] = $resultado; }
 
-        return [implode(' AND ', $parts), $params];
+        $wc    = $parts ? 'WHERE ' . implode(' AND ', $parts) : '';
+        $total = (int) $this->db->fetchOne("SELECT COUNT(*) FROM radar_medidor $wc", $params);
+
+        $rows = $this->db->fetchAllAssociative(
+            "SELECT id, sigla_uf, municipio, local_verificacao, tipo_medidor,
+                    ultimo_resultado, data_validade, proprietario_nome
+             FROM radar_medidor $wc
+             ORDER BY sigla_uf, municipio
+             LIMIT $limit OFFSET $offset",
+            $params
+        );
+
+        return $this->json([
+            'data'  => $rows,
+            'total' => $total,
+            'page'  => $page,
+            'pages' => (int) ceil($total / $limit),
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  API pública de Postos
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/postos?uf=MG&municipio=Belo+Horizonte&page=1
+     *
+     * Requer autenticação.
+     */
+    #[Route('/postos', name: 'postos', methods: ['GET'])]
+    public function postos(Request $req): JsonResponse
+    {
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
+
+        /** @var User $user */
+        $user       = $this->getUser();
+        $allowedUfs = $user->getUfsForQuery();
+
+        $uf        = strtoupper(trim((string) $req->query->get('uf', '')));
+        $municipio = trim((string) $req->query->get('municipio', ''));
+        $bandeira  = trim((string) $req->query->get('bandeira', ''));
+        $semWaze   = $req->query->getBoolean('sem_waze');
+        $page      = max(1, (int) $req->query->get('page', 1));
+        $limit     = min((int) $req->query->get('limit', 50), self::LIMIT_LIST);
+        $offset    = ($page - 1) * $limit;
+
+        $parts  = [];
+        $params = [];
+
+        if ($allowedUfs !== null) {
+            if (count($allowedUfs) === 0) { return $this->json(['data' => [], 'total' => 0]); }
+            $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
+            $parts[] = "uf IN ($ph)";
+            foreach ($allowedUfs as $u) { $params[] = $u; }
+        }
+        if ($uf !== '')       { $parts[] = 'uf = ?';          $params[] = $uf; }
+        if ($municipio !== '') { $parts[] = 'municipio LIKE ?'; $params[] = '%' . $this->escapeLike($municipio) . '%'; }
+        if ($bandeira !== '')  { $parts[] = 'bandeira = ?';    $params[] = $bandeira; }
+        if ($semWaze) { $parts[] = '(SELECT COUNT(*) FROM posto_waze_link pwl WHERE pwl.posto_id = fuel_reseller_raw.id) = 0'; }
+
+        $wc    = $parts ? 'WHERE ' . implode(' AND ', $parts) : '';
+        $total = (int) $this->db->fetchOne("SELECT COUNT(*) FROM fuel_reseller_raw $wc", $params);
+
+        $rows = $this->db->fetchAllAssociative(
+            "SELECT id, cnpj, razao_social, nome_fantasia, municipio, uf, bandeira, endereco
+             FROM fuel_reseller_raw $wc
+             ORDER BY uf, municipio, razao_social
+             LIMIT $limit OFFSET $offset",
+            $params
+        );
+
+        return $this->json([
+            'data'  => $rows,
+            'total' => $total,
+            'page'  => $page,
+            'pages' => (int) ceil($total / $limit),
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  Helpers
+    // ─────────────────────────────────────────────────────────────────────
+
+    private function escapeLike(string $v): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $v);
+    }
+
+    private function ufFilter(?array $allowedUfs, string $col): array
+    {
+        if ($allowedUfs === null) { return ['', []]; }
+        if (count($allowedUfs) === 0) { return ['1=0', []]; }
+        $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
+        return ["{$col} IN ($ph)", $allowedUfs];
     }
 }

@@ -32,6 +32,81 @@
     .alert-animated.tw-hiding {
         animation: twFadeOut 300ms ease forwards;
     }
+
+    /* ── Busca global ─────────────────────────────────────────────── */
+    .navbar-search-wrap {
+        position: relative;
+    }
+    .navbar-search-input {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,.22);
+        border-radius: 20px;
+        color: inherit;
+        font-size: .82rem;
+        padding: .3rem .85rem .3rem 2rem;
+        width: 200px;
+        transition: width .25s ease, border-color .2s;
+        outline: none;
+    }
+    .navbar-search-input:focus {
+        width: 280px;
+        border-color: rgba(255,255,255,.5);
+        background: rgba(255,255,255,.08);
+    }
+    .navbar-search-input::placeholder { color: rgba(255,255,255,.5); }
+    .navbar-search-icon {
+        position: absolute;
+        left: .55rem;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: .5;
+        pointer-events: none;
+    }
+    .search-dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        min-width: 320px;
+        background: var(--bs-body-bg, #fff);
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: .5rem;
+        box-shadow: 0 8px 24px rgba(0,0,0,.14);
+        z-index: 1055;
+        display: none;
+        max-height: 360px;
+        overflow-y: auto;
+    }
+    .search-dropdown.show { display: block; }
+    .search-item {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .5rem .85rem;
+        font-size: .82rem;
+        color: var(--bs-body-color);
+        text-decoration: none;
+        transition: background .15s;
+        border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    }
+    .search-item:last-child { border-bottom: none; }
+    .search-item:hover { background: var(--bs-tertiary-bg, #f5f5f5); }
+    .search-item-label { flex: 1; line-height: 1.3; }
+    .search-item-type {
+        font-size: .7rem;
+        padding: .12em .45em;
+        border-radius: 8px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .search-item-type.radar { background: rgba(13,110,253,.15); color: #0d6efd; }
+    .search-item-type.posto { background: rgba(253,126,20,.15); color: #fd7e14; }
+    .search-empty {
+        padding: .75rem 1rem;
+        font-size: .82rem;
+        color: var(--bs-secondary-color, #6c757d);
+        text-align: center;
+    }
     </style>
 
     <script>
@@ -69,7 +144,6 @@
                 </svg>
             </button>
 
-            {# Toggler: alterna entre hamburguer e X conforme estado do collapse #}
             <button class="navbar-toggler bg-transparent border-0" type="button"
                     data-bs-toggle="collapse" data-bs-target="#nav"
                     aria-controls="nav" aria-expanded="false" aria-label="Abrir menu"
@@ -108,7 +182,21 @@
                         Solicitações
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if app.request.pathInfo starts with '/cobertura' %}active{% endif %}"
+                       href="{{ path('cobertura_radar') }}" title="Cobertura Waze">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/></svg>
+                        Cobertura
+                    </a>
+                </li>
                 {% if is_granted('ROLE_ADMIN') %}
+                <li class="nav-item">
+                    <a class="nav-link {% if app.request.pathInfo starts with '/auditoria' %}active{% endif %}"
+                       href="{{ path('auditoria_index') }}" title="Auditoria">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>
+                        Auditoria
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active{% endif %}"
                        href="{{ path('admin_users_index') }}">
@@ -118,6 +206,19 @@
                 </li>
                 {% endif %}
             </ul>
+
+            {# ── Busca global ──────────────────────────────────────────── #}
+            {% if app.user %}
+            <div class="navbar-search-wrap d-none d-lg-block me-2">
+                <svg class="navbar-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>
+                </svg>
+                <input type="text" id="globalSearch" class="navbar-search-input"
+                       placeholder="Buscar radares, postos…"
+                       autocomplete="off" aria-label="Busca global">
+                <div class="search-dropdown" id="searchDropdown"></div>
+            </div>
+            {% endif %}
 
             {% if app.user %}
             <ul class="navbar-nav ms-auto">
@@ -141,6 +242,19 @@
                                 <div class="fw-semibold">{{ app.user.name }}</div>
                                 <small class="text-muted">{{ app.user.email }}</small>
                             </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="{{ path('export_radares_csv') }}">
+                                <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
+                                Exportar Radares CSV
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ path('export_postos_csv') }}">
+                                <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
+                                Exportar Postos CSV
+                            </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
@@ -272,7 +386,7 @@
 }());
 </script>
 
-{# Count-up animation — bug fix: IIFE fechado corretamente (era duplo antes) #}
+{# Count-up animation #}
 <script>
 (function(){
   function countUp(el) {
@@ -292,6 +406,91 @@
     });
   }, { threshold: 0.5 });
   document.querySelectorAll('.count-up').forEach(function(el){ io2.observe(el); });
+}());
+</script>
+
+{# ── Busca Global Autocomplete ─────────────────────────────────────────── #}
+<script>
+(function(){
+  var input    = document.getElementById('globalSearch');
+  var dropdown = document.getElementById('searchDropdown');
+  if (!input || !dropdown) return;
+
+  var timer = null;
+  var lastQ = '';
+
+  function badgeClass(tipo) { return tipo === 'radar' ? 'radar' : 'posto'; }
+  function typeLabel(tipo)  { return tipo === 'radar' ? 'Radar' : 'Posto'; }
+
+  function render(items) {
+    dropdown.innerHTML = '';
+    if (!items.length) {
+      dropdown.innerHTML = '<div class="search-empty">Nenhum resultado encontrado.</div>';
+    } else {
+      items.forEach(function(r) {
+        var a = document.createElement('a');
+        a.className = 'search-item';
+        a.href = r.url;
+        a.innerHTML =
+          '<span class="search-item-type ' + badgeClass(r.tipo) + '">' + typeLabel(r.tipo) + '</span>' +
+          '<span class="search-item-label">' + escHtml(r.label) + '</span>' +
+          (r.badge ? '<small class="text-muted">' + escHtml(r.badge) + '</small>' : '');
+        dropdown.appendChild(a);
+      });
+    }
+    dropdown.classList.add('show');
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function search(q) {
+    fetch('/api/busca?q=' + encodeURIComponent(q))
+      .then(function(r){ return r.json(); })
+      .then(render)
+      .catch(function(){ dropdown.classList.remove('show'); });
+  }
+
+  input.addEventListener('input', function() {
+    var q = this.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) { dropdown.classList.remove('show'); return; }
+    if (q === lastQ) return;
+    lastQ = q;
+    timer = setTimeout(function(){ search(q); }, 280);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { dropdown.classList.remove('show'); input.blur(); }
+    if (e.key === 'Enter') {
+      var first = dropdown.querySelector('.search-item');
+      if (first) { e.preventDefault(); window.location.href = first.href; }
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      var items = dropdown.querySelectorAll('.search-item');
+      if (items.length) items[0].focus();
+    }
+  });
+
+  // Teclado dentro do dropdown
+  dropdown.addEventListener('keydown', function(e) {
+    var items = Array.from(dropdown.querySelectorAll('.search-item'));
+    var idx   = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' && idx < items.length - 1) { e.preventDefault(); items[idx + 1].focus(); }
+    if (e.key === 'ArrowUp')  { e.preventDefault(); idx > 0 ? items[idx - 1].focus() : input.focus(); }
+    if (e.key === 'Escape')   { dropdown.classList.remove('show'); input.focus(); }
+  });
+
+  // Fecha ao clicar fora
+  document.addEventListener('click', function(e) {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.remove('show');
+    }
+  });
 }());
 </script>
 

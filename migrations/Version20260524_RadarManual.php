@@ -10,6 +10,8 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Cria a tabela radar_manual para radares inseridos manualmente
  * antes de aparecerem na fonte oficial (INMETRO/Google Sheets).
+ *
+ * ATENÇÃO: criado_por_id é INT (sem UNSIGNED) para coincidir com user.id
  */
 final class Version20260524_RadarManual extends AbstractMigration
 {
@@ -37,10 +39,10 @@ final class Version20260524_RadarManual extends AbstractMigration
                 observacoes       TEXT                 NULL,
                 identity_hash     VARCHAR(64)      NOT NULL,
                 status            VARCHAR(20)      NOT NULL DEFAULT 'pendente',
-                radar_medidor_id  INT UNSIGNED         NULL  COMMENT 'ID em radar_medidor após o merge',
+                radar_medidor_id  INT UNSIGNED         NULL  COMMENT 'ID em radar_medidor apos o merge',
                 mesclado_em       DATETIME             NULL,
                 criado_em         DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                criado_por_id     INT UNSIGNED         NULL,
+                criado_por_id     INT                  NULL,
                 PRIMARY KEY (id),
                 INDEX idx_radar_manual_identity (identity_hash),
                 INDEX idx_radar_manual_status   (status),

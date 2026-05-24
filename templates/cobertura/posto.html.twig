@@ -1,0 +1,65 @@
+{% extends 'base.html.twig' %}
+{% block title %}Cobertura Waze — Postos{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-fuel-pump me-2"></i>Cobertura Waze — Postos</h4>
+      <p class="text-muted small mb-0">Postos sem link Waze cadastrado por estado</p>
+    </div>
+    <a href="{{ path('cobertura_radar') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-broadcast me-1"></i>Ver Radares
+    </a>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="card kpi-card"><div class="card-body">
+      <div class="kpi-label">Total Postos</div>
+      <div class="kpi-value">{{ kpis.total|number_format(0,',','.') }}</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card kpi-card border-success"><div class="card-body">
+      <div class="kpi-label text-success">Com Waze</div>
+      <div class="kpi-value text-success">{{ kpis.comWaze|number_format(0,',','.') }}</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card kpi-card border-danger"><div class="card-body">
+      <div class="kpi-label text-danger">Sem Waze</div>
+      <div class="kpi-value text-danger">{{ kpis.semWaze|number_format(0,',','.') }}</div>
+    </div></div></div>
+    <div class="col-6 col-md-3"><div class="card kpi-card border-info"><div class="card-body">
+      <div class="kpi-label text-info">Cobertura Geral</div>
+      <div class="kpi-value text-info">{{ kpis.pct ?? 0 }}%</div>
+    </div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header fw-semibold">Cobertura por Estado</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>UF</th><th>Total</th><th>Com Waze</th><th>Sem Waze</th><th style="min-width:160px">Cobertura</th></tr></thead>
+          <tbody>
+          {% for r in porUf %}
+            {% set cls = r.pct < 25 ? 'danger' : (r.pct < 75 ? 'warning' : 'success') %}
+            <tr>
+              <td><a href="{{ path('posto_index', {uf: r.uf}) }}"><span class="badge bg-{{ cls }}">{{ r.uf }}</span></a></td>
+              <td>{{ r.total }}</td>
+              <td class="text-success">{{ r.com_waze }}</td>
+              <td class="text-danger fw-semibold">{{ r.sem_waze }}</td>
+              <td>
+                <div class="progress mb-1" style="height:8px">
+                  <div class="progress-bar bg-{{ cls }}" style="width:{{ r.pct }}%"></div>
+                </div>
+                <small class="text-{{ cls }}">{{ r.pct }}%</small>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

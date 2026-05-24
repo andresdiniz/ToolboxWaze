@@ -1,0 +1,171 @@
+{% extends 'base.html.twig' %}
+{% block title %}Cobertura Waze — Radares{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-broadcast me-2"></i>Cobertura Waze — Radares</h4>
+      <p class="text-muted small mb-0">Quais radares APROVADOS ainda não têm link Waze cadastrado</p>
+    </div>
+    <a href="{{ path('cobertura_posto') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-fuel-pump me-1"></i>Ver Postos
+    </a>
+  </div>
+
+  {# KPIs #}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card"><div class="card-body">
+        <div class="kpi-label">Total Radares</div>
+        <div class="kpi-value">{{ kpis.total|number_format(0,',','.') }}</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card border-success"><div class="card-body">
+        <div class="kpi-label text-success">Com Link Waze</div>
+        <div class="kpi-value text-success">{{ kpis.comWaze|number_format(0,',','.') }}</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card border-danger"><div class="card-body">
+        <div class="kpi-label text-danger">Sem Link Waze</div>
+        <div class="kpi-value text-danger">{{ kpis.semWaze|number_format(0,',','.') }}</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card border-info"><div class="card-body">
+        <div class="kpi-label text-info">Cobertura Geral</div>
+        <div class="kpi-value text-info">{{ kpis.pctWaze ?? 0 }}%</div>
+      </div></div>
+    </div>
+  </div>
+
+  {# Classificação por UF #}
+  <div class="row g-3 mb-4">
+    {% if criticas %}
+    <div class="col-12 col-md-4">
+      <div class="card border-danger">
+        <div class="card-header bg-danger bg-opacity-10 text-danger fw-semibold">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>Crítico &lt; 25%
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr><th>UF</th><th>Total</th><th>Sem Waze</th><th>%</th></tr></thead>
+            <tbody>
+            {% for r in criticas %}
+              <tr>
+                <td><a href="{{ path('radar_index', {uf: r.uf}) }}"><span class="badge bg-danger">{{ r.uf }}</span></a></td>
+                <td>{{ r.total }}</td>
+                <td class="text-danger fw-semibold">{{ r.sem_waze }}</td>
+                <td><div class="progress" style="height:6px"><div class="progress-bar bg-danger" style="width:{{ r.pct }}%"></div></div><small>{{ r.pct }}%</small></td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if parciais %}
+    <div class="col-12 col-md-4">
+      <div class="card border-warning">
+        <div class="card-header bg-warning bg-opacity-10 text-warning fw-semibold">
+          <i class="bi bi-exclamation-circle me-1"></i>Parcial 25–74%
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr><th>UF</th><th>Total</th><th>Sem Waze</th><th>%</th></tr></thead>
+            <tbody>
+            {% for r in parciais %}
+              <tr>
+                <td><a href="{{ path('radar_index', {uf: r.uf}) }}"><span class="badge bg-warning text-dark">{{ r.uf }}</span></a></td>
+                <td>{{ r.total }}</td>
+                <td class="text-warning fw-semibold">{{ r.sem_waze }}</td>
+                <td><div class="progress" style="height:6px"><div class="progress-bar bg-warning" style="width:{{ r.pct }}%"></div></div><small>{{ r.pct }}%</small></td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if boas %}
+    <div class="col-12 col-md-4">
+      <div class="card border-success">
+        <div class="card-header bg-success bg-opacity-10 text-success fw-semibold">
+          <i class="bi bi-check-circle me-1"></i>Boa Cobertura ≥ 75%
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr><th>UF</th><th>Total</th><th>Sem Waze</th><th>%</th></tr></thead>
+            <tbody>
+            {% for r in boas %}
+              <tr>
+                <td><a href="{{ path('radar_index', {uf: r.uf}) }}"><span class="badge bg-success">{{ r.uf }}</span></a></td>
+                <td>{{ r.total }}</td>
+                <td>{{ r.sem_waze }}</td>
+                <td><div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:{{ r.pct }}%"></div></div><small>{{ r.pct }}%</small></td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Lista radares prioritários #}
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold"><i class="bi bi-list-check me-1"></i>Radares APROVADOS sem Link Waze (prioritários)</span>
+      <span class="badge bg-danger">{{ semWaze|length }} exibidos</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="sticky-top">
+            <tr>
+              <th>UF</th><th>Município</th><th>Local</th><th>Validade</th><th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in semWaze %}
+            <tr>
+              <td><span class="badge bg-secondary">{{ r.sigla_uf }}</span></td>
+              <td>{{ r.municipio }}</td>
+              <td class="small">{{ r.local_verificacao }}</td>
+              <td>
+                {% if r.data_validade %}
+                  <span class="badge bg-{{ r.data_validade_iso is defined and r.data_validade_iso < 'now'|date('Y-m-d') ? 'danger' : 'success' }}">
+                    {{ r.data_validade }}
+                  </span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-xs btn-outline-primary py-0 px-2">
+                  <i class="bi bi-link-45deg"></i> Cadastrar
+                </a>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">
+              <i class="bi bi-check-circle-fill text-success fs-3 d-block mb-2"></i>
+              Todos os radares APROVADOS já têm link Waze!
+            </td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

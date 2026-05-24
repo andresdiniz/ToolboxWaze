@@ -222,7 +222,31 @@ body {
     transition: background var(--t-medium), color var(--t-medium);
 }
 
-img, picture, video, canvas, svg { display: block; max-width: 100%; }
+/*
+ * FIX: a regra global abaixo força display:block em TODOS os SVGs,
+ * quebrando ícones SVG usados como filhos de containers flex/grid
+ * (ex: .tipo-icon, .sol-card-header, .page-header-icon).
+ *
+ * A exceção .icon-svg garante que SVGs marcados explicitamente como
+ * ícones inline fiquem com display:inline / flex-item correto.
+ * Nos templates, todo <svg> que é ícone deve usar a classe .icon-svg.
+ *
+ * ATENÇÃO: não remover o seletor img/picture/video/canvas — ele é
+ * necessário para evitar overflow horizontal de mídias.
+ */
+img, picture, video, canvas { display: block; max-width: 100%; }
+
+/* SVGs de conteúdo (standalone) ficam block */
+svg:not(.icon-svg) { display: block; max-width: 100%; }
+
+/* SVGs de ícone (inline em flex/texto) ficam inline-block com tamanho fixo */
+svg.icon-svg {
+    display: inline-block;
+    flex-shrink: 0;
+    max-width: none;
+    height: auto;
+    vertical-align: middle;
+}
 
 /* =========================================================
    Navbar
@@ -889,6 +913,16 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     gap: .45rem;
 }
 
+/* FIX: SVGs no .sol-card-header são ícones inline dentro de flex —
+   a regra global svg:not(.icon-svg) os tornava display:block,
+   quebrando o alinhamento. Corrigimos localmente sem depender da classe. */
+.sol-card-header svg {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+}
+
 .sol-card-body { padding: 1.15rem 1.25rem; }
 .sol-card-body .form-label {
     font-weight: 500;
@@ -1071,10 +1105,30 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     background: var(--tw-light);
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    font-size: .95rem;
     color: var(--tw);
     transition: background var(--t-fast), color var(--t-fast);
 }
+
+/*
+ * FIX CRÍTICO: a regra global svg:not(.icon-svg) aplica display:block
+ * e max-width:100% em TODOS os SVGs, incluindo os ícones dentro de
+ * .tipo-icon (que é um flex container de 34×34px).
+ *
+ * display:block em item flex = ocupa linha inteira → empurra .tipo-label
+ * max-width:100% = SVG tenta 34px de largura mas height:auto o colapsa a 0
+ *   quando o SVG não tem height intrínseco explícito no HTML.
+ *
+ * Correção: dentro de .tipo-icon, o SVG filho deve ser inline-block
+ * com tamanho fixo 18×18px, sem max-width override.
+ */
+.tipo-icon > svg {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    max-width: none;
+}
+
 .tipo-pill.active .tipo-icon { background: var(--tw); color: #fff; }
 .tipo-label { font-size: .82rem; font-weight: 500; color: var(--color-text); line-height: 1.3; }
 .tipo-pill.active .tipo-label { color: var(--tw-dark); font-weight: 600; }
@@ -1116,6 +1170,15 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
 .btn-enviar:hover:not(:disabled) { background: var(--tw-d); box-shadow: 0 4px 14px rgba(1,105,111,.28); transform: translateY(-1px); color: #fff; }
 .btn-enviar:active:not(:disabled) { transform: translateY(0); }
 .btn-enviar:disabled { background: var(--color-text-faint); cursor: not-allowed; box-shadow: none; }
+
+/* FIX: SVG do botão enviar dentro de inline-flex */
+.btn-enviar > svg {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    max-width: none;
+}
 
 /* ---------------------------------------------------------
    Permalink

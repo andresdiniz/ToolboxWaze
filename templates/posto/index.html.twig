@@ -153,18 +153,18 @@
     </div>
 {% else %}
 
-{# Cálculo sem filtro |min (não existe no Twig nativo) #}
-{% set itemFim = page * per_page %}
+{# Cálculo correto usando perPage (nome exato enviado pelo PostoController) #}
+{% set itemFim = page * perPage %}
 {% set itemFim = itemFim < total ? itemFim : total %}
 
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center py-2">
         <span class="fw-semibold small">
             <i class="bi bi-table me-1"></i>
-            Mostrando {{ ((page - 1) * per_page + 1)|number_format(0,',','.') }}–{{ itemFim|number_format(0,',','.') }}
+            Mostrando {{ ((page - 1) * perPage + 1)|number_format(0,',','.') }}–{{ itemFim|number_format(0,',','.') }}
             de {{ total|number_format(0,',','.') }}
         </span>
-        {% if total > per_page %}
+        {% if total > perPage %}
         <small class="text-muted">Página {{ page }} de {{ pages }}</small>
         {% endif %}
     </div>

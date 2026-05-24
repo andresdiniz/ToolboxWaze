@@ -40,6 +40,27 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  *   proprietario_estado, historico_json
  *
  * ════════════════════════════════════════════════════════════
+ * PROTEÇÃO CONTRA DUPLICATAS
+ * ════════════════════════════════════════════════════════════
+ *
+ * Além do identity_hash (UF+LOCAL+TIPO), o import protege contra
+ * duplicatas usando a combinação (sigla_uf, local_verificacao,
+ * tipo_medidor, data_validade):
+ *
+ *   1. No parseCsv: se o CSV traz duas linhas com mesma localização
+ *      E mesma data_validade, a segunda linha é descartada.
+ *
+ *   2. No processBatch: antes de inserir um radar novo (sem
+ *      identity_hash conhecido), verifica se já existe registro
+ *      no banco com (sigla_uf, local_verificacao, tipo_medidor,
+ *      data_validade) idênticos. Em caso positivo, pula o insert
+ *      e incrementa countSkipped.
+ *
+ * Isso evita duplicatas quando a planilha lista o mesmo ponto de
+ * verificação com datas iguais sob nomes de local ligeiramente
+ * diferentes ou quando o import é reexecutado parcialmente.
+ *
+ * ════════════════════════════════════════════════════════════
  * MERGE AUTOMÁTICO DE RADARES MANUAIS
  * ════════════════════════════════════════════════════════════
  *
@@ -86,7 +107,7 @@ final class ImportRadarGoogleSheetsHandler
     private int $countMerged   = 0;
 
     public function __construct(
-        private readonly Connection            $connection,
+        private readonly Connection             $connection,
         private readonly EntityManagerInterface $em,
         private readonly RadarManualRepository  $radarManualRepo,
     ) {}
@@ -170,6 +191,10 @@ final class ImportRadarGoogleSheetsHandler
 
     // ════════════════════════════════════════════════════════════
     // Parse CSV — agrupa múltiplas linhas (faixas) por radar
+    //
+    // Proteção nível 1: se o CSV traz duas entradas com o mesmo
+    // identity_hash (UF+LOCAL+TIPO) E mesma data_validade, a
+    // segunda é descartada silenciosamente.
     // ════════════════════════════════════════════════════════════
 
     private function parseCsv(string $path, string $uf, string $importedAt): array
@@ -218,22 +243,39 @@ final class ImportRadarGoogleSheetsHandler
 
             $identityHash = $this->buildIdentityHash($uf, $local, $tipo);
 
-            if (!isset($radarMap[$identityHash])) {
-                $radarMap[$identityHash] = [
-                    'sigla_uf'                  => strtoupper($uf),
-                    'municipio'                 => $municipio,
-                    'local_verificacao'         => $local,
-                    'data_ultima_verificacao'   => $dataVerif,
-                    'data_validade'             => $dataValid,
-                    'data_verificacao_efetiva'  => $this->resolveDataVerificacao($dataVerif, $dataValid),
-                    'ultimo_resultado'          => $resultado,
-                    'tipo_medidor'              => $tipo,
-                    'identity_hash'             => $identityHash,
-                    'imported_at'               => $importedAt,
-                    'updated_at'                => $importedAt,
-                    '_faixas'                   => [],
-                ];
+            // ── Proteção nível 1: duplicata dentro do próprio CSV ──
+            // Chave composta: identity_hash + data_validade
+            // Se já existe entrada com mesmo hash E mesma validade, descarta.
+            if (isset($radarMap[$identityHash])) {
+                $existingValidade = $radarMap[$identityHash]['data_validade'];
+                if ($existingValidade === $dataValid) {
+                    // Mesma localização + mesma validade → apenas acumula faixas
+                    $radarMap[$identityHash]['_faixas'][] = [
+                        'NumeroFaixa'       => $this->str($data['faixa']      ?? null),
+                        'NumeroInmetro'     => $this->str($data['inmetro']    ?? null),
+                        'NumeroSerie'       => $this->str($data['serie']      ?? null),
+                        'Sentido'           => $this->str($data['sentido']    ?? null),
+                        'VelocidadeNominal' => $this->str($data['velocidade'] ?? null),
+                    ];
+                    continue; // NÃO cria entrada duplicada
+                }
+                // Validade diferente = radar reavaliado → permite o UPDATE normal
             }
+
+            $radarMap[$identityHash] = [
+                'sigla_uf'                  => strtoupper($uf),
+                'municipio'                 => $municipio,
+                'local_verificacao'         => $local,
+                'data_ultima_verificacao'   => $dataVerif,
+                'data_validade'             => $dataValid,
+                'data_verificacao_efetiva'  => $this->resolveDataVerificacao($dataVerif, $dataValid),
+                'ultimo_resultado'          => $resultado,
+                'tipo_medidor'              => $tipo,
+                'identity_hash'             => $identityHash,
+                'imported_at'               => $importedAt,
+                'updated_at'                => $importedAt,
+                '_faixas'                   => [],
+            ];
 
             $radarMap[$identityHash]['_faixas'][] = [
                 'NumeroFaixa'       => $this->str($data['faixa']      ?? null),
@@ -296,6 +338,16 @@ final class ImportRadarGoogleSheetsHandler
             $existing = $existingByIdentity[$row['identity_hash']] ?? null;
 
             if ($existing === null) {
+                // ── Proteção nível 2: duplicata no banco ──────────────
+                // Antes de inserir, verifica se já existe registro com
+                // mesma (sigla_uf, local_verificacao, tipo_medidor, data_validade).
+                // Isso pega casos onde o identity_hash difere mas o ponto
+                // físico e a validade são iguais (ex.: grafia diferente do local).
+                if ($this->existsDuplicateInDb($row)) {
+                    $this->countSkipped++;
+                    continue;
+                }
+
                 $toInsert[] = $row;
             } else {
                 $row['_db_id'] = $existing['id'];
@@ -435,6 +487,33 @@ final class ImportRadarGoogleSheetsHandler
         }
 
         return $map;
+    }
+
+    /**
+     * Proteção nível 2: verifica no banco se já existe um radar com
+     * (sigla_uf, local_verificacao, tipo_medidor, data_validade) idênticos.
+     * Ignora registros mesclados (merged_into_id IS NOT NULL) para não
+     * bloquear reimports legítimos após um merge.
+     */
+    private function existsDuplicateInDb(array $row): bool
+    {
+        $result = $this->connection->fetchOne(
+            'SELECT id FROM radar_medidor
+             WHERE  sigla_uf           = ?
+               AND  local_verificacao  = ?
+               AND  tipo_medidor       = ?
+               AND  data_validade      = ?
+               AND  merged_into_id IS NULL
+             LIMIT 1',
+            [
+                $row['sigla_uf'],
+                $row['local_verificacao'],
+                $row['tipo_medidor'],
+                $row['data_validade'],
+            ]
+        );
+
+        return $result !== false;
     }
 
     private function insertBatch(array $rows): void

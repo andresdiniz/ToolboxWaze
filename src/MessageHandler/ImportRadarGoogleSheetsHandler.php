@@ -157,7 +157,7 @@ final class ImportRadarGoogleSheetsHandler
         $ok      = curl_exec($ch);
         $errCode = curl_errno($ch);
         $errMsg  = curl_error($ch);
-        curl_close($ch);
+        // PHP 8.5: curl_close() não tem mais efeito — removido para evitar deprecation
         fclose($fp);
 
         if (!$ok || $errCode !== 0 || filesize($tmpPath) < 10) {
@@ -185,7 +185,8 @@ final class ImportRadarGoogleSheetsHandler
             rewind($fh);
         }
 
-        $rawHeader = fgetcsv($fh);
+        // PHP 8.5: $escape deve ser explícito — '' desativa escape (comportamento CSV padrão RFC 4180)
+        $rawHeader = fgetcsv($fh, 0, ',', '"', '');
 
         if ($rawHeader === false || $rawHeader === null) {
             fclose($fh);
@@ -196,7 +197,8 @@ final class ImportRadarGoogleSheetsHandler
 
         $radarMap = [];
 
-        while (($csvRow = fgetcsv($fh)) !== false) {
+        // PHP 8.5: $escape deve ser explícito — '' desativa escape (comportamento CSV padrão RFC 4180)
+        while (($csvRow = fgetcsv($fh, 0, ',', '"', '')) !== false) {
             if ($csvRow === null || count($csvRow) < 2) {
                 continue;
             }

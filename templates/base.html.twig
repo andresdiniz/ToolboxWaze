@@ -189,22 +189,70 @@
                         Cobertura
                     </a>
                 </li>
+
                 {% if is_granted('ROLE_ADMIN') %}
-                <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/auditoria' %}active{% endif %}"
-                       href="{{ path('auditoria_index') }}" title="Auditoria">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>
-                        Auditoria
+                {%
+                    set adminActive = app.request.pathInfo starts with '/admin'
+                        or app.request.pathInfo starts with '/auditoria'
+                %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if adminActive %}active{% endif %}"
+                       href="#" role="button"
+                       data-bs-toggle="dropdown"
+                       aria-expanded="false">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M9.5 1a.5.5 0 0 1 .5.5v1h1.5A1.5 1.5 0 0 1 13 4v9a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13V4a1.5 1.5 0 0 1 1.5-1.5H6v-1a.5.5 0 0 1 1 0v1h2v-1a.5.5 0 0 1 .5-.5m-3 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1zm-2 3a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1z"/>
+                        </svg>
+                        Admin
                     </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active{% endif %}"
-                       href="{{ path('admin_users_index') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.088.179-.943.753-1.664C2.293 10.62 3.088 10 5 10c-.08 0-.16.005-.238.015A6 6 0 0 0 4.92 10zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>
-                        Usuários
-                    </a>
+                    <ul class="dropdown-menu shadow">
+
+                        <li>
+                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">
+                                Gerenciamento
+                            </h6>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/usuarios' %}active{% endif %}"
+                               href="{{ path('admin_users_index') }}">
+                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.088.179-.943.753-1.664C2.293 10.62 3.088 10 5 10c-.08 0-.16.005-.238.015A6 6 0 0 0 4.92 10zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>
+                                Usuários
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/estados' %}active{% endif %}"
+                               href="{{ path('admin_estados_index') }}">
+                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/></svg>
+                                Estados / Radares
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/waze-links' %}active{% endif %}"
+                               href="{{ path('admin_waze_link_index') }}">
+                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1 1 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4 4 0 0 1-.128-1.287zm5.57-3.228a3 3 0 0 0-4.243 0L4.213 5.143a3 3 0 0 0 .829 4.928l.556-.555-.887-.888a2 2 0 0 1 0-2.83l1.828-1.828a2 2 0 0 1 2.83 0l.887.888.556-.555a3 3 0 0 0-.243-3.829z"/></svg>
+                                Links Waze
+                            </a>
+                        </li>
+
+                        <li><hr class="dropdown-divider"></li>
+
+                        <li>
+                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">
+                                Monitoramento
+                            </h6>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if app.request.pathInfo starts with '/auditoria' %}active{% endif %}"
+                               href="{{ path('auditoria_index') }}">
+                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>
+                                Auditoria
+                            </a>
+                        </li>
+
+                    </ul>
                 </li>
                 {% endif %}
+
             </ul>
 
             {# ── Busca global ──────────────────────────────────────────── #}

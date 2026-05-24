@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
-use App\Command\ImportRadarCommand;
 use App\Entity\BrazilianState;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -21,7 +19,7 @@ final class BrazilianStateCrudController extends AbstractController
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly ImportRadarCommand     $importCommand,
+        private readonly string $projectDir,
     ) {}
 
     // =========================================================================
@@ -59,7 +57,7 @@ final class BrazilianStateCrudController extends AbstractController
                 return $this->redirectToRoute('admin_estados_index');
             }
 
-            $linkBase      = trim((string) $req->request->get('link_base_radares', ''));
+            $linkBase       = trim((string) $req->request->get('link_base_radares', ''));
             $linkReferencia = trim((string) $req->request->get('link_referencia_radares', ''));
 
             $state->setLinkBaseRadares($linkBase ?: null);
@@ -97,23 +95,33 @@ final class BrazilianStateCrudController extends AbstractController
 
         $skipWaze = (bool) $req->request->get('skip_waze', false);
         $uf       = $state->getUf();
+        $php      = PHP_BINARY;
+        $console  = $this->projectDir . '/bin/console';
+
+        $cmd = [$php, $console, 'app:import-radares', '--uf=' . $uf, '--env=prod'];
+
+        if ($skipWaze) {
+            $cmd[] = '--skip-waze';
+        }
+
+        $process = new Process($cmd, $this->projectDir, null, null, 120);
 
         try {
-            $input  = new ArrayInput([
-                '--uf'   => [$uf],
-                '--env'  => 'prod',
-            ] + ($skipWaze ? ['--skip-waze' => true] : []));
+            $process->run();
 
-            $output = new BufferedOutput();
-
-            $input->setInteractive(false);
-            $this->importCommand->run($input, $output);
-
-            $this->addFlash('success', sprintf(
-                'Importação de %s concluída.%s',
-                $uf,
-                $skipWaze ? ' (links Waze pulados)' : ''
-            ));
+            if ($process->isSuccessful()) {
+                $this->addFlash('success', sprintf(
+                    'Importação de %s concluída.%s',
+                    $uf,
+                    $skipWaze ? ' (links Waze pulados)' : ''
+                ));
+            } else {
+                $this->addFlash('error', sprintf(
+                    'Erro ao importar %s: %s',
+                    $uf,
+                    substr($process->getErrorOutput() ?: $process->getOutput(), 0, 300)
+                ));
+            }
         } catch (\Throwable $e) {
             $this->addFlash('error', sprintf('Erro ao importar %s: %s', $uf, $e->getMessage()));
         }

@@ -28,7 +28,7 @@
     vertical-align: middle;
 }
 
-/* ── Input / Textarea / Select ───────────────────── */
+/* ── Input / Textarea / Select ──────────────────── */
 .sol-input {
     display: block;
     width: 100%;
@@ -89,7 +89,7 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%2301696f' stroke-width='1.5' d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
 }
 
-/* ── Help text ────────────────────────────────────── */
+/* ── Help text ─────────────────────────────────────── */
 .sol-help {
     font-size: .78rem;
     color: #6b7280;
@@ -167,7 +167,7 @@
     font-weight: 500;
 }
 
-/* ── Grupo de radio / choice expanded ────────────── */
+/* ── Grupo de radio / choice expanded ───────────────── */
 .sol-choices {
     display: flex;
     flex-wrap: wrap;
@@ -194,7 +194,7 @@
 
 /* Radio button visual */
 .sol-choices--radio .sol-choice-item .sol-radio__dot {
-    display: none; /* tratado via sol-radio abaixo */
+    display: none;
 }
 
 .sol-radio {
@@ -278,8 +278,142 @@
     line-height: 1.3;
 }
 
-/* ── Responsivo mobile ─────────────────────────────── */
+/* ── Responsivo mobile ──────────────────────────────── */
 @media (max-width: 575px) {
     .sol-choices { flex-direction: column; gap: .4rem; }
     .sol-choice-item { width: 100%; }
+}
+
+
+/* ==========================================================================
+   TIPO-PILLS — Grid de botões de seleção do tipo de solicitação
+   FIX: este bloco estava completamente ausente do CSS, causando os
+   ícones SVG inline não renderizarem (apareciam como caixas cinzas).
+   ========================================================================== */
+
+.tipo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: .65rem;
+}
+
+.tipo-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .55rem;
+    padding: .9rem .75rem;
+    border: 1.5px solid var(--color-border, #d1d9e0);
+    border-radius: 10px;
+    background: var(--color-surface, #fff);
+    color: var(--color-text, #374151);
+    cursor: pointer;
+    user-select: none;
+    text-align: center;
+    transition:
+        border-color 160ms ease,
+        background   160ms ease,
+        box-shadow   160ms ease,
+        color        160ms ease,
+        transform    120ms ease;
+    outline: none;
+}
+
+.tipo-pill:hover {
+    border-color: var(--tw, #01696f);
+    background: var(--color-surface-2, #f0fafa);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(1,105,111,.12);
+}
+
+.tipo-pill:focus-visible {
+    box-shadow: 0 0 0 3px rgba(1,105,111,.25);
+    border-color: var(--tw, #01696f);
+}
+
+.tipo-pill:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.tipo-pill.active {
+    border-color: var(--tw, #01696f);
+    background: color-mix(in oklch, var(--color-primary, #01696f) 10%, var(--color-surface, #fff));
+    color: var(--tw, #01696f);
+    box-shadow: 0 0 0 2px rgba(1,105,111,.18), 0 2px 8px rgba(1,105,111,.1);
+}
+
+/*
+  FIX PRINCIPAL: .tipo-icon não tinha display nem dimensões definidas.
+  O SVG era inline mas sem container com layout, o browser renderizava
+  como bloco de tamanho zero — aparecia como caixa cinza vazia.
+  Solução: flex container centralizado com tamanho fixo.
+*/
+.tipo-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    transition: background 160ms ease, color 160ms ease;
+}
+
+.tipo-pill:not(.active) .tipo-icon {
+    background: color-mix(in oklch, var(--color-text-muted, #6b7280) 12%, transparent);
+    color: var(--color-text-muted, #6b7280);
+}
+
+.tipo-pill:hover:not(.active) .tipo-icon {
+    background: color-mix(in oklch, var(--tw, #01696f) 12%, transparent);
+    color: var(--tw, #01696f);
+}
+
+.tipo-pill.active .tipo-icon {
+    background: color-mix(in oklch, var(--tw, #01696f) 18%, transparent);
+    color: var(--tw, #01696f);
+}
+
+/* Garante que o SVG dentro do .tipo-icon renderize corretamente */
+.tipo-pill svg,
+.tipo-icon svg {
+    display: block !important;
+    width: 18px !important;
+    height: 18px !important;
+    flex-shrink: 0;
+    overflow: visible;
+}
+
+.tipo-label {
+    font-size: .78rem;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: center;
+    color: inherit;
+}
+
+/* Dark mode */
+[data-theme="dark"] .tipo-pill:not(.active) {
+    border-color: var(--color-border, #393836);
+    background: var(--color-surface, #1c1b19);
+    color: var(--color-text-muted, #797876);
+}
+[data-theme="dark"] .tipo-pill:hover {
+    background: var(--color-surface-2, #201f1d);
+    border-color: var(--color-primary, #4f98a3);
+    color: var(--color-primary, #4f98a3);
+}
+[data-theme="dark"] .tipo-pill.active {
+    border-color: var(--color-primary, #4f98a3);
+    color: var(--color-primary, #4f98a3);
+    background: color-mix(in oklch, var(--color-primary, #4f98a3) 12%, var(--color-surface, #1c1b19));
+}
+
+/* Mobile */
+@media (max-width: 575px) {
+    .tipo-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }

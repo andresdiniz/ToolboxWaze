@@ -46,10 +46,10 @@
 {% endif %}
 
 {# ── Filtros ── #}
+{% set activeCount = (filters.busca ? 1 : 0) + (filters.uf ? 1 : 0) + (filters.municipio ? 1 : 0) + (filters.bandeira ? 1 : 0) %}
 <div class="card mb-4">
     <div class="card-header fw-semibold py-2">
         <i class="bi bi-funnel me-1"></i>Filtros
-        {% set activeCount = (filters.busca ? 1 : 0) + (filters.uf ? 1 : 0) + (filters.municipio ? 1 : 0) + (filters.bandeira ? 1 : 0) %}
         {% if activeCount > 0 %}
             <span class="badge bg-primary ms-1">{{ activeCount }} ativo{{ activeCount > 1 ? 's' }}</span>
         {% endif %}
@@ -152,11 +152,16 @@
         {% endif %}
     </div>
 {% else %}
+
+{# Cálculo sem filtro |min (não existe no Twig nativo) #}
+{% set itemFim = page * per_page %}
+{% set itemFim = itemFim < total ? itemFim : total %}
+
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center py-2">
         <span class="fw-semibold small">
             <i class="bi bi-table me-1"></i>
-            Mostrando {{ ((page-1)*per_page + 1)|number_format(0,',','.') }}–{{ [page*per_page, total]|min|number_format(0,',','.') }}
+            Mostrando {{ ((page - 1) * per_page + 1)|number_format(0,',','.') }}–{{ itemFim|number_format(0,',','.') }}
             de {{ total|number_format(0,',','.') }}
         </span>
         {% if total > per_page %}
@@ -192,7 +197,7 @@
                             <span class="badge border" style="background:var(--color-surface-2);color:var(--color-text);border-color:var(--color-border) !important">{{ row.bandeira }}</span>
                         {% else %}—{% endif %}
                     </td>
-                    <td class="text-truncate" style="max-width:180px" title="{{ row.endereco }}, {{ row.complemento }}">
+                    <td class="text-truncate" style="max-width:180px" title="{{ row.endereco }}{% if row.complemento %}, {{ row.complemento }}{% endif %}">
                         <small>{{ row.endereco }}{% if row.complemento %}, {{ row.complemento }}{% endif %}</small>
                     </td>
                     <td><small>{{ row.municipio }}</small></td>

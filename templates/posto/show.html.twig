@@ -80,6 +80,25 @@
                 <i class="bi bi-geo-alt-fill text-danger"></i>
                 <span class="fw-semibold">Localização</span>
             </div>
+
+            {#
+              MAPA OSM (Leaflet + Nominatim)
+              O posto não tem lat/lon no banco, então geocodificamos
+              o endereço via Nominatim (OSM) no lado do cliente.
+              data-query é passado pelo Twig; o JS faz o fetch e
+              inicializa o mapa. Se Nominatim não retornar resultado,
+              o container esconde e aparece apenas o fallback de links.
+            #}
+            <div id="posto-map"
+                 data-query="{{ (posto.endereco ~ (posto.complemento ? ', ' ~ posto.complemento : '') ~ ', ' ~ posto.municipio ~ ', ' ~ posto.uf ~ ', Brasil')|e('html_attr') }}"
+                 data-nome="{{ posto.razaoSocial|e('html_attr') }}"
+                 style="height:220px;width:100%;background:var(--color-surface-2)">
+                <div class="map-loading d-flex align-items-center justify-content-center h-100 text-muted small gap-2">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    Buscando localização…
+                </div>
+            </div>
+
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-12">
@@ -110,6 +129,13 @@
                         <a href="https://waze.com/ul?q={{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
                            target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-waze me-1"></i>Buscar no Waze
+                        </a>
+                        <a id="osm-link" href="#" target="_blank" rel="noopener"
+                           class="btn btn-sm btn-outline-secondary ms-1 d-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
+                                 viewBox="0 0 16 16" class="me-1" style="vertical-align:-.1em">
+                                <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/>
+                            </svg>OSM
                         </a>
                     </div>
                 </div>
@@ -250,7 +276,7 @@
                     {% if wazeLink.observacao %}
                     <div class="col-12">
                         <div class="detail-label">Observação</div>
-                        <div class="detail-value small fst-italic text-muted">"{{ wazeLink.observacao }}"</div>
+                        <div class="detail-value small fst-italic text-muted">"«{{ wazeLink.observacao }}»"</div>
                     </div>
                     {% endif %}
                 </div>
@@ -393,17 +419,129 @@
     </div>{# /col-xl-6 #}
 </div>{# /row #}
 
-{# ── Copy-to-clipboard ── #}
+{# ══════════════════════════════════════════
+   ESTILOS — mapa dark mode
+══════════════════════════════════════════ #}
+<style>
+#posto-map .leaflet-tile-pane { filter: none; }
+[data-theme="dark"] #posto-map .leaflet-tile-pane {
+    filter: brightness(.85) saturate(.7) invert(1) hue-rotate(180deg);
+}
+[data-theme="dark"] #posto-map .leaflet-marker-icon { filter: none; }
+.leaflet-popup-content-wrapper {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-md);
+}
+.leaflet-popup-tip { background: var(--color-surface); }
+#posto-map .map-loading { pointer-events: none; }
+</style>
+
+{# ══════════════════════════════════════════
+   SCRIPTS — Geocoding Nominatim + Leaflet
+══════════════════════════════════════════ #}
 <script>
-document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        navigator.clipboard.writeText(btn.dataset.copy).then(() => {
-            const icon = btn.querySelector('i');
-            icon.className = 'bi bi-check2 text-success';
-            setTimeout(() => icon.className = 'bi bi-clipboard', 1500);
+(function () {
+
+    /* ── Copy-to-clipboard ── */
+    document.querySelectorAll('.copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            navigator.clipboard.writeText(btn.dataset.copy).then(function() {
+                var icon = btn.querySelector('i');
+                icon.className = 'bi bi-check2 text-success';
+                setTimeout(function(){ icon.className = 'bi bi-clipboard'; }, 1500);
+            });
         });
     });
-});
+
+    /* ── Mapa OSM com Nominatim ── */
+    var mapDiv = document.getElementById('posto-map');
+    if (!mapDiv) return;
+
+    var query = mapDiv.dataset.query;
+    var nome  = mapDiv.dataset.nome;
+
+    /* Geocoding via Nominatim (OSM) — CORS ok para requests do browser */
+    var nominatimUrl =
+        'https://nominatim.openstreetmap.org/search'
+        + '?format=json&limit=1&countrycodes=br'
+        + '&q=' + encodeURIComponent(query);
+
+    fetch(nominatimUrl, {
+        headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' }
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+        if (!data || !data.length) {
+            /* Sem resultado: esconde spinner e mostra aviso discreto */
+            mapDiv.innerHTML =
+                '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">'
+                + '<i class="bi bi-map me-2"></i>Localização não encontrada no OSM</div>';
+            return;
+        }
+
+        var lat = parseFloat(data[0].lat);
+        var lon = parseFloat(data[0].lon);
+
+        /* Exibe link OSM externo */
+        var osmLink = document.getElementById('osm-link');
+        if (osmLink) {
+            osmLink.href = 'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '&zoom=17';
+            osmLink.classList.remove('d-none');
+        }
+
+        function initMap() {
+            var L = window.L;
+
+            /* Limpa loading spinner */
+            mapDiv.innerHTML = '';
+
+            var map = L.map(mapDiv, {
+                center: [lat, lon],
+                zoom: 17,
+                scrollWheelZoom: false,
+                attributionControl: true
+            });
+
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+                maxZoom: 19
+            }).addTo(map);
+
+            var marker = L.marker([lat, lon]).addTo(map);
+            marker.bindPopup(
+                '<div style="font-size:.82rem;line-height:1.6">'
+                + '<strong style="display:block">⛽ ' + nome + '</strong>'
+                + '<span style="font-size:.75rem;color:var(--color-text-muted)">' + data[0].display_name + '</span>'
+                + '</div>'
+            ).openPopup();
+
+            setTimeout(function(){ map.invalidateSize(); }, 250);
+        }
+
+        if (window.L) {
+            initMap();
+        } else {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(link);
+
+            var script = document.createElement('script');
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.onload = initMap;
+            document.head.appendChild(script);
+        }
+    })
+    .catch(function() {
+        mapDiv.innerHTML =
+            '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">'
+            + '<i class="bi bi-wifi-off me-2"></i>Não foi possível carregar o mapa</div>';
+    });
+
+}());
 </script>
 
 {% endblock %}

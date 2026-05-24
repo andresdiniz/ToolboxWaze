@@ -1,0 +1,140 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Editar {{ state.uf }} — Radares{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-map me-2 text-primary"></i>
+            Editar Estado — <span class="badge bg-primary fs-5">{{ state.uf }}</span>
+            <small class="text-muted ms-2">{{ state.name }}</small>
+        </h1>
+        <a href="{{ path('admin_estados_index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Voltar
+        </a>
+    </div>
+
+    {% for type, messages in app.flashes %}
+        {% for msg in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show">
+                {{ msg }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <i class="fas fa-link me-2"></i>
+                    Links da Planilha Google Sheets
+                </div>
+                <div class="card-body">
+
+                    <form method="post"
+                          action="{{ path('admin_estados_edit', {id: state.id}) }}">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('edit_state_' ~ state.id) }}">
+
+                        {# Link Base #}
+                        <div class="mb-4">
+                            <label for="link_base_radares" class="form-label fw-bold">
+                                <i class="fas fa-table me-1 text-success"></i>
+                                Link Base — Aba <code>{{ state.uf }}</code>
+                            </label>
+                            <input type="url"
+                                   id="link_base_radares"
+                                   name="link_base_radares"
+                                   class="form-control font-monospace"
+                                   placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv&amp;gid=XXXXXXX"
+                                   value="{{ state.linkBaseRadares ?? '' }}">
+                            <div class="form-text">
+                                URL completa da aba <strong>{{ state.uf }}</strong> da planilha (dados técnicos dos radares).
+                                Deixe em branco para usar o GID padrão.
+                            </div>
+                        </div>
+
+                        {# Link Referência #}
+                        <div class="mb-4">
+                            <label for="link_referencia_radares" class="form-label fw-bold">
+                                <i class="fas fa-map-pin me-1 text-info"></i>
+                                Link Referência — Aba <code>REFERENCIA.{{ state.uf }}</code>
+                            </label>
+                            <input type="url"
+                                   id="link_referencia_radares"
+                                   name="link_referencia_radares"
+                                   class="form-control font-monospace"
+                                   placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv&amp;gid=YYYYYYY"
+                                   value="{{ state.linkReferenciaRadares ?? '' }}">
+                            <div class="form-text">
+                                URL completa da aba <strong>REFERENCIA.{{ state.uf }}</strong>.
+                                Usada para importar os links Waze cruzando pelo Nº de Série.
+                                Deixe em branco para pular a etapa de links Waze.
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Salvar
+                            </button>
+                            <a href="{{ path('admin_estados_index') }}" class="btn btn-outline-secondary">
+                                Cancelar
+                            </a>
+                        </div>
+
+                    </form>
+
+                </div>
+            </div>
+
+            {# Seção: Forçar importação diretamente desta tela #}
+            <div class="card shadow-sm mt-4 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Forçar Importação Manual
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Executa o <code>app:import-radares --uf={{ state.uf }}</code> imediatamente,
+                        sem esperar a cron.
+                    </p>
+
+                    <div class="d-flex flex-wrap gap-2">
+
+                        {# Importação completa (radares + Waze) #}
+                        <form method="post"
+                              action="{{ path('admin_estados_importar', {id: state.id}) }}"
+                              onsubmit="return confirm('Forçar importação completa de {{ state.uf }}?')">
+                            <input type="hidden" name="_token"
+                                   value="{{ csrf_token('importar_state_' ~ state.id) }}">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-sync-alt me-1"></i>
+                                Importar Radares + Links Waze
+                            </button>
+                        </form>
+
+                        {# Só radares, sem Waze #}
+                        <form method="post"
+                              action="{{ path('admin_estados_importar', {id: state.id}) }}"
+                              onsubmit="return confirm('Importar só radares de {{ state.uf }} (sem links Waze)?')">
+                            <input type="hidden" name="_token"
+                                   value="{{ csrf_token('importar_state_' ~ state.id) }}">
+                            <input type="hidden" name="skip_waze" value="1">
+                            <button type="submit" class="btn btn-outline-secondary">
+                                <i class="fas fa-database me-1"></i>
+                                Importar Só Radares
+                            </button>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

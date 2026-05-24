@@ -10,7 +10,7 @@ if (file_exists($envFile)) {
         if (strpos($line, '=') !== false) {
             [$key, $value] = explode('=', $line, 2);
             $key = trim($key);
-            $value = trim($value, '"\' ');
+            $value = trim($value, "\"' ");
             if (!array_key_exists($key, $_ENV) && !array_key_exists($key, $_SERVER)) {
                 $_ENV[$key] = $value;
                 $_SERVER[$key] = $value;
@@ -19,15 +19,6 @@ if (file_exists($envFile)) {
         }
     }
 }
-
-// === DEBUG TEMPORARIO: forca dev+debug para ver erro real ===
-$_ENV['APP_ENV'] = 'dev';
-$_SERVER['APP_ENV'] = 'dev';
-$_ENV['APP_DEBUG'] = '1';
-$_SERVER['APP_DEBUG'] = '1';
-putenv('APP_ENV=dev');
-putenv('APP_DEBUG=1');
-// === FIM DEBUG ===
 
 $_SERVER['DOCUMENT_ROOT'] = __DIR__ . '/public';
 

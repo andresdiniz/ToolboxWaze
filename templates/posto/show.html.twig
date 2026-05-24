@@ -82,16 +82,16 @@
             </div>
 
             {#
-              MAPA OSM (Leaflet + Nominatim)
-              O posto não tem lat/lon no banco, então geocodificamos
-              o endereço via Nominatim (OSM) no lado do cliente.
-              data-query é passado pelo Twig; o JS faz o fetch e
-              inicializa o mapa. Se Nominatim não retornar resultado,
-              o container esconde e aparece apenas o fallback de links.
+              MAPA OSM (Leaflet + Nominatim geocoding)
+              Se o posto tiver link Waze com lat/lon na URL, passamos via data-lat / data-lon.
+              Caso contrário, o JS geocodifica o endereço via Nominatim.
+              O botão "Waze LiveMap" é atualizado dinamicamente com ?ll=LAT,LON.
             #}
+            {% set wazeEditorUrl = wazeLink ? wazeLink.wazeLink : '' %}
             <div id="posto-map"
                  data-query="{{ (posto.endereco ~ (posto.complemento ? ', ' ~ posto.complemento : '') ~ ', ' ~ posto.municipio ~ ', ' ~ posto.uf ~ ', Brasil')|e('html_attr') }}"
                  data-nome="{{ posto.razaoSocial|e('html_attr') }}"
+                 data-waze-editor="{{ wazeEditorUrl|e('html_attr') }}"
                  style="height:220px;width:100%;background:var(--color-surface-2)">
                 <div class="map-loading d-flex align-items-center justify-content-center h-100 text-muted small gap-2">
                     <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -121,17 +121,28 @@
                         <div class="detail-label">CEP</div>
                         <div class="detail-value">{{ posto.cep ?? '—' }}</div>
                     </div>
-                    <div class="col-12 pt-1">
+                    <div class="col-12 pt-1 d-flex flex-wrap gap-2">
+                        {# Google Maps — busca por texto (sempre funciona) #}
                         <a href="https://www.google.com/maps/search/{{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
-                           target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary me-2">
+                           target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-google me-1"></i>Google Maps
                         </a>
-                        <a href="https://waze.com/ul?q={{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
+
+                        {#
+                          Waze LiveMap — atualizado pelo JS com ?ll=LAT,LON quando disponível.
+                          Fallback: busca por texto via ?q= (funciona, mas menos preciso).
+                          O JS extrai lat/lon do link do Editor Waze salvo (parâmetros lat= e lon=)
+                          OU usa as coordenadas retornadas pelo Nominatim.
+                        #}
+                        <a id="waze-livemap-btn"
+                           href="https://waze.com/ul?q={{ (posto.endereco ~ ' ' ~ posto.municipio ~ ' ' ~ posto.uf)|url_encode }}"
                            target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-waze me-1"></i>Buscar no Waze
+                            <i class="bi bi-waze me-1"></i>Waze LiveMap
                         </a>
+
+                        {# OSM — aparece após geocoding #}
                         <a id="osm-link" href="#" target="_blank" rel="noopener"
-                           class="btn btn-sm btn-outline-secondary ms-1 d-none">
+                           class="btn btn-sm btn-outline-secondary d-none">
                             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
                                  viewBox="0 0 16 16" class="me-1" style="vertical-align:-.1em">
                                 <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/>
@@ -314,13 +325,13 @@
                                         </label>
                                         <input type="url" id="waze_link_posto" name="waze_link"
                                                class="form-control form-control-sm{% if wazeErrors.waze_link is defined %} is-invalid{% endif %}"
-                                               placeholder="https://waze.com/pt-BR/editor?...&venues=207160888.2071412273.41231195"
+                                               placeholder="https://waze.com/pt-BR/editor?env=row&lat=-20.79&lon=-43.92&venues=207160888.2071412273.39196547"
                                                value="{{ wazeFormData.waze_link ?? (wazeLink ? wazeLink.wazeLink : '') }}">
                                         {% if wazeErrors.waze_link is defined %}
                                             <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
                                         {% else %}
                                             <div class="form-text">
-                                                Deve conter o parâmetro <code>venues=ID</code>.
+                                                Cole o link do Editor Waze. Deve conter <code>venues=</code> e preferencialmente <code>lat=</code> e <code>lon=</code>.
                                             </div>
                                         {% endif %}
                                     </div>
@@ -440,7 +451,7 @@
 </style>
 
 {# ══════════════════════════════════════════
-   SCRIPTS — Geocoding Nominatim + Leaflet
+   SCRIPTS — Localização + Mapa + Waze LiveMap
 ══════════════════════════════════════════ #}
 <script>
 (function () {
@@ -456,46 +467,64 @@
         });
     });
 
-    /* ── Mapa OSM com Nominatim ── */
+    /* ── Helpers ── */
+
+    /**
+     * Extrai lat e lon de uma URL do Editor Waze.
+     * Exemplo: ?lat=-20.79328&lon=-43.92684
+     * Retorna { lat, lon } ou null.
+     */
+    function latLonFromEditorUrl(url) {
+        if (!url) return null;
+        try {
+            var u = new URL(url);
+            var lat = parseFloat(u.searchParams.get('lat'));
+            var lon = parseFloat(u.searchParams.get('lon'));
+            if (!isNaN(lat) && !isNaN(lon)) return { lat: lat, lon: lon };
+        } catch(e) {}
+        return null;
+    }
+
+    /**
+     * Monta URL do Waze LiveMap por coordenadas.
+     * https://waze.com/ul?ll=LAT,LON&zoom=17
+     */
+    function wazeByLatLon(lat, lon) {
+        return 'https://waze.com/ul?ll=' + lat + ',' + lon + '&zoom=17';
+    }
+
+    /* ── Mapa ── */
     var mapDiv = document.getElementById('posto-map');
     if (!mapDiv) return;
 
-    var query = mapDiv.dataset.query;
-    var nome  = mapDiv.dataset.nome;
+    var query      = mapDiv.dataset.query;
+    var nome       = mapDiv.dataset.nome;
+    var editorUrl  = mapDiv.dataset.wazeEditor || '';
 
-    /* Geocoding via Nominatim (OSM) — CORS ok para requests do browser */
-    var nominatimUrl =
-        'https://nominatim.openstreetmap.org/search'
-        + '?format=json&limit=1&countrycodes=br'
-        + '&q=' + encodeURIComponent(query);
+    var wazeLivemapBtn = document.getElementById('waze-livemap-btn');
+    var osmLink        = document.getElementById('osm-link');
 
-    fetch(nominatimUrl, {
-        headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' }
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-        if (!data || !data.length) {
-            /* Sem resultado: esconde spinner e mostra aviso discreto */
-            mapDiv.innerHTML =
-                '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">'
-                + '<i class="bi bi-map me-2"></i>Localização não encontrada no OSM</div>';
-            return;
+    /* 1ª prioridade: extrair lat/lon do link do Editor já salvo */
+    var coordsFromEditor = latLonFromEditorUrl(editorUrl);
+    if (coordsFromEditor && wazeLivemapBtn) {
+        wazeLivemapBtn.href = wazeByLatLon(coordsFromEditor.lat, coordsFromEditor.lon);
+    }
+
+    /* Função que inicializa o Leaflet após ter lat/lon */
+    function initMap(lat, lon, displayName) {
+        /* Atualiza Waze LiveMap (somente se ainda não veio do editor) */
+        if (!coordsFromEditor && wazeLivemapBtn) {
+            wazeLivemapBtn.href = wazeByLatLon(lat, lon);
         }
 
-        var lat = parseFloat(data[0].lat);
-        var lon = parseFloat(data[0].lon);
-
-        /* Exibe link OSM externo */
-        var osmLink = document.getElementById('osm-link');
+        /* Atualiza link OSM */
         if (osmLink) {
             osmLink.href = 'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '&zoom=17';
             osmLink.classList.remove('d-none');
         }
 
-        function initMap() {
+        function buildMap() {
             var L = window.L;
-
-            /* Limpa loading spinner */
             mapDiv.innerHTML = '';
 
             var map = L.map(mapDiv, {
@@ -514,7 +543,7 @@
             marker.bindPopup(
                 '<div style="font-size:.82rem;line-height:1.6">'
                 + '<strong style="display:block">⛽ ' + nome + '</strong>'
-                + '<span style="font-size:.75rem;color:var(--color-text-muted)">' + data[0].display_name + '</span>'
+                + (displayName ? '<span style="font-size:.75rem;color:#888">' + displayName + '</span>' : '')
                 + '</div>'
             ).openPopup();
 
@@ -522,18 +551,42 @@
         }
 
         if (window.L) {
-            initMap();
+            buildMap();
         } else {
-            var link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-            document.head.appendChild(link);
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(css);
 
-            var script = document.createElement('script');
-            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-            script.onload = initMap;
-            document.head.appendChild(script);
+            var js = document.createElement('script');
+            js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            js.onload = buildMap;
+            document.head.appendChild(js);
         }
+    }
+
+    /* Se já temos coordenadas do editor, inicializa o mapa diretamente */
+    if (coordsFromEditor) {
+        initMap(coordsFromEditor.lat, coordsFromEditor.lon, null);
+        return;
+    }
+
+    /* Caso contrário, geocodifica via Nominatim */
+    var nominatimUrl =
+        'https://nominatim.openstreetmap.org/search'
+        + '?format=json&limit=1&countrycodes=br'
+        + '&q=' + encodeURIComponent(query);
+
+    fetch(nominatimUrl, { headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' } })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+        if (!data || !data.length) {
+            mapDiv.innerHTML =
+                '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">'
+                + '<i class="bi bi-map me-2"></i>Localização não encontrada no OSM</div>';
+            return;
+        }
+        initMap(parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name);
     })
     .catch(function() {
         mapDiv.innerHTML =

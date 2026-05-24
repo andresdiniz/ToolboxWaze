@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,77 +22,115 @@
 
     {{ importmap('app') }}
     {% block stylesheets %}{% endblock %}
+
+    {# Dark mode aplicado ANTES do render para evitar flash #}
+    <script>
+    (function(){
+        var stored = document.cookie.match(/(?:^|; )tw_theme=([^;]+)/);
+        var pref = stored ? stored[1] : (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-bs-theme', pref);
+    }());
+    </script>
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg mb-4 shadow-sm">
+{# Acessibilidade: skip link #}
+<a class="visually-hidden-focusable btn btn-sm btn-primary position-fixed top-0 start-0 m-2 z-top"
+   href="#main-content">Ir ao conteúdo</a>
+
+<nav class="navbar navbar-expand-lg mb-4 shadow-sm" role="navigation" aria-label="Menu principal">
     <div class="container-xl">
-        <a class="navbar-brand fw-bold" href="{{ path('app_dashboard') }}">
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ path('app_dashboard') }}"
+           data-bs-toggle="tooltip" title="Ir para o Dashboard">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2"
-                 aria-label="ToolboxWaze" style="vertical-align:-.25em;margin-right:.35em">
+                 aria-hidden="true">
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/>
                 <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
             </svg>
             ToolboxWaze
         </a>
-        <button class="navbar-toggler bg-white" type="button"
+
+        {# Toggle dark mode #}
+        <button class="btn btn-sm tw-theme-toggle ms-auto me-2 d-lg-none"
+                id="themeToggleMobile"
+                aria-label="Alternar tema claro/escuro"
+                data-bs-toggle="tooltip" title="Alternar tema claro/escuro">
+            <i class="bi bi-moon-stars-fill theme-icon-dark"></i>
+            <i class="bi bi-sun-fill theme-icon-light d-none"></i>
+        </button>
+
+        <button class="navbar-toggler" type="button"
                 data-bs-toggle="collapse" data-bs-target="#nav"
                 aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
-            </svg>
+            <span class="navbar-toggler-icon"></span>
         </button>
+
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav me-auto gap-1">
                 <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/radares' %}active{% endif %}"
-                       href="{{ path('radar_index') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1zm.5 1.638A4.5 4.5 0 1 0 10.867 12.5 4.5 4.5 0 0 0 10.232 2.64zm.5 3.86A1 1 0 1 1 8.5 7.5a1 1 0 0 1 2.232-1z"/></svg>
+                    <a class="nav-link d-flex align-items-center {% if app.request.pathInfo starts with '/radares' %}active{% endif %}"
+                       href="{{ path('radar_index') }}"
+                       data-bs-toggle="tooltip" title="Lista de radares medidores (RBMLQ)">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1zm.5 1.638A4.5 4.5 0 1 0 10.867 12.5 4.5 4.5 0 0 0 10.232 2.64zm.5 3.86A1 1 0 1 1 8.5 7.5a1 1 0 0 1 2.232-1z"/></svg>
                         Radares
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/postos' %}active{% endif %}"
-                       href="{{ path('posto_index') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5zm1 .5v4h4V3z"/><path d="M0 1.5A.5.5 0 0 1 .5 1H8a.5.5 0 0 1 .5.5V8H9a1.5 1.5 0 0 1 1.5 1.5V12a.5.5 0 0 0 1 0V8.354l-.853-.853a.5.5 0 1 1 .707-.707l1.5 1.5A.5.5 0 0 1 13 8.5V12a1.5 1.5 0 0 1-3 0V9.5A.5.5 0 0 0 9.5 9H9V15.5a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5zm1 0v13h7v-13z"/></svg>
+                    <a class="nav-link d-flex align-items-center {% if app.request.pathInfo starts with '/postos' %}active{% endif %}"
+                       href="{{ path('posto_index') }}"
+                       data-bs-toggle="tooltip" title="Postos de combustível cadastrados no Waze">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5zm1 .5v4h4V3z"/><path d="M0 1.5A.5.5 0 0 1 .5 1H8a.5.5 0 0 1 .5.5V8H9a1.5 1.5 0 0 1 1.5 1.5V12a.5.5 0 0 0 1 0V8.354l-.853-.853a.5.5 0 1 1 .707-.707l1.5 1.5A.5.5 0 0 1 13 8.5V12a1.5 1.5 0 0 1-3 0V9.5A.5.5 0 0 0 9.5 9H9V15.5a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5zm1 0v13h7v-13z"/></svg>
                         Postos
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}"
-                       href="{{ path('solicitacao_hub') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/><path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0m-3.5-2a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1a.5.5 0 0 0-.5-.5"/></svg>
+                    <a class="nav-link d-flex align-items-center {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}"
+                       href="{{ path('solicitacao_hub') }}"
+                       data-bs-toggle="tooltip" title="Solicitações de alteração e correção no Waze">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/><path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0m-3.5-2a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1a.5.5 0 0 0-.5-.5"/></svg>
                         Solicitações
                     </a>
                 </li>
                 {% if is_granted('ROLE_ADMIN') %}
                 <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/admin' %}active{% endif %}"
-                       href="{{ path('admin_users_index') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.088.179-.943.753-1.664C2.293 10.62 3.088 10 5 10c-.08 0-.16.005-.238.015A6 6 0 0 0 4.92 10zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>
+                    <a class="nav-link d-flex align-items-center {% if app.request.pathInfo starts with '/admin' %}active{% endif %}"
+                       href="{{ path('admin_users_index') }}"
+                       data-bs-toggle="tooltip" title="Gerenciamento de usuários (apenas administradores)">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.088.179-.943.753-1.664C2.293 10.62 3.088 10 5 10c-.08 0-.16.005-.238.015A6 6 0 0 0 4.92 10zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>
                         Usuários
                     </a>
                 </li>
                 {% endif %}
             </ul>
 
-            {% if app.user %}
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto align-items-center gap-2">
+                {# Toggle dark mode desktop #}
+                <li class="nav-item d-none d-lg-block">
+                    <button class="btn btn-sm tw-theme-toggle"
+                            id="themeToggleDesktop"
+                            aria-label="Alternar tema claro/escuro"
+                            data-bs-toggle="tooltip" title="Alternar tema claro/escuro">
+                        <i class="bi bi-moon-stars-fill theme-icon-dark"></i>
+                        <i class="bi bi-sun-fill theme-icon-light d-none"></i>
+                    </button>
+                </li>
+
+                {% if app.user %}
                 <li class="nav-item dropdown user-menu">
                     <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#"
-                       data-bs-toggle="dropdown" aria-expanded="false">
+                       data-bs-toggle="dropdown" aria-expanded="false"
+                       data-bs-original-title="Menu do usuário">
                         {% if app.user.avatarUrl %}
-                            <img src="{{ app.user.avatarUrl }}" class="avatar-sm" alt="" loading="lazy">
+                            <img src="{{ app.user.avatarUrl }}" class="avatar-sm" alt="Avatar de {{ app.user.name }}" loading="lazy" width="32" height="32">
                         {% else %}
                             <div class="avatar-sm bg-white text-success d-flex align-items-center justify-content-center fw-bold"
-                                 style="font-size:.8rem">
+                                 style="font-size:.8rem" aria-hidden="true">
                                 {{ app.user.name|first|upper }}
                             </div>
                         {% endif %}
                         <span class="d-none d-md-inline">{{ app.user.name|split(' ')|first }}</span>
-                        <svg class="nav-icon" style="width:10px;height:10px" viewBox="0 0 16 16" fill="currentColor"><path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow">
                         <li>
@@ -104,22 +142,28 @@
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <a class="dropdown-item text-danger" href="{{ path('app_logout') }}">
-                                <svg style="width:16px;height:16px;margin-right:.4rem;vertical-align:-.2em" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>
+                                <svg style="width:16px;height:16px;margin-right:.4rem;vertical-align:-.2em" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>
                                 Sair
                             </a>
                         </li>
                     </ul>
                 </li>
+                {% endif %}
             </ul>
-            {% endif %}
         </div>
     </div>
 </nav>
 
-<div class="container-xl pb-5">
+<div class="container-xl pb-5" id="main-content">
     {% for label, messages in app.flashes(['success','warning','danger','info','error']) %}
         {% for msg in messages %}
-            <div class="alert alert-{{ label == 'error' ? 'danger' : label }} alert-dismissible py-2 mb-3" role="alert">
+            <div class="alert alert-{{ label == 'error' ? 'danger' : label }} alert-dismissible py-2 mb-3 tw-flash"
+                 role="alert"
+                 data-flash-autodismiss="6000">
+                {% if label in ['success'] %}<i class="bi bi-check-circle-fill me-2"></i>{% endif %}
+                {% if label in ['danger', 'error'] %}<i class="bi bi-exclamation-triangle-fill me-2"></i>{% endif %}
+                {% if label == 'warning' %}<i class="bi bi-exclamation-circle-fill me-2"></i>{% endif %}
+                {% if label == 'info' %}<i class="bi bi-info-circle-fill me-2"></i>{% endif %}
                 {{ msg }}
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
             </div>
@@ -133,63 +177,73 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         crossorigin="anonymous"></script>
 
-{#
-  TIMEZONE LOCAL DO USUÁRIO
-  ─────────────────────────
-  Todas as datas gravadas no banco estão em UTC.
-  Qualquer elemento com o atributo data-utc="<ISO 8601 UTC>" será automaticamente
-  convertido pelo JavaScript abaixo para o fuso horário do navegador do usuário.
+{# Leaflet OSM — carregado globalmente para ser usado nos templates que precisam de mapa #}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLEo=" crossorigin=""></script>
 
-  Como usar nos templates:
-    <time data-utc="{{ alguma_data|date('c') }}">{{ alguma_data|date('d/m/Y H:i') }}</time>
-
-  O JS substitui o texto visível pela hora local e adiciona um title com o UTC original.
-  Funciona com qualquer tag HTML que tenha o atributo data-utc.
-#}
 <script>
 (function () {
   'use strict';
 
+  /* — Dark Mode toggle ——————————————————————————————— */
+  var html = document.documentElement;
+  var current = html.getAttribute('data-bs-theme') || 'light';
+
+  function applyTheme(theme) {
+    html.setAttribute('data-bs-theme', theme);
+    document.cookie = 'tw_theme=' + theme + ';path=/;max-age=31536000;SameSite=Lax';
+    document.querySelectorAll('.tw-theme-toggle').forEach(function(btn) {
+      btn.querySelector('.theme-icon-dark').classList.toggle('d-none', theme === 'dark');
+      btn.querySelector('.theme-icon-light').classList.toggle('d-none', theme === 'light');
+    });
+    current = theme;
+  }
+
+  applyTheme(current); // sincroniza ícones com tema atual
+
+  document.querySelectorAll('.tw-theme-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+    });
+  });
+
+  /* — Bootstrap Tooltips (inicializa todos os data-bs-toggle=tooltip) —————— */
+  var tooltipEls = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  tooltipEls.forEach(function(el) {
+    new bootstrap.Tooltip(el, { trigger: 'hover focus', placement: 'auto' });
+  });
+
+  /* — Flash auto-dismiss ——————————————————————————————— */
+  document.querySelectorAll('[data-flash-autodismiss]').forEach(function(el) {
+    var delay = parseInt(el.dataset.flashAutodismiss || '6000', 10);
+    setTimeout(function() {
+      var bsAlert = bootstrap.Alert.getOrCreateInstance(el);
+      if (bsAlert) bsAlert.close();
+    }, delay);
+  });
+
+  /* — Timezone — converte data-utc para hora local ———————————————— */
   var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
-  // Formato longo: dd/mm/aaaa hh:mm
   var fmtDateTime = new Intl.DateTimeFormat('pt-BR', {
-    timeZone : tz,
-    day      : '2-digit',
-    month    : '2-digit',
-    year     : 'numeric',
-    hour     : '2-digit',
-    minute   : '2-digit',
+    timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
   });
-
-  // Formato curto (só data, sem hora) — usado quando a string UTC não tem componente de hora
   var fmtDate = new Intl.DateTimeFormat('pt-BR', {
-    timeZone : tz,
-    day      : '2-digit',
-    month    : '2-digit',
-    year     : 'numeric',
+    timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric',
   });
-
   document.querySelectorAll('[data-utc]').forEach(function (el) {
     var raw = el.getAttribute('data-utc');
     if (!raw) return;
-
-    // Garante que a string seja tratada como UTC mesmo sem sufixo Z
-    if (!/Z|[+-]\d{2}:?\d{2}$/.test(raw)) {
-      raw = raw.replace(' ', 'T') + 'Z';
-    }
-
+    if (!/Z|[+-]\d{2}:?\d{2}$/.test(raw)) raw = raw.replace(' ', 'T') + 'Z';
     var d = new Date(raw);
     if (isNaN(d.getTime())) return;
-
-    // Se o valor original é só data (sem hora, ex: 2026-05-18), exibe só data
     var hasTime = /T|\d{2}:\d{2}/.test(el.getAttribute('data-utc'));
-    var localStr = hasTime ? fmtDateTime.format(d) : fmtDate.format(d);
-
-    // Guarda UTC original como tooltip
     el.setAttribute('title', 'UTC: ' + el.getAttribute('data-utc'));
-    el.textContent = localStr;
+    el.textContent = hasTime ? fmtDateTime.format(d) : fmtDate.format(d);
   });
+
 }());
 </script>
 </body>

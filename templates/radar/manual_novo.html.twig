@@ -3,7 +3,7 @@
 {% block title %}Novo Radar Manual{% endblock %}
 
 {% block body %}
-<div class="container py-4" style="max-width:720px">
+<div class="container py-4" style="max-width:760px">
 
   <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
@@ -12,14 +12,18 @@
     </ol>
   </nav>
 
-  <h1 class="h4 fw-semibold mb-1">Novo Radar Manual</h1>
+  <div class="d-flex align-items-center gap-2 mb-1">
+    <h1 class="h4 fw-semibold mb-0">Novo Radar Manual</h1>
+    {# badge de qualidade — atualizado via JS #}
+    <span id="badge-qualidade" class="badge rounded-pill d-none"></span>
+  </div>
   <p class="text-muted small mb-4">
-    Cadastre um radar que ainda não aparece na fonte oficial (INMETRO/Google Sheets).
-    Assim que ele aparecer na próxima importação, o sistema fará o <strong>merge automático</strong>
-    e atualizará o status para <span class="badge bg-success">Mesclado</span>.
+    Cadastre um radar que ainda não aparece na fonte oficial.
+    Preencha o <strong>Nº de série</strong> sempre que possível — ele garante o
+    <span class="text-success fw-semibold">merge automático de alta confiança</span>
+    quando o radar aparecer no INMETRO/RBMLQ.
   </p>
 
-  {# ── Flash ── #}
   {% for type, msgs in app.flashes %}
     {% for msg in msgs %}
       <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show" role="alert">
@@ -29,79 +33,228 @@
     {% endfor %}
   {% endfor %}
 
-  <div class="card shadow-sm border-0">
-    <div class="card-body p-4">
-      {{ form_start(form, {attr: {novalidate: 'novalidate', class: 'needs-validation'}}) }}
+  {{ form_start(form, {attr: {novalidate: 'novalidate', id: 'form-radar-manual'}}) }}
 
-        <div class="row g-3">
+  {# ─────────────────────────── Seção 1 — Localização #}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-body-tertiary py-2 px-3 fw-semibold small text-uppercase tracking-wider">
+      <i class="bi bi-geo-alt me-1"></i> Localização
+    </div>
+    <div class="card-body p-3">
+      <div class="row g-3">
 
-          <div class="col-12 col-sm-3">
-            {{ form_label(form.siglaUf) }}
-            {{ form_widget(form.siglaUf) }}
-            {{ form_errors(form.siglaUf) }}
-          </div>
-
-          <div class="col-12 col-sm-9">
-            {{ form_label(form.municipio) }}
-            {{ form_widget(form.municipio) }}
-            {{ form_errors(form.municipio) }}
-          </div>
-
-          <div class="col-12">
-            {{ form_label(form.localVerificacao) }}
-            <div class="input-group">
-              {{ form_widget(form.localVerificacao) }}
-              <span class="input-group-text" data-bs-toggle="tooltip"
-                title="Use a descrição exata como aparece no INMETRO para garantir o merge automático.">
-                <i class="bi bi-info-circle"></i>
-              </span>
-            </div>
-            {{ form_errors(form.localVerificacao) }}
-            <div class="form-text">Campo-chave para o merge. Use a descrição exata como aparece no INMETRO.</div>
-          </div>
-
-          <div class="col-12 col-sm-6">
-            {{ form_label(form.tipoMedidor) }}
-            {{ form_widget(form.tipoMedidor) }}
-            {{ form_errors(form.tipoMedidor) }}
-          </div>
-
-          <div class="col-12 col-sm-6">
-            {{ form_label(form.velocidade) }}
-            {{ form_widget(form.velocidade) }}
-            {{ form_errors(form.velocidade) }}
-          </div>
-
-          <div class="col-12">
-            {{ form_label(form.sentido) }}
-            {{ form_widget(form.sentido) }}
-            {{ form_errors(form.sentido) }}
-          </div>
-
-          <div class="col-12">
-            {{ form_label(form.observacoes) }}
-            {{ form_widget(form.observacoes) }}
-            {{ form_errors(form.observacoes) }}
-          </div>
-
+        <div class="col-12 col-sm-3">
+          {{ form_label(form.siglaUf) }}
+          {{ form_widget(form.siglaUf) }}
+          {{ form_errors(form.siglaUf) }}
         </div>
 
-        <div class="d-flex gap-2 mt-4">
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-floppy me-1"></i> Salvar Radar
-          </button>
-          <a href="{{ path('radar_manual_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+        <div class="col-12 col-sm-9">
+          {{ form_label(form.municipio) }}
+          {{ form_widget(form.municipio) }}
+          {{ form_errors(form.municipio) }}
         </div>
 
-      {{ form_end(form) }}
+        <div class="col-12">
+          <label class="form-label" for="{{ form.localVerificacao.vars.id }}">
+            Local de Verificação
+            <span class="badge bg-warning text-dark ms-1" data-bs-toggle="tooltip"
+              title="Use a descrição exata como aparece no INMETRO para garantir o merge automático quando o nº de série não estiver disponível.">
+              chave de merge
+            </span>
+          </label>
+          {{ form_widget(form.localVerificacao) }}
+          {{ form_errors(form.localVerificacao) }}
+        </div>
+
+      </div>
     </div>
   </div>
+
+  {# ─────────────────────────── Seção 2 — Equipamento #}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-body-tertiary py-2 px-3 fw-semibold small text-uppercase tracking-wider">
+      <i class="bi bi-speedometer2 me-1"></i> Equipamento
+    </div>
+    <div class="card-body p-3">
+      <div class="row g-3">
+
+        <div class="col-12 col-sm-6">
+          {{ form_label(form.tipoMedidor) }}
+          {{ form_widget(form.tipoMedidor) }}
+          {{ form_errors(form.tipoMedidor) }}
+        </div>
+
+        <div class="col-12 col-sm-6">
+          {{ form_label(form.marca) }}
+          {{ form_widget(form.marca) }}
+          {{ form_errors(form.marca) }}
+          {# datalist de marcas comuns #}
+          <datalist id="marcas-list">
+            <option value="Pardini"><option value="Cinemometer"><option value="Perkons">
+            <option value="Multiradar"><option value="Iscam"><option value="Redflex">
+            <option value="Sierzega"><option value="Vitronic"><option value="Jenoptik">
+          </datalist>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label" for="{{ form.numeroSerie.vars.id }}">
+            Nº de Série
+            <span class="badge bg-success ms-1" data-bs-toggle="tooltip"
+              title="Identificador mais confiável para o merge. É o número gravado na plaqueta do equipamento e listado na coluna 'N° Série' da planilha RBMLQ.">
+              <i class="bi bi-star-fill me-1" style="font-size:.65rem"></i>alta confiança
+            </span>
+          </label>
+          <div class="input-group">
+            {{ form_widget(form.numeroSerie, {attr: {id: 'campo-serie', class: 'form-control font-monospace'}}) }}
+            <span class="input-group-text" id="icone-serie"><i class="bi bi-upc-scan"></i></span>
+          </div>
+          <div class="form-text">
+            Preencha com o código da plaqueta ou da coluna <em>N° Série</em> da planilha RBMLQ.
+            Deixar vazio usa o local como fallback.
+          </div>
+          {{ form_errors(form.numeroSerie) }}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ─────────────────────────── Seção 3 — Via #}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-body-tertiary py-2 px-3 fw-semibold small text-uppercase tracking-wider">
+      <i class="bi bi-sign-speed-fill me-1"></i> Dados da Via
+    </div>
+    <div class="card-body p-3">
+      <div class="row g-3">
+
+        <div class="col-12 col-sm-4">
+          {{ form_label(form.velocidade) }}
+          <div class="input-group">
+            {{ form_widget(form.velocidade) }}
+            <span class="input-group-text">km/h</span>
+          </div>
+          {{ form_errors(form.velocidade) }}
+        </div>
+
+        <div class="col-12 col-sm-8">
+          {{ form_label(form.sentido) }}
+          {{ form_widget(form.sentido) }}
+          {{ form_errors(form.sentido) }}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ─────────────────────────── Seção 4 — Rastreabilidade #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body-tertiary py-2 px-3 fw-semibold small text-uppercase tracking-wider">
+      <i class="bi bi-bookmark-check me-1"></i> Fonte &amp; Observações
+    </div>
+    <div class="card-body p-3">
+      <div class="row g-3">
+
+        <div class="col-12">
+          <label class="form-label" for="campo-fonte">
+            Fonte da Informação
+            <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          {{ form_widget(form.fonte, {attr: {id: 'campo-fonte', class: 'form-control'}}) }}
+          <div class="form-text" id="fonte-hint">
+            Cole uma URL (Diretran, prefeitura, notícia, post do Waze) ou descreva a fonte.
+            Isso é salvo no log de merge para rastreabilidade.
+          </div>
+          {# preview do link quando é URL #}
+          <div id="fonte-preview" class="mt-2 d-none">
+            <a id="fonte-link" href="#" target="_blank" rel="noopener noreferrer"
+               class="small text-decoration-none">
+              <i class="bi bi-box-arrow-up-right me-1"></i>
+              <span id="fonte-link-label"></span>
+            </a>
+          </div>
+          {{ form_errors(form.fonte) }}
+        </div>
+
+        <div class="col-12">
+          {{ form_label(form.observacoes) }}
+          {{ form_widget(form.observacoes) }}
+          {{ form_errors(form.observacoes) }}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ── Ações #}
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary px-4">
+      <i class="bi bi-floppy me-1"></i> Salvar Radar
+    </button>
+    <a href="{{ path('radar_manual_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+
+  {{ form_end(form) }}
 
 </div>
 
 <script>
-// Bootstrap tooltip
-document.querySelectorAll('[data-bs-toggle="tooltip"]')
-  .forEach(el => new bootstrap.Tooltip(el));
+(function () {
+  // ── Tooltip Bootstrap
+  document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    .forEach(el => new bootstrap.Tooltip(el));
+
+  // ── Badge de qualidade de merge (atualiza em tempo real)
+  const fieldSerie = document.getElementById('campo-serie');
+  const fieldTipo  = document.querySelector('[name="radar_manual[tipoMedidor]"]');
+  const badge      = document.getElementById('badge-qualidade');
+
+  function updateQuality() {
+    const hasSerie = fieldSerie && fieldSerie.value.trim() !== '';
+    const hasTipo  = fieldTipo  && fieldTipo.value !== '';
+
+    badge.classList.remove('d-none', 'bg-success', 'bg-warning', 'bg-secondary', 'text-dark');
+
+    if (hasSerie) {
+      badge.className = 'badge rounded-pill bg-success';
+      badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Merge de alta confiança (via nº série)';
+    } else if (hasTipo) {
+      badge.className = 'badge rounded-pill bg-warning text-dark';
+      badge.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Merge médio (via local + tipo)';
+    } else {
+      badge.className = 'badge rounded-pill bg-secondary';
+      badge.innerHTML = '<i class="bi bi-question-circle me-1"></i>Merge baixo (só local)';
+    }
+  }
+
+  if (fieldSerie) fieldSerie.addEventListener('input', updateQuality);
+  if (fieldTipo)  fieldTipo.addEventListener('change', updateQuality);
+  updateQuality();
+
+  // ── Preview da fonte
+  const campoFonte = document.getElementById('campo-fonte');
+  const fontePreview = document.getElementById('fonte-preview');
+  const fonteLink    = document.getElementById('fonte-link');
+  const fonteLinkLabel = document.getElementById('fonte-link-label');
+
+  function isUrl(s) {
+    try { const u = new URL(s); return u.protocol === 'http:' || u.protocol === 'https:'; }
+    catch { return false; }
+  }
+
+  if (campoFonte) {
+    campoFonte.addEventListener('input', function () {
+      const v = this.value.trim();
+      if (isUrl(v)) {
+        fonteLink.href = v;
+        try { fonteLinkLabel.textContent = new URL(v).hostname; }
+        catch { fonteLinkLabel.textContent = v; }
+        fontePreview.classList.remove('d-none');
+      } else {
+        fontePreview.classList.add('d-none');
+      }
+    });
+  }
+}());
 </script>
 {% endblock %}

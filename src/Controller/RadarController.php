@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\User;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\ParameterType;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -52,20 +53,23 @@ final class RadarController extends AbstractController
             $uf = '';
         }
 
-        [$where, $params] = $this->buildWhere($uf, $municipio, $resultado, $tipo, $validade, $serie, $allowedUfs);
+        [$where, $params, $types] = $this->buildWhere($uf, $municipio, $resultado, $tipo, $validade, $serie, $allowedUfs);
 
         $baseFrom    = $this->buildFrom($serie);
         $whereClause = $where ? " WHERE $where" : '';
 
         $total = (int) $this->db->fetchOne(
             "SELECT COUNT(DISTINCT rm.id) FROM radar_medidor rm $baseFrom $whereClause",
-            $params
+            $params,
+            $types
         );
 
         $dv = $this->dateConv('rm.data_validade');
 
-        // OFFSET e LIMIT passados como parâmetros para evitar interpolação direta
-        $rowParams   = array_merge($params, [$offset, self::PER_PAGE]);
+        // OFFSET e LIMIT como inteiros explícitos — MariaDB rejeita string em LIMIT/OFFSET
+        $rowParams = array_merge($params, [(int) $offset, (int) self::PER_PAGE]);
+        $rowTypes  = array_merge($types,  [ParameterType::INTEGER, ParameterType::INTEGER]);
+
         $rows = $this->db->fetchAllAssociative(
             "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
                     rm.local_verificacao,
@@ -78,21 +82,24 @@ final class RadarController extends AbstractController
              FROM radar_medidor rm $baseFrom
              $whereClause
              ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao
-             LIMIT ?, ?",
-            $rowParams
+             LIMIT ? OFFSET ?",
+            $rowParams,
+            $rowTypes
         );
 
         $ufsQuery  = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';
         $ufsParams = [];
+        $ufsTypes  = [];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
             $placeholders = implode(',', array_fill(0, count($allowedUfs), '?'));
             $ufsQuery    .= " AND sigla_uf IN ($placeholders)";
             $ufsParams    = $allowedUfs;
+            $ufsTypes     = array_fill(0, count($allowedUfs), ParameterType::STRING);
         } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
             $ufsQuery .= ' AND 1=0';
         }
         $ufsQuery .= ' ORDER BY sigla_uf';
-        $ufs = array_column($this->db->fetchAllAssociative($ufsQuery, $ufsParams), 'sigla_uf');
+        $ufs = array_column($this->db->fetchAllAssociative($ufsQuery, $ufsParams, $ufsTypes), 'sigla_uf');
 
         $resultados = array_column($this->db->fetchAllAssociative(
             'SELECT DISTINCT ultimo_resultado FROM radar_medidor WHERE ultimo_resultado IS NOT NULL ORDER BY ultimo_resultado'
@@ -347,6 +354,7 @@ final class RadarController extends AbstractController
     ): array {
         $parts  = [];
         $params = [];
+        $types  = [];
 
         if ($allowedUfs !== null) {
             if (count($allowedUfs) === 0) {
@@ -356,6 +364,7 @@ final class RadarController extends AbstractController
                 $parts[] = "rm.sigla_uf IN ($ph)";
                 foreach ($allowedUfs as $ufsVal) {
                     $params[] = $ufsVal;
+                    $types[]  = ParameterType::STRING;
                 }
             }
         }
@@ -363,24 +372,30 @@ final class RadarController extends AbstractController
         if ($uf !== '') {
             $parts[]  = 'rm.sigla_uf = ?';
             $params[] = $uf;
+            $types[]  = ParameterType::STRING;
         }
         if ($municipio !== '') {
             $parts[]  = 'rm.municipio LIKE ?';
             $params[] = '%' . $this->escapeLike($municipio) . '%';
+            $types[]  = ParameterType::STRING;
         }
         if ($resultado !== '') {
             $parts[]  = 'rm.ultimo_resultado = ?';
             $params[] = $resultado;
+            $types[]  = ParameterType::STRING;
         }
         if ($tipo !== '') {
             $parts[]  = 'rm.tipo_medidor = ?';
             $params[] = $tipo;
+            $types[]  = ParameterType::STRING;
         }
         if ($serie !== '') {
             $escaped  = $this->escapeLike($serie);
             $parts[]  = '(rf.numero_serie LIKE ? OR rf.numero_inmetro LIKE ?)';
             $params[] = "%$escaped%";
+            $types[]  = ParameterType::STRING;
             $params[] = "%$escaped%";
+            $types[]  = ParameterType::STRING;
         }
 
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
@@ -390,21 +405,27 @@ final class RadarController extends AbstractController
         if ($validade === 'vencido') {
             $parts[]  = "$dv < ?";
             $params[] = $hoje;
+            $types[]  = ParameterType::STRING;
         } elseif ($validade === 'valido') {
             $parts[]  = "$dv >= ?";
             $params[] = $hoje;
+            $types[]  = ParameterType::STRING;
         } elseif ($validade === '30dias') {
             $parts[]  = "$dv >= ? AND $dv <= ?";
             $params[] = $hoje;
+            $types[]  = ParameterType::STRING;
             $params[] = $em30;
+            $types[]  = ParameterType::STRING;
         } elseif ($validade === 'recentes30') {
             $ha30dias = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
             $dve      = $this->dateConv('rm.data_verificacao_efetiva');
             $parts[]  = "rm.data_verificacao_efetiva IS NOT NULL AND $dve >= ? AND $dve <= ?";
             $params[] = $ha30dias;
+            $types[]  = ParameterType::STRING;
             $params[] = $hoje;
+            $types[]  = ParameterType::STRING;
         }
 
-        return [implode(' AND ', $parts), $params];
+        return [implode(' AND ', $parts), $params, $types];
     }
 }

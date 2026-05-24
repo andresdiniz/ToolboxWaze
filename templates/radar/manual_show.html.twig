@@ -1,0 +1,85 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Radar Manual #{{ radar.id }}{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width:720px">
+
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ path('radar_manual_lista') }}">Radares Manuais</a></li>
+      <li class="breadcrumb-item active">#{{ radar.id }}</li>
+    </ol>
+  </nav>
+
+  <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <h1 class="h4 fw-semibold mb-0">Radar Manual #{{ radar.id }}</h1>
+    {% if radar.status == 'mesclado' %}
+      <span class="badge bg-success fs-6"><i class="bi bi-check2-circle me-1"></i>Mesclado</span>
+    {% else %}
+      <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i>Pendente</span>
+    {% endif %}
+  </div>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <dl class="row mb-0">
+        <dt class="col-sm-4 text-muted">UF</dt>
+        <dd class="col-sm-8"><span class="badge bg-secondary">{{ radar.siglaUf }}</span></dd>
+
+        <dt class="col-sm-4 text-muted">Município</dt>
+        <dd class="col-sm-8">{{ radar.municipio }}</dd>
+
+        <dt class="col-sm-4 text-muted">Local de Verificação</dt>
+        <dd class="col-sm-8">{{ radar.localVerificacao }}</dd>
+
+        <dt class="col-sm-4 text-muted">Tipo do Medidor</dt>
+        <dd class="col-sm-8">{{ radar.tipoMedidor ?? '—' }}</dd>
+
+        <dt class="col-sm-4 text-muted">Velocidade</dt>
+        <dd class="col-sm-8">{{ radar.velocidade ? radar.velocidade ~ ' km/h' : '—' }}</dd>
+
+        <dt class="col-sm-4 text-muted">Sentido</dt>
+        <dd class="col-sm-8">{{ radar.sentido ?? '—' }}</dd>
+
+        <dt class="col-sm-4 text-muted">Observações</dt>
+        <dd class="col-sm-8">{{ radar.observacoes ?? '—' }}</dd>
+
+        <dt class="col-sm-4 text-muted">Identity Hash</dt>
+        <dd class="col-sm-8"><code class="small">{{ radar.identityHash }}</code></dd>
+
+        <dt class="col-sm-4 text-muted">Cadastrado em</dt>
+        <dd class="col-sm-8">{{ radar.criadoEm|date('d/m/Y H:i') }}</dd>
+
+        {% if radar.criadoPor %}
+        <dt class="col-sm-4 text-muted">Cadastrado por</dt>
+        <dd class="col-sm-8">{{ radar.criadoPor.email }}</dd>
+        {% endif %}
+
+        {% if radar.isMesclado %}
+        <dt class="col-sm-4 text-muted">Mesclado em</dt>
+        <dd class="col-sm-8">{{ radar.mescladoEm|date('d/m/Y H:i') }}</dd>
+
+        <dt class="col-sm-4 text-muted">Radar Oficial</dt>
+        <dd class="col-sm-8">
+          <a href="{{ path('radar_show', {id: radar.radarMedidorId}) }}">
+            Ver Radar #{{ radar.radarMedidorId }}
+          </a>
+        </dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  {% if radar.isPendente and is_granted('ROLE_ADMIN') %}
+  <form method="post" action="{{ path('radar_manual_excluir', {id: radar.id}) }}"
+        onsubmit="return confirm('Excluir este radar manual?')">
+    <input type="hidden" name="_token" value="{{ csrf_token('excluir_radar_manual_' ~ radar.id) }}">
+    <button type="submit" class="btn btn-sm btn-outline-danger">
+      <i class="bi bi-trash me-1"></i> Excluir
+    </button>
+  </form>
+  {% endif %}
+
+</div>
+{% endblock %}

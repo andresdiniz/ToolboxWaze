@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\MessageHandler;
 
+use App\Entity\RadarManual;
 use App\Message\ImportRadarGoogleSheetsMessage;
+use App\Repository\RadarManualRepository;
 use Doctrine\DBAL\Connection;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -35,6 +38,17 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * Campos PRESERVADOS (não tocados pelo UPDATE):
  *   estado, proprietario_nome, proprietario_municipio,
  *   proprietario_estado, historico_json
+ *
+ * ════════════════════════════════════════════════════════════
+ * MERGE AUTOMÁTICO DE RADARES MANUAIS
+ * ════════════════════════════════════════════════════════════
+ *
+ * Após processar cada lote, o handler verifica se algum
+ * identity_hash presente no CSV bate com um RadarManual pendente.
+ * Quando há match:
+ *   1. O radar_medidor recém-inserido/atualizado é vinculado.
+ *   2. O RadarManual tem status = 'mesclado', mesclado_em = now,
+ *      radar_medidor_id = id do registro oficial.
  *
  * ════════════════════════════════════════════════════════════
  * ESTRUTURA DO CSV
@@ -69,9 +83,12 @@ final class ImportRadarGoogleSheetsHandler
     private int $countInserted = 0;
     private int $countUpdated  = 0;
     private int $countSkipped  = 0;
+    private int $countMerged   = 0;
 
     public function __construct(
-        private readonly Connection $connection,
+        private readonly Connection            $connection,
+        private readonly EntityManagerInterface $em,
+        private readonly RadarManualRepository  $radarManualRepo,
     ) {}
 
     public function __invoke(ImportRadarGoogleSheetsMessage $message): void
@@ -82,6 +99,7 @@ final class ImportRadarGoogleSheetsHandler
         $this->countInserted = 0;
         $this->countUpdated  = 0;
         $this->countSkipped  = 0;
+        $this->countMerged   = 0;
 
         $tmpFile = $this->downloadToTempFile($message->getUrl());
 
@@ -102,8 +120,8 @@ final class ImportRadarGoogleSheetsHandler
 
         $total = $this->countInserted + $this->countUpdated + $this->countSkipped;
         echo sprintf(
-            "  [%s][sheets] total=%d  inseridos=%d  atualizados=%d  sem-mudança=%d\n",
-            $uf, $total, $this->countInserted, $this->countUpdated, $this->countSkipped
+            "  [%s][sheets] total=%d  inseridos=%d  atualizados=%d  sem-mudança=%d  merges=%d\n",
+            $uf, $total, $this->countInserted, $this->countUpdated, $this->countSkipped, $this->countMerged
         );
     }
 
@@ -316,6 +334,59 @@ final class ImportRadarGoogleSheetsHandler
         } catch (\Throwable $e) {
             $this->connection->rollBack();
             throw $e;
+        }
+
+        // ── Merge automático de radares manuais ──────────────────
+        // Feito FORA da transação DBAL para usar o EntityManager sem
+        // conflito de transações aninhadas.
+        $this->mergeRadaresManuais($changed);
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Merge: vincula RadarManual pendente ao radar_medidor oficial
+    // ════════════════════════════════════════════════════════════
+
+    private function mergeRadaresManuais(array $changed): void
+    {
+        if ($changed === []) {
+            return;
+        }
+
+        $identityHashes = array_column($changed, 'identity_hash');
+
+        // Carrega todos os RadarManual pendentes que batem com este lote
+        $manuaisPendentes = $this->radarManualRepo
+            ->findPendentesByIdentityHash($identityHashes);
+
+        if ($manuaisPendentes === []) {
+            return;
+        }
+
+        $now = new \DateTimeImmutable();
+
+        foreach ($changed as $row) {
+            $manual = $manuaisPendentes[$row['identity_hash']] ?? null;
+
+            if ($manual === null) {
+                continue;
+            }
+
+            // Busca o ID do radar_medidor que acabou de ser inserido/atualizado
+            $radarId = $row['_db_id'] ?? $this->findIdByRowHash($row['row_hash']);
+
+            if ($radarId === null) {
+                continue;
+            }
+
+            $manual->setStatus(RadarManual::STATUS_MESCLADO);
+            $manual->setRadarMedidorId($radarId);
+            $manual->setMescladoEm($now);
+
+            $this->countMerged++;
+        }
+
+        if ($this->countMerged > 0) {
+            $this->em->flush();
         }
     }
 

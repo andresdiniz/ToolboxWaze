@@ -1,218 +1,107 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Cadastrar Radar Manualmente — ToolboxWaze{% endblock %}
+{% block title %}Novo Radar Manual{% endblock %}
 
 {% block body %}
-<div class="row justify-content-center">
-<div class="col-lg-8">
+<div class="container py-4" style="max-width:720px">
 
-    {# ── Cabeçalho ── #}
-    <div class="d-flex align-items-center justify-content-between mb-4">
-        <div>
-            <h1 class="h4 fw-bold mb-0">Cadastrar Radar Manualmente</h1>
-            <p class="text-muted small mb-0 mt-1">
-                Use para radares ainda não publicados pelo INMETRO.
-                Os campos serão preenchidos automaticamente quando o registro oficial aparecer.
-            </p>
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ path('radar_manual_lista') }}">Radares Manuais</a></li>
+      <li class="breadcrumb-item active">Novo</li>
+    </ol>
+  </nav>
+
+  <h1 class="h4 fw-semibold mb-1">Novo Radar Manual</h1>
+  <p class="text-muted small mb-4">
+    Cadastre um radar que ainda não aparece na fonte oficial (INMETRO/Google Sheets).
+    Assim que ele aparecer na próxima importação, o sistema fará o <strong>merge automático</strong>
+    e atualizará o status para <span class="badge bg-success">Mesclado</span>.
+  </p>
+
+  {# ── Flash ── #}
+  {% for type, msgs in app.flashes %}
+    {% for msg in msgs %}
+      <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show" role="alert">
+        {{ msg|raw }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+      {{ form_start(form, {attr: {novalidate: 'novalidate', class: 'needs-validation'}}) }}
+
+        <div class="row g-3">
+
+          <div class="col-12 col-sm-3">
+            {{ form_label(form.siglaUf) }}
+            {{ form_widget(form.siglaUf) }}
+            {{ form_errors(form.siglaUf) }}
+          </div>
+
+          <div class="col-12 col-sm-9">
+            {{ form_label(form.municipio) }}
+            {{ form_widget(form.municipio) }}
+            {{ form_errors(form.municipio) }}
+          </div>
+
+          <div class="col-12">
+            {{ form_label(form.localVerificacao) }}
+            <div class="input-group">
+              {{ form_widget(form.localVerificacao) }}
+              <span class="input-group-text" data-bs-toggle="tooltip"
+                title="Use a descrição exata como aparece no INMETRO para garantir o merge automático.">
+                <i class="bi bi-info-circle"></i>
+              </span>
+            </div>
+            {{ form_errors(form.localVerificacao) }}
+            <div class="form-text">Campo-chave para o merge. Use a descrição exata como aparece no INMETRO.</div>
+          </div>
+
+          <div class="col-12 col-sm-6">
+            {{ form_label(form.tipoMedidor) }}
+            {{ form_widget(form.tipoMedidor) }}
+            {{ form_errors(form.tipoMedidor) }}
+          </div>
+
+          <div class="col-12 col-sm-6">
+            {{ form_label(form.velocidade) }}
+            {{ form_widget(form.velocidade) }}
+            {{ form_errors(form.velocidade) }}
+          </div>
+
+          <div class="col-12">
+            {{ form_label(form.sentido) }}
+            {{ form_widget(form.sentido) }}
+            {{ form_errors(form.sentido) }}
+          </div>
+
+          <div class="col-12">
+            {{ form_label(form.observacoes) }}
+            {{ form_widget(form.observacoes) }}
+            {{ form_errors(form.observacoes) }}
+          </div>
+
         </div>
-        <a href="{{ path('radar_index') }}" class="btn btn-sm btn-outline-secondary">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-1">
-                <path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
-            </svg>
-            Voltar
-        </a>
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-floppy me-1"></i> Salvar Radar
+          </button>
+          <a href="{{ path('radar_manual_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+        </div>
+
+      {{ form_end(form) }}
     </div>
+  </div>
 
-    {# ── Aviso informativo ── #}
-    <div class="alert alert-info alert-animated d-flex gap-2 py-2 mb-4">
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" class="flex-shrink-0 mt-1">
-            <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2"/>
-        </svg>
-        <div class="small">
-            <strong>Como funciona:</strong> O radar será adicionado imediatamente às consultas.
-            Quando o importador do INMETRO encontrar o mesmo local, os campos em branco serão
-            preenchidos automaticamente sem perder o link Waze.
-        </div>
-    </div>
-
-    {# ── Formulário ── #}
-    <form method="post" action="{{ path('radar_manual_novo') }}" novalidate>
-
-        {# ── Localização ── #}
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent border-bottom fw-semibold py-2">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" class="me-1 text-primary">
-                    <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/>
-                </svg>
-                Localização <span class="text-danger">*</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-
-                    <div class="col-md-3">
-                        <label for="sigla_uf" class="form-label fw-semibold small">UF <span class="text-danger">*</span></label>
-                        <select id="sigla_uf" name="sigla_uf"
-                                class="form-select form-select-sm {{ errors.sigla_uf is defined ? 'is-invalid' }}">
-                            <option value="">Selecione…</option>
-                            {% for uf in ufs %}
-                                <option value="{{ uf }}" {{ data.sigla_uf == uf ? 'selected' }}>{{ uf }}</option>
-                            {% endfor %}
-                        </select>
-                        {% if errors.sigla_uf is defined %}
-                            <div class="invalid-feedback">{{ errors.sigla_uf }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="estado" class="form-label fw-semibold small">Estado</label>
-                        <input type="text" id="estado" name="estado"
-                               class="form-control form-control-sm"
-                               value="{{ data.estado }}" placeholder="Minas Gerais"
-                               maxlength="100">
-                    </div>
-
-                    <div class="col-md-5">
-                        <label for="municipio" class="form-label fw-semibold small">Município <span class="text-danger">*</span></label>
-                        <input type="text" id="municipio" name="municipio"
-                               class="form-control form-control-sm {{ errors.municipio is defined ? 'is-invalid' }}"
-                               value="{{ data.municipio }}" placeholder="Conselheiro Lafaiete"
-                               maxlength="150" required>
-                        {% if errors.municipio is defined %}
-                            <div class="invalid-feedback">{{ errors.municipio }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="col-12">
-                        <label for="local_verificacao" class="form-label fw-semibold small">Local / Endereço <span class="text-danger">*</span></label>
-                        <input type="text" id="local_verificacao" name="local_verificacao"
-                               class="form-control form-control-sm {{ errors.local_verificacao is defined ? 'is-invalid' }}"
-                               value="{{ data.local_verificacao }}"
-                               placeholder="Av. Brasil, 1200 — sentido centro"
-                               maxlength="255" required>
-                        {% if errors.local_verificacao is defined %}
-                            <div class="invalid-feedback">{{ errors.local_verificacao|raw }}</div>
-                        {% endif %}
-                        <div class="form-text">Use o mesmo formato do INMETRO para facilitar o merge automático.</div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-
-        {# ── Dados técnicos ── #}
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent border-bottom fw-semibold py-2">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" class="me-1 text-primary">
-                    <path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1z"/>
-                </svg>
-                Dados Técnicos
-                <span class="badge bg-secondary fw-normal ms-1" style="font-size:.7rem">opcional</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-
-                    <div class="col-md-6">
-                        <label for="tipo_medidor" class="form-label fw-semibold small">Tipo de Medidor</label>
-                        <select id="tipo_medidor" name="tipo_medidor" class="form-select form-select-sm">
-                            <option value="">Não informado</option>
-                            {% for t in tipos %}
-                                <option value="{{ t }}" {{ data.tipo_medidor == t ? 'selected' }}>{{ t }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="ultimo_resultado" class="form-label fw-semibold small">Último Resultado</label>
-                        <select id="ultimo_resultado" name="ultimo_resultado" class="form-select form-select-sm">
-                            <option value="">Não informado</option>
-                            {% for r in resultados %}
-                                <option value="{{ r }}" {{ data.ultimo_resultado == r ? 'selected' }}>{{ r }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="data_ultima_verificacao" class="form-label fw-semibold small">Última Verificação</label>
-                        <input type="date" id="data_ultima_verificacao" name="data_ultima_verificacao"
-                               class="form-control form-control-sm {{ errors.data_ultima_verificacao is defined ? 'is-invalid' }}"
-                               value="{{ data.data_ultima_verificacao }}">
-                        {% if errors.data_ultima_verificacao is defined %}
-                            <div class="invalid-feedback">{{ errors.data_ultima_verificacao }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="data_validade" class="form-label fw-semibold small">Validade</label>
-                        <input type="date" id="data_validade" name="data_validade"
-                               class="form-control form-control-sm {{ errors.data_validade is defined ? 'is-invalid' }}"
-                               value="{{ data.data_validade }}">
-                        {% if errors.data_validade is defined %}
-                            <div class="invalid-feedback">{{ errors.data_validade }}</div>
-                        {% endif %}
-                        <div class="form-text">Se não informada, será calculada como Última Verificação + 1 ano.</div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-
-        {# ── Proprietário ── #}
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent border-bottom fw-semibold py-2">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" class="me-1 text-primary">
-                    <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0"/>
-                    <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1"/>
-                </svg>
-                Proprietário / Órgão Responsável
-                <span class="badge bg-secondary fw-normal ms-1" style="font-size:.7rem">opcional</span>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-
-                    <div class="col-12">
-                        <label for="proprietario_nome" class="form-label fw-semibold small">Nome</label>
-                        <input type="text" id="proprietario_nome" name="proprietario_nome"
-                               class="form-control form-control-sm"
-                               value="{{ data.proprietario_nome }}"
-                               placeholder="Prefeitura Municipal / DER / DNIT"
-                               maxlength="255">
-                    </div>
-
-                    <div class="col-md-8">
-                        <label for="proprietario_municipio" class="form-label fw-semibold small">Município do proprietário</label>
-                        <input type="text" id="proprietario_municipio" name="proprietario_municipio"
-                               class="form-control form-control-sm"
-                               value="{{ data.proprietario_municipio }}"
-                               maxlength="150">
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="proprietario_estado" class="form-label fw-semibold small">UF do proprietário</label>
-                        <select id="proprietario_estado" name="proprietario_estado" class="form-select form-select-sm">
-                            <option value="">Selecione…</option>
-                            {% for uf in ufs %}
-                                <option value="{{ uf }}" {{ data.proprietario_estado == uf ? 'selected' }}>{{ uf }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-
-        {# ── Ações ── #}
-        <div class="d-flex justify-content-between align-items-center">
-            <a href="{{ path('radar_index') }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
-            <button type="submit" class="btn btn-primary">
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" class="me-1">
-                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-                    <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>
-                </svg>
-                Cadastrar Radar
-            </button>
-        </div>
-
-    </form>
 </div>
-</div>
+
+<script>
+// Bootstrap tooltip
+document.querySelectorAll('[data-bs-toggle="tooltip"]')
+  .forEach(el => new bootstrap.Tooltip(el));
+</script>
 {% endblock %}

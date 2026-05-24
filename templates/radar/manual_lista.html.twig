@@ -1,88 +1,101 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Meus Radares Manuais — ToolboxWaze{% endblock %}
+{% block title %}Radares Manuais{% endblock %}
 
 {% block body %}
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <h1 class="h4 fw-bold mb-0">Meus Radares Manuais</h1>
-    <a href="{{ path('radar_manual_novo') }}" class="btn btn-primary btn-sm">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-1">
-            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
-            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>
-        </svg>
-        Novo Radar
-    </a>
-</div>
+<div class="container-xl py-4">
 
-{% if radares is empty %}
+  {# ── Cabeçalho ── #}
+  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+      <h1 class="h4 mb-0 fw-semibold">Radares Manuais</h1>
+      <p class="text-muted small mb-0">
+        {{ total }} cadastrado{{ total != 1 ? 's' : '' }} ·
+        <span class="text-warning fw-semibold">{{ pendentes }} pendente{{ pendentes != 1 ? 's' : '' }}</span>
+      </p>
+    </div>
+    <a href="{{ path('radar_manual_novo') }}" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-1"></i> Novo Radar Manual
+    </a>
+  </div>
+
+  {# ── Flash ── #}
+  {% for type, msgs in app.flashes %}
+    {% for msg in msgs %}
+      <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show" role="alert">
+        {{ msg|raw }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  {# ── Tabela ── #}
+  {% if radares is empty %}
     <div class="text-center py-5 text-muted">
-        <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor" class="mb-3 opacity-25">
-            <path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1z"/>
-        </svg>
-        <p class="mb-3">Você ainda não cadastrou nenhum radar manualmente.</p>
-        <a href="{{ path('radar_manual_novo') }}" class="btn btn-primary btn-sm">Cadastrar primeiro radar</a>
+      <i class="bi bi-radar fs-1 d-block mb-3 opacity-25"></i>
+      <p class="mb-3">Nenhum radar manual cadastrado ainda.</p>
+      <a href="{{ path('radar_manual_novo') }}" class="btn btn-outline-primary btn-sm">Cadastrar o primeiro</a>
     </div>
-{% else %}
-<div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover table-sm align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>UF</th>
-                    <th>Município</th>
-                    <th>Local</th>
-                    <th>Tipo</th>
-                    <th>Resultado</th>
-                    <th>Validade</th>
-                    <th>Waze</th>
-                    <th>Cadastrado em</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
+  {% else %}
+    <div class="card shadow-sm border-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>UF</th>
+              <th>Município</th>
+              <th>Local</th>
+              <th>Tipo</th>
+              <th>Vel.</th>
+              <th>Status</th>
+              <th>Cadastrado em</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
             {% for r in radares %}
-                <tr>
-                    <td><span class="badge badge-uf">{{ r.sigla_uf }}</span></td>
-                    <td class="small">{{ r.municipio }}</td>
-                    <td class="small">{{ r.local_verificacao|slice(0,45) }}{% if r.local_verificacao|length > 45 %}…{% endif %}</td>
-                    <td class="small text-muted">{{ r.tipo_medidor ?: '—' }}</td>
-                    <td>
-                        {% if r.ultimo_resultado %}
-                            <span class="badge {{ r.ultimo_resultado == 'APROVADO' ? 'bg-success' : 'bg-danger' }} bg-opacity-75">
-                                {{ r.ultimo_resultado }}
-                            </span>
-                        {% else %}
-                            <span class="text-muted small">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="small text-muted text-nowrap">{{ r.data_validade ?: '—' }}</td>
-                    <td class="text-center">
-                        {% if r.tem_waze %}
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="text-success">
-                                <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/>
-                            </svg>
-                        {% else %}
-                            <span class="text-muted small">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="small text-muted text-nowrap">
-                        {{ r.criado_em|date('d/m/Y') }}
-                    </td>
-                    <td class="text-end">
-                        <a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
-                            Ver
-                        </a>
-                        <form method="post" action="{{ path('radar_manual_excluir', {id: r.id}) }}"
-                              class="d-inline"
-                              onsubmit="return confirm('Excluir este radar manual?')">
-                            <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Excluir</button>
-                        </form>
-                    </td>
-                </tr>
+            <tr>
+              <td class="text-muted small">{{ r.id }}</td>
+              <td><span class="badge bg-secondary">{{ r.siglaUf }}</span></td>
+              <td>{{ r.municipio }}</td>
+              <td class="text-truncate" style="max-width:260px" title="{{ r.localVerificacao }}">{{ r.localVerificacao }}</td>
+              <td class="small text-muted">{{ r.tipoMedidor ?? '—' }}</td>
+              <td class="small">{{ r.velocidade ? r.velocidade ~ ' km/h' : '—' }}</td>
+              <td>
+                {% if r.status == 'mesclado' %}
+                  <span class="badge bg-success"><i class="bi bi-check2-circle me-1"></i>Mesclado</span>
+                {% else %}
+                  <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pendente</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted">{{ r.criadoEm|date('d/m/Y') }}</td>
+              <td>
+                <a href="{{ path('radar_manual_show', {id: r.id}) }}" class="btn btn-sm btn-outline-secondary">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </td>
+            </tr>
             {% endfor %}
-            </tbody>
+          </tbody>
         </table>
+      </div>
     </div>
+
+    {# ── Paginação ── #}
+    {% set totalPages = (total / perPage)|round(0, 'ceil') %}
+    {% if totalPages > 1 %}
+    <nav class="mt-3">
+      <ul class="pagination pagination-sm justify-content-center">
+        {% for p in 1..totalPages %}
+          <li class="page-item {{ p == page ? 'active' : '' }}">
+            <a class="page-link" href="{{ path('radar_manual_lista', {page: p}) }}">{{ p }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+    </nav>
+    {% endif %}
+  {% endif %}
+
 </div>
-{% endif %}
 {% endblock %}

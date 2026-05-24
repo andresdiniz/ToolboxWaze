@@ -89,12 +89,20 @@
                 </thead>
                 <tbody>
                 {% for field, label in comparableFields %}
-                    {# Verificar se há divergência #}
+                    {#
+                      |unique não existe no Twig nativo.
+                      Deduplicar usando array_flip (chaves = valores únicos) e keys().
+                    #}
                     {% set values = [] %}
                     {% for r in radares %}
                         {% set values = values|merge([(r[field] ?? '')]) %}
                     {% endfor %}
-                    {% set uniqueValues = values|unique %}
+                    {# Constrói mapa valor => 1 para deduplicar, depois pega as chaves #}
+                    {% set valMap = {} %}
+                    {% for v in values %}
+                        {% set valMap = valMap|merge({(v): 1}) %}
+                    {% endfor %}
+                    {% set uniqueValues = valMap|keys %}
 
                     <tr class="{{ uniqueValues|length > 1 ? 'table-warning' : '' }}">
                         <td class="ps-3 fw-semibold small">{{ label }}</td>

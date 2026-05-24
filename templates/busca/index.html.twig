@@ -1,0 +1,76 @@
+{% extends 'base.html.twig' %}
+{% block title %}Busca — {{ q }} — ToolboxWaze{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-4">
+
+  <div class="mb-4">
+    <form method="get" action="{{ path('busca_index') }}" class="d-flex gap-2" style="max-width:600px">
+      <input type="search" name="q" value="{{ q }}" class="form-control"
+             placeholder="Buscar município, local, razão social..." autofocus>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
+    </form>
+  </div>
+
+  {% if q|length >= 2 %}
+    <p class="text-muted small mb-3">
+      {{ radares|length }} radar(es) e {{ postos|length }} posto(s) encontrados para <strong>"{{ q }}"</strong>
+    </p>
+  {% endif %}
+
+  {% if radares %}
+  <h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-broadcast me-1"></i>Radares</h6>
+  <div class="card mb-4">
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr><th>UF</th><th>Município</th><th>Local</th><th>Resultado</th><th></th></tr></thead>
+        <tbody>
+        {% for r in radares %}
+          <tr>
+            <td><span class="badge bg-secondary">{{ r.sigla_uf }}</span></td>
+            <td>{{ r.municipio }}</td>
+            <td class="small">{{ r.local_verificacao }}</td>
+            <td>
+              {% set cls = r.ultimo_resultado == 'APROVADO' ? 'success' : (r.ultimo_resultado == 'REPROVADO' ? 'danger' : 'secondary') %}
+              <span class="badge bg-{{ cls }}">{{ r.ultimo_resultado ?? 'SEM INFO' }}</span>
+            </td>
+            <td><a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-xs btn-outline-primary py-0 px-2">Ver</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if postos %}
+  <h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-fuel-pump me-1"></i>Postos</h6>
+  <div class="card mb-4">
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr><th>UF</th><th>Município</th><th>Razão Social</th><th>Bandeira</th><th></th></tr></thead>
+        <tbody>
+        {% for p in postos %}
+          <tr>
+            <td><span class="badge bg-secondary">{{ p.uf }}</span></td>
+            <td>{{ p.municipio }}</td>
+            <td class="small">{{ p.nome_fantasia ?: p.razao_social }}</td>
+            <td class="small">{{ p.bandeira }}</td>
+            <td><a href="{{ path('posto_show', {id: p.id}) }}" class="btn btn-xs btn-outline-primary py-0 px-2">Ver</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if q|length >= 2 and not radares and not postos %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-search fs-1 d-block mb-3"></i>
+    <p>Nenhum resultado encontrado para <strong>"{{ q }}"</strong>.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

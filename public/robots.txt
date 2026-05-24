@@ -1,0 +1,22 @@
+User-agent: *
+
+# Bloqueia rotas privadas e funcionais que não devem ser indexadas
+Disallow: /admin
+Disallow: /admin/
+Disallow: /exportar
+Disallow: /exportar/
+Disallow: /solicitacoes
+Disallow: /solicitacoes/
+Disallow: /perfil
+Disallow: /perfil/
+Disallow: /login
+Disallow: /registro
+Disallow: /verificar-email
+Disallow: /reenviar-confirmacao
+
+# Permite indexação das páginas públicas principais
+Allow: /radares
+Allow: /postos
+Allow: /
+
+Sitemap: https://wazetoolbox.acheireviews.com.br/sitemap.xml

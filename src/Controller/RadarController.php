@@ -63,6 +63,9 @@ final class RadarController extends AbstractController
         );
 
         $dv = $this->dateConv('rm.data_validade');
+
+        // OFFSET e LIMIT passados como parâmetros para evitar interpolação direta
+        $rowParams   = array_merge($params, [$offset, self::PER_PAGE]);
         $rows = $this->db->fetchAllAssociative(
             "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
                     rm.local_verificacao,
@@ -75,8 +78,8 @@ final class RadarController extends AbstractController
              FROM radar_medidor rm $baseFrom
              $whereClause
              ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao
-             LIMIT $offset, " . self::PER_PAGE,
-            $params
+             LIMIT ?, ?",
+            $rowParams
         );
 
         $ufsQuery  = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';
@@ -395,9 +398,6 @@ final class RadarController extends AbstractController
             $params[] = $hoje;
             $params[] = $em30;
         } elseif ($validade === 'recentes30') {
-            // Filtra por data_verificacao_efetiva nos últimos 30 dias.
-            // Usa o campo calculado na importação (não data_ultima_verificacao)
-            // para cobrir também radares em que só a validade está preenchida.
             $ha30dias = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
             $dve      = $this->dateConv('rm.data_verificacao_efetiva');
             $parts[]  = "rm.data_verificacao_efetiva IS NOT NULL AND $dve >= ? AND $dve <= ?";

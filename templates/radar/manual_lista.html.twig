@@ -1,0 +1,88 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Meus Radares Manuais — ToolboxWaze{% endblock %}
+
+{% block body %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h4 fw-bold mb-0">Meus Radares Manuais</h1>
+    <a href="{{ path('radar_manual_novo') }}" class="btn btn-primary btn-sm">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-1">
+            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>
+        </svg>
+        Novo Radar
+    </a>
+</div>
+
+{% if radares is empty %}
+    <div class="text-center py-5 text-muted">
+        <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor" class="mb-3 opacity-25">
+            <path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1z"/>
+        </svg>
+        <p class="mb-3">Você ainda não cadastrou nenhum radar manualmente.</p>
+        <a href="{{ path('radar_manual_novo') }}" class="btn btn-primary btn-sm">Cadastrar primeiro radar</a>
+    </div>
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>UF</th>
+                    <th>Município</th>
+                    <th>Local</th>
+                    <th>Tipo</th>
+                    <th>Resultado</th>
+                    <th>Validade</th>
+                    <th>Waze</th>
+                    <th>Cadastrado em</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in radares %}
+                <tr>
+                    <td><span class="badge badge-uf">{{ r.sigla_uf }}</span></td>
+                    <td class="small">{{ r.municipio }}</td>
+                    <td class="small">{{ r.local_verificacao|slice(0,45) }}{% if r.local_verificacao|length > 45 %}…{% endif %}</td>
+                    <td class="small text-muted">{{ r.tipo_medidor ?: '—' }}</td>
+                    <td>
+                        {% if r.ultimo_resultado %}
+                            <span class="badge {{ r.ultimo_resultado == 'APROVADO' ? 'bg-success' : 'bg-danger' }} bg-opacity-75">
+                                {{ r.ultimo_resultado }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted text-nowrap">{{ r.data_validade ?: '—' }}</td>
+                    <td class="text-center">
+                        {% if r.tem_waze %}
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="text-success">
+                                <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/>
+                            </svg>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted text-nowrap">
+                        {{ r.criado_em|date('d/m/Y') }}
+                    </td>
+                    <td class="text-end">
+                        <a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-sm btn-outline-secondary py-0 px-2">
+                            Ver
+                        </a>
+                        <form method="post" action="{{ path('radar_manual_excluir', {id: r.id}) }}"
+                              class="d-inline"
+                              onsubmit="return confirm('Excluir este radar manual?')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Excluir</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

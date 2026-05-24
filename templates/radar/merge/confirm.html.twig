@@ -44,18 +44,21 @@
                                    {{ loop.first ? 'checked' }}>
                             <span class="badge-uf">{{ r.sigla_uf }}</span>
                             <strong class="small">#{{ r.id }}</strong>
-                            {% if r.situacao == 'MESCLADO' %}
+                            {# situacao pode não existir na tabela — usar ?? #}
+                            {% if (r.situacao ?? '') == 'MESCLADO' %}
+                                <span class="badge bg-secondary ms-auto">MESCLADO</span>
+                            {% elseif (r.merged_into_id ?? null) is not null %}
                                 <span class="badge bg-secondary ms-auto">MESCLADO</span>
                             {% endif %}
                         </div>
                         <div class="small text-muted mb-1">{{ r.municipio ?? '—' }}</div>
-                        <div class="small text-truncate" title="{{ r.logradouro }}">{{ r.logradouro ?? '—' }}</div>
+                        <div class="small text-truncate" title="{{ r.local_verificacao ?? '' }}">{{ r.local_verificacao ?? '—' }}</div>
                         <div class="small mt-1">
                             <span class="text-muted">Faixas:</span>
-                            <strong>{{ r.total_faixas }}</strong>
+                            <strong>{{ r.total_faixas ?? 0 }}</strong>
                             <span class="text-muted ms-2">Tipo:</span> {{ r.tipo_medidor ?? '—' }}
                         </div>
-                        {% if r.link_waze %}
+                        {% if r.link_waze ?? '' %}
                             <div class="small mt-1">
                                 <i class="bi bi-link-45deg text-primary"></i>
                                 <a href="{{ r.link_waze }}" target="_blank" rel="noopener" class="text-primary">Link Waze</a>
@@ -69,6 +72,18 @@
     </div>
 
     {# ── Comparação campo a campo ── #}
+    {#
+      Filtrar comparableFields para exibir somente os campos que existem
+      no primeiro radar (evita RuntimeError para colunas ausentes na tabela).
+    #}
+    {% set firstRadar = radares|first %}
+    {% set visibleFields = {} %}
+    {% for field, label in comparableFields %}
+        {% if attribute(firstRadar, field) is defined %}
+            {% set visibleFields = visibleFields|merge({(field): label}) %}
+        {% endif %}
+    {% endfor %}
+
     <div class="card mb-4">
         <div class="card-header fw-semibold py-2">
             <i class="bi bi-table me-1"></i>2. Resolva os campos conflitantes
@@ -88,16 +103,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                {% for field, label in comparableFields %}
-                    {#
-                      |unique não existe no Twig nativo.
-                      Deduplicar usando array_flip (chaves = valores únicos) e keys().
-                    #}
+                {% for field, label in visibleFields %}
                     {% set values = [] %}
                     {% for r in radares %}
                         {% set values = values|merge([(r[field] ?? '')]) %}
                     {% endfor %}
-                    {# Constrói mapa valor => 1 para deduplicar, depois pega as chaves #}
+                    {# Deduplicar sem |unique (não existe no Twig nativo) #}
                     {% set valMap = {} %}
                     {% for v in values %}
                         {% set valMap = valMap|merge({(v): 1}) %}
@@ -111,7 +122,6 @@
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 {% if uniqueValues|length > 1 %}
-                                {# Campo conflitante: mostrar radio de escolha #}
                                 <input type="radio"
                                        name="field_choice[{{ field }}]"
                                        value="{{ loop.first ? 'survivor' : 'absorbed_' ~ (rIdx - 1) }}"
@@ -145,7 +155,7 @@
                 <div class="col-auto">
                     <div class="border rounded p-2 small text-center" style="min-width:120px">
                         <div class="fw-semibold">#{{ r.id }}</div>
-                        <div class="text-muted">{{ r.total_faixas }} faixa(s)</div>
+                        <div class="text-muted">{{ r.total_faixas ?? 0 }} faixa(s)</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -172,7 +182,6 @@
 </form>
 
 <script>
-// Destaca visualmente o card do sobrevivente selecionado
 document.querySelectorAll('.survivor-radio').forEach(radio => {
     radio.addEventListener('change', () => {
         document.querySelectorAll('.survivor-card').forEach(card => {
@@ -188,7 +197,6 @@ document.querySelectorAll('.survivor-radio').forEach(radio => {
     if (radio.checked) radio.dispatchEvent(new Event('change'));
 });
 
-// Confirmação antes de submeter
 document.getElementById('mergeForm').addEventListener('submit', e => {
     const survivorId = document.querySelector('input[name="survivor_id"]:checked')?.value;
     if (!survivorId) { e.preventDefault(); alert('Selecione o radar sobrevivente.'); return; }

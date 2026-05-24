@@ -1,208 +1,339 @@
 {% extends 'base.html.twig' %}
-
 {% block title %}Dashboard — ToolboxWaze{% endblock %}
 
 {% block body %}
-<div class="page-header reveal">
-    <h1>
-        <span class="page-header-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-6"/>
-            </svg>
-        </span>
-        Dashboard
-    </h1>
-    <a href="{{ path('export_postos_csv') }}" class="btn btn-outline-success btn-sm">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:.3rem;vertical-align:-.15em">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7,10 12,15 17,10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        Exportar CSV
-    </a>
-</div>
+<div class="container-fluid py-4">
 
-{# ── KPIs ── #}
-<div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-        <div class="kpi-card reveal reveal-delay-1">
-            <div class="kpi-label">
-                <span class="kpi-icon" style="background:rgba(1,105,111,.12)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tw)" stroke-width="2.5"><path d="M3 3h18v18H3z"/></svg>
-                </span>
-                Total de Postos
-            </div>
-            <div class="kpi-value"><span class="count-up">{{ kpis.total }}</span></div>
-            <div class="kpi-subtext">cadastros ativos</div>
+  {# ═══════════════════════════════════════════════════════════════
+     KPIs RADARES
+  ═══════════════════════════════════════════════════════════════ #}
+  <h5 class="text-uppercase text-muted fw-semibold mb-3 small ls-1">
+    <i class="bi bi-broadcast me-1"></i> Radares Medidores
+  </h5>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="kpi-label">Total</div>
+          <div class="kpi-value count-up" data-target="{{ radarKpis.total ?? 0 }}">0</div>
         </div>
+      </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="kpi-card reveal reveal-delay-2">
-            <div class="kpi-label">
-                <span class="kpi-icon" style="background:rgba(16,185,129,.12)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-                </span>
-                Com Link Waze
-            </div>
-            <div class="kpi-value" style="color: var(--status-resolvida-text)"><span class="count-up">{{ kpis.comWaze }}</span></div>
-            <div class="progress mt-2" style="height:5px">
-                <div class="progress-bar" style="background:var(--status-resolvida-dot);width:{{ kpis.pct }}%"></div>
-            </div>
-            <div class="kpi-subtext">{{ kpis.pct }}% cobertos</div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card kpi-card h-100 border-success">
+        <div class="card-body">
+          <div class="kpi-label text-success">Aprovados</div>
+          <div class="kpi-value text-success count-up" data-target="{{ radarKpis.aprovados ?? 0 }}">0</div>
         </div>
+      </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="kpi-card reveal reveal-delay-3">
-            <div class="kpi-label">
-                <span class="kpi-icon" style="background:rgba(245,158,11,.12)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                </span>
-                Sem Link Waze
-            </div>
-            <div class="kpi-value" style="color: var(--status-pendente-text)"><span class="count-up">{{ kpis.semWaze }}</span></div>
-            <a href="{{ path('posto_index', {sem_waze: 1}) }}" class="btn btn-sm btn-outline-warning mt-2" style="font-size:.75rem;padding:.25rem .65rem">
-                Ver postos →
-            </a>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card kpi-card h-100 border-danger">
+        <div class="card-body">
+          <div class="kpi-label text-danger">Reprovados</div>
+          <div class="kpi-value text-danger count-up" data-target="{{ radarKpis.reprovados ?? 0 }}">0</div>
         </div>
+      </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="kpi-card reveal reveal-delay-4">
-            <div class="kpi-label">
-                <span class="kpi-icon" style="background:rgba(1,105,111,.12)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tw)" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                </span>
-                Cadastrados este mês
-            </div>
-            <div class="kpi-value"><span class="count-up">{{ kpis.mesAtual }}</span></div>
-            <span class="kpi-trend up">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18,15 12,9 6,15"/></svg>
-                mês atual
-            </span>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card kpi-card h-100 border-warning">
+        <div class="card-body">
+          <div class="kpi-label text-warning">Vencidos</div>
+          <div class="kpi-value text-warning count-up" data-target="{{ radarKpis.vencidos ?? 0 }}">0</div>
+          <div class="kpi-sub">validade expirada</div>
         </div>
+      </div>
     </div>
-</div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card kpi-card h-100 border-warning">
+        <div class="card-body">
+          <div class="kpi-label text-warning">Vencendo</div>
+          <div class="kpi-value text-warning count-up" data-target="{{ radarKpis.vencendo ?? 0 }}">0</div>
+          <div class="kpi-sub">próx. 30 dias</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="kpi-label">Cobertura Waze</div>
+          <div class="kpi-value text-info count-up" data-target="{{ radarKpis.pctWaze ?? 0 }}" data-suffix="%">0%</div>
+          <div class="kpi-sub">{{ radarKpis.comWaze ?? 0 }} / {{ radarKpis.total ?? 0 }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-{# ── Tabela por UF + Gráfico ── #}
-<div class="row g-4">
-    <div class="col-lg-7">
-        <div class="card border-0 reveal">
-            <div class="card-header d-flex align-items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 6l4 1 4-5 4 4 3-2"/><path d="M3 18h18"/>
-                </svg>
-                Cobertura por UF
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>UF</th>
-                            <th class="text-end">Total</th>
-                            <th class="text-end">Com Waze</th>
-                            <th class="text-end">Sem Waze</th>
-                            <th style="min-width:130px">Cobertura</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for row in kpis.porUf %}
-                        <tr>
-                            <td><span class="badge badge-uf">{{ row.uf }}</span></td>
-                            <td class="text-end" style="font-variant-numeric:tabular-nums">{{ row.total|number_format(0,',','.') }}</td>
-                            <td class="text-end" style="color:var(--status-resolvida-text);font-variant-numeric:tabular-nums">{{ row.com_waze|number_format(0,',','.') }}</td>
-                            <td class="text-end" style="color:var(--status-pendente-text);font-variant-numeric:tabular-nums">{{ row.sem_waze|number_format(0,',','.') }}</td>
-                            <td>
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="progress flex-grow-1" style="height:7px">
-                                        <div class="progress-bar
-                                            {% if row.pct >= 80 %}bg-success
-                                            {% elseif row.pct >= 40 %}bg-warning
-                                            {% else %}bg-danger{% endif %}"
-                                             style="width:{{ row.pct }}%"></div>
-                                    </div>
-                                    <span style="font-size:.75rem;min-width:38px;color:var(--color-text-muted)">{{ row.pct }}%</span>
-                                </div>
-                            </td>
-                        </tr>
-                    {% else %}
-                        <tr><td colspan="5" class="text-center py-4" style="color:var(--color-text-faint)">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto .5rem;display:block;opacity:.4"><circle cx="12" cy="12" r="10"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-                            Sem dados.
-                        </td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+  {# ═══════════════════════════════════════════════════════════════
+     GRÁFICOS RADARES — linha 1
+  ═══════════════════════════════════════════════════════════════ #}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">Radares por Estado</span>
+          <a href="{{ path('radar_index') }}" class="btn btn-sm btn-outline-secondary">Ver todos</a>
         </div>
+        <div class="card-body" style="min-height:280px">
+          <canvas id="chartRadarUf"></canvas>
+        </div>
+      </div>
     </div>
+    <div class="col-12 col-xl-4">
+      <div class="card h-100">
+        <div class="card-header"><span class="fw-semibold">Resultado Geral</span></div>
+        <div class="card-body d-flex align-items-center justify-content-center" style="min-height:280px">
+          <canvas id="chartRadarResultado" style="max-height:240px"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <div class="col-lg-5">
-        <div class="card border-0 h-100 reveal reveal-delay-1">
-            <div class="card-header d-flex align-items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-                </svg>
-                Atividade — últimos 30 dias
-            </div>
-            <div class="card-body d-flex align-items-center p-3">
-                <canvas id="chartAtividade" style="width:100%;max-height:260px"></canvas>
-            </div>
+  {# ═══════════════════════════════════════════════════════════════
+     GRÁFICOS RADARES — linha 2
+  ═══════════════════════════════════════════════════════════════ #}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-6">
+      <div class="card h-100">
+        <div class="card-header"><span class="fw-semibold">Verificações Mensais (12 meses)</span></div>
+        <div class="card-body" style="min-height:240px">
+          <canvas id="chartVerifMensais"></canvas>
         </div>
+      </div>
     </div>
-</div>
+    <div class="col-12 col-xl-6">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">Cobertura Waze por Estado</span>
+          <a href="{{ path('cobertura_radar') }}" class="btn btn-sm btn-outline-secondary">Relatório</a>
+        </div>
+        <div class="card-body" style="min-height:240px">
+          <canvas id="chartCoberturaUf"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════
+     KPIs POSTOS
+  ═══════════════════════════════════════════════════════════════ #}
+  <h5 class="text-uppercase text-muted fw-semibold mb-3 small ls-1">
+    <i class="bi bi-fuel-pump me-1"></i> Postos de Combustível
+  </h5>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card h-100">
+        <div class="card-body">
+          <div class="kpi-label">Total Postos</div>
+          <div class="kpi-value count-up" data-target="{{ kpis.total ?? 0 }}">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card h-100 border-success">
+        <div class="card-body">
+          <div class="kpi-label text-success">Com Link Waze</div>
+          <div class="kpi-value text-success count-up" data-target="{{ kpis.comWaze ?? 0 }}">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card h-100 border-danger">
+        <div class="card-body">
+          <div class="kpi-label text-danger">Sem Link Waze</div>
+          <div class="kpi-value text-danger count-up" data-target="{{ kpis.semWaze ?? 0 }}">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card kpi-card h-100 border-info">
+        <div class="card-body">
+          <div class="kpi-label text-info">Cobertura</div>
+          <div class="kpi-value text-info">{{ kpis.pct ?? 0 }}%</div>
+          <div class="kpi-sub">{{ kpis.mesAtual ?? 0 }} cadastros este mês</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Gráfico atividade postos #}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+      <div class="card">
+        <div class="card-header"><span class="fw-semibold">Atividade de Cadastros — Postos (30 dias)</span></div>
+        <div class="card-body" style="min-height:220px">
+          <canvas id="chartPostoAtividade"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">Radares APROVADOS sem Waze</span>
+          <a href="{{ path('cobertura_radar') }}" class="btn btn-sm btn-outline-warning">Ver todos</a>
+        </div>
+        <div class="card-body p-0" style="max-height:260px;overflow-y:auto">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="sticky-top"><tr><th>UF</th><th>Município</th><th>Local</th></tr></thead>
+            <tbody>
+            {% for r in radarSemWaze %}
+              <tr>
+                <td><span class="badge bg-secondary">{{ r.sigla_uf }}</span></td>
+                <td class="small">{{ r.municipio }}</td>
+                <td class="small text-truncate" style="max-width:140px" title="{{ r.local_verificacao }}">{{ r.local_verificacao }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3" class="text-center text-muted py-3">Todos vinculados! 🎉</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>{# /container #}
 {% endblock %}
 
 {% block javascripts %}
 {{ parent() }}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 (function(){
-    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    var gridColor = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
-    var labelColor = isDark ? '#7a9a9d' : '#6c757d';
-    var barColor = isDark ? 'rgba(79,152,163,0.80)' : 'rgba(1,105,111,0.75)';
+  'use strict';
 
-    const labels = {{ atividade|map(r => r.dia)|json_encode|raw }};
-    const data   = {{ atividade|map(r => r.cadastros)|json_encode|raw }};
-    new Chart(document.getElementById('chartAtividade'), {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Links cadastrados',
-                data,
-                backgroundColor: barColor,
-                borderRadius: 5,
-                borderSkipped: false,
-            }]
-        },
-        options: {
-            responsive: true,
-            animation: { duration: 900, easing: 'easeOutQuart' },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: isDark ? '#182224' : '#fff',
-                    titleColor: isDark ? '#d4e0e1' : '#1e2a2b',
-                    bodyColor: isDark ? '#7a9a9d' : '#6c757d',
-                    borderColor: isDark ? 'rgba(255,255,255,.10)' : 'rgba(0,0,0,.10)',
-                    borderWidth: 1,
-                    padding: 10,
-                    cornerRadius: 8,
-                }
-            },
-            scales: {
-                x: {
-                    grid: { display: false },
-                    ticks: { color: labelColor, font: { size: 11 }, maxTicksLimit: 8 }
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: { stepSize: 1, color: labelColor, font: { size: 11 } },
-                    grid: { color: gridColor }
-                }
-            }
-        }
-    });
-}());
+  // ─── Dados do PHP → JS ───────────────────────────────────────
+  const radarUf = {{ radarPorUf | json_encode | raw }};
+  const resultado = {{ radarResultado | json_encode | raw }};
+  const mensais = {{ radarMensais | json_encode | raw }};
+  const coberturaUf = {{ radarCobertura | json_encode | raw }};
+  const postoAtiv = {{ atividade | json_encode | raw }};
+
+  // ─── Helpers ─────────────────────────────────────────────────
+  const isDark = () => document.documentElement.getAttribute('data-bs-theme') === 'dark'
+                    || document.documentElement.classList.contains('dark-mode')
+                    || window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const gridColor  = () => isDark() ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
+  const labelColor = () => isDark() ? '#adb5bd' : '#495057';
+
+  Chart.defaults.font.family = 'system-ui, -apple-system, sans-serif';
+  Chart.defaults.font.size   = 12;
+
+  function buildScales(x = true, y = true) {
+    const base = { grid: { color: gridColor() }, ticks: { color: labelColor() } };
+    return {
+      ...(x ? { x: base } : {}),
+      ...(y ? { y: base } : {}),
+    };
+  }
+
+  // ─── 1. Radares por UF (barras empilhadas) ───────────────────
+  new Chart(document.getElementById('chartRadarUf'), {
+    type: 'bar',
+    data: {
+      labels: radarUf.map(r => r.uf),
+      datasets: [
+        { label: 'Aprovados',  data: radarUf.map(r => +r.aprovados),  backgroundColor: '#20c997', stack: 's' },
+        { label: 'Reprovados', data: radarUf.map(r => +r.reprovados), backgroundColor: '#dc3545', stack: 's' },
+        { label: 'Outros',     data: radarUf.map(r => +r.total - (+r.aprovados||0) - (+r.reprovados||0)), backgroundColor: '#6c757d', stack: 's' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'bottom', labels: { color: labelColor() } } },
+      scales: { ...buildScales(), x: { stacked: true, grid: { color: gridColor() }, ticks: { color: labelColor() } }, y: { stacked: true, grid: { color: gridColor() }, ticks: { color: labelColor() } } },
+    },
+  });
+
+  // ─── 2. Resultado geral (rosca) ───────────────────────────────
+  const resColors = { 'APROVADO': '#20c997', 'REPROVADO': '#dc3545', 'SEM INFO': '#6c757d' };
+  new Chart(document.getElementById('chartRadarResultado'), {
+    type: 'doughnut',
+    data: {
+      labels: resultado.map(r => r.resultado),
+      datasets: [{ data: resultado.map(r => +r.total), backgroundColor: resultado.map(r => resColors[r.resultado] ?? '#adb5bd'), borderWidth: 2 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: labelColor() } } },
+      cutout: '65%',
+    },
+  });
+
+  // ─── 3. Verificações mensais (linha) ─────────────────────────
+  new Chart(document.getElementById('chartVerifMensais'), {
+    type: 'line',
+    data: {
+      labels: mensais.map(r => r.mes),
+      datasets: [{
+        label: 'Verificações',
+        data: mensais.map(r => +r.total),
+        borderColor: '#0d6efd',
+        backgroundColor: 'rgba(13,110,253,0.1)',
+        fill: true, tension: 0.4, pointRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: buildScales(),
+    },
+  });
+
+  // ─── 4. Cobertura Waze por UF (barras horizontais) ───────────
+  new Chart(document.getElementById('chartCoberturaUf'), {
+    type: 'bar',
+    data: {
+      labels: coberturaUf.map(r => r.uf),
+      datasets: [
+        { label: 'Com Waze',  data: coberturaUf.map(r => +r.com_waze), backgroundColor: '#20c997' },
+        { label: 'Sem Waze',  data: coberturaUf.map(r => +r.sem_waze), backgroundColor: '#dc3545' },
+      ],
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'bottom', labels: { color: labelColor() } } },
+      scales: buildScales(),
+    },
+  });
+
+  // ─── 5. Atividade postos (linha) ─────────────────────────────
+  new Chart(document.getElementById('chartPostoAtividade'), {
+    type: 'line',
+    data: {
+      labels: postoAtiv.map(r => r.dia),
+      datasets: [{
+        label: 'Cadastros',
+        data: postoAtiv.map(r => +r.cadastros),
+        borderColor: '#fd7e14',
+        backgroundColor: 'rgba(253,126,20,0.1)',
+        fill: true, tension: 0.4, pointRadius: 3,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: buildScales(),
+    },
+  });
+
+  // ─── Count-up animado ─────────────────────────────────────────
+  document.querySelectorAll('.count-up').forEach(el => {
+    const target = parseFloat(el.dataset.target ?? '0');
+    const suffix = el.dataset.suffix ?? '';
+    const dur = 1200;
+    const start = performance.now();
+    const fmt = v => Number.isInteger(target) ? Math.round(v).toLocaleString('pt-BR') : v.toFixed(1);
+    const step = t => {
+      const p = Math.min((t - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(ease * target) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+
+})();
 </script>
 {% endblock %}

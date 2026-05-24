@@ -5,14 +5,22 @@
 {% block body %}
 
 {# ── Cabeçalho ── #}
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div>
         <h1 class="h4 mb-0 fw-bold">
             <i class="bi bi-camera-video text-success me-2"></i>Radares Medidores
         </h1>
         <small class="text-muted">Dados RBMLQ — atualizados por estado</small>
     </div>
-    <span class="badge bg-secondary fs-6">{{ total|number_format(0, ',', '.') }} registros</span>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="badge bg-secondary fs-6">{{ total|number_format(0, ',', '.') }} registros</span>
+        <a href="{{ path('radar_manual_lista') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-list-ul me-1"></i>Lista Manual
+        </a>
+        <a href="{{ path('radar_manual_novo') }}" class="btn btn-sm btn-success">
+            <i class="bi bi-plus-lg me-1"></i>Adicionar Radar
+        </a>
+    </div>
 </div>
 
 {# ── Stats ── #}

@@ -54,7 +54,7 @@ class ImportRadarWazeLinkPlanilhaCommand extends Command
 
     private const IMPORTADOR_EMAIL = 'andresoaresdiniz201218@gmail.com';
 
-    private const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcjyVJXsqv6YgCNHobs46Y2Au002IjlKl3n0JCWQqEUyJM0s2TaCrw8N_D7Hbcu52rtaEIcxQb23Y/pub?gid=0&single=true&output=csv';
+    private const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTMNkLJ-NOlnlRd1axHsu2C0f7UMBPohZyUdL259U6K6IfW_tNYN1gdRlsRLPNIrLfa_da_vGFCkTlb/pub?gid=0&single=true&output=csv';
 
     public function __construct(
         private readonly EntityManagerInterface  $em,

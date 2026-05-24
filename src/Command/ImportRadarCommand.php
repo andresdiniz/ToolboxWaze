@@ -101,7 +101,7 @@ final class ImportRadarCommand extends Command
 
         $io->title('Importação Radares — Unificada');
 
-        // ── Resolve lista de UFs ──────────────────────────────────────────────
+        // ── Resolve lista de UFs ────────────────────────────────────────
         $requestedUfs = array_map('strtoupper', $input->getOption('uf'));
 
         if ($requestedUfs !== []) {
@@ -114,7 +114,7 @@ final class ImportRadarCommand extends Command
             }
         }
 
-        // ── Links do banco ────────────────────────────────────────────────────
+        // ── Links do banco ────────────────────────────────────────────
         $linkMapRadares    = $useSheets ? $this->stateRepository->findLinkMapRadares() : [];
         $linkMapReferencia = $skipWaze  ? [] : $this->stateRepository->findLinkMapReferencia();
 
@@ -280,7 +280,8 @@ final class ImportRadarCommand extends Command
             rewind($fh);
         }
 
-        $rawHeader = fgetcsv($fh);
+        // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
+        $rawHeader = fgetcsv($fh, 0, ',', '"', '');
         if ($rawHeader === false || $rawHeader === null) {
             fclose($fh);
             throw new \RuntimeException("CSV da aba REFERENCIA.{$uf} sem cabeçalho.");
@@ -306,7 +307,8 @@ final class ImportRadarCommand extends Command
 
         $linkMap = [];
 
-        while (($row = fgetcsv($fh)) !== false) {
+        // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
+        while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
             if ($row === null || count($row) <= max((int)$colLink, (int)$colSerie)) {
                 continue;
             }
@@ -381,7 +383,7 @@ final class ImportRadarCommand extends Command
         $ok      = curl_exec($ch);
         $errCode = curl_errno($ch);
         $errMsg  = curl_error($ch);
-        curl_close($ch);
+        // PHP 8.5: curl_close() não tem mais efeito — removido para evitar deprecation
         fclose($fp);
 
         if (!$ok || $errCode !== 0 || filesize($tmpPath) < 10) {

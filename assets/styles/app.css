@@ -115,6 +115,12 @@ body, button, input, select, textarea {
     --shadow-md:  0 4px 12px rgba(0,0,0,.35);
     --shadow-lg:  0 8px 28px rgba(0,0,0,.45);
 
+    /* Bootstrap color utility overrides para dark mode */
+    --bs-secondary-color:    #94b5b8;
+    --bs-secondary-rgb:      148,181,184;
+    --bs-body-color:         #d4e0e1;
+    --bs-body-color-rgb:     212,224,225;
+
     /* =====================================================
        FIX CRÍTICO: Bootstrap 5 usa --bs-table-bg e
        --bs-table-color em .table e variantes (table-light,
@@ -169,6 +175,8 @@ body, button, input, select, textarea {
         --shadow-sm:  0 1px 3px rgba(0,0,0,.25);
         --shadow-md:  0 4px 12px rgba(0,0,0,.35);
         --shadow-lg:  0 8px 28px rgba(0,0,0,.45);
+        --bs-secondary-color:    #94b5b8;
+        --bs-body-color:         #d4e0e1;
         --bs-table-bg:           #182224;
         --bs-table-color:        #d4e0e1;
         --bs-table-border-color: rgba(255,255,255,.08);
@@ -437,15 +445,18 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
 .kpi-trend.up   { background: var(--status-resolvida-bg); color: var(--status-resolvida-text); }
 .kpi-trend.down { background: var(--status-cancelada-bg); color: var(--status-cancelada-text); }
 
-/* Stat card (legado) */
+/* Stat card (legado) — cards de stats das páginas de radar/posto */
 .stat-card {
     background: var(--tw-highlight);
     border-color: transparent !important;
 }
+/* FIX: .stat-value sem cor explícita herdava --tw-dark que no dark mode
+   era #a8d8dc (OK) mas Bootstrap fs-4 + fw-bold sobrescrevia com
+   --bs-body-color hardcoded. Forçamos o token correto em ambos os modos. */
 .stat-card .stat-value {
     font-size: 1.75rem;
     font-weight: 700;
-    color: var(--tw-dark);
+    color: var(--tw-dark);  /* light: #0f3638 escuro sobre fundo claro */
 }
 .stat-card .stat-label {
     font-size: .75rem;
@@ -454,8 +465,38 @@ img, picture, video, canvas, svg { display: block; max-width: 100%; }
     color: var(--tw-d);
 }
 
-[data-theme="dark"] .stat-card .stat-value { color: var(--color-text); }
-[data-theme="dark"] .stat-card .stat-label  { color: var(--color-text-muted); }
+[data-theme="dark"] .stat-card .stat-value { color: var(--color-text) !important; }
+[data-theme="dark"] .stat-card .stat-label  { color: var(--color-text-muted) !important; }
+
+/* =========================================================
+   FIX DARK MODE — Bootstrap text utilities
+   Bootstrap aplica color hardcoded (hex/rgb) via .text-muted,
+   .text-secondary, .text-body-secondary etc.
+   Sobrescrevemos com !important para garantir legibilidade.
+   Afeta: subtítulos de página (small.text-muted), card Estados
+   (text-secondary), rodapés de card (text-muted small).
+   ========================================================= */
+[data-theme="dark"] .text-muted,
+[data-theme="dark"] .text-body-secondary {
+    color: var(--color-text-muted) !important;
+}
+[data-theme="dark"] .text-secondary {
+    color: var(--color-text-muted) !important;
+}
+[data-theme="dark"] small.text-muted,
+[data-theme="dark"] .small.text-muted {
+    color: var(--color-text-muted) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .text-muted,
+    :root:not([data-theme]) .text-body-secondary,
+    :root:not([data-theme]) .text-secondary,
+    :root:not([data-theme]) small.text-muted,
+    :root:not([data-theme]) .small.text-muted {
+        color: #94b5b8 !important;
+    }
+}
 
 /* =========================================================
    Badges

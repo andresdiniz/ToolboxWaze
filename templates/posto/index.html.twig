@@ -19,27 +19,27 @@
 {% if stats %}
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-        <div class="card stat-card p-3">
-            <div class="detail-label">Total</div>
-            <div class="stat-value">{{ stats.total|number_format(0,',','.') }}</div>
+        <div class="kpi-card">
+            <div class="kpi-label">Total</div>
+            <div class="kpi-value">{{ stats.total|number_format(0,',','.') }}</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="card p-3" style="border-left:3px solid #6c757d">
-            <div class="detail-label">Estados</div>
-            <div class="stat-value" style="color:#6c757d">{{ stats.estados }}</div>
+        <div class="kpi-card">
+            <div class="kpi-label">Estados</div>
+            <div class="kpi-value">{{ stats.estados }}</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="card p-3" style="border-left:3px solid #0d6efd">
-            <div class="detail-label">Municípios</div>
-            <div class="stat-value" style="color:#0d6efd">{{ stats.municipios|number_format(0,',','.') }}</div>
+        <div class="kpi-card">
+            <div class="kpi-label">Municípios</div>
+            <div class="kpi-value">{{ stats.municipios|number_format(0,',','.') }}</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="card p-3" style="border-left:3px solid #fd7e14">
-            <div class="detail-label">Bandeiras</div>
-            <div class="stat-value" style="color:#fd7e14">{{ stats.bandeiras }}</div>
+        <div class="kpi-card">
+            <div class="kpi-label">Bandeiras</div>
+            <div class="kpi-value">{{ stats.bandeiras }}</div>
         </div>
     </div>
 </div>
@@ -47,7 +47,14 @@
 
 {# ── Filtros ── #}
 <div class="card mb-4">
-    <div class="card-body">
+    <div class="card-header fw-semibold py-2">
+        <i class="bi bi-funnel me-1"></i>Filtros
+        {% set activeCount = (filters.busca ? 1 : 0) + (filters.uf ? 1 : 0) + (filters.municipio ? 1 : 0) + (filters.bandeira ? 1 : 0) %}
+        {% if activeCount > 0 %}
+            <span class="badge bg-primary ms-1">{{ activeCount }} ativo{{ activeCount > 1 ? 's' }}</span>
+        {% endif %}
+    </div>
+    <div class="card-body pb-2">
         <form method="get" class="filters-form">
             <div class="row g-2 align-items-end">
 
@@ -59,7 +66,7 @@
 
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1 detail-label">Estado</label>
-                    <select name="uf" class="form-select form-select-sm">
+                    <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         {% for u in ufs %}
                             <option value="{{ u }}" {{ filters.uf == u ? 'selected' }}>{{ u }}</option>
@@ -75,7 +82,7 @@
 
                 <div class="col-12 col-md-2">
                     <label class="form-label mb-1 detail-label">Bandeira</label>
-                    <select name="bandeira" class="form-select form-select-sm">
+                    <select name="bandeira" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todas</option>
                         {% for b in bandeiras %}
                             <option value="{{ b }}" {{ filters.bandeira == b ? 'selected' }}>{{ b }}</option>
@@ -85,19 +92,50 @@
 
                 <div class="col-6 col-md-1">
                     <button type="submit" class="btn btn-primary btn-sm w-100">
-                        <i class="bi bi-search"></i>
+                        <i class="bi bi-funnel me-1"></i>Filtrar
                     </button>
                 </div>
 
-                {% if filters.uf or filters.municipio or filters.bandeira or filters.busca %}
+                {% if activeCount > 0 %}
                 <div class="col-auto">
-                    <a href="{{ path('posto_index') }}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-x-circle me-1"></i>Limpar
+                    <a href="{{ path('posto_index') }}" class="btn btn-outline-secondary btn-sm" title="Limpar filtros">
+                        <i class="bi bi-x-lg"></i>
                     </a>
                 </div>
                 {% endif %}
 
             </div>
+
+            {# Tags dos filtros ativos #}
+            {% if activeCount > 0 %}
+            <div class="mt-2 d-flex flex-wrap gap-1">
+                {% if filters.busca %}
+                    <span class="badge border" style="background:var(--color-surface-2);color:var(--color-text);border-color:var(--color-border) !important">
+                        Busca: <strong>{{ filters.busca }}</strong>
+                        <a href="{{ path('posto_index', filters|merge({busca: '', page: 1})) }}" class="text-danger ms-1">×</a>
+                    </span>
+                {% endif %}
+                {% if filters.uf %}
+                    <span class="badge border" style="background:var(--color-surface-2);color:var(--color-text);border-color:var(--color-border) !important">
+                        Estado: <strong>{{ filters.uf }}</strong>
+                        <a href="{{ path('posto_index', filters|merge({uf: '', page: 1})) }}" class="text-danger ms-1">×</a>
+                    </span>
+                {% endif %}
+                {% if filters.municipio %}
+                    <span class="badge border" style="background:var(--color-surface-2);color:var(--color-text);border-color:var(--color-border) !important">
+                        Município: <strong>{{ filters.municipio }}</strong>
+                        <a href="{{ path('posto_index', filters|merge({municipio: '', page: 1})) }}" class="text-danger ms-1">×</a>
+                    </span>
+                {% endif %}
+                {% if filters.bandeira %}
+                    <span class="badge border" style="background:var(--color-surface-2);color:var(--color-text);border-color:var(--color-border) !important">
+                        Bandeira: <strong>{{ filters.bandeira }}</strong>
+                        <a href="{{ path('posto_index', filters|merge({bandeira: '', page: 1})) }}" class="text-danger ms-1">×</a>
+                    </span>
+                {% endif %}
+            </div>
+            {% endif %}
+
         </form>
     </div>
 </div>
@@ -107,12 +145,27 @@
     <div class="text-center py-5 text-muted">
         <i class="bi bi-fuel-pump fs-2 d-block mb-2"></i>
         Nenhum posto encontrado com os filtros selecionados.
+        {% if activeCount > 0 %}
+        <div class="mt-3">
+            <a href="{{ path('posto_index') }}" class="btn btn-sm btn-outline-secondary">Limpar filtros</a>
+        </div>
+        {% endif %}
     </div>
 {% else %}
 <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small">
+            <i class="bi bi-table me-1"></i>
+            Mostrando {{ ((page-1)*per_page + 1)|number_format(0,',','.') }}–{{ [page*per_page, total]|min|number_format(0,',','.') }}
+            de {{ total|number_format(0,',','.') }}
+        </span>
+        {% if total > per_page %}
+        <small class="text-muted">Página {{ page }} de {{ pages }}</small>
+        {% endif %}
+    </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
-            <thead class="table-light">
+            <thead>
                 <tr>
                     <th>Razão Social / Fantasia</th>
                     <th>CNPJ</th>
@@ -128,7 +181,7 @@
                 {% for row in rows %}
                 <tr class="row-link" onclick="window.location='{{ path('posto_show', {id: row.id}) }}'">
                     <td>
-                        <div class="fw-semibold" style="max-width:200px" class="text-truncate">{{ row.razao_social }}</div>
+                        <div class="fw-semibold" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ row.razao_social }}</div>
                         {% if row.nome_fantasia and row.nome_fantasia != row.razao_social %}
                             <small class="text-muted">{{ row.nome_fantasia }}</small>
                         {% endif %}
@@ -136,7 +189,7 @@
                     <td><code class="small">{{ row.cnpj }}</code></td>
                     <td>
                         {% if row.bandeira %}
-                            <span class="badge bg-light text-dark border">{{ row.bandeira }}</span>
+                            <span class="badge border" style="background:var(--color-surface-2);color:var(--color-text);border-color:var(--color-border) !important">{{ row.bandeira }}</span>
                         {% else %}—{% endif %}
                     </td>
                     <td class="text-truncate" style="max-width:180px" title="{{ row.endereco }}, {{ row.complemento }}">
@@ -156,46 +209,46 @@
             </tbody>
         </table>
     </div>
+
+    {# ── Paginação ── #}
+    {% if pages > 1 %}
+    <div class="card-footer py-2">
+        <nav aria-label="Paginação">
+            <ul class="pagination pagination-sm mb-0 justify-content-center flex-wrap">
+                <li class="page-item {{ page == 1 ? 'disabled' }}">
+                    <a class="page-link" href="{{ path('posto_index', filters|merge({page: page - 1})) }}">‹ Anterior</a>
+                </li>
+
+                {% set from = max(1, page - 2) %}
+                {% set to   = min(pages, page + 2) %}
+
+                {% if from > 1 %}
+                    <li class="page-item"><a class="page-link" href="{{ path('posto_index', filters|merge({page: 1})) }}">1</a></li>
+                    {% if from > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                {% endif %}
+
+                {% for p in from..to %}
+                    <li class="page-item {{ p == page ? 'active' }}">
+                        <a class="page-link" href="{{ path('posto_index', filters|merge({page: p})) }}">{{ p }}</a>
+                    </li>
+                {% endfor %}
+
+                {% if to < pages %}
+                    {% if to < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+                    <li class="page-item"><a class="page-link" href="{{ path('posto_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
+                {% endif %}
+
+                <li class="page-item {{ page == pages ? 'disabled' }}">
+                    <a class="page-link" href="{{ path('posto_index', filters|merge({page: page + 1})) }}">Próxima ›</a>
+                </li>
+            </ul>
+            <p class="text-center text-muted small mt-1 mb-0">
+                Página {{ page }} de {{ pages }} — {{ total|number_format(0,',','.') }} registros
+            </p>
+        </nav>
+    </div>
+    {% endif %}
+
 </div>
-
-{# ── Paginação ── #}
-{% if pages > 1 %}
-<nav class="mt-3">
-    <ul class="pagination pagination-sm justify-content-center flex-wrap">
-
-        <li class="page-item {{ page == 1 ? 'disabled' }}">
-            <a class="page-link" href="{{ path('posto_index', filters|merge({page: page - 1})) }}">‹</a>
-        </li>
-
-        {% set from = max(1, page - 2) %}
-        {% set to   = min(pages, page + 2) %}
-
-        {% if from > 1 %}
-            <li class="page-item"><a class="page-link" href="{{ path('posto_index', filters|merge({page: 1})) }}">1</a></li>
-            {% if from > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-        {% endif %}
-
-        {% for p in from..to %}
-            <li class="page-item {{ p == page ? 'active' }}">
-                <a class="page-link" href="{{ path('posto_index', filters|merge({page: p})) }}">{{ p }}</a>
-            </li>
-        {% endfor %}
-
-        {% if to < pages %}
-            {% if to < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
-            <li class="page-item"><a class="page-link" href="{{ path('posto_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
-        {% endif %}
-
-        <li class="page-item {{ page == pages ? 'disabled' }}">
-            <a class="page-link" href="{{ path('posto_index', filters|merge({page: page + 1})) }}">›</a>
-        </li>
-
-    </ul>
-    <p class="text-center text-muted small">
-        Página {{ page }} de {{ pages }} — {{ total|number_format(0,',','.') }} registros
-    </p>
-</nav>
-{% endif %}
-
 {% endif %}
 {% endblock %}

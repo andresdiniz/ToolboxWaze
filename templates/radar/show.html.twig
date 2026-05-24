@@ -11,13 +11,6 @@
     </ol>
 </nav>
 
-{#
-  BUG FIX: antes usávamos radar.data_validade (formato 'd/m/Y') para comparar com $hoje
-  (formato 'Y-m-d'), resultando em comparação lexicográfica errada.
-  Agora o controller retorna radar.data_validade_iso (Y-m-d) e as variáveis
-  hoje/em30 também vêm do controller para garantir consistência.
-#}
-
 {# ── Cabeçalho ── #}
 <div class="d-flex align-items-start justify-content-between mb-4 gap-3 flex-wrap">
     <div>
@@ -38,7 +31,6 @@
             <span class="badge bg-secondary fs-6 px-3 py-2">{{ radar.ultimo_resultado }}</span>
         {% endif %}
 
-        {# Badge de validade no cabeçalho — usa data_validade_iso (Y-m-d) para comparação correta #}
         {% if radar.data_validade_iso %}
             {% if radar.data_validade_iso < hoje %}
                 <span class="badge bg-danger fs-6 px-3 py-2">
@@ -98,7 +90,6 @@
                     <div class="col-sm-6">
                         <div class="detail-label">Validade</div>
                         <div class="detail-value">
-                            {# Exibe no formato original d/m/Y, mas compara com iso #}
                             {% if radar.data_validade %}
                                 {% if radar.data_validade_iso < hoje %}
                                     <span class="text-danger fw-semibold">
@@ -161,7 +152,7 @@
             </div>
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0">
-                    <thead class="table-light">
+                    <thead>
                         <tr>
                             <th>Faixa</th>
                             <th>Nº Inmetro</th>
@@ -245,27 +236,64 @@
     {# ── Coluna direita ── #}
     <div class="col-lg-5">
 
-        {# CARD: EDITOR WAZE #}
+        {# ══════════════════════════════════════════════
+           CARD: EDITOR WAZE + MAPA OSM
+           Extrai lat/lon da URL do waze_link e renderiza
+           um mapa Leaflet (OpenStreetMap) com marcador.
+           O botão "Abrir Editor" é mantido.
+           ══════════════════════════════════════════════ #}
         {% if app.user %}
-        <div class="card mb-4 border-primary" id="card-waze">
-            <div class="card-header fw-semibold bg-primary text-white d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-signpost-2 me-2"></i>Editor Waze</span>
+        <div class="card mb-4" id="card-waze">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center"
+                 style="background:var(--tw);color:#fff;border-radius:var(--radius-lg) var(--radius-lg) 0 0">
+                <span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                         viewBox="0 0 16 16" class="me-2" style="vertical-align:-.15em">
+                        <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/>
+                    </svg>
+                    Editor Waze
+                </span>
                 {% if wazeLink %}
                     <a href="{{ wazeLink.waze_link }}" target="_blank" rel="noopener"
-                       class="btn btn-sm btn-light">
-                        <i class="bi bi-box-arrow-up-right me-1"></i>Abrir Editor
+                       class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.3)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
+                             viewBox="0 0 16 16" class="me-1" style="vertical-align:-.1em">
+                            <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
+                            <path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
+                        </svg>
+                        Abrir Editor
                     </a>
                 {% endif %}
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
+
+                {# ── MAPA OSM ── aparece quando há waze_link com lat/lon #}
+                {% if wazeLink and wazeLink.waze_link %}
+                {%
+                    set wazeLat = null
+                    %}{%
+                    set wazeLon = null
+                %}
+                {# Extrai lat= e lon= da URL via regex do Twig #}
+                {% if wazeLink.waze_link matches '/[?&]lat=(-?[0-9]+\.?[0-9]*)/' %}
+                    {% set wazeLat = wazeLink.waze_link|replace({'/.*[?&]lat=(-?[0-9]+\.?[0-9]*).*/': '\\1'}) %}
+                    {# Twig não tem regex-capture nativo; passamos lat/lon via data-attr e JS extrai #}
+                {% endif %}
+                <div id="waze-map"
+                     data-waze-url="{{ wazeLink.waze_link|e('html_attr') }}"
+                     style="height:240px;width:100%;background:var(--color-surface-2)">
+                </div>
+                {% endif %}
+
+                <div class="p-3">
 
                 {# Estado atual (somente leitura) quando já existe link #}
                 {% if wazeLink %}
-                <div class="mb-3 p-3 rounded" style="background:var(--bs-light, #f8f9fa);border:1px solid var(--bs-border-color, #dee2e6)">
+                <div class="mb-3 p-3 rounded" style="background:var(--color-surface-2);border:1px solid var(--color-border)">
                     <div class="row g-2">
                         <div class="col-12">
                             <div class="detail-label">Hazard ID atual</div>
-                            <div class="fw-bold text-primary fs-5">#{{ wazeLink.permanent_hazard_id }}</div>
+                            <div class="fw-bold fs-5" style="color:var(--tw)">&#35;{{ wazeLink.permanent_hazard_id }}</div>
                         </div>
                         <div class="col-sm-6">
                             <div class="detail-label">Cadastrado por</div>
@@ -275,7 +303,7 @@
                         {% if wazeLink.updated_at %}
                         <div class="col-sm-6">
                             <div class="detail-label">Última edição</div>
-                            <div class="small text-warning fw-semibold">{{ wazeLink.updated_by_email }}</div>
+                            <div class="small fw-semibold" style="color:var(--color-text)">{{ wazeLink.updated_by_email }}</div>
                             <div class="text-muted" style="font-size:.75rem">{{ wazeLink.updated_at|date('d/m/Y H:i') }}</div>
                         </div>
                         {% endif %}
@@ -291,13 +319,16 @@
 
                 {# Botão para recolher/expandir o formulário (só quando já tem link) #}
                 {% if wazeLink %}
-                <button class="btn btn-outline-primary btn-sm w-100 mb-3"
+                <button class="btn btn-sm w-100 mb-3"
                         type="button"
+                        style="border:1px solid var(--color-border);color:var(--color-text);background:var(--color-surface-2)"
                         data-bs-toggle="collapse"
                         data-bs-target="#waze-form-wrap"
                         aria-expanded="{% if wazeErrors is not empty %}true{% else %}false{% endif %}"
                         aria-controls="waze-form-wrap">
-                    <i class="bi bi-pencil me-1"></i>Alterar Permalink / motivo
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
+                         viewBox="0 0 16 16" class="me-1"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/></svg>
+                    Alterar Permalink / motivo
                 </button>
                 <div class="collapse{% if wazeErrors is not empty %} show{% endif %}" id="waze-form-wrap">
                 {% else %}
@@ -314,13 +345,6 @@
                             <label class="form-label fw-semibold small">
                                 Link do Editor Waze <span class="text-danger">*</span>
                             </label>
-                            {#
-                              BUG FIX: antes era `wazeLink ? wazeLink.waze_link : wazeFormData...`
-                              Se havia erro de validação (wazeErrors), o campo mostrava o link
-                              salvo no banco em vez do valor que o usuário digitou.
-                              Agora: se há wazeFormData (redirect após erro), usa isso.
-                              Senão, pré-popula com o link atual do banco (modo edição normal).
-                            #}
                             <input type="url"
                                    name="waze_link"
                                    id="waze-link-input"
@@ -353,13 +377,16 @@
                             {% endif %}
                         </div>
 
-                        <div class="mb-3 p-2 rounded bg-light border small text-muted">
-                            <i class="bi bi-person-check me-1"></i>
+                        <div class="mb-3 p-2 rounded small text-muted" style="background:var(--color-surface-2);border:1px solid var(--color-border)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
+                                 viewBox="0 0 16 16" class="me-1"><path d="M11 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm.256 7a4.474 4.474 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10c.26 0 .507.009.74.025a4.548 4.548 0 0 1 .261-.9C8.677 9.045 8.366 9 8 9c-5 0-6 3-6 4s1 1 1 1h5.256zm3.63-4.54c.18-.613 1.048-.613 1.229 0l.043.148a.64.64 0 0 0 .921.382l.136-.074c.561-.306 1.175.308.87.869l-.075.136a.64.64 0 0 0 .382.92l.149.045c.612.18.612 1.048 0 1.229l-.15.043a.64.64 0 0 0-.38.921l.074.136c.305.561-.309 1.175-.87.87l-.136-.075a.64.64 0 0 0-.92.382l-.045.149c-.18.612-1.048.612-1.229 0l-.043-.15a.64.64 0 0 0-.921-.38l-.136.074c-.561.305-1.175-.309-.87-.87l.075-.136a.64.64 0 0 0-.382-.92l-.148-.045c-.613-.18-.613-1.048 0-1.229l.148-.043a.64.64 0 0 0 .382-.921l-.074-.136c-.306-.561.308-1.175.869-.87l.136.075a.64.64 0 0 0 .92-.382l.045-.148zM14 12.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0z"/></svg>
                             Será registrado como: <strong>{{ app.user.email }}</strong> — agora
                         </div>
 
-                        <button type="submit" class="btn btn-primary btn-sm w-100">
-                            <i class="bi bi-save me-1"></i>
+                        <button type="submit" class="btn btn-sm w-100"
+                                style="background:var(--tw);color:#fff;border:none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
+                                 viewBox="0 0 16 16" class="me-1"><path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/></svg>
                             {{ wazeLink ? 'Salvar alterações' : 'Cadastrar link Waze' }}
                         </button>
                     </form>
@@ -368,14 +395,16 @@
 
                 {# TIMELINE DE HISTÓRICO DO LINK WAZE #}
                 {% if wazeLog is not empty %}
-                <hr class="my-3">
-                <button class="btn btn-outline-secondary btn-sm w-100 mb-2"
+                <hr class="my-3" style="border-color:var(--color-border)">
+                <button class="btn btn-sm w-100 mb-2"
                         type="button"
+                        style="border:1px solid var(--color-border);color:var(--color-text-muted);background:transparent"
                         data-bs-toggle="collapse"
                         data-bs-target="#waze-historico-wrap"
                         aria-expanded="false"
                         aria-controls="waze-historico-wrap">
-                    <i class="bi bi-clock-history me-1"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
+                         viewBox="0 0 16 16" class="me-1"><path d="M8.515 1.019A7 7 0 0 0 8 1V0a8 8 0 0 1 .589.022l-.074.997zm2.004.45a7.003 7.003 0 0 0-.985-.299l.219-.976c.383.086.76.2 1.126.342l-.36.933zm1.37.71a7.01 7.01 0 0 0-.439-.27l.493-.87a8.025 8.025 0 0 1 .979.654l-.615.789a6.996 6.996 0 0 0-.418-.302zm1.834 1.79a6.99 6.99 0 0 0-.653-.796l.724-.69c.27.285.52.59.747.91l-.818.576zm.744 1.352a7.08 7.08 0 0 0-.214-.468l.893-.45a7.976 7.976 0 0 1 .45 1.088l-.95.313a7.023 7.023 0 0 0-.179-.483zm.53 2.507a6.991 6.991 0 0 0-.1-1.025l.985-.17c.067.386.106.778.116 1.17l-1 .025zm-.131 1.538c.033-.17.06-.339.081-.51l.993.123a7.957 7.957 0 0 1-.23 1.155l-.964-.267c.046-.165.086-.332.12-.501zm-.952 2.379c.184-.29.346-.594.486-.908l.914.405c-.16.36-.345.706-.555 1.038l-.845-.535zm-.964 1.205c.122-.122.239-.248.35-.378l.758.653a8.073 8.073 0 0 1-.401.432l-.707-.707z"/><path d="M8 1a7 7 0 1 0 4.95 11.95l.707.707A8.001 8.001 0 1 1 8 0v1z"/><path d="M7.5 3a.5.5 0 0 1 .5.5v5.21l3.248 1.856a.5.5 0 0 1-.496.868l-3.5-2A.5.5 0 0 1 7 9V3.5a.5.5 0 0 1 .5-.5z"/></svg>
                     Histórico de alterações ({{ wazeLog|length }})
                 </button>
                 <div class="collapse" id="waze-historico-wrap">
@@ -391,11 +420,11 @@
                                         {{ log.campo_alterado == 'waze_link' ? 'bg-primary' : 'bg-secondary' }}
                                         badge-sm">
                                         {% if log.campo_alterado == 'waze_link' %}
-                                            <i class="bi bi-link-45deg me-1"></i>Link alterado
+                                            Link alterado
                                         {% elseif log.campo_alterado == 'motivo_revisao' %}
-                                            <i class="bi bi-chat-text me-1"></i>Motivo
+                                            Motivo
                                         {% else %}
-                                            <i class="bi bi-pencil me-1"></i>{{ log.campo_alterado }}
+                                            {{ log.campo_alterado }}
                                         {% endif %}
                                     </span>
                                     <small class="text-muted ms-2" style="white-space:nowrap">
@@ -404,14 +433,13 @@
                                 </div>
 
                                 <div class="small mb-1">
-                                    <i class="bi bi-person me-1 text-muted"></i>
                                     <span class="fw-semibold">{{ log.changed_by_email }}</span>
                                 </div>
 
                                 {% if log.campo_alterado == 'waze_link' %}
                                     {% if log.valor_anterior %}
                                     <div class="small text-muted">
-                                        <span class="text-danger"><i class="bi bi-dash-circle me-1"></i>Anterior:</span>
+                                        <span class="text-danger">Anterior:</span>
                                         <a href="{{ log.valor_anterior }}" target="_blank" rel="noopener"
                                            class="font-monospace text-decoration-none text-muted"
                                            style="word-break:break-all;font-size:.7rem">
@@ -419,12 +447,10 @@
                                         </a>
                                     </div>
                                     {% else %}
-                                    <div class="small text-success">
-                                        <i class="bi bi-plus-circle me-1"></i>Primeiro cadastro
-                                    </div>
+                                    <div class="small text-success">Primeiro cadastro</div>
                                     {% endif %}
                                     <div class="small">
-                                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Novo:</span>
+                                        <span class="text-success">Novo:</span>
                                         <a href="{{ log.valor_novo }}" target="_blank" rel="noopener"
                                            class="font-monospace text-decoration-none"
                                            style="word-break:break-all;font-size:.7rem">
@@ -433,21 +459,15 @@
                                     </div>
                                 {% else %}
                                     {% if log.valor_anterior %}
-                                    <div class="small text-muted">
-                                        <i class="bi bi-dash me-1 text-danger"></i><em>{{ log.valor_anterior }}</em>
-                                    </div>
+                                    <div class="small text-muted"><em>{{ log.valor_anterior }}</em></div>
                                     {% endif %}
                                     {% if log.valor_novo %}
-                                    <div class="small">
-                                        <i class="bi bi-arrow-right me-1 text-success"></i>{{ log.valor_novo }}
-                                    </div>
+                                    <div class="small">→ {{ log.valor_novo }}</div>
                                     {% endif %}
                                 {% endif %}
 
                                 {% if log.observacao %}
-                                <div class="small text-muted fst-italic mt-1">
-                                    <i class="bi bi-sticky me-1"></i>{{ log.observacao }}
-                                </div>
+                                <div class="small text-muted fst-italic mt-1">{{ log.observacao }}</div>
                                 {% endif %}
                             </div>
                         </div>
@@ -456,6 +476,8 @@
                 </div>{# /waze-historico-wrap #}
                 {% endif %}{# wazeLog #}
 
+                </div>{# /p-3 #}
+
             </div>{# /card-body #}
         </div>{# /card editor waze #}
         {% endif %}{# app.user #}
@@ -463,8 +485,11 @@
     </div>{# /col-lg-5 #}
 </div>
 
-{# CSS INLINE — Timeline Waze #}
+{# ═══════════════════════════════════════════════════════
+   ESTILOS — Timeline Waze + Mapa OSM (dark-mode aware)
+   ═══════════════════════════════════════════════════════ #}
 <style>
+/* Timeline */
 .waze-timeline {
     position: relative;
     padding-left: 1.5rem;
@@ -472,54 +497,161 @@
 .waze-timeline::before {
     content: '';
     position: absolute;
-    left: .45rem;
-    top: .5rem;
-    bottom: .5rem;
+    left: .45rem; top: .5rem; bottom: .5rem;
     width: 2px;
-    background: #dee2e6;
+    background: var(--color-border);
     border-radius: 2px;
 }
 .waze-timeline-item {
     position: relative;
     margin-bottom: 1rem;
 }
-.waze-timeline-item:last-child {
-    margin-bottom: 0;
-}
+.waze-timeline-item:last-child { margin-bottom: 0; }
 .waze-timeline-dot {
     position: absolute;
-    left: -1.5rem;
-    top: .3rem;
-    width: .7rem;
-    height: .7rem;
+    left: -1.5rem; top: .3rem;
+    width: .7rem; height: .7rem;
     border-radius: 50%;
-    border: 2px solid #fff;
+    border: 2px solid var(--color-surface);
     box-shadow: 0 0 0 2px currentColor;
 }
-.waze-timeline-dot.dot-link  { color: var(--bs-primary, #0d6efd); }
-.waze-timeline-dot.dot-obs   { color: var(--bs-secondary, #6c757d); }
+.waze-timeline-dot.dot-link  { color: var(--tw); }
+.waze-timeline-dot.dot-obs   { color: var(--color-text-muted); }
 .waze-timeline-content {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: .4rem;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     padding: .5rem .75rem;
 }
 .badge-sm { font-size: .7rem; padding: .2em .5em; }
+
+/* Mapa Leaflet — overrides mínimos para dark mode */
+#waze-map .leaflet-tile-pane { filter: none; }
+[data-theme="dark"] #waze-map .leaflet-tile-pane {
+    filter: brightness(.85) saturate(.7) invert(1) hue-rotate(180deg);
+}
+[data-theme="dark"] #waze-map .leaflet-marker-icon { filter: none; }
+.leaflet-popup-content-wrapper {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-md);
+}
+.leaflet-popup-tip { background: var(--color-surface); }
+.waze-map-actions {
+    display: flex;
+    gap: .5rem;
+    padding: .6rem .75rem;
+    background: var(--color-surface-2);
+    border-bottom: 1px solid var(--color-border);
+    font-size: .78rem;
+    align-items: center;
+}
+.waze-map-coords {
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: .72rem;
+    color: var(--color-text-muted);
+    margin-left: auto;
+}
 </style>
 
+{# ═══════════════════════════════════════════════════════
+   SCRIPTS — Hazard preview + Mapa OSM Leaflet
+   ═══════════════════════════════════════════════════════ #}
 <script>
 (function () {
+    /* ── Hazard ID preview no input ── */
     const input    = document.getElementById('waze-link-input');
     const preview  = document.getElementById('waze-hazard-preview');
     const hazardEl = document.getElementById('waze-hazard-id');
-    if (!input) return;
-    function update() {
-        const m = input.value.match(/[?&]permanentHazards=(\d+)/);
-        if (m) { hazardEl.textContent = m[1]; preview.classList.remove('d-none'); }
-        else   { preview.classList.add('d-none'); }
+    if (input) {
+        function updateHazard() {
+            const m = input.value.match(/[?&]permanentHazards=(\d+)/);
+            if (m) { hazardEl.textContent = m[1]; preview.classList.remove('d-none'); }
+            else   { preview.classList.add('d-none'); }
+        }
+        input.addEventListener('input', updateHazard);
+        updateHazard();
     }
-    input.addEventListener('input', update);
-    update();
+
+    /* ── Mapa OSM Leaflet ── */
+    const mapDiv = document.getElementById('waze-map');
+    if (!mapDiv) return;
+
+    const wazeUrl = mapDiv.dataset.wazeUrl || '';
+
+    /* Extrai lat e lon da URL do Waze Editor */
+    const latMatch = wazeUrl.match(/[?&]lat=(-?[\d.]+)/);
+    const lonMatch = wazeUrl.match(/[?&]lon=(-?[\d.]+)/);
+
+    if (!latMatch || !lonMatch) {
+        /* Sem coordenadas: esconde o container do mapa */
+        mapDiv.style.display = 'none';
+        return;
+    }
+
+    const lat = parseFloat(latMatch[1]);
+    const lon = parseFloat(lonMatch[1]);
+
+    /* Cria barra de ações acima do mapa */
+    const actions = document.createElement('div');
+    actions.className = 'waze-map-actions';
+    actions.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" style="color:var(--tw);flex-shrink:0"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>' +
+        '<span style="color:var(--color-text);font-weight:600">Localização no mapa</span>' +
+        '<span class="waze-map-coords">' + lat.toFixed(5) + ', ' + lon.toFixed(5) + '</span>' +
+        '<a href="https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '&zoom=17" ' +
+           'target="_blank" rel="noopener" ' +
+           'style="color:var(--tw);font-size:.72rem;text-decoration:none;margin-left:.5rem">OSM ↗</a>';
+    mapDiv.parentNode.insertBefore(actions, mapDiv);
+
+    /* Carrega Leaflet via CDN e inicializa o mapa */
+    function initMap() {
+        const L = window.L;
+        const map = L.map(mapDiv, {
+            center: [lat, lon],
+            zoom: 17,
+            scrollWheelZoom: false,
+            attributionControl: true,
+            zoomControl: true
+        });
+
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        /* Marcador com popup linkando para o editor Waze */
+        const marker = L.marker([lat, lon]).addTo(map);
+        marker.bindPopup(
+            '<div style="font-size:.82rem;line-height:1.5">' +
+            '<strong style="display:block;margin-bottom:.3rem">📍 Radar</strong>' +
+            '<a href="' + wazeUrl + '" target="_blank" rel="noopener" ' +
+               'style="color:var(--tw);text-decoration:none;font-weight:600">' +
+               '🗺 Abrir no Editor Waze</a>' +
+            '</div>'
+        ).openPopup();
+
+        /* Recalcula tamanho após BS collapse / DOM ready */
+        setTimeout(function(){ map.invalidateSize(); }, 300);
+    }
+
+    if (window.L) {
+        initMap();
+    } else {
+        /* Carrega CSS do Leaflet */
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+
+        /* Carrega JS do Leaflet */
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = initMap;
+        document.head.appendChild(script);
+    }
 }());
 </script>
 

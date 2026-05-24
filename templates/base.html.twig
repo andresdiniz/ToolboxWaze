@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#01696f">
     <title>{% block title %}ToolboxWaze{% endblock %}</title>
 
     {# Bootstrap CSS via CDN #}
@@ -55,10 +56,12 @@
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                 </svg>
             </button>
+            {# FIX: ícone usa currentColor para funcionar em modo claro e escuro #}
             <button class="navbar-toggler bg-transparent border-0" type="button"
                     data-bs-toggle="collapse" data-bs-target="#nav"
                     aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="#fff" viewBox="0 0 16 16">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                     fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
                     <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
                 </svg>
             </button>
@@ -174,7 +177,7 @@
 }());
 </script>
 
-{# Dark mode toggle logic #}
+{# Dark mode toggle logic — disables transitions during switch to avoid global repaint #}
 <script>
 (function(){
   var html = document.documentElement;
@@ -183,12 +186,26 @@
   var moon = document.getElementById('icon-moon');
 
   function applyTheme(t) {
+    // Desabilita todas as transitions para evitar repintura global durante troca de tema
+    var style = document.createElement('style');
+    style.id = '__theme-no-transition';
+    style.textContent = '*, *::before, *::after { transition: none !important; }';
+    document.head.appendChild(style);
+
     html.setAttribute('data-theme', t);
     try { localStorage.setItem('twTheme', t); } catch(e){}
     if (sun && moon) {
       sun.style.display  = t === 'dark' ? 'block' : 'none';
       moon.style.display = t === 'dark' ? 'none'  : 'block';
     }
+
+    // Restaura transitions no próximo frame
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        var el = document.getElementById('__theme-no-transition');
+        if (el) el.remove();
+      });
+    });
   }
 
   var saved = null;
@@ -240,6 +257,7 @@
     });
   }, { threshold: 0.5 });
   document.querySelectorAll('.count-up').forEach(function(el){ io2.observe(el); });
+}());
 }());
 </script>
 </body>

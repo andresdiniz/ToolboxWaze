@@ -10,11 +10,6 @@
           href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
           crossorigin="anonymous">
 
-    {# Bootstrap Icons via CDN #}
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-          crossorigin="anonymous">
-
     {# Inter via Google Fonts #}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,28 +17,52 @@
 
     {{ importmap('app') }}
     {% block stylesheets %}{% endblock %}
+
+    {# Apply saved theme before paint to avoid flash #}
+    <script>
+    (function(){
+        var t = localStorage.getItem('twTheme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+    }());
+    </script>
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg mb-4 shadow-sm">
+<nav class="navbar navbar-expand-lg mb-4">
     <div class="container-xl">
-        <a class="navbar-brand fw-bold" href="{{ path('app_dashboard') }}">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2"
-                 aria-label="ToolboxWaze" style="vertical-align:-.25em;margin-right:.35em">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/>
-                <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
-            </svg>
+        <a class="navbar-brand" href="{{ path('app_dashboard') }}">
+            <span class="navbar-brand-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     aria-label="ToolboxWaze">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/>
+                    <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
+                </svg>
+            </span>
             ToolboxWaze
         </a>
-        <button class="navbar-toggler bg-white" type="button"
-                data-bs-toggle="collapse" data-bs-target="#nav"
-                aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
-            </svg>
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            {# Dark mode toggle #}
+            <button class="theme-toggle" data-theme-toggle aria-label="Alternar tema"
+                    title="Alternar modo escuro">
+                <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                    <circle cx="12" cy="12" r="5"/>
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+                <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+            </button>
+            <button class="navbar-toggler bg-transparent border-0" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#nav"
+                    aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="#fff" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+                </svg>
+            </button>
+        </div>
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav me-auto gap-1">
                 <li class="nav-item">
@@ -135,61 +154,92 @@
 
 {#
   TIMEZONE LOCAL DO USUÁRIO
-  ─────────────────────────
-  Todas as datas gravadas no banco estão em UTC.
-  Qualquer elemento com o atributo data-utc="<ISO 8601 UTC>" será automaticamente
-  convertido pelo JavaScript abaixo para o fuso horário do navegador do usuário.
-
-  Como usar nos templates:
-    <time data-utc="{{ alguma_data|date('c') }}">{{ alguma_data|date('d/m/Y H:i') }}</time>
-
-  O JS substitui o texto visível pela hora local e adiciona um title com o UTC original.
-  Funciona com qualquer tag HTML que tenha o atributo data-utc.
 #}
 <script>
 (function () {
   'use strict';
-
   var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
-  // Formato longo: dd/mm/aaaa hh:mm
-  var fmtDateTime = new Intl.DateTimeFormat('pt-BR', {
-    timeZone : tz,
-    day      : '2-digit',
-    month    : '2-digit',
-    year     : 'numeric',
-    hour     : '2-digit',
-    minute   : '2-digit',
-  });
-
-  // Formato curto (só data, sem hora) — usado quando a string UTC não tem componente de hora
-  var fmtDate = new Intl.DateTimeFormat('pt-BR', {
-    timeZone : tz,
-    day      : '2-digit',
-    month    : '2-digit',
-    year     : 'numeric',
-  });
-
+  var fmtDateTime = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  var fmtDate = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
   document.querySelectorAll('[data-utc]').forEach(function (el) {
     var raw = el.getAttribute('data-utc');
     if (!raw) return;
-
-    // Garante que a string seja tratada como UTC mesmo sem sufixo Z
-    if (!/Z|[+-]\d{2}:?\d{2}$/.test(raw)) {
-      raw = raw.replace(' ', 'T') + 'Z';
-    }
-
+    if (!/Z|[+-]\d{2}:?\d{2}$/.test(raw)) raw = raw.replace(' ', 'T') + 'Z';
     var d = new Date(raw);
     if (isNaN(d.getTime())) return;
-
-    // Se o valor original é só data (sem hora, ex: 2026-05-18), exibe só data
     var hasTime = /T|\d{2}:\d{2}/.test(el.getAttribute('data-utc'));
-    var localStr = hasTime ? fmtDateTime.format(d) : fmtDate.format(d);
-
-    // Guarda UTC original como tooltip
     el.setAttribute('title', 'UTC: ' + el.getAttribute('data-utc'));
-    el.textContent = localStr;
+    el.textContent = hasTime ? fmtDateTime.format(d) : fmtDate.format(d);
   });
+}());
+</script>
+
+{# Dark mode toggle logic #}
+<script>
+(function(){
+  var html = document.documentElement;
+  var btn  = document.querySelector('[data-theme-toggle]');
+  var sun  = document.getElementById('icon-sun');
+  var moon = document.getElementById('icon-moon');
+
+  function applyTheme(t) {
+    html.setAttribute('data-theme', t);
+    try { localStorage.setItem('twTheme', t); } catch(e){}
+    if (sun && moon) {
+      sun.style.display  = t === 'dark' ? 'block' : 'none';
+      moon.style.display = t === 'dark' ? 'none'  : 'block';
+    }
+  }
+
+  var saved = null;
+  try { saved = localStorage.getItem('twTheme'); } catch(e){}
+  var current = saved || (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+  applyTheme(current);
+
+  if (btn) {
+    btn.addEventListener('click', function(){
+      applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+  }
+}());
+</script>
+
+{# Scroll reveal #}
+<script>
+(function(){
+  if (!('IntersectionObserver' in window)) {
+    document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+}());
+</script>
+
+{# Count-up animation for .count-up elements #}
+<script>
+(function(){
+  function countUp(el) {
+    var target = parseFloat(el.textContent.replace(/[^0-9.]/g,''));
+    if (isNaN(target) || target === 0) return;
+    var start = 0, duration = 1000, step = 16;
+    var increment = target / (duration / step);
+    var timer = setInterval(function(){
+      start += increment;
+      if (start >= target) { start = target; clearInterval(timer); }
+      el.textContent = Math.round(start).toLocaleString('pt-BR');
+    }, step);
+  }
+  var io2 = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting) { countUp(e.target); io2.unobserve(e.target); }
+    });
+  }, { threshold: 0.5 });
+  document.querySelectorAll('.count-up').forEach(function(el){ io2.observe(el); });
 }());
 </script>
 </body>

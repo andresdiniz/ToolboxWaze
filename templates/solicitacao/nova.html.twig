@@ -16,7 +16,7 @@
   {{ form_start(form, {attr: {id: 'form-solicitacao', novalidate: 'novalidate', autocomplete: 'off'}}) }}
   {{ form_errors(form) }}
 
-  {# ── 1. Dados do solicitante ─────────────────────────────────────────────── #}
+  {# ── 1. Dados do solicitante ────────────────────────────────────────────── #}
   <div class="sol-card">
     <div class="sol-card-header">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.294 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/></svg>
@@ -108,250 +108,270 @@
 {% endblock %}
 
 {% block javascripts %}
+{#
+  FIX: O bug original era uma race condition — o IIFE executava ANTES do
+  DOMContentLoaded, então document.querySelector('[data-tipo-select]')
+  retornava null na primeira carga e o bloco inteiro era abortado (return).
+  Após atualizar a página o DOM já estava completo e funcionava.
+
+  Solução: mover TODO o código para dentro de um listener DOMContentLoaded
+  garantido. Se o DOM já estiver pronto (readyState != 'loading'), o callback
+  é chamado imediatamente — sem atraso perceptível e sem race condition.
+#}
 <script>
 (function () {
-  /* ── Permalink copy ──────────────────────────────────────────────────────── */
-  document.addEventListener('click', function (e) {
-    const btn = e.target.closest('.permalink-copy-btn');
-    if (!btn) return;
-    const input = btn.closest('.permalink-wrapper')?.querySelector('input');
-    if (!input || !input.value) return;
-    navigator.clipboard.writeText(input.value).then(() => {
-      btn.style.color = 'var(--tw)';
-      setTimeout(() => { btn.style.color = ''; }, 1800);
-    });
-  });
+  function init() {
 
-  /* ── Permalink validation ────────────────────────────────────────────────── */
-  const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor/i;
-  const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
-  function checkPermalink(val) {
-    const v = val.trim();
-    if (!v) return { ok: true };
-    if (!WAZE_RE.test(v)) return { ok: false, msg: 'URL deve ser do editor Waze (waze.com/editor).' };
-    const m = ZOOM_RE.exec(v);
-    if (!m) return { ok: false, msg: 'URL sem parâmetro zoom. Copie a URL completa do editor.' };
-    const z = parseInt(m[1], 10);
-    if (z < 15) return { ok: false, msg: `Zoom ${z} insuficiente — mínimo: 15.` };
-    return { ok: true, zoom: z };
-  }
-  function applyPermalinkFeedback(input, result) {
-    const wrap   = input.closest('.permalink-wrapper') ?? input.parentElement;
-    const parent = wrap.parentElement;
-    input.classList.toggle('is-invalid', !result.ok);
-    input.classList.toggle('is-valid', result.ok && !!input.value.trim());
-    let fb = parent.querySelector('.permalink-feedback');
-    if (!result.ok) {
-      if (!fb) { fb = document.createElement('p'); fb.className = 'sol-error permalink-feedback'; wrap.insertAdjacentElement('afterend', fb); }
-      fb.textContent = result.msg;
-    } else if (fb) fb.remove();
-  }
-  function initPermalinks(root) {
-    (root ?? document).querySelectorAll('[data-permalink]').forEach(input => {
-      if (input.dataset.plInit) return;
-      input.dataset.plInit = '1';
-      input.addEventListener('blur',  () => applyPermalinkFeedback(input, checkPermalink(input.value)));
-      input.addEventListener('input', () => { if (input.classList.contains('is-invalid')) applyPermalinkFeedback(input, checkPermalink(input.value)); });
-    });
-  }
-
-  /* ── Estado ─────────────────────────────────────────────────────────────── */
-  const tipoSelect = document.querySelector('[data-tipo-select]');
-  if (!tipoSelect) return;
-
-  const subArea   = document.getElementById('campos-sub');
-  const spinner   = document.getElementById('campos-spinner');
-  const btnEnviar = document.getElementById('btn-enviar');
-  const pills     = document.querySelectorAll('.tipo-pill');
-
-  let tipoAtual           = '';
-  let tipoNivelAtual      = null;
-  let acaoGerenteAtual    = null;
-  let acaoGerenteEpAtual  = null;
-  let cargoAtual          = null;
-  let souChampAtual       = false;
-  let fetchController     = null;
-
-  /* ── Avalia se botão Enviar deve ficar habilitado ───────────────────────── */
-  function atualizaBtnEnviar() {
-    if (!btnEnviar) return;
-    let podeEnviar = !!tipoAtual;
-    if (tipoAtual === 'nivel')               podeEnviar = tipoNivelAtual !== null;
-    if (tipoAtual === 'gerente_area')        podeEnviar = acaoGerenteAtual !== null;
-    if (tipoAtual === 'gerente_estado_pais') podeEnviar = acaoGerenteEpAtual !== null && cargoAtual !== null;
-    btnEnviar.disabled = !podeEnviar;
-  }
-
-  /* ── Pills ───────────────────────────────────────────────────────────────── */
-  pills.forEach(pill => {
-    pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
-    pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); } });
-  });
-
-  function chooseTipo(valor) {
-    if (tipoAtual === valor) return;
-    tipoAtual          = valor;
-    tipoNivelAtual     = null;
-    acaoGerenteAtual   = null;
-    acaoGerenteEpAtual = null;
-    cargoAtual         = null;
-    souChampAtual      = false;
-    tipoSelect.value   = valor;
-    activatePill(valor);
-    atualizaBtnEnviar();
-    fetchCampos();
-  }
-
-  function activatePill(valor) {
-    pills.forEach(p => {
-      const on = p.dataset.value === valor;
-      p.classList.toggle('active', on);
-      p.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-  }
-
-  /* ── AJAX ───────────────────────────────────────────────────────────────── */
-  function fetchCampos() {
-    if (fetchController) fetchController.abort();
-    fetchController = new AbortController();
-
-    spinner.style.display = 'flex';
-    subArea.style.opacity = '0.4';
-
-    const url = new URL('/solicitacoes/campos', window.location.origin);
-    url.searchParams.set('tipo', tipoAtual);
-    if (tipoNivelAtual)     url.searchParams.set('tipoNivel', tipoNivelAtual);
-    if (acaoGerenteAtual)   url.searchParams.set('acaoGerenteArea', acaoGerenteAtual);
-    if (acaoGerenteEpAtual) url.searchParams.set('acaoGerenteEstadoPais', acaoGerenteEpAtual);
-    if (cargoAtual)         url.searchParams.set('cargo', cargoAtual);
-    if (souChampAtual)      url.searchParams.set('souChamp', '1');
-
-    fetch(url.toString(), {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      signal: fetchController.signal
-    })
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-      .then(html => {
-        subArea.innerHTML = html;
-        subArea.style.opacity = '';
-        subArea.querySelectorAll('.sol-card').forEach((el, i) => { el.style.animationDelay = (i * 0.055) + 's'; });
-        initPermalinks(subArea);
-        bindSubListeners();
-        atualizaBtnEnviar();
-      })
-      .catch(err => { if (err.name !== 'AbortError') console.error('fetchCampos erro:', err); })
-      .finally(() => { spinner.style.display = 'none'; subArea.style.opacity = ''; });
-  }
-
-  /* ── Listeners dentro de #campos-sub ────────────────────────────────────── */
-  function bindSubListeners() {
-    // Radio Upgrade/Downgrade (tipo=nivel)
-    subArea.querySelectorAll('[data-tipo-nivel-ajax]').forEach(radio => {
-      if (radio.dataset.nivelBound) return;
-      radio.dataset.nivelBound = '1';
-      radio.addEventListener('change', function () {
-        if (!this.checked || this.value === tipoNivelAtual) return;
-        tipoNivelAtual = this.value;
-        souChampAtual  = false;
-        atualizaBtnEnviar();
-        fetchCampos();
+    /* ── Permalink copy ────────────────────────────────────────────────────── */
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('.permalink-copy-btn');
+      if (!btn) return;
+      const input = btn.closest('.permalink-wrapper')?.querySelector('input');
+      if (!input || !input.value) return;
+      navigator.clipboard.writeText(input.value).then(() => {
+        btn.style.color = 'var(--tw)';
+        setTimeout(() => { btn.style.color = ''; }, 1800);
       });
-      if (radio.checked && !tipoNivelAtual) {
-        tipoNivelAtual = radio.value;
-        atualizaBtnEnviar();
-      }
     });
 
-    // Radio Incluir/Excluir (tipo=gerente_area)
-    // FIX: quando o radio já vem checked após um fetch anterior (ex: re-render
-    // com acaoGerenteAtual já definido), é necessário chamar fetchCampos() para
-    // que os subcampos condicionais (mentor, polígono, etc.) sejam carregados.
-    subArea.querySelectorAll('[data-acao-gerente-area-ajax]').forEach(radio => {
-      if (radio.dataset.gerenteAreaBound) return;
-      radio.dataset.gerenteAreaBound = '1';
-      radio.addEventListener('change', function () {
-        if (!this.checked || this.value === acaoGerenteAtual) return;
-        acaoGerenteAtual = this.value;
-        atualizaBtnEnviar();
-        fetchCampos();
-      });
-      if (radio.checked && acaoGerenteAtual !== radio.value) {
-        acaoGerenteAtual = radio.value;
-        atualizaBtnEnviar();
-        fetchCampos(); // FIX: garante subcampos ao re-renderizar com ação já selecionada
-      }
-    });
-
-    // Radio Incluir/Excluir (tipo=gerente_estado_pais)
-    // FIX: mesmo padrão — fetchCampos() ao detectar radio pré-checked
-    subArea.querySelectorAll('[data-acao-gerente-ep-ajax]').forEach(radio => {
-      if (radio.dataset.gerenteEpBound) return;
-      radio.dataset.gerenteEpBound = '1';
-      radio.addEventListener('change', function () {
-        if (!this.checked || this.value === acaoGerenteEpAtual) return;
-        acaoGerenteEpAtual = this.value;
-        cargoAtual = null;
-        atualizaBtnEnviar();
-        fetchCampos();
-      });
-      if (radio.checked && acaoGerenteEpAtual !== radio.value) {
-        acaoGerenteEpAtual = radio.value;
-        atualizaBtnEnviar();
-        fetchCampos(); // FIX: garante subcampos ao re-renderizar com ação já selecionada
-      }
-    });
-
-    // Radio Gerente de Estado / Gerente de País (tipo=gerente_estado_pais)
-    subArea.querySelectorAll('[data-cargo-select] input[type="radio"]').forEach(radio => {
-      if (radio.dataset.cargoBound) return;
-      radio.dataset.cargoBound = '1';
-      radio.addEventListener('change', function () {
-        if (!this.checked || this.value === cargoAtual) return;
-        cargoAtual = this.value;
-        fetchCampos();
-      });
-      if (radio.checked && !cargoAtual) {
-        cargoAtual = radio.value;
-        fetchCampos();
-      }
-    });
-
-    // Checkbox souChamp — só aparece para não-Champ no tipo nivel
-    const chk = subArea.querySelector('[data-sou-champ]');
-    if (chk && !chk.dataset.champBound) {
-      chk.dataset.champBound = '1';
-      chk.addEventListener('change', function () {
-        souChampAtual = this.checked;
-        fetchCampos();
+    /* ── Permalink validation ──────────────────────────────────────────────── */
+    const WAZE_RE = /^https?:\/\/(?:www\.|beta\.)?waze\.com(?:\/[a-z]{2}(?:-[A-Z]{2})?)?\/editor/i;
+    const ZOOM_RE = /[?&]zoom(?:Level)?=(\d+)/i;
+    function checkPermalink(val) {
+      const v = val.trim();
+      if (!v) return { ok: true };
+      if (!WAZE_RE.test(v)) return { ok: false, msg: 'URL deve ser do editor Waze (waze.com/editor).' };
+      const m = ZOOM_RE.exec(v);
+      if (!m) return { ok: false, msg: 'URL sem parâmetro zoom. Copie a URL completa do editor.' };
+      const z = parseInt(m[1], 10);
+      if (z < 15) return { ok: false, msg: `Zoom ${z} insuficiente — mínimo: 15.` };
+      return { ok: true, zoom: z };
+    }
+    function applyPermalinkFeedback(input, result) {
+      const wrap   = input.closest('.permalink-wrapper') ?? input.parentElement;
+      const parent = wrap.parentElement;
+      input.classList.toggle('is-invalid', !result.ok);
+      input.classList.toggle('is-valid', result.ok && !!input.value.trim());
+      let fb = parent.querySelector('.permalink-feedback');
+      if (!result.ok) {
+        if (!fb) { fb = document.createElement('p'); fb.className = 'sol-error permalink-feedback'; wrap.insertAdjacentElement('afterend', fb); }
+        fb.textContent = result.msg;
+      } else if (fb) fb.remove();
+    }
+    function initPermalinks(root) {
+      (root ?? document).querySelectorAll('[data-permalink]').forEach(input => {
+        if (input.dataset.plInit) return;
+        input.dataset.plInit = '1';
+        input.addEventListener('blur',  () => applyPermalinkFeedback(input, checkPermalink(input.value)));
+        input.addEventListener('input', () => { if (input.classList.contains('is-invalid')) applyPermalinkFeedback(input, checkPermalink(input.value)); });
       });
     }
-  }
 
-  /* ── Validação e bloqueio do submit ─────────────────────────────────────── */
-  document.getElementById('form-solicitacao')
-    ?.addEventListener('submit', e => {
-      let ok = true;
+    /* ── Estado ──────────────────────────────────────────────────────────────  */
+    /*
+      FIX: querySelector feito DENTRO de init(), depois do DOMContentLoaded.
+      Antes era executado fora, durante o parsing do script tag — o elemento
+      [data-tipo-select] ainda não existia no DOM e retornava null,
+      causando o return prematuro que desativava toda a interatividade.
+    */
+    const tipoSelect = document.querySelector('[data-tipo-select]');
+    if (!tipoSelect) return; // segurança — DOM inconsistente
 
-      const camposObrigatorios = ['solicitanteNome', 'solicitanteUsuario', 'solicitanteEmail'];
-      camposObrigatorios.forEach(nome => {
-        const el = e.target.querySelector(`[name$="[${nome}]"]`);
-        if (!el) return;
-        const vazio = !el.value.trim();
-        el.classList.toggle('is-invalid', vazio);
-        if (vazio && ok) {
-          ok = false;
-          e.preventDefault();
-          el.focus();
+    const subArea   = document.getElementById('campos-sub');
+    const spinner   = document.getElementById('campos-spinner');
+    const btnEnviar = document.getElementById('btn-enviar');
+    const pills     = document.querySelectorAll('.tipo-pill');
+
+    let tipoAtual           = '';
+    let tipoNivelAtual      = null;
+    let acaoGerenteAtual    = null;
+    let acaoGerenteEpAtual  = null;
+    let cargoAtual          = null;
+    let souChampAtual       = false;
+    let fetchController     = null;
+
+    /* ── Avalia se botão Enviar deve ficar habilitado ──────────────────────── */
+    function atualizaBtnEnviar() {
+      if (!btnEnviar) return;
+      let podeEnviar = !!tipoAtual;
+      if (tipoAtual === 'nivel')               podeEnviar = tipoNivelAtual !== null;
+      if (tipoAtual === 'gerente_area')        podeEnviar = acaoGerenteAtual !== null;
+      if (tipoAtual === 'gerente_estado_pais') podeEnviar = acaoGerenteEpAtual !== null && cargoAtual !== null;
+      btnEnviar.disabled = !podeEnviar;
+    }
+
+    /* ── Pills ───────────────────────────────────────────────────────────────  */
+    pills.forEach(pill => {
+      pill.addEventListener('click',   () => chooseTipo(pill.dataset.value));
+      pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseTipo(pill.dataset.value); } });
+    });
+
+    function chooseTipo(valor) {
+      if (tipoAtual === valor) return;
+      tipoAtual          = valor;
+      tipoNivelAtual     = null;
+      acaoGerenteAtual   = null;
+      acaoGerenteEpAtual = null;
+      cargoAtual         = null;
+      souChampAtual      = false;
+      tipoSelect.value   = valor;
+      activatePill(valor);
+      atualizaBtnEnviar();
+      fetchCampos();
+    }
+
+    function activatePill(valor) {
+      pills.forEach(p => {
+        const on = p.dataset.value === valor;
+        p.classList.toggle('active', on);
+        p.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+
+    /* ── AJAX ───────────────────────────────────────────────────────────────── */
+    function fetchCampos() {
+      if (fetchController) fetchController.abort();
+      fetchController = new AbortController();
+
+      spinner.style.display = 'flex';
+      subArea.style.opacity = '0.4';
+
+      const url = new URL('/solicitacoes/campos', window.location.origin);
+      url.searchParams.set('tipo', tipoAtual);
+      if (tipoNivelAtual)     url.searchParams.set('tipoNivel', tipoNivelAtual);
+      if (acaoGerenteAtual)   url.searchParams.set('acaoGerenteArea', acaoGerenteAtual);
+      if (acaoGerenteEpAtual) url.searchParams.set('acaoGerenteEstadoPais', acaoGerenteEpAtual);
+      if (cargoAtual)         url.searchParams.set('cargo', cargoAtual);
+      if (souChampAtual)      url.searchParams.set('souChamp', '1');
+
+      fetch(url.toString(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal: fetchController.signal
+      })
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+        .then(html => {
+          subArea.innerHTML = html;
+          subArea.style.opacity = '';
+          subArea.querySelectorAll('.sol-card').forEach((el, i) => { el.style.animationDelay = (i * 0.055) + 's'; });
+          initPermalinks(subArea);
+          bindSubListeners();
+          atualizaBtnEnviar();
+        })
+        .catch(err => { if (err.name !== 'AbortError') console.error('fetchCampos erro:', err); })
+        .finally(() => { spinner.style.display = 'none'; subArea.style.opacity = ''; });
+    }
+
+    /* ── Listeners dentro de #campos-sub ──────────────────────────────────── */
+    function bindSubListeners() {
+      subArea.querySelectorAll('[data-tipo-nivel-ajax]').forEach(radio => {
+        if (radio.dataset.nivelBound) return;
+        radio.dataset.nivelBound = '1';
+        radio.addEventListener('change', function () {
+          if (!this.checked || this.value === tipoNivelAtual) return;
+          tipoNivelAtual = this.value;
+          souChampAtual  = false;
+          atualizaBtnEnviar();
+          fetchCampos();
+        });
+        if (radio.checked && !tipoNivelAtual) {
+          tipoNivelAtual = radio.value;
+          atualizaBtnEnviar();
         }
       });
 
-      e.target.querySelectorAll('[data-permalink]').forEach(input => {
-        if (!input.value.trim()) return;
-        const r = checkPermalink(input.value);
-        applyPermalinkFeedback(input, r);
-        if (!r.ok && ok) { ok = false; e.preventDefault(); input.focus(); }
+      subArea.querySelectorAll('[data-acao-gerente-area-ajax]').forEach(radio => {
+        if (radio.dataset.gerenteAreaBound) return;
+        radio.dataset.gerenteAreaBound = '1';
+        radio.addEventListener('change', function () {
+          if (!this.checked || this.value === acaoGerenteAtual) return;
+          acaoGerenteAtual = this.value;
+          atualizaBtnEnviar();
+          fetchCampos();
+        });
+        if (radio.checked && acaoGerenteAtual !== radio.value) {
+          acaoGerenteAtual = radio.value;
+          atualizaBtnEnviar();
+          fetchCampos();
+        }
       });
-    });
-})();
+
+      subArea.querySelectorAll('[data-acao-gerente-ep-ajax]').forEach(radio => {
+        if (radio.dataset.gerenteEpBound) return;
+        radio.dataset.gerenteEpBound = '1';
+        radio.addEventListener('change', function () {
+          if (!this.checked || this.value === acaoGerenteEpAtual) return;
+          acaoGerenteEpAtual = this.value;
+          cargoAtual = null;
+          atualizaBtnEnviar();
+          fetchCampos();
+        });
+        if (radio.checked && acaoGerenteEpAtual !== radio.value) {
+          acaoGerenteEpAtual = radio.value;
+          atualizaBtnEnviar();
+          fetchCampos();
+        }
+      });
+
+      subArea.querySelectorAll('[data-cargo-select] input[type="radio"]').forEach(radio => {
+        if (radio.dataset.cargoBound) return;
+        radio.dataset.cargoBound = '1';
+        radio.addEventListener('change', function () {
+          if (!this.checked || this.value === cargoAtual) return;
+          cargoAtual = this.value;
+          fetchCampos();
+        });
+        if (radio.checked && !cargoAtual) {
+          cargoAtual = radio.value;
+          fetchCampos();
+        }
+      });
+
+      const chk = subArea.querySelector('[data-sou-champ]');
+      if (chk && !chk.dataset.champBound) {
+        chk.dataset.champBound = '1';
+        chk.addEventListener('change', function () {
+          souChampAtual = this.checked;
+          fetchCampos();
+        });
+      }
+    }
+
+    /* ── Validação e bloqueio do submit ────────────────────────────────────── */
+    document.getElementById('form-solicitacao')
+      ?.addEventListener('submit', e => {
+        let ok = true;
+
+        const camposObrigatorios = ['solicitanteNome', 'solicitanteUsuario', 'solicitanteEmail'];
+        camposObrigatorios.forEach(nome => {
+          const el = e.target.querySelector(`[name$="[${nome}]"]`);
+          if (!el) return;
+          const vazio = !el.value.trim();
+          el.classList.toggle('is-invalid', vazio);
+          if (vazio && ok) {
+            ok = false;
+            e.preventDefault();
+            el.focus();
+          }
+        });
+
+        e.target.querySelectorAll('[data-permalink]').forEach(input => {
+          if (!input.value.trim()) return;
+          const r = checkPermalink(input.value);
+          applyPermalinkFeedback(input, r);
+          if (!r.ok && ok) { ok = false; e.preventDefault(); input.focus(); }
+        });
+      });
+
+  } // fim init()
+
+  /* ── Bootstrap garantido: executa init() após o DOM estar 100% pronto ──── */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    // DOM já está pronto (readyState = 'interactive' ou 'complete')
+    init();
+  }
+
+}());
 </script>
 {% endblock %}

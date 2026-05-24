@@ -65,8 +65,6 @@ final class RadarController extends AbstractController
 
         $dv = $this->dateConv('rm.data_validade');
 
-        // LIMIT e OFFSET são inteiros seguros (úsnico cast possível), interpolados diretamente.
-        // O DBAL não aceita ParameterType::INTEGER em arrays posicionais mistos no MariaDB.
         $limit  = (int) self::PER_PAGE;
         $off    = (int) $offset;
 
@@ -86,7 +84,8 @@ final class RadarController extends AbstractController
             $params
         );
 
-        $ufsQuery  = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL';
+        // Filtros de UF: apenas radares não mesclados
+        $ufsQuery  = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL';
         $ufsParams = [];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
             $placeholders = implode(',', array_fill(0, count($allowedUfs), '?'));
@@ -99,18 +98,18 @@ final class RadarController extends AbstractController
         $ufs = array_column($this->db->fetchAllAssociative($ufsQuery, $ufsParams), 'sigla_uf');
 
         $resultados = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT ultimo_resultado FROM radar_medidor WHERE ultimo_resultado IS NOT NULL ORDER BY ultimo_resultado'
+            'SELECT DISTINCT ultimo_resultado FROM radar_medidor WHERE ultimo_resultado IS NOT NULL AND merged_into_id IS NULL ORDER BY ultimo_resultado'
         ), 'ultimo_resultado');
 
         $tipos = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL ORDER BY tipo_medidor'
+            'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL AND merged_into_id IS NULL ORDER BY tipo_medidor'
         ), 'tipo_medidor');
 
         $hoje        = (new \DateTimeImmutable())->format('Y-m-d');
         $em30        = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $ha30dias    = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
 
-        // ── Stats ─────────────────────────────────────────────────────────────
+        // ── Stats (excluir mesclados) ──
         $dv = $this->dateConv('data_validade');
         $statsSql = "SELECT COUNT(*) AS total,
                             SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
@@ -118,12 +117,13 @@ final class RadarController extends AbstractController
                             SUM(data_validade IS NOT NULL AND $dv < ?)                       AS vencidos,
                             SUM(data_validade IS NOT NULL AND $dv >= ? AND $dv <= ?)         AS vencendo,
                             COUNT(DISTINCT sigla_uf) AS estados
-                     FROM radar_medidor";
+                     FROM radar_medidor
+                     WHERE merged_into_id IS NULL";
 
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
             $ph     = implode(',', array_fill(0, count($allowedUfs), '?'));
             $stats  = $this->db->fetchAssociative(
-                $statsSql . " WHERE sigla_uf IN ($ph)",
+                $statsSql . " AND sigla_uf IN ($ph)",
                 array_merge([$hoje, $hoje, $em30], $allowedUfs)
             );
         } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
@@ -351,6 +351,9 @@ final class RadarController extends AbstractController
     ): array {
         $parts  = [];
         $params = [];
+
+        // Sempre excluir radares mesclados
+        $parts[] = 'rm.merged_into_id IS NULL';
 
         if ($allowedUfs !== null) {
             if (count($allowedUfs) === 0) {

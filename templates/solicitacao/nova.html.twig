@@ -89,8 +89,14 @@
   </div>
 
   {# ── 3. Área dinâmica — 100% gerenciada pelo JS via AJAX ─────────────────── #}
-  <div id="campos-spinner" style="display:none;align-items:center;gap:.5rem;padding:.5rem 0;color:var(--bs-secondary-color,#6c757d)">
-    <div class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></div>
+  <div id="campos-fetch-error" role="alert">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/></svg>
+    Erro ao carregar campos. Verifique sua conexão e tente novamente.
+    <button type="button" id="btn-retry" style="margin-left:.5rem;font-size:.8rem;text-decoration:underline;background:none;border:none;cursor:pointer;color:inherit;">Tentar novamente</button>
+  </div>
+
+  <div id="campos-spinner" role="status" aria-live="polite" aria-label="Carregando campos">
+    <div class="spinner-border spinner-border-sm text-success" aria-hidden="true"></div>
     Carregando campos…
   </div>
 
@@ -98,8 +104,8 @@
 
   <div class="d-flex justify-content-end mt-2 mb-5">
     <button type="submit" class="btn-enviar" id="btn-enviar" disabled>
-      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" style="margin-right:.3em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/></svg>
-      Enviar solicitação
+      <svg id="btn-enviar-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" style="margin-right:.3em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/></svg>
+      <span id="btn-enviar-texto">Enviar solicitação</span>
     </button>
   </div>
 
@@ -108,16 +114,6 @@
 {% endblock %}
 
 {% block javascripts %}
-{#
-  FIX: O bug original era uma race condition — o IIFE executava ANTES do
-  DOMContentLoaded, então document.querySelector('[data-tipo-select]')
-  retornava null na primeira carga e o bloco inteiro era abortado (return).
-  Após atualizar a página o DOM já estava completo e funcionava.
-
-  Solução: mover TODO o código para dentro de um listener DOMContentLoaded
-  garantido. Se o DOM já estiver pronto (readyState != 'loading'), o callback
-  é chamado imediatamente — sem atraso perceptível e sem race condition.
-#}
 <script>
 (function () {
   function init() {
@@ -168,19 +164,16 @@
     }
 
     /* ── Estado ──────────────────────────────────────────────────────────────  */
-    /*
-      FIX: querySelector feito DENTRO de init(), depois do DOMContentLoaded.
-      Antes era executado fora, durante o parsing do script tag — o elemento
-      [data-tipo-select] ainda não existia no DOM e retornava null,
-      causando o return prematuro que desativava toda a interatividade.
-    */
     const tipoSelect = document.querySelector('[data-tipo-select]');
-    if (!tipoSelect) return; // segurança — DOM inconsistente
+    if (!tipoSelect) return;
 
-    const subArea   = document.getElementById('campos-sub');
-    const spinner   = document.getElementById('campos-spinner');
-    const btnEnviar = document.getElementById('btn-enviar');
-    const pills     = document.querySelectorAll('.tipo-pill');
+    const subArea    = document.getElementById('campos-sub');
+    const spinner    = document.getElementById('campos-spinner');
+    const fetchError = document.getElementById('campos-fetch-error');
+    const btnEnviar  = document.getElementById('btn-enviar');
+    const btnRetry   = document.getElementById('btn-retry');
+    const tipoGrid   = document.getElementById('tipo-pills');
+    const pills      = document.querySelectorAll('.tipo-pill');
 
     let tipoAtual           = '';
     let tipoNivelAtual      = null;
@@ -189,6 +182,39 @@
     let cargoAtual          = null;
     let souChampAtual       = false;
     let fetchController     = null;
+
+    /* ── Spinner com transição opacity ─────────────────────────────────────── */
+    function showSpinner() {
+      spinner.classList.add('visible');
+    }
+    function hideSpinner() {
+      spinner.classList.remove('visible');
+    }
+
+    /* ── Erro de fetch ─────────────────────────────────────────────────────── */
+    function showFetchError() {
+      fetchError.classList.add('visible');
+    }
+    function hideFetchError() {
+      fetchError.classList.remove('visible');
+    }
+
+    /* ── Loading state no botão enviar ─────────────────────────────────────── */
+    function setBtnLoading(loading) {
+      if (!btnEnviar) return;
+      const icon  = document.getElementById('btn-enviar-icon');
+      const texto = document.getElementById('btn-enviar-texto');
+      if (loading) {
+        btnEnviar.disabled = true;
+        if (icon)  icon.outerHTML  = '<span id="btn-enviar-icon" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="width:14px;height:14px;border-width:2px;margin-right:.3em"></span>';
+        if (texto) texto.textContent = 'Enviando…';
+      } else {
+        if (icon && !document.getElementById('btn-enviar-icon')?.classList.contains('spinner-border')) return;
+        const spinnerEl = document.getElementById('btn-enviar-icon');
+        if (spinnerEl) spinnerEl.outerHTML = '<svg id="btn-enviar-icon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16" style="margin-right:.3em"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/></svg>';
+        if (texto) texto.textContent = 'Enviar solicitação';
+      }
+    }
 
     /* ── Avalia se botão Enviar deve ficar habilitado ──────────────────────── */
     function atualizaBtnEnviar() {
@@ -228,13 +254,20 @@
       });
     }
 
+    /* ── Retry ───────────────────────────────────────────────────────────────  */
+    btnRetry && btnRetry.addEventListener('click', () => {
+      if (tipoAtual) fetchCampos();
+    });
+
     /* ── AJAX ───────────────────────────────────────────────────────────────── */
     function fetchCampos() {
       if (fetchController) fetchController.abort();
       fetchController = new AbortController();
 
-      spinner.style.display = 'flex';
+      hideFetchError();
+      showSpinner();
       subArea.style.opacity = '0.4';
+      tipoGrid && tipoGrid.classList.add('loading');
 
       const url = new URL('/solicitacoes/campos', window.location.origin);
       url.searchParams.set('tipo', tipoAtual);
@@ -257,8 +290,17 @@
           bindSubListeners();
           atualizaBtnEnviar();
         })
-        .catch(err => { if (err.name !== 'AbortError') console.error('fetchCampos erro:', err); })
-        .finally(() => { spinner.style.display = 'none'; subArea.style.opacity = ''; });
+        .catch(err => {
+          if (err.name === 'AbortError') return;
+          console.error('fetchCampos erro:', err);
+          subArea.style.opacity = '';
+          showFetchError();
+        })
+        .finally(() => {
+          hideSpinner();
+          subArea.style.opacity = '';
+          tipoGrid && tipoGrid.classList.remove('loading');
+        });
     }
 
     /* ── Listeners dentro de #campos-sub ──────────────────────────────────── */
@@ -336,7 +378,24 @@
       }
     }
 
-    /* ── Validação e bloqueio do submit ────────────────────────────────────── */
+    /* ── Validação blur nos campos do solicitante ──────────────────────────── */
+    ['solicitanteNome', 'solicitanteUsuario', 'solicitanteEmail'].forEach(nome => {
+      const el = document.querySelector(`[name$="[${nome}]"]`);
+      if (!el) return;
+      el.addEventListener('blur', () => {
+        const vazio = !el.value.trim();
+        el.classList.toggle('is-invalid', vazio);
+        el.classList.toggle('is-valid', !vazio);
+      });
+      el.addEventListener('input', () => {
+        if (el.classList.contains('is-invalid') && el.value.trim()) {
+          el.classList.remove('is-invalid');
+          el.classList.add('is-valid');
+        }
+      });
+    });
+
+    /* ── Validação e loading state no submit ───────────────────────────────── */
     document.getElementById('form-solicitacao')
       ?.addEventListener('submit', e => {
         let ok = true;
@@ -360,15 +419,15 @@
           applyPermalinkFeedback(input, r);
           if (!r.ok && ok) { ok = false; e.preventDefault(); input.focus(); }
         });
+
+        if (ok) setBtnLoading(true);
       });
 
   } // fim init()
 
-  /* ── Bootstrap garantido: executa init() após o DOM estar 100% pronto ──── */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
-    // DOM já está pronto (readyState = 'interactive' ou 'complete')
     init();
   }
 

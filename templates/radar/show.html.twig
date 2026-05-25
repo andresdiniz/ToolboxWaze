@@ -260,8 +260,8 @@
                         </svg>
                         Abrir Editor
                     </a>
-                {% elseif radar.linkWaze %}
-                    <a href="{{ radar.linkWaze }}" target="_blank" rel="noopener"
+                {% elseif radar.link_waze %}
+                    <a href="{{ radar.link_waze }}" target="_blank" rel="noopener"
                        class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.3)">
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
                              viewBox="0 0 16 16" class="me-1" style="vertical-align:-.1em">
@@ -274,8 +274,8 @@
             </div>
             <div class="card-body p-0">
 
-                {# ── MAPA OSM — usa wazeLink da tabela ou radar.linkWaze da planilha #}
-                {% set mapaUrl = wazeLink ? wazeLink.waze_link : radar.linkWaze %}
+                {# ── MAPA OSM — usa wazeLink da tabela ou radar.link_waze da planilha #}
+                {% set mapaUrl = wazeLink ? wazeLink.waze_link : radar.link_waze %}
                 {% if mapaUrl %}
                 <div id="waze-map"
                      data-waze-url="{{ mapaUrl|e('html_attr') }}"
@@ -286,7 +286,7 @@
                 <div class="p-3">
 
                 {# ── Banner: link importado da planilha (ainda sem cadastro manual) #}
-                {% if not wazeLink and radar.linkWaze %}
+                {% if not wazeLink and radar.link_waze %}
                 <div class="alert alert-info py-2 px-3 mb-3 small d-flex align-items-start gap-2" role="alert">
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor"
                          viewBox="0 0 16 16" class="mt-1 flex-shrink-0">
@@ -361,7 +361,7 @@
                               Prioridade do valor pré-preenchido:
                                 1. Dado postado com erro (wazeFormData)
                                 2. Link manual já cadastrado (wazeLink.waze_link)
-                                3. Link importado da planilha (radar.linkWaze)  ← NOVO
+                                3. Link importado da planilha (radar.link_waze)
                                 4. Vazio
                             #}
                             <input type="url"
@@ -372,7 +372,7 @@
                                            ? wazeFormData.waze_link
                                            : (wazeLink
                                                ? wazeLink.waze_link
-                                               : radar.linkWaze|default(''))
+                                               : radar.link_waze|default(''))
                                    }}"
                                    class="form-control form-control-sm font-monospace {{ wazeErrors.waze_link is defined ? 'is-invalid' : '' }}"
                                    placeholder="https://waze.com/pt-BR/editor?…&permanentHazards=272464"

@@ -12,7 +12,33 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
- * Importa radares a partir do CSV do Google Sheets.
+ * Importa radares a partir do CSV/TSV do Google Sheets.
+ *
+ * ════════════════════════════════════════════════════════════
+ * DETECÇÃO AUTOMÁTICA DE SEPARADOR
+ * ════════════════════════════════════════════════════════════
+ *
+ * O arquivo pode vir como CSV (vírgula) ou TSV (tab), dependendo
+ * da configuração de exportação da planilha. O handler detecta
+ * automaticamente contando tabs vs vírgulas na primeira linha
+ * e usa o separador com mais ocorrências.
+ *
+ * ════════════════════════════════════════════════════════════
+ * MAPEAMENTO DE COLUNAS
+ * ════════════════════════════════════════════════════════════
+ *
+ * Suporta dois formatos de cabeçalho:
+ *
+ * Formato simples (CSV padrão da planilha de controle):
+ *   Município, Data Verificação, Data Validade, Resultado,
+ *   Local, Tipo, Faixa, Inmetro, Série, Sentido, Velocidade
+ *
+ * Formato expandido (TSV exportado do RBMLQ/Google Sheets):
+ *   Estado, Municipio, LocalVerificacao, DataUltimaVerificacao,
+ *   DataValidade, UltimoResultado, TipoMedidor,
+ *   Faixas.0.NumeroFaixa, Faixas.0.NumeroInmetro,
+ *   Faixas.0.NumeroSerie, Faixas.0.Sentido,
+ *   Faixas.0.VelocidadeNominal, ...
  *
  * ════════════════════════════════════════════════════════════
  * ESTRATÉGIA DE PRESERVAÇÃO DE DADOS
@@ -21,63 +47,23 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * O identity_hash é idêntico ao usado pelo ImportRadarMedidoresHandler:
  *   SHA-256( UF | LOCAL_VERIFICACAO | TIPO_MEDIDOR )
  *
- * Isso garante que um radar já importado via RBMLQ seja reconhecido
- * e atualizado — e não duplicado — ao usar a fonte Google Sheets.
- *
- * O row_hash desta fonte é calculado APENAS sobre os campos
- * disponíveis no CSV (sem proprietario_*, sem historico_json).
- * Portanto, ao trocar de volta para o RBMLQ, o row_hash muda e o
- * handler RBMLQ atualiza o registro restaurando todos os campos.
- *
- * Campos atualizados por esta fonte:
- *   municipio, local_verificacao, data_ultima_verificacao,
- *   data_validade, data_verificacao_efetiva, ultimo_resultado,
- *   tipo_medidor, faixas_json, identity_hash, raw_data,
- *   row_hash, updated_at
- *
- * Campos PRESERVADOS (não tocados pelo UPDATE):
- *   estado, proprietario_nome, proprietario_municipio,
- *   proprietario_estado, historico_json
- *
  * ════════════════════════════════════════════════════════════
  * PROTEÇÃO CONTRA DUPLICATAS
  * ════════════════════════════════════════════════════════════
  *
- * Além do identity_hash (UF+LOCAL+TIPO), o import protege contra
- * duplicatas usando a combinação (sigla_uf, local_verificacao,
- * tipo_medidor, data_validade):
+ * Nível 1 (parseCsv): mesmo identity_hash + mesma data_validade
+ * no mesmo arquivo → acumula faixas, sem nova entrada.
  *
- *   1. No parseCsv: se o CSV traz duas linhas com mesma localização
- *      E mesma data_validade, a segunda linha é descartada.
- *
- *   2. No processBatch: antes de inserir um radar novo (sem
- *      identity_hash conhecido), verifica se já existe registro
- *      no banco com (sigla_uf, local_verificacao, tipo_medidor,
- *      data_validade) idênticos. Em caso positivo, pula o insert
- *      e incrementa countSkipped.
- *
- * Isso evita duplicatas quando a planilha lista o mesmo ponto de
- * verificação com datas iguais sob nomes de local ligeiramente
- * diferentes ou quando o import é reexecutado parcialmente.
+ * Nível 2 (processBatch): antes de inserir, consulta o banco por
+ * (sigla_uf, local_verificacao, tipo_medidor, data_validade).
+ * Se encontrar, pula o insert.
  *
  * ════════════════════════════════════════════════════════════
  * MERGE AUTOMÁTICO DE RADARES MANUAIS
  * ════════════════════════════════════════════════════════════
  *
- * Após processar cada lote, o handler verifica se algum
- * identity_hash presente no CSV bate com um RadarManual pendente.
- * Quando há match:
- *   1. O radar_medidor recém-inserido/atualizado é vinculado.
- *   2. O RadarManual tem status = 'mesclado', mesclado_em = now,
- *      radar_medidor_id = id do registro oficial.
- *
- * ════════════════════════════════════════════════════════════
- * ESTRUTURA DO CSV
- * ════════════════════════════════════════════════════════════
- *
- * Cabeçalho esperado:
- *   Município, Data Verificação, Data Validade, Resultado,
- *   Local, Tipo, Faixa, Inmetro, Série, Sentido, Velocidade
+ * Após cada lote, vincula RadarManual pendente ao radar_medidor
+ * oficial quando o identity_hash bate.
  */
 #[AsMessageHandler]
 final class ImportRadarGoogleSheetsHandler
@@ -178,7 +164,7 @@ final class ImportRadarGoogleSheetsHandler
         $ok      = curl_exec($ch);
         $errCode = curl_errno($ch);
         $errMsg  = curl_error($ch);
-        // PHP 8.5: curl_close() não tem mais efeito — removido para evitar deprecation
+        // PHP 8.5: curl_close() não tem mais efeito
         fclose($fp);
 
         if (!$ok || $errCode !== 0 || filesize($tmpPath) < 10) {
@@ -190,15 +176,55 @@ final class ImportRadarGoogleSheetsHandler
     }
 
     // ════════════════════════════════════════════════════════════
-    // Parse CSV — agrupa múltiplas linhas (faixas) por radar
+    // Detecção de separador
+    // Lê a primeira linha não-vazia e conta tabs vs vírgulas.
+    // Retorna '\t' se tabs > vírgulas, ',' caso contrário.
+    // ════════════════════════════════════════════════════════════
+
+    private function detectSeparator(string $path): string
+    {
+        $fh = fopen($path, 'rb');
+        if ($fh === false) {
+            return ',';
+        }
+
+        // Pula BOM
+        $bom = fread($fh, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            rewind($fh);
+        }
+
+        $line = '';
+        while (!feof($fh)) {
+            $line = fgets($fh);
+            if ($line !== false && trim($line) !== '') {
+                break;
+            }
+        }
+        fclose($fh);
+
+        if ($line === false || $line === '') {
+            return ',';
+        }
+
+        $tabs    = substr_count($line, "\t");
+        $commas  = substr_count($line, ',');
+
+        return $tabs > $commas ? "\t" : ',';
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Parse CSV/TSV — detecta separador automaticamente,
+    // suporta formato simples e formato expandido (RBMLQ/TSV).
     //
-    // Proteção nível 1: se o CSV traz duas entradas com o mesmo
-    // identity_hash (UF+LOCAL+TIPO) E mesma data_validade, a
-    // segunda é descartada silenciosamente.
+    // Proteção nível 1: mesma localização + mesma data_validade
+    // no mesmo arquivo → acumula faixas, sem entrada duplicada.
     // ════════════════════════════════════════════════════════════
 
     private function parseCsv(string $path, string $uf, string $importedAt): array
     {
+        $sep = $this->detectSeparator($path);
+
         $fh = fopen($path, 'rb');
 
         if ($fh === false) {
@@ -210,8 +236,8 @@ final class ImportRadarGoogleSheetsHandler
             rewind($fh);
         }
 
-        // PHP 8.5: $escape deve ser explícito — '' desativa escape (comportamento CSV padrão RFC 4180)
-        $rawHeader = fgetcsv($fh, 0, ',', '"', '');
+        // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
+        $rawHeader = fgetcsv($fh, 0, $sep, '"', '');
 
         if ($rawHeader === false || $rawHeader === null) {
             fclose($fh);
@@ -220,10 +246,14 @@ final class ImportRadarGoogleSheetsHandler
 
         $header = array_map([$this, 'normalizeKey'], $rawHeader);
 
+        // Detecta se é formato expandido (TSV do RBMLQ) pela presença
+        // de colunas como 'localverificacao' ou 'ultimoresultado'
+        $isExpanded = \in_array('localverificacao', $header, true)
+                   || \in_array('ultimoresultado',  $header, true);
+
         $radarMap = [];
 
-        // PHP 8.5: $escape deve ser explícito — '' desativa escape (comportamento CSV padrão RFC 4180)
-        while (($csvRow = fgetcsv($fh, 0, ',', '"', '')) !== false) {
+        while (($csvRow = fgetcsv($fh, 0, $sep, '"', '')) !== false) {
             if ($csvRow === null || count($csvRow) < 2) {
                 continue;
             }
@@ -234,55 +264,57 @@ final class ImportRadarGoogleSheetsHandler
                 continue;
             }
 
-            $municipio = $this->str($data['municipio']       ?? null);
-            $local     = $this->str($data['local']           ?? null);
-            $tipo      = $this->str($data['tipo']            ?? null);
-            $dataVerif = $this->str($data['dataverificacao'] ?? null);
-            $dataValid = $this->str($data['datavalidade']    ?? null);
-            $resultado = $this->str($data['resultado']       ?? null);
+            if ($isExpanded) {
+                [$municipio, $local, $tipo, $dataVerif, $dataValid, $resultado, $faixas]
+                    = $this->extractExpanded($data);
+            } else {
+                $municipio = $this->str($data['municipio']       ?? null);
+                $local     = $this->str($data['local']           ?? null);
+                $tipo      = $this->str($data['tipo']            ?? null);
+                $dataVerif = $this->str($data['dataverificacao'] ?? null);
+                $dataValid = $this->str($data['datavalidade']    ?? null);
+                $resultado = $this->str($data['resultado']       ?? null);
+                $faixas    = [[
+                    'NumeroFaixa'       => $this->str($data['faixa']      ?? null),
+                    'NumeroInmetro'     => $this->str($data['inmetro']    ?? null),
+                    'NumeroSerie'       => $this->str($data['serie']      ?? null),
+                    'Sentido'           => $this->str($data['sentido']    ?? null),
+                    'VelocidadeNominal' => $this->str($data['velocidade'] ?? null),
+                ]];
+            }
+
+            // Ignora linhas sem local ou tipo (provavelmente linhas de metadados)
+            if ($local === null || $tipo === null) {
+                continue;
+            }
 
             $identityHash = $this->buildIdentityHash($uf, $local, $tipo);
 
-            // ── Proteção nível 1: duplicata dentro do próprio CSV ──
-            // Chave composta: identity_hash + data_validade
-            // Se já existe entrada com mesmo hash E mesma validade, descarta.
+            // ── Proteção nível 1: duplicata dentro do próprio arquivo ──
             if (isset($radarMap[$identityHash])) {
-                $existingValidade = $radarMap[$identityHash]['data_validade'];
-                if ($existingValidade === $dataValid) {
-                    // Mesma localização + mesma validade → apenas acumula faixas
-                    $radarMap[$identityHash]['_faixas'][] = [
-                        'NumeroFaixa'       => $this->str($data['faixa']      ?? null),
-                        'NumeroInmetro'     => $this->str($data['inmetro']    ?? null),
-                        'NumeroSerie'       => $this->str($data['serie']      ?? null),
-                        'Sentido'           => $this->str($data['sentido']    ?? null),
-                        'VelocidadeNominal' => $this->str($data['velocidade'] ?? null),
-                    ];
-                    continue; // NÃO cria entrada duplicada
+                if ($radarMap[$identityHash]['data_validade'] === $dataValid) {
+                    // Mesma localização + mesma validade → só acumula faixas novas
+                    foreach ($faixas as $f) {
+                        $radarMap[$identityHash]['_faixas'][] = $f;
+                    }
+                    continue;
                 }
-                // Validade diferente = radar reavaliado → permite o UPDATE normal
+                // Validade diferente = reavaliação legítima → UPDATE
             }
 
             $radarMap[$identityHash] = [
-                'sigla_uf'                  => strtoupper($uf),
-                'municipio'                 => $municipio,
-                'local_verificacao'         => $local,
-                'data_ultima_verificacao'   => $dataVerif,
-                'data_validade'             => $dataValid,
-                'data_verificacao_efetiva'  => $this->resolveDataVerificacao($dataVerif, $dataValid),
-                'ultimo_resultado'          => $resultado,
-                'tipo_medidor'              => $tipo,
-                'identity_hash'             => $identityHash,
-                'imported_at'               => $importedAt,
-                'updated_at'                => $importedAt,
-                '_faixas'                   => [],
-            ];
-
-            $radarMap[$identityHash]['_faixas'][] = [
-                'NumeroFaixa'       => $this->str($data['faixa']      ?? null),
-                'NumeroInmetro'     => $this->str($data['inmetro']    ?? null),
-                'NumeroSerie'       => $this->str($data['serie']      ?? null),
-                'Sentido'           => $this->str($data['sentido']    ?? null),
-                'VelocidadeNominal' => $this->str($data['velocidade'] ?? null),
+                'sigla_uf'                 => strtoupper($uf),
+                'municipio'                => $municipio,
+                'local_verificacao'        => $local,
+                'data_ultima_verificacao'  => $dataVerif,
+                'data_validade'            => $dataValid,
+                'data_verificacao_efetiva' => $this->resolveDataVerificacao($dataVerif, $dataValid),
+                'ultimo_resultado'         => $resultado,
+                'tipo_medidor'             => $tipo,
+                'identity_hash'            => $identityHash,
+                'imported_at'              => $importedAt,
+                'updated_at'               => $importedAt,
+                '_faixas'                  => $faixas,
             ];
         }
 
@@ -292,15 +324,15 @@ final class ImportRadarGoogleSheetsHandler
             $faixasJson = json_encode($radar['_faixas'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
             $rawPayload = [
-                'sigla_uf'                  => $radar['sigla_uf'],
-                'municipio'                 => $radar['municipio'],
-                'local_verificacao'         => $radar['local_verificacao'],
-                'data_ultima_verificacao'   => $radar['data_ultima_verificacao'],
-                'data_validade'             => $radar['data_validade'],
-                'data_verificacao_efetiva'  => $radar['data_verificacao_efetiva'],
-                'ultimo_resultado'          => $radar['ultimo_resultado'],
-                'tipo_medidor'              => $radar['tipo_medidor'],
-                'faixas'                    => $radar['_faixas'],
+                'sigla_uf'                 => $radar['sigla_uf'],
+                'municipio'                => $radar['municipio'],
+                'local_verificacao'        => $radar['local_verificacao'],
+                'data_ultima_verificacao'  => $radar['data_ultima_verificacao'],
+                'data_validade'            => $radar['data_validade'],
+                'data_verificacao_efetiva' => $radar['data_verificacao_efetiva'],
+                'ultimo_resultado'         => $radar['ultimo_resultado'],
+                'tipo_medidor'             => $radar['tipo_medidor'],
+                'faixas'                   => $radar['_faixas'],
             ];
 
             $rawJson = json_encode($rawPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -312,6 +344,70 @@ final class ImportRadarGoogleSheetsHandler
         unset($radar);
 
         return $radarMap;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Extração de campos do formato expandido (TSV RBMLQ)
+    //
+    // Cabeçalho esperado (normalizado):
+    //   estado, municipio, localverificacao, dataultimaveri...,
+    //   datavalidade, ultimoresultado, tipomedidor,
+    //   faixas0numerofaixa, faixas0numeroinmetro,
+    //   faixas0numeroserie, faixas0sentido,
+    //   faixas0velocidadenominal, faixas1..., faixas2...
+    // ════════════════════════════════════════════════════════════
+
+    private function extractExpanded(array $data): array
+    {
+        $municipio = $this->str($data['municipio']            ?? null);
+        $local     = $this->str($data['localverificacao']     ?? null);
+        $tipo      = $this->str($data['tipomedidor']          ?? null);
+        $dataVerif = $this->str($data['dataultimaveri']       ?? $data['dataultimaveri...']
+                              ?? $data['dataultimaverifcacao']
+                              ?? $data['dataultimaverifcao']
+                              ?? $this->findKey($data, 'dataultima') ?? null);
+        $dataValid = $this->str($data['datavalidade']         ?? null);
+        $resultado = $this->str($data['ultimoresultado']      ?? null);
+
+        // ── Extrai faixas indexadas: faixas0..., faixas1..., faixas2... ──
+        $faixas = [];
+        for ($i = 0; $i <= 9; $i++) {
+            $pref   = "faixas{$i}";
+            $numero = $this->str($data["{$pref}numerofaixa"]       ?? null);
+            $inmet  = $this->str($data["{$pref}numeroinmetro"]     ?? null);
+            $serie  = $this->str($data["{$pref}numeroserie"]       ?? null);
+            $sent   = $this->str($data["{$pref}sentido"]           ?? null);
+            $vel    = $this->str($data["{$pref}velocidadenominal"] ?? null);
+
+            // Para quando não há mais faixas (todas nulas)
+            if ($numero === null && $serie === null && $inmet === null) {
+                break;
+            }
+
+            $faixas[] = [
+                'NumeroFaixa'       => $numero,
+                'NumeroInmetro'     => $inmet,
+                'NumeroSerie'       => $serie,
+                'Sentido'           => $sent,
+                'VelocidadeNominal' => $vel,
+            ];
+        }
+
+        return [$municipio, $local, $tipo, $dataVerif, $dataValid, $resultado, $faixas];
+    }
+
+    /**
+     * Busca a primeira chave do array que começa com o prefixo dado.
+     * Usado para tolerar variações de nome de coluna no TSV expandido.
+     */
+    private function findKey(array $data, string $prefix): ?string
+    {
+        foreach ($data as $k => $v) {
+            if (str_starts_with((string) $k, $prefix)) {
+                return $this->str($v);
+            }
+        }
+        return null;
     }
 
     // ════════════════════════════════════════════════════════════
@@ -339,15 +435,10 @@ final class ImportRadarGoogleSheetsHandler
 
             if ($existing === null) {
                 // ── Proteção nível 2: duplicata no banco ──────────────
-                // Antes de inserir, verifica se já existe registro com
-                // mesma (sigla_uf, local_verificacao, tipo_medidor, data_validade).
-                // Isso pega casos onde o identity_hash difere mas o ponto
-                // físico e a validade são iguais (ex.: grafia diferente do local).
                 if ($this->existsDuplicateInDb($row)) {
                     $this->countSkipped++;
                     continue;
                 }
-
                 $toInsert[] = $row;
             } else {
                 $row['_db_id'] = $existing['id'];
@@ -390,9 +481,6 @@ final class ImportRadarGoogleSheetsHandler
             throw $e;
         }
 
-        // ── Merge automático de radares manuais ──────────────────
-        // Feito FORA da transação DBAL para usar o EntityManager sem
-        // conflito de transações aninhadas.
         $this->mergeRadaresManuais($changed);
     }
 
@@ -406,9 +494,7 @@ final class ImportRadarGoogleSheetsHandler
             return;
         }
 
-        $identityHashes = array_column($changed, 'identity_hash');
-
-        // Carrega todos os RadarManual pendentes que batem com este lote
+        $identityHashes   = array_column($changed, 'identity_hash');
         $manuaisPendentes = $this->radarManualRepo
             ->findPendentesByIdentityHash($identityHashes);
 
@@ -425,7 +511,6 @@ final class ImportRadarGoogleSheetsHandler
                 continue;
             }
 
-            // Busca o ID do radar_medidor que acabou de ser inserido/atualizado
             $radarId = $row['_db_id'] ?? $this->findIdByRowHash($row['row_hash']);
 
             if ($radarId === null) {
@@ -492,8 +577,7 @@ final class ImportRadarGoogleSheetsHandler
     /**
      * Proteção nível 2: verifica no banco se já existe um radar com
      * (sigla_uf, local_verificacao, tipo_medidor, data_validade) idênticos.
-     * Ignora registros mesclados (merged_into_id IS NOT NULL) para não
-     * bloquear reimports legítimos após um merge.
+     * Ignora registros mesclados para não bloquear reimports legítimos.
      */
     private function existsDuplicateInDb(array $row): bool
     {
@@ -605,10 +689,9 @@ final class ImportRadarGoogleSheetsHandler
     /**
      * Calcula a data de verificação efetiva (dd/mm/aaaa).
      *
-     * Regra:
-     *   1. Se $dataVerif não é vazia → retorna ela.
-     *   2. Se $dataValid não é vazia → retorna dataValid - 1 ano.
-     *   3. Ambas nulas/vazias → retorna null.
+     * 1. Se $dataVerif não é vazia → retorna ela.
+     * 2. Se $dataValid não é vazia → retorna dataValid - 1 ano.
+     * 3. Ambas nulas → retorna null.
      */
     private function resolveDataVerificacao(?string $dataVerif, ?string $dataValid): ?string
     {

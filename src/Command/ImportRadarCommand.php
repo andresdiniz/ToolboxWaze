@@ -23,7 +23,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * ════════════════════════════════════════════════════════════
  * ETAPA 1 — Importa dados técnicos (medidores RBMLQ)
  * ════════════════════════════════════════════════════════════
- *   Fonte: Google Sheets CSV (padrão) ou RBMLQ/INMETRO API.
+ *   Fonte: Google Sheets CSV/TSV (padrão) ou RBMLQ/INMETRO API.
  *   URL por estado: prioridade 1 = banco (brazilian_state.link_base_radares)
  *                   prioridade 2 = UF_GID_MAP hardcoded (fallback)
  *
@@ -37,12 +37,11 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   Colunas esperadas na aba REFERENCIA.UF:
  *     LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE | USUÁRIO | VERIFICADO | ALTERADO | AÇÃO
  *
- *   As primeiras linhas podem conter metadados (ex: nome do estado, totais).
- *   O cabeçalho real é detectado automaticamente — é a primeira linha que
- *   contenha "link" ou "ndeserie" após normalização.
+ *   Aliases aceitos para Nº DE SÉRIE (após normalização):
+ *     ndeserie, nodeserie, serie, noserie
  *
- *   Para configurar: acesse o EasyAdmin → BrazilianState → edite o estado
- *   e preencha o campo "Link Referência Radares" com a URL CSV da aba REFERENCIA.UF.
+ *   As primeiras linhas podem conter metadados.
+ *   O cabeçalho real é detectado automaticamente.
  *
  * ════════════════════════════════════════════════════════════
  * BACKFILL AUTOMÁTICO
@@ -122,7 +121,7 @@ final class ImportRadarCommand extends Command
         $linkMapRadares    = $useSheets ? $this->stateRepository->findLinkMapRadares() : [];
         $linkMapReferencia = $skipWaze  ? [] : $this->stateRepository->findLinkMapReferencia();
 
-        $fonte = $useSheets ? 'Google Sheets CSV' : 'RBMLQ/INMETRO API';
+        $fonte = $useSheets ? 'Google Sheets CSV/TSV' : 'RBMLQ/INMETRO API';
         $io->note([
             'Fonte           : ' . $fonte,
             'Estados         : ' . implode(', ', $ufs),
@@ -256,7 +255,6 @@ final class ImportRadarCommand extends Command
 
     // ════════════════════════════════════════════════════════════
     // Importa links Waze da aba REFERENCIA.UF
-    // URL completa vinda do banco (link_referencia_radares)
     // ════════════════════════════════════════════════════════════
 
     private function importLinksWaze(string $uf, string $url): int
@@ -285,9 +283,11 @@ final class ImportRadarCommand extends Command
         }
 
         // ── Detecta o cabeçalho real ──────────────────────────────────
-        // A planilha pode ter metadados nas primeiras linhas (nome do estado,
-        // totais, etc.). O cabeçalho real é a primeira linha que contenha
-        // "link" ou "ndeserie" (após normalização). Pulamos até 20 linhas.
+        // A planilha pode ter metadados nas primeiras linhas.
+        // O cabeçalho real é a primeira linha que contenha
+        // "link" ou qualquer alias de série após normalização.
+        // Aliases aceitos para Nº DE SÉRIE:
+        //   ndeserie | nodeserie | serie | noserie
         $header   = null;
         $colLink  = false;
         $colSerie = false;
@@ -298,25 +298,26 @@ final class ImportRadarCommand extends Command
             $rawRow = fgetcsv($fh, 0, ',', '"', '');
 
             if ($rawRow === false) {
-                break; // EOF
+                break;
             }
 
             $attempts++;
 
             if ($rawRow === null || $rawRow === [null]) {
-                continue; // linha vazia
+                continue;
             }
 
             $normalized = array_map(fn($h) => $this->normalizeKey((string) $h), $rawRow);
 
-            $lk  = array_search('link',     $normalized, true);
-            $ls  = array_search('ndeserie', $normalized, true);
+            $lk = array_search('link',     $normalized, true);
+            $ls = array_search('ndeserie', $normalized, true);
 
-            if ($lk  === false) { $lk  = array_search('linkwaze', $normalized, true); }
-            if ($ls  === false) { $ls  = array_search('serie',    $normalized, true); }
-            if ($ls  === false) { $ls  = array_search('noserie',  $normalized, true); }
+            if ($lk === false) { $lk = array_search('linkwaze',  $normalized, true); }
+            // Aliases para Nº DE SÉRIE
+            if ($ls === false) { $ls = array_search('nodeserie', $normalized, true); }
+            if ($ls === false) { $ls = array_search('serie',     $normalized, true); }
+            if ($ls === false) { $ls = array_search('noserie',   $normalized, true); }
 
-            // Linha com pelo menos uma das colunas-chave → é o cabeçalho
             if ($lk !== false || $ls !== false) {
                 $header   = $normalized;
                 $colLink  = $lk;
@@ -330,6 +331,7 @@ final class ImportRadarCommand extends Command
             throw new \RuntimeException(
                 "Colunas LINK/Nº DE SÉRIE não encontradas na aba REFERENCIA.{$uf} " .
                 "(verificadas {$attempts} linha(s)). " .
+                "Aliases de série aceitos: ndeserie, nodeserie, serie, noserie. " .
                 "Último cabeçalho detectado: " . implode(', ', $header ?? [])
             );
         }
@@ -338,7 +340,7 @@ final class ImportRadarCommand extends Command
 
         // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
-            if ($row === null || count($row) <= max((int)$colLink, (int)$colSerie)) {
+            if ($row === null || count($row) <= max((int) $colLink, (int) $colSerie)) {
                 continue;
             }
 
@@ -412,7 +414,7 @@ final class ImportRadarCommand extends Command
         $ok      = curl_exec($ch);
         $errCode = curl_errno($ch);
         $errMsg  = curl_error($ch);
-        // PHP 8.5: curl_close() não tem mais efeito — removido para evitar deprecation
+        // PHP 8.5: curl_close() não tem mais efeito
         fclose($fp);
 
         if (!$ok || $errCode !== 0 || filesize($tmpPath) < 10) {

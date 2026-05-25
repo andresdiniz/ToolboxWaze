@@ -2,6 +2,8 @@
 # Files in the packages/ subdirectory configure your dependencies.
 
 parameters:
+    # ID do container GTM (ex: GTM-XXXXXX). Deixe vazio para desabilitar o snippet.
+    app.gtm_id: '%env(default::GTM_ID)%'
 
 services:
     _defaults:

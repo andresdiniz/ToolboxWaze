@@ -109,6 +109,28 @@
     }
     </style>
 
+    {# ── Google Tag Manager — inicialização do dataLayer ─────────── #}
+    {# O snippet só é renderizado quando GTM_ID estiver definido no .env #}
+    {% set gtmId = app_gtm_id|default('') %}
+    {% if gtmId %}
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+        'event':          'page_context',
+        'user_role':      '{{ app.user ? (is_granted('ROLE_ADMIN') ? 'admin' : 'user') : 'guest' }}',
+        'user_logged_in': {{ app.user ? 'true' : 'false' }},
+        'page_section':   '{{ app.request.pathInfo|split('/')|filter(v => v != '')|first|default('home') }}'
+    });
+    </script>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','{{ gtmId|e('js') }}');</script>
+    <!-- End Google Tag Manager -->
+    {% endif %}
+
     <script>
     (function(){
         var t = localStorage.getItem('twTheme');
@@ -116,30 +138,16 @@
         document.documentElement.setAttribute('data-theme', t);
     }());
     </script>
-
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-JW5BB4KW0X"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-JW5BB4KW0X');
-</script>
-
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-TDJ6L3FC');</script>
-    <!-- End Google Tag Manager -->
 </head>
 <body>
-    <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TDJ6L3FC"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
+
+{% if gtmId is defined and gtmId %}
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ gtmId|e('html_attr') }}"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+{% endif %}
+
 <nav class="navbar navbar-expand-lg mb-4">
     <div class="container-xl">
         <a class="navbar-brand" href="{{ path('app_dashboard') }}">
@@ -314,13 +322,15 @@
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
-                            <a class="dropdown-item" href="{{ path('export_radares_csv') }}">
+                            <a class="dropdown-item" href="{{ path('export_radares_csv') }}"
+                               onclick="window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'export_csv',export_tipo:'radares'});">
                                 <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
                                 Exportar Radares CSV
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="{{ path('export_postos_csv') }}">
+                            <a class="dropdown-item" href="{{ path('export_postos_csv') }}"
+                               onclick="window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'export_csv',export_tipo:'postos'});">
                                 <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
                                 Exportar Postos CSV
                             </a>
@@ -394,6 +404,9 @@
       sun.style.display  = t === 'dark' ? 'block' : 'none';
       moon.style.display = t === 'dark' ? 'none'  : 'block';
     }
+    // ── Analytics: registra troca de tema ──────────────────────────
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({ event: 'theme_toggle', theme: t });
     requestAnimationFrame(function(){
       requestAnimationFrame(function(){
         var el = document.getElementById('__theme-no-transition');
@@ -478,7 +491,7 @@
 }());
 </script>
 
-{# ── Busca Global Autocomplete ─────────────────────────────────────────── #}
+{# ── Busca Global Autocomplete (com rastreamento Analytics) ───────────── #}
 <script>
 (function(){
   var input    = document.getElementById('globalSearch');
@@ -490,6 +503,11 @@
 
   function badgeClass(tipo) { return tipo === 'radar' ? 'radar' : 'posto'; }
   function typeLabel(tipo)  { return tipo === 'radar' ? 'Radar' : 'Posto'; }
+
+  function trackEvent(event, data) {
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push(Object.assign({ event: event }, data));
+  }
 
   function render(items) {
     dropdown.innerHTML = '';
@@ -504,6 +522,14 @@
           '<span class="search-item-type ' + badgeClass(r.tipo) + '">' + typeLabel(r.tipo) + '</span>' +
           '<span class="search-item-label">' + escHtml(r.label) + '</span>' +
           (r.badge ? '<small class="text-muted">' + escHtml(r.badge) + '</small>' : '');
+        // ── Rastreia clique no resultado ───────────────────────────
+        a.addEventListener('click', function() {
+          trackEvent('busca_click', {
+            search_term: lastQ,
+            item_tipo:   r.tipo,
+            item_label:  r.label
+          });
+        });
         dropdown.appendChild(a);
       });
     }
@@ -519,7 +545,15 @@
   function search(q) {
     fetch('/api/busca?q=' + encodeURIComponent(q))
       .then(function(r){ return r.json(); })
-      .then(render)
+      .then(function(items) {
+        render(items);
+        // ── Rastreia busca realizada ───────────────────────────────
+        trackEvent('busca_global', {
+          search_term:   q,
+          results_count: items.length,
+          result_tipos:  [...new Set(items.map(function(i){ return i.tipo; }))].join(',')
+        });
+      })
       .catch(function(){ dropdown.classList.remove('show'); });
   }
 

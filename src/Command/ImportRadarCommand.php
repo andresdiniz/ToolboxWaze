@@ -35,13 +35,17 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   Grava: radar_medidor.link_waze
  *
  *   Colunas esperadas na aba REFERENCIA.UF:
- *     LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE | USUÁRIO | VERIFICADO | ALTERADO | AÇÃO
+ *     LINK: | Nº DE SÉRIE: | NOVO: | EXPIRADO: | CIDADE: | USUÁRIO: | VERIFICADO: | ALTERADO: | AÇÃO:
+ *
+ *   Aliases aceitos para LINK (após normalização):
+ *     link, linkwaze
  *
  *   Aliases aceitos para Nº DE SÉRIE (após normalização):
  *     ndeserie, nodeserie, serie, noserie
  *
- *   As primeiras linhas podem conter metadados.
- *   O cabeçalho real é detectado automaticamente.
+ *   As primeiras linhas podem conter metadados (ex: totais, percentuais).
+ *   O cabeçalho real é detectado automaticamente: primeira linha que
+ *   contenha AMBAS as colunas (link E série) simultaneamente.
  *
  * ════════════════════════════════════════════════════════════
  * BACKFILL AUTOMÁTICO
@@ -283,15 +287,27 @@ final class ImportRadarCommand extends Command
         }
 
         // ── Detecta o cabeçalho real ──────────────────────────────────
-        // A planilha pode ter metadados nas primeiras linhas.
-        // O cabeçalho real é a primeira linha que contenha
-        // "link" ou qualquer alias de série após normalização.
-        // Aliases aceitos para Nº DE SÉRIE:
-        //   ndeserie | nodeserie | serie | noserie
-        $header   = null;
-        $colLink  = false;
-        $colSerie = false;
-        $attempts = 0;
+        //
+        // A planilha REFERENCIA.UF tem metadados nas primeiras linhas:
+        //   Linha 1: ALAGOAS,,,,,,,,
+        //   Linha 2: ATIVO:,73,CADASTRADO:,69,,,,,
+        //   Linha 3: PORCENTAGEM:,"111,6883117",DELETAR:,43,,,,,
+        //   Linha 4: REPROVADO:,0,LINK INVÁLIDO:,0,,,,,
+        //   Linha 5: LINK:,Nº DE SÉRIE:,NOVO:,...   ← cabeçalho real
+        //
+        // REGRA: aceita APENAS a linha que contenha simultaneamente
+        //   a coluna LINK  E  a coluna Nº DE SÉRIE (AND, não OR).
+        // Isso evita falso-positivo em linhas de metadado que por
+        // acaso contenham uma das duas palavras isoladamente.
+        //
+        // Aliases aceitos após normalizeKey():
+        //   LINK      → link, linkwaze
+        //   Nº DE SÉRIE → ndeserie, nodeserie, serie, noserie
+        $header       = null;
+        $colLink      = false;
+        $colSerie     = false;
+        $attempts     = 0;
+        $lastNormalized = [];
 
         while ($attempts < 20) {
             // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
@@ -307,18 +323,21 @@ final class ImportRadarCommand extends Command
                 continue;
             }
 
-            $normalized = array_map(fn($h) => $this->normalizeKey((string) $h), $rawRow);
+            $normalized     = array_map(fn($h) => $this->normalizeKey((string) $h), $rawRow);
+            $lastNormalized = $normalized;
 
+            // Busca coluna LINK
             $lk = array_search('link',     $normalized, true);
-            $ls = array_search('ndeserie', $normalized, true);
+            if ($lk === false) { $lk = array_search('linkwaze', $normalized, true); }
 
-            if ($lk === false) { $lk = array_search('linkwaze',  $normalized, true); }
-            // Aliases para Nº DE SÉRIE
+            // Busca coluna Nº DE SÉRIE (vários aliases)
+            $ls = array_search('ndeserie', $normalized, true);
             if ($ls === false) { $ls = array_search('nodeserie', $normalized, true); }
             if ($ls === false) { $ls = array_search('serie',     $normalized, true); }
             if ($ls === false) { $ls = array_search('noserie',   $normalized, true); }
 
-            if ($lk !== false || $ls !== false) {
+            // *** AND: só aceita quando AMBAS as colunas estão presentes ***
+            if ($lk !== false && $ls !== false) {
                 $header   = $normalized;
                 $colLink  = $lk;
                 $colSerie = $ls;
@@ -329,10 +348,11 @@ final class ImportRadarCommand extends Command
         if ($header === null || $colLink === false || $colSerie === false) {
             fclose($fh);
             throw new \RuntimeException(
-                "Colunas LINK/Nº DE SÉRIE não encontradas na aba REFERENCIA.{$uf} " .
+                "Colunas LINK e Nº DE SÉRIE não encontradas juntas na aba REFERENCIA.{$uf} " .
                 "(verificadas {$attempts} linha(s)). " .
+                "Aliases de link aceitos: link, linkwaze. " .
                 "Aliases de série aceitos: ndeserie, nodeserie, serie, noserie. " .
-                "Último cabeçalho detectado: " . implode(', ', $header ?? [])
+                "Última linha normalizada: [" . implode(', ', $lastNormalized) . "]"
             );
         }
 

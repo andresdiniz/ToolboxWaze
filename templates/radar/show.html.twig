@@ -238,9 +238,6 @@
 
         {# ══════════════════════════════════════════════
            CARD: EDITOR WAZE + MAPA OSM
-           Extrai lat/lon da URL do waze_link e renderiza
-           um mapa Leaflet (OpenStreetMap) com marcador.
-           O botão "Abrir Editor" é mantido.
            ══════════════════════════════════════════════ #}
         {% if app.user %}
         <div class="card mb-4" id="card-waze">
@@ -263,29 +260,44 @@
                         </svg>
                         Abrir Editor
                     </a>
+                {% elseif radar.linkWaze %}
+                    <a href="{{ radar.linkWaze }}" target="_blank" rel="noopener"
+                       class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.3)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor"
+                             viewBox="0 0 16 16" class="me-1" style="vertical-align:-.1em">
+                            <path d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
+                            <path d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
+                        </svg>
+                        Abrir Editor
+                    </a>
                 {% endif %}
             </div>
             <div class="card-body p-0">
 
-                {# ── MAPA OSM ── aparece quando há waze_link com lat/lon #}
-                {% if wazeLink and wazeLink.waze_link %}
-                {%
-                    set wazeLat = null
-                    %}{%
-                    set wazeLon = null
-                %}
-                {# Extrai lat= e lon= da URL via regex do Twig #}
-                {% if wazeLink.waze_link matches '/[?&]lat=(-?[0-9]+\.?[0-9]*)/' %}
-                    {% set wazeLat = wazeLink.waze_link|replace({'/.*[?&]lat=(-?[0-9]+\.?[0-9]*).*/': '\\1'}) %}
-                    {# Twig não tem regex-capture nativo; passamos lat/lon via data-attr e JS extrai #}
-                {% endif %}
+                {# ── MAPA OSM — usa wazeLink da tabela ou radar.linkWaze da planilha #}
+                {% set mapaUrl = wazeLink ? wazeLink.waze_link : radar.linkWaze %}
+                {% if mapaUrl %}
                 <div id="waze-map"
-                     data-waze-url="{{ wazeLink.waze_link|e('html_attr') }}"
+                     data-waze-url="{{ mapaUrl|e('html_attr') }}"
                      style="height:240px;width:100%;background:var(--color-surface-2)">
                 </div>
                 {% endif %}
 
                 <div class="p-3">
+
+                {# ── Banner: link importado da planilha (ainda sem cadastro manual) #}
+                {% if not wazeLink and radar.linkWaze %}
+                <div class="alert alert-info py-2 px-3 mb-3 small d-flex align-items-start gap-2" role="alert">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor"
+                         viewBox="0 0 16 16" class="mt-1 flex-shrink-0">
+                        <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+                    </svg>
+                    <div>
+                        <strong>Link importado da planilha</strong> — ainda não confirmado manualmente.<br>
+                        Confira o link abaixo e clique em <strong>Cadastrar</strong> para registrar oficialmente.
+                    </div>
+                </div>
+                {% endif %}
 
                 {# Estado atual (somente leitura) quando já existe link #}
                 {% if wazeLink %}
@@ -317,7 +329,7 @@
                 </div>
                 {% endif %}
 
-                {# Botão para recolher/expandir o formulário (só quando já tem link) #}
+                {# Botão para recolher/expandir o formulário (só quando já tem link manual) #}
                 {% if wazeLink %}
                 <button class="btn btn-sm w-100 mb-3"
                         type="button"
@@ -345,10 +357,23 @@
                             <label class="form-label fw-semibold small">
                                 Link do Editor Waze <span class="text-danger">*</span>
                             </label>
+                            {#
+                              Prioridade do valor pré-preenchido:
+                                1. Dado postado com erro (wazeFormData)
+                                2. Link manual já cadastrado (wazeLink.waze_link)
+                                3. Link importado da planilha (radar.linkWaze)  ← NOVO
+                                4. Vazio
+                            #}
                             <input type="url"
                                    name="waze_link"
                                    id="waze-link-input"
-                                   value="{{ wazeFormData.waze_link is defined ? wazeFormData.waze_link : (wazeLink ? wazeLink.waze_link : '') }}"
+                                   value="{{
+                                       wazeFormData.waze_link is defined
+                                           ? wazeFormData.waze_link
+                                           : (wazeLink
+                                               ? wazeLink.waze_link
+                                               : radar.linkWaze|default(''))
+                                   }}"
                                    class="form-control form-control-sm font-monospace {{ wazeErrors.waze_link is defined ? 'is-invalid' : '' }}"
                                    placeholder="https://waze.com/pt-BR/editor?…&permanentHazards=272464"
                                    required>

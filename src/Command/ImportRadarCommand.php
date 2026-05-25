@@ -196,8 +196,11 @@ final class ImportRadarCommand extends Command
                 }
 
                 try {
-                    $updated = $this->importLinksWaze($uf, $referenciaUrl);
-                    $io->text(sprintf('  <info>[%s]</info> %d link(s) Waze atualizados.', $uf, $updated));
+                    [$updated, $matched, $notMatched] = $this->importLinksWaze($uf, $referenciaUrl);
+                    $io->text(sprintf(
+                        '  <info>[%s]</info> %d link(s) salvos | %d match(es) | %d série(s) sem match no banco.',
+                        $uf, $updated, $matched, $notMatched
+                    ));
                     $wazeOk++;
                 } catch (\Throwable $e) {
                     $wazeErrors[$uf] = $e->getMessage();
@@ -259,9 +262,10 @@ final class ImportRadarCommand extends Command
 
     // ════════════════════════════════════════════════════════════
     // Importa links Waze da aba REFERENCIA.UF
+    // Retorna [updated, matched, notMatched]
     // ════════════════════════════════════════════════════════════
 
-    private function importLinksWaze(string $uf, string $url): int
+    private function importLinksWaze(string $uf, string $url): array
     {
         $tmpFile = $this->downloadToTempFile($url, $uf);
 
@@ -272,7 +276,7 @@ final class ImportRadarCommand extends Command
         }
     }
 
-    private function processReferenciaSheet(string $path, string $uf): int
+    private function processReferenciaSheet(string $path, string $uf): array
     {
         $fh = fopen($path, 'rb');
 
@@ -288,29 +292,27 @@ final class ImportRadarCommand extends Command
 
         // ── Detecta o cabeçalho real ──────────────────────────────────
         //
-        // A planilha REFERENCIA.UF tem metadados nas primeiras linhas:
+        // Formato real da planilha REFERENCIA.UF:
         //   Linha 1: ALAGOAS,,,,,,,,
         //   Linha 2: ATIVO:,73,CADASTRADO:,69,,,,,
         //   Linha 3: PORCENTAGEM:,"111,6883117",DELETAR:,43,,,,,
         //   Linha 4: REPROVADO:,0,LINK INVÁLIDO:,0,,,,,
-        //   Linha 5: LINK:,Nº DE SÉRIE:,NOVO:,...   ← cabeçalho real
+        //   Linha 5: LINK:,Nº DE SÉRIE:,NOVO:,...  ← cabeçalho real
         //
-        // REGRA: aceita APENAS a linha que contenha simultaneamente
-        //   a coluna LINK  E  a coluna Nº DE SÉRIE (AND, não OR).
-        // Isso evita falso-positivo em linhas de metadado que por
-        // acaso contenham uma das duas palavras isoladamente.
-        //
-        // Aliases aceitos após normalizeKey():
+        // REGRA: só aceita linha com AMBAS as colunas (AND).
+        // Aliases após normalizeKey():
         //   LINK      → link, linkwaze
         //   Nº DE SÉRIE → ndeserie, nodeserie, serie, noserie
-        $header       = null;
-        $colLink      = false;
-        $colSerie     = false;
-        $attempts     = 0;
+        //
+        // Nota: 'Nº DE SÉRIE:' via iconv TRANSLIT vira 'nodeserie'
+        //       'N° DE SÉRIE:' (grau) vira 'ndeserie'
+        $header         = null;
+        $colLink        = false;
+        $colSerie       = false;
+        $attempts       = 0;
         $lastNormalized = [];
 
         while ($attempts < 20) {
-            // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
             $rawRow = fgetcsv($fh, 0, ',', '"', '');
 
             if ($rawRow === false) {
@@ -330,13 +332,13 @@ final class ImportRadarCommand extends Command
             $lk = array_search('link',     $normalized, true);
             if ($lk === false) { $lk = array_search('linkwaze', $normalized, true); }
 
-            // Busca coluna Nº DE SÉRIE (vários aliases)
-            $ls = array_search('ndeserie', $normalized, true);
+            // Busca coluna Nº DE SÉRIE (todos os aliases possíveis)
+            $ls = array_search('ndeserie',  $normalized, true);
             if ($ls === false) { $ls = array_search('nodeserie', $normalized, true); }
             if ($ls === false) { $ls = array_search('serie',     $normalized, true); }
             if ($ls === false) { $ls = array_search('noserie',   $normalized, true); }
 
-            // *** AND: só aceita quando AMBAS as colunas estão presentes ***
+            // Só aceita quando AMBAS estão presentes
             if ($lk !== false && $ls !== false) {
                 $header   = $normalized;
                 $colLink  = $lk;
@@ -350,15 +352,15 @@ final class ImportRadarCommand extends Command
             throw new \RuntimeException(
                 "Colunas LINK e Nº DE SÉRIE não encontradas juntas na aba REFERENCIA.{$uf} " .
                 "(verificadas {$attempts} linha(s)). " .
-                "Aliases de link aceitos: link, linkwaze. " .
-                "Aliases de série aceitos: ndeserie, nodeserie, serie, noserie. " .
                 "Última linha normalizada: [" . implode(', ', $lastNormalized) . "]"
             );
         }
 
+        // ── Lê todos os pares série → link ───────────────────────────────
+        // Cada série pode aparecer em múltiplas linhas (faixas distintas
+        // do mesmo medidor). Guardamos só o primeiro link não-vazio.
         $linkMap = [];
 
-        // PHP 8.5: $escape deve ser explícito — '' desativa escape (RFC 4180)
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
             if ($row === null || count($row) <= max((int) $colLink, (int) $colSerie)) {
                 continue;
@@ -371,21 +373,25 @@ final class ImportRadarCommand extends Command
                 continue;
             }
 
-            $linkMap[$serie] = $link;
+            // Guarda apenas o primeiro link por série
+            $linkMap[$serie] ??= $link;
         }
 
         fclose($fh);
 
         if ($linkMap === []) {
-            return 0;
+            return [0, 0, 0];
         }
 
-        $updated = 0;
+        // ── Faz o match com radar_faixa → radar_medidor e grava link_waze ──
+        $updated    = 0;
+        $matched    = 0;
+        $notMatched = 0;
 
         foreach ($linkMap as $serie => $linkWaze) {
             $radarId = $this->connection->fetchOne(
                 'SELECT rf.radar_medidor_id
-                 FROM   radar_faixa rf
+                 FROM   radar_faixa  rf
                  JOIN   radar_medidor rm ON rm.id = rf.radar_medidor_id
                  WHERE  rf.numero_serie = ?
                    AND  rm.sigla_uf    = ?
@@ -394,16 +400,18 @@ final class ImportRadarCommand extends Command
             );
 
             if ($radarId === false) {
+                $notMatched++;
                 continue;
             }
 
+            $matched++;
             $updated += (int) $this->connection->executeStatement(
                 'UPDATE radar_medidor SET link_waze = ? WHERE id = ?',
                 [$linkWaze, (int) $radarId]
             );
         }
 
-        return $updated;
+        return [$updated, $matched, $notMatched];
     }
 
     private function downloadToTempFile(string $url, string $context = ''): string
@@ -434,7 +442,6 @@ final class ImportRadarCommand extends Command
         $ok      = curl_exec($ch);
         $errCode = curl_errno($ch);
         $errMsg  = curl_error($ch);
-        // PHP 8.5: curl_close() não tem mais efeito
         fclose($fp);
 
         if (!$ok || $errCode !== 0 || filesize($tmpPath) < 10) {

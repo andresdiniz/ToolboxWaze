@@ -1,5 +1,10 @@
 twig:
     file_name_pattern: '*.twig'
+    globals:
+        # Disponibiliza o ID do GTM como variável global nos templates Twig.
+        # Uso: {% if app_gtm_id %}...snippet GTM...{% endif %}
+        # Definir GTM_ID no .env.local para ativar (ex: GTM_ID=GTM-XXXXXX)
+        app_gtm_id: '%app.gtm_id%'
 
 when@test:
     twig:

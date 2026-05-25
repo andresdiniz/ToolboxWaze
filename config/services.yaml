@@ -3,7 +3,8 @@
 
 parameters:
     # ID do container GTM (ex: GTM-XXXXXX). Deixe vazio para desabilitar o snippet.
-    app.gtm_id: '%env(default::GTM_ID)%'
+    # Defina GTM_ID no .env.local — nunca commite o ID real no repositório.
+    app.gtm_id: '%env(string:default::GTM_ID)%'
 
 services:
     _defaults:

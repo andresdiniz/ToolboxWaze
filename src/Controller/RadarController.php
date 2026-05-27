@@ -95,8 +95,10 @@ final class RadarController extends AbstractController
             throw $this->createAccessDeniedException('Você não tem acesso a dados deste estado.');
         }
 
-        $faixas    = $this->faixaRepo->findBy(['radarMedidorId' => $id], ['numeroFaixa' => 'ASC']);
-        $historico = $this->historicoRepo->findBy(['radarMedidorId' => $id], ['ano' => 'DESC', 'dataLaudo' => 'DESC']);
+        // Doctrine findBy usa o nome da PROPRIEDADE da entidade (não da coluna).
+        // RadarFaixa::$radarMedidor é um ManyToOne — passar o ID direto funciona.
+        $faixas    = $this->faixaRepo->findBy(['radarMedidor' => $id], ['numeroFaixa' => 'ASC']);
+        $historico = $this->historicoRepo->findBy(['radarMedidor' => $id], ['ano' => 'DESC', 'dataLaudo' => 'DESC']);
 
         $wazeLink = $this->wazeRepo->findRawByRadarId($id);
         $wazeLog  = $wazeLink ? $this->wazeRepo->findLogByLinkId($wazeLink['id']) : [];

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Repository\UserRepository;
+use App\Service\ApiTokenService;
 use App\Service\RadarImportService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
@@ -15,10 +16,10 @@ use Symfony\Component\Routing\Attribute\Route;
  * Endpoint de importação bulk de radares.
  *
  * POST /api/radares/importar
- * Authorization: Bearer <API_IMPORT_TOKEN>
+ * Authorization: Bearer <token gerado em /api/meu-token>
  * Content-Type: application/json
  *
- * Body: array JSON de até 500 radares (ver RadarImportService::FIELDS).
+ * Body: array JSON de até 500 radares.
  * Retorna: { created, updated, skipped, errors[] }
  */
 #[Route('/api/radares', name: 'api_radar_')]
@@ -28,20 +29,18 @@ final class ApiRadarImportController extends AbstractController
 
     public function __construct(
         private readonly RadarImportService $importService,
-        #[Autowire(env: 'API_IMPORT_TOKEN')]
-        private readonly string $apiToken,
+        private readonly ApiTokenService    $tokenService,
+        private readonly UserRepository     $userRepository,
     ) {}
 
     #[Route('/importar', name: 'importar', methods: ['POST'])]
     public function importar(Request $req): JsonResponse
     {
-        // ── Autenticação Bearer ──────────────────────────────────────────────
-        $auth = $req->headers->get('Authorization', '');
-        if (!str_starts_with($auth, 'Bearer ') || substr($auth, 7) !== $this->apiToken) {
+        $user = $this->resolveUserFromToken($req);
+        if ($user === null) {
             return $this->json(['error' => 'Unauthorized'], 401);
         }
 
-        // ── Parse do body ───────────────────────────────────────────────────
         $data = json_decode($req->getContent(), true);
 
         if (!is_array($data) || $data === []) {
@@ -58,11 +57,32 @@ final class ApiRadarImportController extends AbstractController
             ], 422);
         }
 
-        // ── Processamento ───────────────────────────────────────────────────
         $result = $this->importService->processBatch($data);
-
-        $status = $result['errors'] === [] ? 200 : 207; // 207 = Multi-Status (parcialmente OK)
+        $status = $result['errors'] === [] ? 200 : 207;
 
         return $this->json($result, $status);
+    }
+
+    // ── Helper ────────────────────────────────────────────────────────────
+
+    private function resolveUserFromToken(Request $req): ?object
+    {
+        $token = $this->tokenService->extractBearerToken(
+            $req->headers->get('Authorization', '')
+        );
+        if ($token === null) {
+            return null;
+        }
+
+        // Percorre todos os usuários com permissão de API e valida o token
+        // Performance: apenas usuários com ROLE_API_IMPORT são verificados
+        $users = $this->userRepository->findByRole('ROLE_API_IMPORT');
+        foreach ($users as $user) {
+            if ($this->tokenService->validateToken($token, $user->getUserIdentifier())) {
+                return $user;
+            }
+        }
+
+        return null;
     }
 }

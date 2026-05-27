@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\RadarMedidor;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\DBAL\Connection;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -13,10 +14,17 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class RadarMedidorRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    private Connection $db;
+
+    public function __construct(ManagerRegistry $registry, Connection $db)
     {
         parent::__construct($registry, RadarMedidor::class);
+        $this->db = $db;
     }
+
+    // =========================================================================
+    // ORM helpers (usados por comandos de importação, fixtures, etc.)
+    // =========================================================================
 
     public function findByUf(string $uf): array
     {
@@ -83,14 +91,6 @@ class RadarMedidorRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    // -------------------------------------------------------------------------
-    // Filtro "recentes" — usa data_verificacao_efetiva calculada na importação
-    //
-    // Como o campo está em dd/mm/aaaa (varchar), a comparação usa
-    // STR_TO_DATE apenas UMA vez por query, não por linha.
-    // O índice idx_radar_data_verificacao_efetiva acelera o filtro.
-    // -------------------------------------------------------------------------
-
     /**
      * Retorna radares recentes: data_verificacao_efetiva nos últimos $days dias.
      *
@@ -116,12 +116,6 @@ class RadarMedidorRepository extends ServiceEntityRepository
         return $qb->getQuery()->getResult();
     }
 
-    /**
-     * Conta radares recentes.
-     *
-     * @param string|null $uf   Filtra por UF (opcional).
-     * @param int         $days Janela em dias (padrão 30).
-     */
     public function countRecentes(?string $uf = null, int $days = 30): int
     {
         $qb = $this->createQueryBuilder('r')
@@ -138,5 +132,198 @@ class RadarMedidorRepository extends ServiceEntityRepository
         }
 
         return (int) $qb->getQuery()->getSingleScalarResult();
+    }
+
+    // =========================================================================
+    // DBAL – queries de listagem paginada (usadas pelo RadarController)
+    // =========================================================================
+
+    /**
+     * Retorna uma página de radares aplicando todos os filtros.
+     *
+     * @param array{uf:string, municipio:string, resultado:string, tipo:string, validade:string, serie:string} $filters
+     */
+    public function findPaginated(
+        array  $filters,
+        ?array $allowedUfs,
+        int    $page,
+        int    $perPage,
+    ): array {
+        $offset = ($page - 1) * $perPage;
+        [$where, $params] = $this->buildWhere($filters, $allowedUfs);
+        $baseFrom    = $this->buildFrom($filters['serie']);
+        $whereClause = $where ? " WHERE $where" : '';
+        $dv          = $this->dateConv('rm.data_validade');
+
+        return $this->db->fetchAllAssociative(
+            "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
+                    rm.local_verificacao,
+                    rm.data_ultima_verificacao,
+                    rm.data_verificacao_efetiva,
+                    rm.data_validade,
+                    DATE_FORMAT($dv, '%Y-%m-%d') AS data_validade_iso,
+                    rm.ultimo_resultado,
+                    rm.tipo_medidor, rm.proprietario_nome
+             FROM radar_medidor rm $baseFrom
+             $whereClause
+             ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao
+             LIMIT $perPage OFFSET $offset",
+            $params
+        );
+    }
+
+    /**
+     * Conta o total de radares que atendem aos filtros (para paginação).
+     *
+     * @param array{uf:string, municipio:string, resultado:string, tipo:string, validade:string, serie:string} $filters
+     */
+    public function countFiltered(array $filters, ?array $allowedUfs): int
+    {
+        [$where, $params] = $this->buildWhere($filters, $allowedUfs);
+        $baseFrom    = $this->buildFrom($filters['serie']);
+        $whereClause = $where ? " WHERE $where" : '';
+
+        return (int) $this->db->fetchOne(
+            "SELECT COUNT(DISTINCT rm.id) FROM radar_medidor rm $baseFrom $whereClause",
+            $params
+        );
+    }
+
+    /**
+     * Retorna as listas de valores únicos para os selects de filtro.
+     */
+    public function findFilterOptions(?array $allowedUfs): array
+    {
+        // UFs disponíveis
+        $ufsQuery  = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL';
+        $ufsParams = [];
+        if ($allowedUfs !== null && count($allowedUfs) > 0) {
+            $ph        = implode(',', array_fill(0, count($allowedUfs), '?'));
+            $ufsQuery .= " AND sigla_uf IN ($ph)";
+            $ufsParams = $allowedUfs;
+        } elseif ($allowedUfs !== null && count($allowedUfs) === 0) {
+            $ufsQuery .= ' AND 1=0';
+        }
+        $ufsQuery .= ' ORDER BY sigla_uf';
+
+        $ufs = array_column($this->db->fetchAllAssociative($ufsQuery, $ufsParams), 'sigla_uf');
+
+        $resultados = array_column($this->db->fetchAllAssociative(
+            'SELECT DISTINCT ultimo_resultado FROM radar_medidor WHERE ultimo_resultado IS NOT NULL AND merged_into_id IS NULL ORDER BY ultimo_resultado'
+        ), 'ultimo_resultado');
+
+        $tipos = array_column($this->db->fetchAllAssociative(
+            'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL AND merged_into_id IS NULL ORDER BY tipo_medidor'
+        ), 'tipo_medidor');
+
+        return compact('ufs', 'resultados', 'tipos');
+    }
+
+    /**
+     * Busca um radar por ID retornando array puro (DBAL), com data_validade_iso.
+     */
+    public function findRawById(int $id): array|false
+    {
+        $dv = $this->dateConv('data_validade');
+        return $this->db->fetchAssociative(
+            "SELECT *, DATE_FORMAT($dv, '%Y-%m-%d') AS data_validade_iso
+             FROM radar_medidor WHERE id = ?",
+            [$id]
+        );
+    }
+
+    // =========================================================================
+    // Internos
+    // =========================================================================
+
+    private function dateConv(string $col): string
+    {
+        return sprintf("STR_TO_DATE(%s, '%%d/%%m/%%Y')", $col);
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
+    private function buildFrom(string $serie): string
+    {
+        return $serie !== '' ? 'LEFT JOIN radar_faixa rf ON rf.radar_medidor_id = rm.id' : '';
+    }
+
+    /**
+     * @return array{string, array} [$whereClause, $params]
+     */
+    private function buildWhere(array $filters, ?array $allowedUfs): array
+    {
+        $parts  = [];
+        $params = [];
+
+        // Sempre excluir radares mesclados
+        $parts[] = 'rm.merged_into_id IS NULL';
+
+        if ($allowedUfs !== null) {
+            if (count($allowedUfs) === 0) {
+                $parts[] = '1=0';
+            } else {
+                $ph      = implode(',', array_fill(0, count($allowedUfs), '?'));
+                $parts[] = "rm.sigla_uf IN ($ph)";
+                foreach ($allowedUfs as $v) {
+                    $params[] = $v;
+                }
+            }
+        }
+
+        if ($filters['uf'] !== '') {
+            $parts[]  = 'rm.sigla_uf = ?';
+            $params[] = $filters['uf'];
+        }
+        if ($filters['municipio'] !== '') {
+            $parts[]  = 'rm.municipio LIKE ?';
+            $params[] = '%' . $this->escapeLike($filters['municipio']) . '%';
+        }
+        if ($filters['resultado'] !== '') {
+            $parts[]  = 'rm.ultimo_resultado = ?';
+            $params[] = $filters['resultado'];
+        }
+        if ($filters['tipo'] !== '') {
+            $parts[]  = 'rm.tipo_medidor = ?';
+            $params[] = $filters['tipo'];
+        }
+        if ($filters['serie'] !== '') {
+            $escaped  = $this->escapeLike($filters['serie']);
+            $parts[]  = '(rf.numero_serie LIKE ? OR rf.numero_inmetro LIKE ?)';
+            $params[] = "%$escaped%";
+            $params[] = "%$escaped%";
+        }
+
+        $hoje = (new \DateTimeImmutable())->format('Y-m-d');
+        $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $dv   = $this->dateConv('rm.data_validade');
+
+        switch ($filters['validade']) {
+            case 'vencido':
+                $parts[]  = "$dv < ?";
+                $params[] = $hoje;
+                break;
+            case 'valido':
+                $parts[]  = "$dv >= ?";
+                $params[] = $hoje;
+                break;
+            case '30dias':
+                $parts[]  = "$dv >= ? AND $dv <= ?";
+                $params[] = $hoje;
+                $params[] = $em30;
+                break;
+            case 'recentes30':
+                $ha30dias = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+                $dve      = $this->dateConv('rm.data_verificacao_efetiva');
+                $parts[]  = "rm.data_verificacao_efetiva IS NOT NULL AND $dve >= ? AND $dve <= ?";
+                $params[] = $ha30dias;
+                $params[] = $hoje;
+                break;
+        }
+
+        return [implode(' AND ', $parts), $params];
     }
 }

@@ -116,6 +116,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $resetTokenExpiresAt = null;
 
+    /**
+     * Token de API pessoal do usuário (64 hex chars = 256 bits).
+     * Gerado sob demanda. Nulo enquanto não solicitado.
+     */
+    #[ORM\Column(length: 64, nullable: true, unique: true)]
+    private ?string $apiToken = null;
+
+    /** Data/hora em que o token de API foi gerado pela última vez. */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $apiTokenGeneratedAt = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -127,7 +138,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function __construct()
     {
-        // Garante que $createdAt nunca é lida como uninitialised antes do PrePersist
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -240,6 +250,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getResetTokenExpiresAt(): ?\DateTimeImmutable { return $this->resetTokenExpiresAt; }
     public function setResetTokenExpiresAt(?\DateTimeImmutable $v): static { $this->resetTokenExpiresAt = $v; return $this; }
+
+    public function getApiToken(): ?string { return $this->apiToken; }
+    public function setApiToken(?string $v): static { $this->apiToken = $v; return $this; }
+
+    public function getApiTokenGeneratedAt(): ?\DateTimeImmutable { return $this->apiTokenGeneratedAt; }
+    public function setApiTokenGeneratedAt(?\DateTimeImmutable $v): static { $this->apiTokenGeneratedAt = $v; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 

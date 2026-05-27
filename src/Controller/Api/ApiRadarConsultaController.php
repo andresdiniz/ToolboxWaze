@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
-use App\Repository\UserRepository;
 use App\Service\ApiTokenService;
 use App\Service\RadarConsultaService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,7 +19,6 @@ final class ApiRadarConsultaController extends AbstractController
     public function __construct(
         private readonly RadarConsultaService $consultaService,
         private readonly ApiTokenService      $tokenService,
-        private readonly UserRepository       $userRepository,
     ) {}
 
     #[Route('/consultar', name: 'individual', methods: ['GET'])]
@@ -57,7 +55,6 @@ final class ApiRadarConsultaController extends AbstractController
         }
 
         $body = json_decode($req->getContent(), true);
-
         if (!is_array($body)) {
             return $this->json(['error' => 'Body deve ser um objeto JSON.'], 400);
         }
@@ -86,20 +83,9 @@ final class ApiRadarConsultaController extends AbstractController
 
     private function autorizado(Request $req): bool
     {
-        $token = $this->tokenService->extractBearerToken(
+        $raw = $this->tokenService->extractBearerToken(
             $req->headers->get('Authorization', '')
         );
-        if ($token === null) {
-            return false;
-        }
-
-        $users = $this->userRepository->findByRole('ROLE_API_IMPORT');
-        foreach ($users as $user) {
-            if ($this->tokenService->validateToken($token, $user->getUserIdentifier())) {
-                return true;
-            }
-        }
-
-        return false;
+        return $raw !== null && $this->tokenService->resolveUser($raw) !== null;
     }
 }

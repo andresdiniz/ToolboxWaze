@@ -4,58 +4,69 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Security\Core\User\UserInterface;
+use App\Entity\User;
+use App\Repository\UserRepository;
+use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Gera e valida tokens de API derivados do username do usuário.
+ * Gerencia tokens de API persistidos no banco de dados.
  *
- * Algoritmo: HMAC-SHA256(API_TOKEN_SECRET, username)
- *
- * Propriedades:
- *   - Único por usuário (cada username gera um token diferente)
- *   - Determinístico (o mesmo username sempre gera o mesmo token)
- *   - Revogável trocando o API_TOKEN_SECRET no .env
- *   - Sem banco de dados adicional
+ * - Token: 64 hex chars (256 bits de entropia)
+ * - Único por usuário, armazenado em claro na coluna api_token
+ * - Revogar = setar NULL (o usuário pode gerar um novo)
+ * - Validação: busca direto pelo token no banco (lookup O(1) via índice UNIQUE)
  */
 final class ApiTokenService
 {
     public function __construct(
-        #[Autowire(env: 'API_TOKEN_SECRET')]
-        private readonly string $secret,
+        private readonly EntityManagerInterface $em,
+        private readonly UserRepository         $userRepository,
     ) {}
 
     /**
-     * Gera o token para um username.
+     * Gera um novo token para o usuário e persiste.
+     * Se já existia um token, ele é substituído (revogando o anterior).
      */
-    public function generateForUsername(string $username): string
+    public function gerarToken(User $user): string
     {
-        return hash_hmac('sha256', $username, $this->secret);
+        $token = bin2hex(random_bytes(32)); // 64 hex chars
+
+        $user->setApiToken($token);
+        $user->setApiTokenGeneratedAt(new \DateTimeImmutable());
+
+        $this->em->persist($user);
+        $this->em->flush();
+
+        return $token;
     }
 
     /**
-     * Gera o token para um objeto User do Symfony.
+     * Revoga o token do usuário (seta NULL).
      */
-    public function generateForUser(UserInterface $user): string
+    public function revogarToken(User $user): void
     {
-        return $this->generateForUsername($user->getUserIdentifier());
+        $user->setApiToken(null);
+        $user->setApiTokenGeneratedAt(null);
+
+        $this->em->persist($user);
+        $this->em->flush();
     }
 
     /**
-     * Valida um token recebido no header Authorization.
-     * Retorna o username se válido, null caso contrário.
-     *
-     * A comparação é feita via hash_equals() para evitar timing attacks.
+     * Valida o Bearer token recebido e retorna o User correspondente.
+     * Retorna null se o token não existir ou estiver revogado.
      */
-    public function validateToken(string $receivedToken, string $username): bool
+    public function resolveUser(string $bearerToken): ?User
     {
-        $expected = $this->generateForUsername($username);
-        return hash_equals($expected, $receivedToken);
+        if (strlen($bearerToken) !== 64) {
+            return null;
+        }
+
+        return $this->userRepository->findOneBy(['apiToken' => $bearerToken]);
     }
 
     /**
      * Extrai o Bearer token do header Authorization.
-     * Retorna null se o header estiver ausente ou mal formatado.
      */
     public function extractBearerToken(string $authorizationHeader): ?string
     {

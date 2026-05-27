@@ -1,0 +1,142 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Meu Token de API{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width: 680px">
+
+    <h1 class="h4 mb-1"><i class="bi bi-key me-2"></i>Token de API</h1>
+    <p class="text-muted mb-4">Use este token para autenticar requisições externas à API do Toolbox.</p>
+
+    {# Flash messages #}
+    {% for msg in app.flashes('success') %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+    {% for msg in app.flashes('danger') %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+
+            {% if app.user.apiToken %}
+                {# ——— Token ativo ——— #}
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="badge bg-success">Ativo</span>
+                    <small class="text-muted">
+                        Gerado em {{ app.user.apiTokenGeneratedAt|date('d/m/Y \\\u00e0\\s H:i') }}
+                    </small>
+                </div>
+
+                <label class="form-label fw-semibold mt-3">Seu token</label>
+                <div class="input-group mb-3">
+                    <input type="password"
+                           id="tokenInput"
+                           class="form-control font-monospace"
+                           value="{{ app.user.apiToken }}"
+                           readonly>
+                    <button class="btn btn-outline-secondary" type="button" id="toggleToken"
+                            title="Mostrar / Ocultar">
+                        <i class="bi bi-eye" id="toggleIcon"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" type="button" id="copyToken"
+                            title="Copiar token">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+
+                <p class="text-muted small mb-3">
+                    Envie o header abaixo em todas as requisições:
+                </p>
+                <pre class="bg-light rounded p-2 small">Authorization: Bearer {{ app.user.apiToken }}</pre>
+
+                <hr class="my-4">
+
+                <div class="d-flex gap-2 flex-wrap">
+                    {# Gerar novo token (substitui o atual) #}
+                    <form method="post" action="{{ path('api_token_gerar') }}"
+                          onsubmit="return confirm('Gerar um novo token irá invalidar o atual. Continuar?')">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('api_token_gerar') }}">
+                        <button class="btn btn-warning btn-sm">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Regenerar token
+                        </button>
+                    </form>
+
+                    {# Revogar #}
+                    <form method="post" action="{{ path('api_token_revogar') }}"
+                          onsubmit="return confirm('Tem certeza que deseja revogar o token?')">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('api_token_revogar') }}">
+                        <button class="btn btn-danger btn-sm">
+                            <i class="bi bi-x-circle me-1"></i>Revogar token
+                        </button>
+                    </form>
+                </div>
+
+            {% else %}
+                {# ——— Sem token ——— #}
+                <div class="text-center py-4">
+                    <i class="bi bi-shield-lock text-muted" style="font-size: 2.5rem"></i>
+                    <p class="mt-3 text-muted">Você ainda não possui um token de API.</p>
+
+                    <form method="post" action="{{ path('api_token_gerar') }}">
+                        <input type="hidden" name="_token"
+                               value="{{ csrf_token('api_token_gerar') }}">
+                        <button class="btn btn-primary">
+                            <i class="bi bi-key me-2"></i>Gerar meu token
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+
+        </div>{# /card-body #}
+    </div>{# /card #}
+
+    <div class="mt-4">
+        <h6 class="fw-semibold">Como usar</h6>
+        <ul class="text-muted small">
+            <li>Inclua o header <code>Authorization: Bearer &lt;token&gt;</code> em cada requisição.</li>
+            <li>O token não expira automaticamente — revogue-o se suspeitar de vazamento.</li>
+            <li>Ao regenerar, o token anterior é invalidado imediatamente.</li>
+            <li>Endpoints disponíveis: <code>POST /api/radares/importar</code>,
+                <code>GET /api/radares/consultar</code>,
+                <code>POST /api/radares/consultar/lote</code>.</li>
+        </ul>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+(function () {
+    const input  = document.getElementById('tokenInput');
+    const toggle = document.getElementById('toggleToken');
+    const icon   = document.getElementById('toggleIcon');
+    const copy   = document.getElementById('copyToken');
+
+    if (!input) return;
+
+    toggle?.addEventListener('click', () => {
+        const hidden = input.type === 'password';
+        input.type   = hidden ? 'text' : 'password';
+        icon.className = hidden ? 'bi bi-eye-slash' : 'bi bi-eye';
+    });
+
+    copy?.addEventListener('click', () => {
+        navigator.clipboard.writeText(input.value).then(() => {
+            copy.innerHTML = '<i class="bi bi-check"></i>';
+            setTimeout(() => { copy.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500);
+        });
+    });
+}());
+</script>
+{% endblock %}

@@ -18,3 +18,8 @@
 /public/assets/
 /assets/vendor/
 ###< symfony/asset-mapper ###
+
+###> dev notes / scratch files ###
+*.txt
+compose.override.yaml
+###< dev notes / scratch files ###

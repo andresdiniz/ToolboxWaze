@@ -1,0 +1,167 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Meu Perfil — ToolboxWaze{% endblock %}
+
+{% block body %}
+<div class="container py-3">
+
+  <div class="mb-3">
+    <a href="{{ path('app_dashboard') }}" class="btn btn-sm btn-outline-secondary">← Voltar</a>
+  </div>
+
+  {# ── Cabeçalho ── #}
+  <div class="d-flex align-items-start gap-3 mb-4">
+    {% if app.user.avatarUrl %}
+      <img src="{{ app.user.avatarUrl }}" alt="Avatar" class="rounded-circle flex-shrink-0"
+           style="width:56px;height:56px;object-fit:cover">
+    {% else %}
+      <div class="rounded-circle flex-shrink-0 d-flex align-items-center justify-content-center fw-bold text-white"
+           style="width:56px;height:56px;background:var(--tw);font-size:1.4rem">
+        {{ app.user.name|first|upper }}
+      </div>
+    {% endif %}
+    <div class="flex-grow-1">
+      <h4 class="mb-1">{{ app.user.name }}</h4>
+      <small class="text-muted">{{ app.user.email }}</small>
+      {% if app.user.isAdmin() %}
+        <span class="badge bg-danger ms-2">Admin</span>
+      {% endif %}
+      {% if 'ROLE_CHAMP' in app.user.roles %}
+        <span class="badge bg-warning text-dark ms-2">Champ</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% for type, messages in app.flashes %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show alert-animated">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  <div class="row g-3">
+
+    {# ── Dados pessoais ── #}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">👤 Dados da Conta</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><th class="ps-3" style="width:40%">Nome</th><td>{{ app.user.name }}</td></tr>
+              <tr><th class="ps-3">E-mail</th><td>{{ app.user.email }}</td></tr>
+              <tr><th class="ps-3">Apelido Waze</th>
+                  <td>{{ app.user.wazeNickname ?: '<span class="text-muted fst-italic">Não informado</span>'|raw }}</td></tr>
+              <tr><th class="ps-3">Status</th>
+                  <td>
+                    {% if app.user.isApproved() %}
+                      <span class="badge bg-success">Aprovado</span>
+                    {% elseif app.user.isPending() %}
+                      <span class="badge bg-warning text-dark">Pendente</span>
+                    {% else %}
+                      <span class="badge bg-danger">Rejeitado</span>
+                    {% endif %}
+                  </td>
+              </tr>
+              <tr><th class="ps-3">Membro desde</th>
+                  <td><small>{{ app.user.createdAt|date('d/m/Y') }}</small></td></tr>
+              {% if app.user.approvedAt %}
+              <tr><th class="ps-3">Aprovado em</th>
+                  <td><small>{{ app.user.approvedAt|date('d/m/Y') }}</small></td></tr>
+              {% endif %}
+              {% if app.user.lastLoginAt %}
+              <tr><th class="ps-3">Último acesso</th>
+                  <td><small>{{ app.user.lastLoginAt|date('d/m/Y H:i') }}</small></td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    {# ── Permissões ── #}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">🔑 Permissões e Acesso</div>
+        <div class="card-body">
+
+          {# UFs autorizadas #}
+          <div class="mb-3">
+            <div class="fw-semibold mb-1 small text-muted text-uppercase" style="letter-spacing:.05em">Estados (UFs)</div>
+            {% if app.user.allowedUfs is null or app.user.allowedUfs is empty %}
+              <span class="badge bg-success">Todos os estados</span>
+            {% else %}
+              {% for uf in app.user.allowedUfs %}
+                <span class="badge bg-secondary me-1 mb-1">{{ uf }}</span>
+              {% endfor %}
+            {% endif %}
+          </div>
+
+          {# Permissões de módulo #}
+          <div class="mb-3">
+            <div class="fw-semibold mb-1 small text-muted text-uppercase" style="letter-spacing:.05em">Módulos</div>
+            {% if app.user.isAdmin() %}
+              <span class="badge bg-danger">Acesso total (Admin)</span>
+            {% elseif app.user.permissions is empty %}
+              <span class="text-muted fst-italic small">Nenhuma permissão especial</span>
+            {% else %}
+              {% set allPerms = {
+                'PERM_RADARS':  'Radares',
+                'PERM_FUEL':    'Combustível',
+                'PERM_REPORTS': 'Relatórios',
+                'PERM_TOOLS':   'Ferramentas',
+                'PERM_EXPORT':  'Exportação'
+              } %}
+              {% for key, label in allPerms %}
+                {% if key in app.user.permissions %}
+                  <span class="badge bg-primary me-1 mb-1">{{ label }}</span>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </div>
+
+          {# Roles #}
+          <div>
+            <div class="fw-semibold mb-1 small text-muted text-uppercase" style="letter-spacing:.05em">Roles</div>
+            {% for role in app.user.roles %}
+              {% if role != 'ROLE_USER' %}
+                <span class="badge
+                  {{ role == 'ROLE_ADMIN' ? 'bg-danger' : (role == 'ROLE_CHAMP' ? 'bg-warning text-dark' : 'bg-secondary') }}
+                  me-1 mb-1">{{ role }}</span>
+              {% endif %}
+            {% endfor %}
+            <span class="badge bg-secondary me-1 mb-1">ROLE_USER</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    {# ── Token de API ── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+          🔐 Token de API
+          <a href="{{ path('perfil_api_token') }}" class="btn btn-sm btn-outline-primary">Gerenciar token</a>
+        </div>
+        <div class="card-body">
+          {% if app.user.apiToken %}
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <code class="small">{{ app.user.apiToken|slice(0,8) }}••••••••••••••••••••••••••••••••••••••••••••••••••••••••••</code>
+              <span class="badge bg-success">Ativo</span>
+              {% if app.user.apiTokenGeneratedAt %}
+                <small class="text-muted">Gerado em {{ app.user.apiTokenGeneratedAt|date('d/m/Y H:i') }}</small>
+              {% endif %}
+            </div>
+          {% else %}
+            <span class="text-muted fst-italic">Nenhum token ativo. Clique em <strong>Gerenciar token</strong> para gerar um.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>{# /row #}
+</div>
+{% endblock %}

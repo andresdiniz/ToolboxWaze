@@ -21,6 +21,13 @@ final class PerfilController extends AbstractController
         private readonly ApiTokenService $tokenService,
     ) {}
 
+    /** Página principal do perfil */
+    #[Route('', name: 'index', methods: ['GET'])]
+    public function index(): Response
+    {
+        return $this->render('perfil/index.html.twig');
+    }
+
     /** Página de gerenciamento do token de API */
     #[Route('/api-token', name: 'api_token', methods: ['GET'])]
     public function apiToken(): Response

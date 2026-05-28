@@ -28,15 +28,15 @@ final class RadarStatsService
             $dv   = "STR_TO_DATE(data_validade, '%d/%m/%Y')";
 
             [$where, $params] = $this->ufWhere($allowedUfs);
-            $wc = $where ? "WHERE $where" : '';
+            $wc = $where ? "WHERE merged_into_id IS NULL AND $where" : 'WHERE merged_into_id IS NULL';
 
             $row = $this->db->fetchAssociative(
                 "SELECT COUNT(*) AS total,
-                        SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
-                        SUM(ultimo_resultado = 'REPROVADO') AS reprovados,
+                        SUM(situacao = 'APROVADO')  AS aprovados,
+                        SUM(situacao = 'REPROVADO') AS reprovados,
                         SUM(data_validade IS NOT NULL AND $dv < ?)    AS vencidos,
                         SUM(data_validade IS NOT NULL AND $dv >= ? AND $dv <= ?) AS vencendo,
-                        COUNT(DISTINCT sigla_uf)             AS estados
+                        COUNT(DISTINCT sigla_uf)     AS estados
                  FROM radar_medidor $wc",
                 array_merge([$hoje, $hoje, $em30], $params)
             );
@@ -61,12 +61,12 @@ final class RadarStatsService
         return $this->cache->get($key, function (ItemInterface $item) use ($allowedUfs) {
             $item->expiresAfter(600);
             [$where, $params] = $this->ufWhere($allowedUfs);
-            $wc = $where ? "WHERE $where" : '';
+            $wc = $where ? "WHERE merged_into_id IS NULL AND $where" : 'WHERE merged_into_id IS NULL';
 
             return $this->db->fetchAllAssociative(
                 "SELECT sigla_uf AS uf, COUNT(*) AS total,
-                        SUM(ultimo_resultado = 'APROVADO')  AS aprovados,
-                        SUM(ultimo_resultado = 'REPROVADO') AS reprovados
+                        SUM(situacao = 'APROVADO')  AS aprovados,
+                        SUM(situacao = 'REPROVADO') AS reprovados
                  FROM radar_medidor $wc
                  GROUP BY sigla_uf ORDER BY sigla_uf",
                 $params
@@ -82,12 +82,12 @@ final class RadarStatsService
         return $this->cache->get($key, function (ItemInterface $item) use ($allowedUfs) {
             $item->expiresAfter(600);
             [$where, $params] = $this->ufWhere($allowedUfs);
-            $wc = $where ? "WHERE $where" : '';
+            $wc = $where ? "WHERE merged_into_id IS NULL AND $where" : 'WHERE merged_into_id IS NULL';
 
             return $this->db->fetchAllAssociative(
-                "SELECT COALESCE(ultimo_resultado, 'SEM INFO') AS resultado, COUNT(*) AS total
+                "SELECT COALESCE(situacao, 'SEM INFO') AS resultado, COUNT(*) AS total
                  FROM radar_medidor $wc
-                 GROUP BY ultimo_resultado ORDER BY total DESC",
+                 GROUP BY situacao ORDER BY total DESC",
                 $params
             );
         });
@@ -118,12 +118,12 @@ final class RadarStatsService
         return $this->cache->get($key, function (ItemInterface $item) use ($allowedUfs) {
             $item->expiresAfter(600);
             [$where, $params] = $this->ufWhere($allowedUfs, 'rm');
-            $wc = $where ? "WHERE $where" : '';
+            $wc = $where ? "WHERE rm.merged_into_id IS NULL AND $where" : 'WHERE rm.merged_into_id IS NULL';
 
             return $this->db->fetchAllAssociative(
                 "SELECT rm.sigla_uf AS uf,
-                        COUNT(rm.id)             AS total,
-                        COUNT(rwl.id)            AS com_waze,
+                        COUNT(rm.id)                 AS total,
+                        COUNT(rwl.id)                AS com_waze,
                         COUNT(rm.id) - COUNT(rwl.id) AS sem_waze,
                         ROUND(COUNT(rwl.id) / COUNT(rm.id) * 100, 1) AS pct
                  FROM radar_medidor rm
@@ -140,15 +140,18 @@ final class RadarStatsService
     public function getSemWazePrioritarios(?array $allowedUfs = null, int $limit = 10): array
     {
         [$where, $params] = $this->ufWhere($allowedUfs, 'rm');
-        $wc = $where ? "WHERE $where AND" : 'WHERE';
+        $andUf = $where ? "AND $where" : '';
 
         $lim = (int) $limit;
         return $this->db->fetchAllAssociative(
-            "SELECT rm.id, rm.sigla_uf, rm.municipio, rm.local_verificacao,
-                    rm.ultimo_resultado, rm.data_validade
+            "SELECT rm.id, rm.sigla_uf, rm.municipio, rm.logradouro,
+                    rm.situacao, rm.data_validade
              FROM radar_medidor rm
              LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
-             $wc rwl.id IS NULL AND rm.ultimo_resultado = 'APROVADO'
+             WHERE rwl.id IS NULL
+               AND rm.merged_into_id IS NULL
+               AND rm.situacao = 'APROVADO'
+               $andUf
              ORDER BY rm.sigla_uf, rm.municipio
              LIMIT $lim",
             $params

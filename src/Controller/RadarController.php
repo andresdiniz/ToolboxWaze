@@ -44,7 +44,6 @@ class RadarController extends AbstractController
         'link_waze'                 => 'Link Waze',
     ];
 
-    // Expressão SQL que converte data_validade (dd/mm/aaaa) para DATE para comparar com datas ISO
     private const VALIDADE_ISO_EXPR = "STR_TO_DATE(r.data_validade, '%d/%m/%Y')";
 
     public function __construct(private readonly Connection $db) {}
@@ -155,14 +154,14 @@ class RadarController extends AbstractController
             'em30'        => $em30,
             'ha30dias'    => $ha30,
             'filters'     => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
-            'allowedUfs'  => null,  // null = sem restrição; array de siglas = acesso restrito
+            'allowedUfs'  => null,
         ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Detalhe
     // ─────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
+    #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(int $id): Response
     {
         $viso  = self::VALIDADE_ISO_EXPR;
@@ -187,11 +186,14 @@ class RadarController extends AbstractController
             [$id]
         ) ?: null;
 
+        // radar_waze_link_log não tem radar_medidor_id — junta via radar_waze_link
         $wazeLog = $this->db->fetchAllAssociative(
             'SELECT wll.*, u.email AS changed_by_email
              FROM radar_waze_link_log wll
+             INNER JOIN radar_waze_link wl ON wl.id = wll.radar_waze_link_id
              LEFT JOIN user u ON u.id = wll.changed_by
-             WHERE wll.radar_medidor_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
+             WHERE wl.radar_medidor_id = ?
+             ORDER BY wll.changed_at DESC LIMIT 20',
             [$id]
         );
 
@@ -219,7 +221,7 @@ class RadarController extends AbstractController
     // ─────────────────────────────────────────────────────────────────────────
     // Editar radar
     // ─────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\\d+'])]
+    #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function edit(int $id, Request $request): Response
     {
         $viso  = self::VALIDADE_ISO_EXPR;
@@ -286,7 +288,7 @@ class RadarController extends AbstractController
     // ─────────────────────────────────────────────────────────────────────────
     // Salvar link Waze
     // ─────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
+    #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
         $radar = $this->db->fetchAssociative('SELECT id, link_waze FROM radar_medidor WHERE id = ?', [$id]);
@@ -327,9 +329,12 @@ class RadarController extends AbstractController
                 [$id]
             ) ?: null;
             $wazeLog = $this->db->fetchAllAssociative(
-                'SELECT wll.*, u.email AS changed_by_email FROM radar_waze_link_log wll
+                'SELECT wll.*, u.email AS changed_by_email
+                 FROM radar_waze_link_log wll
+                 INNER JOIN radar_waze_link wl ON wl.id = wll.radar_waze_link_id
                  LEFT JOIN user u ON u.id = wll.changed_by
-                 WHERE wll.radar_medidor_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
+                 WHERE wl.radar_medidor_id = ?
+                 ORDER BY wll.changed_at DESC LIMIT 20',
                 [$id]
             );
             return $this->render('radar/show.html.twig', [
@@ -355,15 +360,14 @@ class RadarController extends AbstractController
         );
 
         if ($existing) {
+            // INSERT no log — apenas colunas que existem na tabela
             $this->db->insert('radar_waze_link_log', [
-                'radar_waze_link_id'  => $existing['id'],
-                'radar_medidor_id'    => $id,
-                'campo_alterado'      => 'waze_link',
-                'valor_anterior'      => $existing['waze_link'],
-                'valor_novo'          => $wazeLink,
-                'changed_by'          => $user->getId(),
-                'changed_at'          => $agora,
-                'observacao'          => $motivo,
+                'radar_waze_link_id' => $existing['id'],
+                'campo_alterado'     => 'waze_link',
+                'valor_anterior'     => $existing['waze_link'],
+                'valor_novo'         => $wazeLink,
+                'changed_by'         => $user->getId(),
+                'changed_at'         => $agora,
             ]);
             $this->db->update('radar_waze_link', [
                 'waze_link'           => $wazeLink,

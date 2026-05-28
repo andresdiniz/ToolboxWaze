@@ -33,7 +33,7 @@
         animation: twFadeOut 300ms ease forwards;
     }
 
-    /* ── Busca global ─────────────────────────────────────────────── */
+    /* ── Busca global ─────────────────────────────────────── */
     .navbar-search-wrap {
         position: relative;
     }
@@ -109,8 +109,7 @@
     }
     </style>
 
-    {# ── Google Tag Manager — inicialização do dataLayer ─────────── #}
-    {# O snippet só é renderizado quando GTM_ID estiver definido no .env #}
+    {# ── Google Tag Manager — inicialização do dataLayer ───────────── #}
     {% set gtmId = app_gtm_id|default('') %}
     {% if gtmId %}
     <script>
@@ -284,7 +283,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             </ul>
 
-            {# ── Busca global ──────────────────────────────────────────── #}
+            {# ── Busca global ─────────────────────────────────────── #}
             {% if app.user %}
             <div class="navbar-search-wrap d-none d-lg-block me-2">
                 <svg class="navbar-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -321,6 +320,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                             </div>
                         </li>
                         <li><hr class="dropdown-divider"></li>
+
+                        {# ── Token de API ── #}
+                        <li>
+                            <a class="dropdown-item {% if app.request.pathInfo starts with '/perfil/api-token' %}active{% endif %}"
+                               href="{{ path('perfil_api_token') }}">
+                                <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10H7.465A4 4 0 0 1 0 8m4-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6m0 2.5a.5.5 0 1 1 0 1 .5.5 0 0 1 0-1"/>
+                                </svg>
+                                Token de API
+                                {% if not app.user.apiToken %}
+                                    <span class="badge bg-secondary ms-1" style="font-size:.6rem">Inativo</span>
+                                {% else %}
+                                    <span class="badge bg-success ms-1" style="font-size:.6rem">• Ativo</span>
+                                {% endif %}
+                            </a>
+                        </li>
+
+                        <li><hr class="dropdown-divider"></li>
+
                         <li>
                             <a class="dropdown-item" href="{{ path('export_radares_csv') }}"
                                onclick="window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'export_csv',export_tipo:'radares'});">
@@ -404,7 +422,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       sun.style.display  = t === 'dark' ? 'block' : 'none';
       moon.style.display = t === 'dark' ? 'none'  : 'block';
     }
-    // ── Analytics: registra troca de tema ──────────────────────────
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({ event: 'theme_toggle', theme: t });
     requestAnimationFrame(function(){
@@ -428,7 +445,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 }());
 </script>
 
-{# Navbar toggler: alterna ícone hamburguer <-> X #}
 <script>
 (function(){
   var navEl     = document.getElementById('nav');
@@ -440,7 +456,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 }());
 </script>
 
-{# Flash messages: auto-dismiss após 4s com animação de saída #}
 <script>
 (function(){
   document.querySelectorAll('.alert-animated').forEach(function(el){
@@ -452,7 +467,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 }());
 </script>
 
-{# Scroll reveal #}
 <script>
 (function(){
   if (!('IntersectionObserver' in window)) {
@@ -468,7 +482,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 }());
 </script>
 
-{# Count-up animation #}
 <script>
 (function(){
   function countUp(el) {
@@ -491,7 +504,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 }());
 </script>
 
-{# ── Busca Global Autocomplete (com rastreamento Analytics) ───────────── #}
 <script>
 (function(){
   var input    = document.getElementById('globalSearch');
@@ -522,13 +534,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           '<span class="search-item-type ' + badgeClass(r.tipo) + '">' + typeLabel(r.tipo) + '</span>' +
           '<span class="search-item-label">' + escHtml(r.label) + '</span>' +
           (r.badge ? '<small class="text-muted">' + escHtml(r.badge) + '</small>' : '');
-        // ── Rastreia clique no resultado ───────────────────────────
         a.addEventListener('click', function() {
-          trackEvent('busca_click', {
-            search_term: lastQ,
-            item_tipo:   r.tipo,
-            item_label:  r.label
-          });
+          trackEvent('busca_click', { search_term: lastQ, item_tipo: r.tipo, item_label: r.label });
         });
         dropdown.appendChild(a);
       });
@@ -547,12 +554,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       .then(function(r){ return r.json(); })
       .then(function(items) {
         render(items);
-        // ── Rastreia busca realizada ───────────────────────────────
-        trackEvent('busca_global', {
-          search_term:   q,
-          results_count: items.length,
-          result_tipos:  [...new Set(items.map(function(i){ return i.tipo; }))].join(',')
-        });
+        trackEvent('busca_global', { search_term: q, results_count: items.length,
+          result_tipos: [...new Set(items.map(function(i){ return i.tipo; }))].join(',') });
       })
       .catch(function(){ dropdown.classList.remove('show'); });
   }
@@ -579,7 +582,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
   });
 
-  // Teclado dentro do dropdown
   dropdown.addEventListener('keydown', function(e) {
     var items = Array.from(dropdown.querySelectorAll('.search-item'));
     var idx   = items.indexOf(document.activeElement);
@@ -588,7 +590,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if (e.key === 'Escape')   { dropdown.classList.remove('show'); input.focus(); }
   });
 
-  // Fecha ao clicar fora
   document.addEventListener('click', function(e) {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) {
       dropdown.classList.remove('show');

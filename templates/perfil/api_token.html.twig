@@ -1,114 +1,352 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Meu Token de API{% endblock %}
+{% block title %}Token de API — ToolboxWaze{% endblock %}
+
+{% block stylesheets %}
+<style>
+.token-page { max-width: 680px; margin: 0 auto; }
+
+.token-card {
+    border-radius: .75rem;
+    border: 1px solid var(--tw-border, rgba(0,0,0,.1));
+    background: var(--tw-surface, #fff);
+    box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    padding: 2rem;
+}
+[data-theme="dark"] .token-card {
+    background: #1c1b19;
+    border-color: rgba(255,255,255,.08);
+}
+
+.token-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: .25em .75em;
+    border-radius: 20px;
+}
+.token-status-badge.active {
+    background: rgba(25,135,84,.12);
+    color: #198754;
+}
+[data-theme="dark"] .token-status-badge.active {
+    background: rgba(110,200,140,.15);
+    color: #6ec88c;
+}
+.token-status-badge.inactive {
+    background: rgba(108,117,125,.12);
+    color: #6c757d;
+}
+
+.token-field {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: .82rem;
+    letter-spacing: .04em;
+    background: transparent;
+    border: 1px solid rgba(0,0,0,.15);
+    border-right: none;
+    border-radius: .5rem 0 0 .5rem;
+}
+[data-theme="dark"] .token-field {
+    border-color: rgba(255,255,255,.12);
+    color: #cdccca;
+    background: transparent;
+}
+.token-field:focus {
+    box-shadow: none;
+    border-color: #01696f;
+    background: transparent;
+}
+
+.token-btn-icon {
+    border: 1px solid rgba(0,0,0,.15);
+    background: transparent;
+    color: #6c757d;
+    transition: all .18s;
+}
+.token-btn-icon:last-child {
+    border-radius: 0 .5rem .5rem 0;
+}
+[data-theme="dark"] .token-btn-icon {
+    border-color: rgba(255,255,255,.12);
+    color: #797876;
+}
+.token-btn-icon:hover {
+    background: rgba(1,105,111,.08);
+    color: #01696f;
+    border-color: #01696f;
+}
+
+.usage-box {
+    background: rgba(1,105,111,.06);
+    border: 1px solid rgba(1,105,111,.15);
+    border-radius: .5rem;
+    padding: .85rem 1rem;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: .78rem;
+    color: #01696f;
+    word-break: break-all;
+}
+[data-theme="dark"] .usage-box {
+    background: rgba(79,152,163,.08);
+    border-color: rgba(79,152,163,.2);
+    color: #4f98a3;
+}
+
+.empty-icon-wrap {
+    width: 72px;
+    height: 72px;
+    background: rgba(1,105,111,.08);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.25rem;
+}
+[data-theme="dark"] .empty-icon-wrap {
+    background: rgba(79,152,163,.12);
+}
+
+.how-to-list li {
+    padding: .3rem 0;
+    font-size: .875rem;
+    color: #6c757d;
+    border-bottom: 1px solid rgba(0,0,0,.05);
+}
+[data-theme="dark"] .how-to-list li {
+    border-bottom-color: rgba(255,255,255,.04);
+    color: #797876;
+}
+.how-to-list li:last-child { border-bottom: none; }
+
+.endpoints-table th {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-weight: 600;
+    color: #6c757d;
+    border-bottom: 2px solid rgba(0,0,0,.08);
+    padding: .5rem .75rem;
+}
+[data-theme="dark"] .endpoints-table th {
+    color: #797876;
+    border-bottom-color: rgba(255,255,255,.06);
+}
+.endpoints-table td {
+    font-size: .82rem;
+    padding: .55rem .75rem;
+    vertical-align: middle;
+    border-bottom: 1px solid rgba(0,0,0,.05);
+}
+[data-theme="dark"] .endpoints-table td {
+    border-bottom-color: rgba(255,255,255,.04);
+}
+.method-badge {
+    font-size: .68rem;
+    font-weight: 700;
+    padding: .2em .55em;
+    border-radius: .3rem;
+    letter-spacing: .04em;
+}
+.method-get  { background: rgba(25,135,84,.12);  color: #198754; }
+.method-post { background: rgba(13,110,253,.12);  color: #0d6efd; }
+[data-theme="dark"] .method-get  { background: rgba(110,200,140,.12); color: #6ec88c; }
+[data-theme="dark"] .method-post { background: rgba(100,160,255,.12); color: #6da8ff; }
+</style>
+{% endblock %}
 
 {% block body %}
-<div class="container py-4" style="max-width: 680px">
+<div class="token-page">
 
-    <h1 class="h4 mb-1"><i class="bi bi-key me-2"></i>Token de API</h1>
-    <p class="text-muted mb-4">Use este token para autenticar requisições externas à API do Toolbox.</p>
-
-    {# Flash messages #}
-    {% for msg in app.flashes('success') %}
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            {{ msg }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    {# ── Cabeçalho ─────────────────────────────────────── #}
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <div style="width:42px;height:42px;background:rgba(1,105,111,.1);border-radius:.6rem;
+                    display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="#01696f">
+                <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10H7.465A4 4 0 0 1 0 8m4-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6m0 2.5a.5.5 0 1 1 0 1 .5.5 0 0 1 0-1"/>
+            </svg>
         </div>
-    {% endfor %}
-    {% for msg in app.flashes('danger') %}
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            {{ msg }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div>
+            <h1 class="h5 mb-0 fw-semibold">Token de API</h1>
+            <p class="text-muted mb-0" style="font-size:.85rem">
+                Autentique requisições externas ao ToolboxWaze
+            </p>
         </div>
-    {% endfor %}
+    </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
+    {# ── Card principal ─────────────────────────────── #}
+    <div class="token-card mb-4">
 
-            {% if app.user.apiToken %}
-                {# ——— Token ativo ——— #}
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <span class="badge bg-success">Ativo</span>
-                    <small class="text-muted">
-                        Gerado em {{ app.user.apiTokenGeneratedAt|date('d/m/Y \\\u00e0\\s H:i') }}
-                    </small>
-                </div>
+        {% if app.user.apiToken %}
+        {# ────────────────── TOKEN ATIVO ─────────────────── #}
 
-                <label class="form-label fw-semibold mt-3">Seu token</label>
-                <div class="input-group mb-3">
-                    <input type="password"
-                           id="tokenInput"
-                           class="form-control font-monospace"
-                           value="{{ app.user.apiToken }}"
-                           readonly>
-                    <button class="btn btn-outline-secondary" type="button" id="toggleToken"
-                            title="Mostrar / Ocultar">
-                        <i class="bi bi-eye" id="toggleIcon"></i>
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <span class="token-status-badge active">
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
+                        <circle cx="4" cy="4" r="4"/>
+                    </svg>
+                    Ativo
+                </span>
+                {% if app.user.apiTokenGeneratedAt %}
+                <small class="text-muted">
+                    Gerado em
+                    <span data-utc="{{ app.user.apiTokenGeneratedAt|date('Y-m-d H:i:s') }}">
+                        {{ app.user.apiTokenGeneratedAt|date('d/m/Y H:i') }}
+                    </span>
+                </small>
+                {% endif %}
+            </div>
+
+            {# Campo do token #}
+            <label class="form-label fw-semibold" style="font-size:.85rem">Seu token de API</label>
+            <div class="input-group mb-3">
+                <input type="password"
+                       id="tokenField"
+                       class="form-control token-field"
+                       value="{{ app.user.apiToken }}"
+                       readonly
+                       autocomplete="off"
+                       spellcheck="false">
+                <button class="btn token-btn-icon" type="button" id="btnToggle" title="Mostrar / ocultar">
+                    <svg id="iconEye" width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
+                        <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
+                    </svg>
+                    <svg id="iconEyeSlash" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" style="display:none">
+                        <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7 7 0 0 0-2.79.588l.77.771A6 6 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486z"/>
+                        <path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829"/>
+                        <path d="M3.35 5.47q-.27.24-.518.487A13 13 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7 7 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12z"/>
+                    </svg>
+                </button>
+                <button class="btn token-btn-icon" type="button" id="btnCopy" title="Copiar token">
+                    <svg id="iconCopy" width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/>
+                        <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z"/>
+                    </svg>
+                    <svg id="iconCheck" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" style="display:none">
+                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/>
+                    </svg>
+                </button>
+            </div>
+
+            {# Linha de uso #}
+            <p class="text-muted mb-2" style="font-size:.8rem">Use este header em todas as requisições:</p>
+            <div class="usage-box">Authorization: Bearer {{ app.user.apiToken }}</div>
+
+            <hr class="my-4" style="opacity:.07">
+
+            {# Ações #}
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="post" action="{{ path('perfil_api_token_gerar') }}"
+                      onsubmit="return confirm('Isso vai invalidar o token atual e gerar um novo. Continuar?')">
+                    <input type="hidden" name="_token" value="{{ csrf_token('api_token_gerar') }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-1" style="vertical-align:-.15em">
+                            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/>
+                            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
+                        </svg>
+                        Regenerar token
                     </button>
-                    <button class="btn btn-outline-secondary" type="button" id="copyToken"
-                            title="Copiar token">
-                        <i class="bi bi-clipboard"></i>
-                    </button>
-                </div>
+                </form>
 
-                <p class="text-muted small mb-3">
-                    Envie o header abaixo em todas as requisições:
+                <form method="post" action="{{ path('perfil_api_token_revogar') }}"
+                      onsubmit="return confirm('Deseja revogar o token? Ele será desativado imediatamente.')">
+                    <input type="hidden" name="_token" value="{{ csrf_token('api_token_revogar') }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-1" style="vertical-align:-.15em">
+                            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                        </svg>
+                        Revogar token
+                    </button>
+                </form>
+            </div>
+
+        {% else %}
+        {# ────────────────── SEM TOKEN ─────────────────── #}
+
+            <div class="text-center py-3">
+                <div class="empty-icon-wrap">
+                    <svg width="30" height="30" viewBox="0 0 16 16" fill="rgba(1,105,111,.6)">
+                        <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10H7.465A4 4 0 0 1 0 8m4-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6m0 2.5a.5.5 0 1 1 0 1 .5.5 0 0 1 0-1"/>
+                    </svg>
+                </div>
+                <h6 class="fw-semibold mb-1">Nenhum token ativo</h6>
+                <p class="text-muted mb-4" style="font-size:.875rem;max-width:36ch;margin:0 auto .85rem">
+                    Gere um token para autenticar scripts e integrações externas.
                 </p>
-                <pre class="bg-light rounded p-2 small">Authorization: Bearer {{ app.user.apiToken }}</pre>
+                <form method="post" action="{{ path('perfil_api_token_gerar') }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('api_token_gerar') }}">
+                    <button type="submit" class="btn btn-primary">
+                        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" class="me-2" style="vertical-align:-.15em">
+                            <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10H7.465A4 4 0 0 1 0 8m4-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6m0 2.5a.5.5 0 1 1 0 1 .5.5 0 0 1 0-1"/>
+                        </svg>
+                        Gerar meu token
+                    </button>
+                </form>
+            </div>
 
-                <hr class="my-4">
+        {% endif %}
+    </div>{# /token-card #}
 
-                <div class="d-flex gap-2 flex-wrap">
-                    {# Gerar novo token (substitui o atual) #}
-                    <form method="post" action="{{ path('api_token_gerar') }}"
-                          onsubmit="return confirm('Gerar um novo token irá invalidar o atual. Continuar?')">
-                        <input type="hidden" name="_token"
-                               value="{{ csrf_token('api_token_gerar') }}">
-                        <button class="btn btn-warning btn-sm">
-                            <i class="bi bi-arrow-clockwise me-1"></i>Regenerar token
-                        </button>
-                    </form>
+    {# ── Como usar ────────────────────────────────── #}
+    <div class="token-card">
+        <h6 class="fw-semibold mb-3" style="font-size:.875rem">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" class="me-1" style="vertical-align:-.12em;opacity:.6">
+                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+            </svg>
+            Como usar
+        </h6>
 
-                    {# Revogar #}
-                    <form method="post" action="{{ path('api_token_revogar') }}"
-                          onsubmit="return confirm('Tem certeza que deseja revogar o token?')">
-                        <input type="hidden" name="_token"
-                               value="{{ csrf_token('api_token_revogar') }}">
-                        <button class="btn btn-danger btn-sm">
-                            <i class="bi bi-x-circle me-1"></i>Revogar token
-                        </button>
-                    </form>
-                </div>
-
-            {% else %}
-                {# ——— Sem token ——— #}
-                <div class="text-center py-4">
-                    <i class="bi bi-shield-lock text-muted" style="font-size: 2.5rem"></i>
-                    <p class="mt-3 text-muted">Você ainda não possui um token de API.</p>
-
-                    <form method="post" action="{{ path('api_token_gerar') }}">
-                        <input type="hidden" name="_token"
-                               value="{{ csrf_token('api_token_gerar') }}">
-                        <button class="btn btn-primary">
-                            <i class="bi bi-key me-2"></i>Gerar meu token
-                        </button>
-                    </form>
-                </div>
-            {% endif %}
-
-        </div>{# /card-body #}
-    </div>{# /card #}
-
-    <div class="mt-4">
-        <h6 class="fw-semibold">Como usar</h6>
-        <ul class="text-muted small">
+        <ul class="list-unstyled how-to-list mb-4">
             <li>Inclua o header <code>Authorization: Bearer &lt;token&gt;</code> em cada requisição.</li>
-            <li>O token não expira automaticamente — revogue-o se suspeitar de vazamento.</li>
-            <li>Ao regenerar, o token anterior é invalidado imediatamente.</li>
-            <li>Endpoints disponíveis: <code>POST /api/radares/importar</code>,
-                <code>GET /api/radares/consultar</code>,
-                <code>POST /api/radares/consultar/lote</code>.</li>
+            <li>O token não expira automaticamente — revogue se suspeitar de vazamento.</li>
+            <li>Ao regenerar, o token anterior é invalidado <strong>imediatamente</strong>.</li>
+            <li>Compartilhe apenas com sistemas confiáveis; o token dá acesso à API em seu nome.</li>
         </ul>
+
+        <h6 class="fw-semibold mb-2" style="font-size:.875rem">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" class="me-1" style="vertical-align:-.12em;opacity:.6">
+                <path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9m-2.517-.4L3 9.698V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.286l9.638-9.638-.29-.29zM5.925 1.426l-.994.994.61.61 1.01-1.01A5 5 0 0 0 3 7.098V8a3 3 0 0 0 1.5 2.598V12h3V9.5a.5.5 0 0 0-.5-.5H7v-.5a.5.5 0 0 0-.5-.5H6v-.286c.09-.015.176-.037.26-.065q.118-.038.228-.095l.58-.346.31.31.708-.708-.71-.71zM7.5 5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5"/>
+            </svg>
+            Endpoints disponíveis
+        </h6>
+
+        <table class="table endpoints-table mb-0">
+            <thead>
+                <tr>
+                    <th>Método</th>
+                    <th>Endpoint</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="method-badge method-post">POST</span></td>
+                    <td><code>/api/radares/importar</code></td>
+                    <td>Importar radares em lote</td>
+                </tr>
+                <tr>
+                    <td><span class="method-badge method-get">GET</span></td>
+                    <td><code>/api/radares/consultar</code></td>
+                    <td>Consultar por N/S ou INMETRO</td>
+                </tr>
+                <tr>
+                    <td><span class="method-badge method-post">POST</span></td>
+                    <td><code>/api/radares/consultar/lote</code></td>
+                    <td>Consultar múltiplos radares</td>
+                </tr>
+                <tr>
+                    <td><span class="method-badge method-get">GET</span></td>
+                    <td><code>/api/meu-token</code></td>
+                    <td>Ver token atual (JSON)</td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
 </div>
@@ -118,23 +356,35 @@
 {{ parent() }}
 <script>
 (function () {
-    const input  = document.getElementById('tokenInput');
-    const toggle = document.getElementById('toggleToken');
-    const icon   = document.getElementById('toggleIcon');
-    const copy   = document.getElementById('copyToken');
+    var field     = document.getElementById('tokenField');
+    var btnToggle = document.getElementById('btnToggle');
+    var iconEye   = document.getElementById('iconEye');
+    var iconSlash = document.getElementById('iconEyeSlash');
+    var btnCopy   = document.getElementById('btnCopy');
+    var iconCopy  = document.getElementById('iconCopy');
+    var iconCheck = document.getElementById('iconCheck');
 
-    if (!input) return;
+    if (!field) return;
 
-    toggle?.addEventListener('click', () => {
-        const hidden = input.type === 'password';
-        input.type   = hidden ? 'text' : 'password';
-        icon.className = hidden ? 'bi bi-eye-slash' : 'bi bi-eye';
+    // Toggle mostrar / ocultar
+    btnToggle && btnToggle.addEventListener('click', function () {
+        var hidden = field.type === 'password';
+        field.type = hidden ? 'text' : 'password';
+        iconEye.style.display   = hidden ? 'none'  : '';
+        iconSlash.style.display = hidden ? ''      : 'none';
     });
 
-    copy?.addEventListener('click', () => {
-        navigator.clipboard.writeText(input.value).then(() => {
-            copy.innerHTML = '<i class="bi bi-check"></i>';
-            setTimeout(() => { copy.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500);
+    // Copiar com feedback visual
+    btnCopy && btnCopy.addEventListener('click', function () {
+        navigator.clipboard.writeText(field.value).then(function () {
+            iconCopy.style.display  = 'none';
+            iconCheck.style.display = '';
+            btnCopy.style.color     = '#198754';
+            setTimeout(function () {
+                iconCopy.style.display  = '';
+                iconCheck.style.display = 'none';
+                btnCopy.style.color     = '';
+            }, 1800);
         });
     });
 }());

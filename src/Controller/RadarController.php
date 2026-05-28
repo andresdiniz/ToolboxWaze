@@ -186,7 +186,6 @@ class RadarController extends AbstractController
             [$id]
         ) ?: null;
 
-        // radar_waze_link_log não tem radar_medidor_id — junta via radar_waze_link
         $wazeLog = $this->db->fetchAllAssociative(
             'SELECT wll.*, u.email AS changed_by_email
              FROM radar_waze_link_log wll
@@ -207,14 +206,16 @@ class RadarController extends AbstractController
         );
 
         return $this->render('radar/show.html.twig', [
-            'radar'     => $radar,
-            'wazeLink'  => $wazeLink,
-            'wazeLog'   => $wazeLog,
-            'historico' => $historico,
-            'faixas'    => $faixas,
-            'hoje'      => $hoje,
-            'em30'      => $em30,
-            'ha30dias'  => $ha30,
+            'radar'        => $radar,
+            'wazeLink'     => $wazeLink,
+            'wazeLog'      => $wazeLog,
+            'historico'    => $historico,
+            'faixas'       => $faixas,
+            'hoje'         => $hoje,
+            'em30'         => $em30,
+            'ha30dias'     => $ha30,
+            'wazeErrors'   => [],   // vazio = sem erros de validação
+            'wazeFormData' => [],   // vazio = formulário limpo
         ]);
     }
 
@@ -360,7 +361,6 @@ class RadarController extends AbstractController
         );
 
         if ($existing) {
-            // INSERT no log — apenas colunas que existem na tabela
             $this->db->insert('radar_waze_link_log', [
                 'radar_waze_link_id' => $existing['id'],
                 'campo_alterado'     => 'waze_link',

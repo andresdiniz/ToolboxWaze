@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Entity\EscolaInep;
+use App\Entity\EscolaInepComentario;
+use App\Entity\EscolaInepWazeLinkLog;
 use Doctrine\DBAL\Connection;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,19 +23,25 @@ class EscolaInepController extends AbstractController
 
     public function __construct(
         private readonly Connection $db,
+        private readonly EntityManagerInterface $em,
     ) {
     }
+
+    // -------------------------------------------------------------------------
+    // Listagem
+    // -------------------------------------------------------------------------
 
     #[Route('', name: 'escola_inep_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
-        $page      = max(1, (int) $request->query->get('page', 1));
-        $busca     = trim((string) $request->query->get('busca', ''));
-        $uf        = trim((string) $request->query->get('uf', ''));
-        $municipio = trim((string) $request->query->get('municipio', ''));
+        $page        = max(1, (int) $request->query->get('page', 1));
+        $busca       = trim((string) $request->query->get('busca', ''));
+        $uf          = trim((string) $request->query->get('uf', ''));
+        $municipio   = trim((string) $request->query->get('municipio', ''));
         $dependencia = trim((string) $request->query->get('dependencia', ''));
         $localizacao = trim((string) $request->query->get('localizacao', ''));
-        $offset    = ($page - 1) * self::PER_PAGE;
+        $situacao    = trim((string) $request->query->get('situacao', ''));
+        $offset      = ($page - 1) * self::PER_PAGE;
 
         $where  = ['1=1'];
         $params = [];
@@ -59,6 +69,15 @@ class EscolaInepController extends AbstractController
             $params[] = $localizacao;
         }
 
+        // Filtro de situação
+        match ($situacao) {
+            'ativa'      => ($where[] = "(e.restricao_atendimento IS NULL OR UPPER(e.restricao_atendimento) LIKE '%SEM RESTRI%')"),
+            'paralisada' => ($where[] = "UPPER(e.restricao_atendimento) LIKE '%PARALISADA%'"),
+            'sem_link'   => ($where[] = '(e.link_waze IS NULL OR e.link_waze = \'\')'),
+            'com_link'   => ($where[] = 'e.link_waze IS NOT NULL AND e.link_waze != \'\'' ),
+            default      => null,
+        };
+
         $whereClause = implode(' AND ', $where);
 
         $total = (int) $this->db->fetchOne(
@@ -67,12 +86,14 @@ class EscolaInepController extends AbstractController
         );
         $pages = max(1, (int) ceil($total / self::PER_PAGE));
         $page  = min($page, $pages);
+        $offset = ($page - 1) * self::PER_PAGE;
 
         $rows = $this->db->fetchAllAssociative(
             "SELECT e.id, e.escola, e.codigo_inep, e.uf, e.municipio,
                     e.localizacao, e.dependencia_administrativa,
                     e.categoria_administrativa, e.porte, e.etapas_ensino,
-                    e.restricao_atendimento, e.latitude, e.longitude
+                    e.restricao_atendimento, e.latitude, e.longitude,
+                    e.link_waze, e.permanent_hazard_id, e.link_area_escolar
              FROM escola_inep e
              WHERE $whereClause
              ORDER BY e.escola
@@ -81,34 +102,32 @@ class EscolaInepController extends AbstractController
         );
 
         $stats = null;
-        if ($busca === '' && $uf === '' && $municipio === '' && $dependencia === '' && $localizacao === '') {
+        if ($busca === '' && $uf === '' && $municipio === '' && $dependencia === '' && $localizacao === '' && $situacao === '') {
             $stats = $this->db->fetchAssociative(
-                "SELECT COUNT(*)                              AS total,
-                        COUNT(DISTINCT e.uf)                  AS estados,
-                        COUNT(DISTINCT CONCAT(e.uf,e.municipio)) AS municipios
+                "SELECT COUNT(*)                                    AS total,
+                        COUNT(DISTINCT e.uf)                        AS estados,
+                        COUNT(DISTINCT CONCAT(e.uf, e.municipio))   AS municipios
                  FROM escola_inep e"
             ) ?: null;
         }
 
         $ufs = array_column(
             $this->db->fetchAllAssociative(
-                "SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL ORDER BY uf"
+                'SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL ORDER BY uf'
             ),
             'uf'
         );
-
         $dependencias = array_column(
             $this->db->fetchAllAssociative(
-                "SELECT DISTINCT dependencia_administrativa FROM escola_inep
-                 WHERE dependencia_administrativa IS NOT NULL ORDER BY dependencia_administrativa"
+                'SELECT DISTINCT dependencia_administrativa FROM escola_inep
+                 WHERE dependencia_administrativa IS NOT NULL ORDER BY dependencia_administrativa'
             ),
             'dependencia_administrativa'
         );
-
         $localizacoes = array_column(
             $this->db->fetchAllAssociative(
-                "SELECT DISTINCT localizacao FROM escola_inep
-                 WHERE localizacao IS NOT NULL ORDER BY localizacao"
+                'SELECT DISTINCT localizacao FROM escola_inep
+                 WHERE localizacao IS NOT NULL ORDER BY localizacao'
             ),
             'localizacao'
         );
@@ -129,24 +148,114 @@ class EscolaInepController extends AbstractController
                 'municipio'   => $municipio,
                 'dependencia' => $dependencia,
                 'localizacao' => $localizacao,
+                'situacao'    => $situacao,
             ],
         ]);
     }
 
+    // -------------------------------------------------------------------------
+    // Detalhe
+    // -------------------------------------------------------------------------
+
     #[Route('/{id}', name: 'escola_inep_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
-        $escola = $this->db->fetchAssociative(
-            'SELECT * FROM escola_inep WHERE id = ?',
-            [$id]
-        );
+        /** @var EscolaInep|null $escola */
+        $escola = $this->em->find(EscolaInep::class, $id);
 
         if (!$escola) {
             throw $this->createNotFoundException("Escola #{$id} não encontrada.");
         }
 
+        $linkLogs = $this->em->getRepository(EscolaInepWazeLinkLog::class)
+            ->findBy(['escola' => $escola], ['alteradoEm' => 'DESC'], 20);
+
         return $this->render('escola_inep/show.html.twig', [
-            'escola' => $escola,
+            'escola'   => $escola,
+            'linkLogs' => $linkLogs,
         ]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Salvar links Waze
+    // -------------------------------------------------------------------------
+
+    #[Route('/{id}/link', name: 'escola_inep_link_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
+    public function linkSave(int $id, Request $request): Response
+    {
+        /** @var EscolaInep|null $escola */
+        $escola = $this->em->find(EscolaInep::class, $id);
+        if (!$escola) {
+            throw $this->createNotFoundException();
+        }
+
+        $novoLinkWaze        = trim((string) $request->request->get('link_waze', '')) ?: null;
+        $novoLinkAreaEscolar = trim((string) $request->request->get('link_area_escolar', '')) ?: null;
+        $observacao          = trim((string) $request->request->get('observacao', '')) ?: null;
+        $user                = $this->getUser();
+
+        // Log e atualiza link_waze
+        if ($novoLinkWaze !== $escola->getLinkWaze()) {
+            $log = (new EscolaInepWazeLinkLog())
+                ->setEscola($escola)
+                ->setCampo('link_waze')
+                ->setValorAnterior($escola->getLinkWaze())
+                ->setValorNovo($novoLinkWaze)
+                ->setAlteradoPor($user)
+                ->setObservacao($observacao);
+            $this->em->persist($log);
+            $escola->setLinkWaze($novoLinkWaze);
+        }
+
+        // Log e atualiza link_area_escolar
+        if ($novoLinkAreaEscolar !== $escola->getLinkAreaEscolar()) {
+            $log = (new EscolaInepWazeLinkLog())
+                ->setEscola($escola)
+                ->setCampo('link_area_escolar')
+                ->setValorAnterior($escola->getLinkAreaEscolar())
+                ->setValorNovo($novoLinkAreaEscolar)
+                ->setAlteradoPor($user)
+                ->setObservacao($observacao);
+            $this->em->persist($log);
+            $escola->setLinkAreaEscolar($novoLinkAreaEscolar);
+        }
+
+        $this->em->flush();
+
+        $this->addFlash('success', 'Links atualizados com sucesso.');
+
+        return $this->redirectToRoute('escola_inep_show', ['id' => $id]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Adicionar comentário
+    // -------------------------------------------------------------------------
+
+    #[Route('/{id}/comentario', name: 'escola_inep_comentario_add', methods: ['POST'], requirements: ['id' => '\\d+'])]
+    public function comentarioAdd(int $id, Request $request): Response
+    {
+        /** @var EscolaInep|null $escola */
+        $escola = $this->em->find(EscolaInep::class, $id);
+        if (!$escola) {
+            throw $this->createNotFoundException();
+        }
+
+        $texto = trim((string) $request->request->get('texto', ''));
+        if ($texto === '') {
+            $this->addFlash('warning', 'O comentário não pode estar vazio.');
+            return $this->redirectToRoute('escola_inep_show', ['id' => $id]);
+        }
+
+        $comentario = (new EscolaInepComentario())
+            ->setEscola($escola)
+            ->setAutor($this->getUser())
+            ->setTexto($texto);
+
+        $this->em->persist($comentario);
+        $this->em->flush();
+
+        $this->addFlash('success', 'Comentário adicionado.');
+
+        return $this->redirectToRoute('escola_inep_show', ['id' => $id]);
     }
 }

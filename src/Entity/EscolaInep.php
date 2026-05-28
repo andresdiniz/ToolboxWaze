@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Repository\EscolaInepRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -98,6 +100,27 @@ class EscolaInep
     #[ORM\Column(type: 'decimal', precision: 12, scale: 8, nullable: true)]
     private ?string $longitude = null;
 
+    /**
+     * Link do Editor de Mapas do Waze — permanentHazards (zona escolar).
+     * Exemplo: https://waze.com/pt-BR/editor?env=row&permanentHazards=1134152
+     */
+    #[ORM\Column(name: 'link_waze', type: 'string', length: 1000, nullable: true)]
+    private ?string $linkWaze = null;
+
+    /**
+     * ID numérico extraído de permanentHazards= do link_waze.
+     * Indexado para buscas e exibição rápida.
+     */
+    #[ORM\Column(name: 'permanent_hazard_id', type: 'integer', nullable: true, options: ['unsigned' => true])]
+    private ?int $permanentHazardId = null;
+
+    /**
+     * URL da Área Escolar no Waze (place type = school area).
+     * Pode apontar para um venue diferente do permanentHazards.
+     */
+    #[ORM\Column(name: 'link_area_escolar', type: 'string', length: 1000, nullable: true)]
+    private ?string $linkAreaEscolar = null;
+
     /** SHA-256 de toda a linha — detecta qualquer alteração */
     #[ORM\Column(length: 64)]
     private string $rowHash;
@@ -116,9 +139,25 @@ class EscolaInep
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
+    /**
+     * Comentários dos editores sobre esta escola.
+     *
+     * @var Collection<int, EscolaInepComentario>
+     */
+    #[ORM\OneToMany(
+        targetEntity: EscolaInepComentario::class,
+        mappedBy: 'escola',
+        cascade: ['persist'],
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY',
+    )]
+    #[ORM\OrderBy(['criadoEm' => 'DESC'])]
+    private Collection $comentarios;
+
     public function __construct()
     {
-        $this->importedAt = new \DateTimeImmutable();
+        $this->importedAt  = new \DateTimeImmutable();
+        $this->comentarios = new ArrayCollection();
     }
 
     public function getId(): ?int { return $this->id; }
@@ -180,6 +219,27 @@ class EscolaInep
     public function getLongitude(): ?string { return $this->longitude; }
     public function setLongitude(?string $v): self { $this->longitude = $v; return $this; }
 
+    public function getLinkWaze(): ?string { return $this->linkWaze; }
+    public function getLinkAreaEscolar(): ?string { return $this->linkAreaEscolar; }
+    public function getPermanentHazardId(): ?int { return $this->permanentHazardId; }
+
+    public function setLinkWaze(?string $url): self
+    {
+        $this->linkWaze = $url;
+        $this->permanentHazardId = $url ? self::extractPermanentHazardId($url) : null;
+        return $this;
+    }
+
+    public function setLinkAreaEscolar(?string $v): self { $this->linkAreaEscolar = $v; return $this; }
+
+    public static function extractPermanentHazardId(string $url): ?int
+    {
+        if (preg_match('/[?&]permanentHazards=(\d+)/', $url, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
+
     public function getRowHash(): string { return $this->rowHash; }
     public function setRowHash(string $v): self { $this->rowHash = $v; return $this; }
 
@@ -194,4 +254,7 @@ class EscolaInep
 
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
     public function setUpdatedAt(?\DateTimeImmutable $v): self { $this->updatedAt = $v; return $this; }
+
+    /** @return Collection<int, EscolaInepComentario> */
+    public function getComentarios(): Collection { return $this->comentarios; }
 }

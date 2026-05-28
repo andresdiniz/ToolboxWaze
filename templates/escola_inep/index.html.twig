@@ -8,7 +8,7 @@
   {# ── Cabeçalho ── #}
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
-      <h4 class="mb-0"><i class="bi bi-building me-2"></i>Escolas INEP</h4>
+      <h4 class="mb-0">🏫 Escolas INEP</h4>
       {% if stats is not null %}
         <small class="text-muted">
           {{ stats.total|number_format(0, ',', '.') }} escolas ·
@@ -23,7 +23,7 @@
 
   {# ── Filtros ── #}
   <form method="GET" action="{{ path('escola_inep_index') }}" class="row g-2 mb-3" id="form-filtros">
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-3">
       <input type="text" name="busca" value="{{ filters.busca }}"
              class="form-control form-control-sm"
              placeholder="Buscar escola, INEP ou município…">
@@ -44,7 +44,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-md-1">
       <select name="localizacao" class="form-select form-select-sm">
         <option value="">Localização</option>
         {% for loc in localizacoes %}
@@ -52,14 +52,19 @@
         {% endfor %}
       </select>
     </div>
+    <div class="col-6 col-md-2">
+      <select name="situacao" class="form-select form-select-sm">
+        <option value="">Todas as situações</option>
+        <option value="ativa"     {% if filters.situacao == 'ativa' %}selected{% endif %}>✅ Ativas</option>
+        <option value="paralisada" {% if filters.situacao == 'paralisada' %}selected{% endif %}>🔴 Paralisadas</option>
+        <option value="sem_link"  {% if filters.situacao == 'sem_link' %}selected{% endif %}>🔗 Sem link Waze</option>
+        <option value="com_link"  {% if filters.situacao == 'com_link' %}selected{% endif %}>✔ Com link Waze</option>
+      </select>
+    </div>
     <div class="col-6 col-md-2 d-flex gap-1">
-      <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
-        <i class="bi bi-search"></i> Filtrar
-      </button>
-      {% if filters.busca or filters.uf or filters.municipio or filters.dependencia or filters.localizacao %}
-        <a href="{{ path('escola_inep_index') }}" class="btn btn-outline-secondary btn-sm">
-          <i class="bi bi-x"></i>
-        </a>
+      <button type="submit" class="btn btn-primary btn-sm flex-grow-1">🔍 Filtrar</button>
+      {% if filters.busca or filters.uf or filters.municipio or filters.dependencia or filters.localizacao or filters.situacao %}
+        <a href="{{ path('escola_inep_index') }}" class="btn btn-outline-secondary btn-sm">✕</a>
       {% endif %}
     </div>
   </form>
@@ -74,9 +79,9 @@
           <th>UF</th>
           <th>Município</th>
           <th>Dependência</th>
-          <th>Localização</th>
-          <th>Porte</th>
+          <th>Loc.</th>
           <th>Situação</th>
+          <th>Waze</th>
           <th></th>
         </tr>
       </thead>
@@ -88,43 +93,43 @@
             <td>{{ row.uf }}</td>
             <td>{{ row.municipio }}</td>
             <td>
-              {% if row.dependencia_administrativa == 'Estadual' %}
-                <span class="badge bg-primary">Estadual</span>
-              {% elseif row.dependencia_administrativa == 'Municipal' %}
-                <span class="badge bg-success">Municipal</span>
-              {% elseif row.dependencia_administrativa == 'Federal' %}
-                <span class="badge bg-dark">Federal</span>
-              {% elseif row.dependencia_administrativa == 'Privada' %}
-                <span class="badge bg-warning text-dark">Privada</span>
-              {% else %}
-                <span class="badge bg-secondary">{{ row.dependencia_administrativa }}</span>
+              {% set dep = row.dependencia_administrativa %}
+              {% if dep == 'Estadual' %}<span class="badge bg-primary">Estadual</span>
+              {% elseif dep == 'Municipal' %}<span class="badge bg-success">Municipal</span>
+              {% elseif dep == 'Federal' %}<span class="badge bg-dark">Federal</span>
+              {% elseif dep == 'Privada' %}<span class="badge bg-warning text-dark">Privada</span>
+              {% else %}<span class="badge bg-secondary">{{ dep }}</span>
               {% endif %}
             </td>
-            <td>{{ row.localizacao }}</td>
-            <td><small>{{ row.porte }}</small></td>
+            <td><small>{{ row.localizacao }}</small></td>
             <td>
-              {% if 'SEM RESTRIÇÃO' in row.restricao_atendimento|upper %}
-                <span class="badge bg-success"><i class="bi bi-check-circle"></i> OK</span>
-              {% elseif 'PARALISADA' in row.restricao_atendimento|upper %}
+              {% set restricao = row.restricao_atendimento|default('')|upper %}
+              {% if 'SEM RESTRIÇÃO' in restricao or 'SEM RESTRICAO' in restricao %}
+                <span class="badge bg-success">Ativa</span>
+              {% elseif 'PARALISADA' in restricao %}
                 <span class="badge bg-danger">Paralisada</span>
-              {% elseif 'EXCLUSIVAMENTE' in row.restricao_atendimento|upper %}
+              {% elseif 'EXCLUSIVAMENTE' in restricao %}
                 <span class="badge bg-info text-dark">Esp.</span>
               {% else %}
-                <span class="badge bg-secondary">{{ row.restricao_atendimento|slice(0, 20) }}</span>
+                <span class="badge bg-secondary" title="{{ row.restricao_atendimento }}">{{ row.restricao_atendimento|default('—')|slice(0,15) }}</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if row.link_waze %}
+                <a href="{{ row.link_waze }}" target="_blank" title="Abrir no Editor Waze"
+                   class="badge bg-primary text-decoration-none">🗺 Editor</a>
+              {% else %}
+                <span class="text-muted small">—</span>
               {% endif %}
             </td>
             <td>
               <a href="{{ path('escola_inep_show', {id: row.id}) }}"
-                 class="btn btn-outline-primary btn-sm">
-                <i class="bi bi-eye"></i>
-              </a>
+                 class="btn btn-outline-primary btn-sm">👁</a>
             </td>
           </tr>
         {% else %}
           <tr>
-            <td colspan="9" class="text-center text-muted py-4">
-              Nenhuma escola encontrada.
-            </td>
+            <td colspan="9" class="text-center text-muted py-4">Nenhuma escola encontrada.</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -167,7 +172,6 @@
         {% endif %}
       </ul>
     </nav>
-
     <p class="text-center text-muted small mt-1">
       Página {{ page }} de {{ pages }} — {{ total|number_format(0, ',', '.') }} escolas
     </p>

@@ -5,135 +5,210 @@
 {% block body %}
 <div class="container py-3">
 
-  <nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="{{ path('escola_inep_index') }}">Escolas INEP</a></li>
-      <li class="breadcrumb-item active" aria-current="page">{{ escola.escola }}</li>
-    </ol>
-  </nav>
+  <div class="mb-3">
+    <a href="{{ path('escola_inep_index') }}" class="btn btn-sm btn-outline-secondary">← Voltar</a>
+  </div>
+
+  {# ── Cabeçalho ── #}
+  <div class="d-flex align-items-start gap-3 mb-4">
+    <div class="flex-grow-1">
+      <h4 class="mb-1">{{ escola.escola }}</h4>
+      <small class="text-muted">Cód. INEP: <code>{{ escola.codigoInep }}</code></small>
+      {% set restricao = escola.restricaoAtendimento|default('')|upper %}
+      {% if 'PARALISADA' in restricao %}
+        <span class="badge bg-danger ms-2">Paralisada</span>
+      {% elseif 'SEM RESTRIÇÃO' in restricao or 'SEM RESTRICAO' in restricao %}
+        <span class="badge bg-success ms-2">Ativa</span>
+      {% endif %}
+    </div>
+  </div>
 
   <div class="row g-3">
 
-    {# ── Card principal ── #}
-    <div class="col-12 col-lg-8">
-      <div class="card shadow-sm">
-        <div class="card-header d-flex align-items-center gap-2">
-          <i class="bi bi-building fs-5"></i>
-          <strong class="flex-grow-1">{{ escola.escola }}</strong>
-          {% if 'SEM RESTRIÇÃO' in escola.restricao_atendimento|upper %}
-            <span class="badge bg-success">Em funcionamento</span>
-          {% elseif 'PARALISADA' in escola.restricao_atendimento|upper %}
-            <span class="badge bg-danger">Paralisada</span>
-          {% else %}
-            <span class="badge bg-secondary">{{ escola.restricao_atendimento|slice(0,30) }}</span>
-          {% endif %}
-        </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-4">Código INEP</dt>
-            <dd class="col-sm-8"><code>{{ escola.codigo_inep }}</code></dd>
-
-            <dt class="col-sm-4">UF / Município</dt>
-            <dd class="col-sm-8">{{ escola.uf }} — {{ escola.municipio }}</dd>
-
-            <dt class="col-sm-4">Localização</dt>
-            <dd class="col-sm-8">{{ escola.localizacao }}</dd>
-
-            {% if escola.localidade_diferenciada and 'não está' not in escola.localidade_diferenciada|lower %}
-              <dt class="col-sm-4">Localidade Dif.</dt>
-              <dd class="col-sm-8">{{ escola.localidade_diferenciada }}</dd>
-            {% endif %}
-
-            <dt class="col-sm-4">Categoria Adm.</dt>
-            <dd class="col-sm-8">{{ escola.categoria_administrativa }}</dd>
-
-            <dt class="col-sm-4">Dependência Adm.</dt>
-            <dd class="col-sm-8">{{ escola.dependencia_administrativa }}</dd>
-
-            {% if escola.categoria_escola_privada and escola.categoria_escola_privada != 'Não Informado' %}
-              <dt class="col-sm-4">Cat. Escola Privada</dt>
-              <dd class="col-sm-8">{{ escola.categoria_escola_privada }}</dd>
-            {% endif %}
-
-            <dt class="col-sm-4">Conveniada</dt>
-            <dd class="col-sm-8">{{ escola.conveniada ?? '—' }}</dd>
-
-            <dt class="col-sm-4">Regulamentação</dt>
-            <dd class="col-sm-8">{{ escola.regulamentacao ?? '—' }}</dd>
-
-            <dt class="col-sm-4">Porte</dt>
-            <dd class="col-sm-8">{{ escola.porte ?? '—' }}</dd>
-
-            <dt class="col-sm-4">Etapas de Ensino</dt>
-            <dd class="col-sm-8">{{ escola.etapas_ensino ?? '—' }}</dd>
-
-            {% if escola.outras_ofertas %}
-              <dt class="col-sm-4">Outras Ofertas</dt>
-              <dd class="col-sm-8">{{ escola.outras_ofertas }}</dd>
-            {% endif %}
-
-            <dt class="col-sm-4">Endereço</dt>
-            <dd class="col-sm-8">{{ escola.endereco ?? '—' }}</dd>
-
-            {% if escola.telefone %}
-              <dt class="col-sm-4">Telefone</dt>
-              <dd class="col-sm-8">{{ escola.telefone }}</dd>
-            {% endif %}
-          </dl>
+    {# ── Dados INEP ── #}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">📋 Dados INEP</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><th class="ps-3" style="width:40%">UF</th><td>{{ escola.uf }}</td></tr>
+              <tr><th class="ps-3">Município</th><td>{{ escola.municipio }}</td></tr>
+              <tr><th class="ps-3">Endereço</th><td>{{ escola.endereco }}</td></tr>
+              <tr><th class="ps-3">Dependência</th><td>{{ escola.dependenciaAdministrativa }}</td></tr>
+              <tr><th class="ps-3">Localização</th><td>{{ escola.localizacao }}</td></tr>
+              <tr><th class="ps-3">Porte</th><td>{{ escola.porte }}</td></tr>
+              <tr><th class="ps-3">Etapas de Ensino</th><td><small>{{ escola.etapasEnsino }}</small></td></tr>
+              <tr><th class="ps-3">Situação</th><td>{{ escola.restricaoAtendimento }}</td></tr>
+              <tr><th class="ps-3">Telefone</th><td>{{ escola.telefone }}</td></tr>
+              {% if escola.latitude and escola.longitude %}
+              <tr>
+                <th class="ps-3">Coordenadas</th>
+                <td>
+                  <a href="https://www.google.com/maps?q={{ escola.latitude }},{{ escola.longitude }}"
+                     target="_blank" class="text-decoration-none">
+                    {{ escola.latitude }}, {{ escola.longitude }} 🗺
+                  </a>
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    {# ── Card lateral: mapa + Waze ── #}
-    <div class="col-12 col-lg-4">
-
-      {% if escola.latitude and escola.longitude %}
-        <div class="card shadow-sm mb-3">
-          <div class="card-header"><i class="bi bi-geo-alt me-1"></i>Localização</div>
-          <div class="card-body">
-            <dl class="row mb-2">
-              <dt class="col-5">Latitude</dt>
-              <dd class="col-7"><code>{{ escola.latitude }}</code></dd>
-              <dt class="col-5">Longitude</dt>
-              <dd class="col-7"><code>{{ escola.longitude }}</code></dd>
-            </dl>
-            <div class="d-grid gap-2">
-              <a href="https://www.google.com/maps?q={{ escola.latitude }},{{ escola.longitude }}"
-                 target="_blank" rel="noopener"
-                 class="btn btn-outline-success btn-sm">
-                <i class="bi bi-map me-1"></i>Google Maps
-              </a>
-              <a href="https://waze.com/ul?ll={{ escola.latitude }},{{ escola.longitude }}&navigate=yes"
-                 target="_blank" rel="noopener"
-                 class="btn btn-outline-info btn-sm">
-                <i class="bi bi-sign-turn-right me-1"></i>Waze
-              </a>
-              <a href="https://www.waze.com/pt-BR/editor?env=row&lat={{ escola.latitude }}&lon={{ escola.longitude }}&marker=true&zoomLevel=17"
-                 target="_blank" rel="noopener"
-                 class="btn btn-outline-warning btn-sm">
-                <i class="bi bi-pencil-square me-1"></i>Waze Editor
-              </a>
-            </div>
-          </div>
+    {# ── Links Waze ── #}
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+          🗺 Links Waze
+          {% if app.user %}
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLinks">
+              ✏️ Editar
+            </button>
+          {% endif %}
         </div>
-      {% endif %}
+        <div class="card-body">
 
-      <div class="card shadow-sm">
-        <div class="card-header"><i class="bi bi-info-circle me-1"></i>Importação</div>
-        <div class="card-body small text-muted">
-          <p class="mb-1">Importado em: {{ escola.imported_at ? escola.imported_at|date('d/m/Y H:i') : '—' }}</p>
-          <p class="mb-0">Atualizado em: {{ escola.updated_at ? escola.updated_at|date('d/m/Y H:i') : '—' }}</p>
+          <div class="mb-3">
+            <div class="fw-semibold mb-1">🚸 Zona Escolar (Permanent Hazard)</div>
+            {% if escola.linkWaze %}
+              <a href="{{ escola.linkWaze }}" target="_blank" class="btn btn-sm btn-primary">
+                Abrir no Editor Waze
+              </a>
+              {% if escola.permanentHazardId %}
+                <small class="text-muted ms-2">ID: {{ escola.permanentHazardId }}</small>
+              {% endif %}
+            {% else %}
+              <span class="text-muted fst-italic">Não cadastrado</span>
+            {% endif %}
+          </div>
+
+          <div>
+            <div class="fw-semibold mb-1">🏫 Área Escolar (Place)</div>
+            {% if escola.linkAreaEscolar %}
+              <a href="{{ escola.linkAreaEscolar }}" target="_blank" class="btn btn-sm btn-success">
+                Abrir Área Escolar
+              </a>
+            {% else %}
+              <span class="text-muted fst-italic">Não cadastrada</span>
+            {% endif %}
+          </div>
+
         </div>
       </div>
 
-    </div>{# /col-lg-4 #}
+      {# ── Histórico de links ── #}
+      {% if linkLogs is not empty %}
+      <div class="card mt-3">
+        <div class="card-header fw-semibold">📜 Histórico de Links</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Campo</th><th>Antes</th><th>Depois</th><th>Editor</th><th>Data</th></tr></thead>
+            <tbody>
+              {% for log in linkLogs %}
+              <tr>
+                <td><small>{{ log.campo }}</small></td>
+                <td><small class="text-muted">{{ log.valorAnterior|default('—')|slice(0,40) }}</small></td>
+                <td><small>{{ log.valorNovo|default('—')|slice(0,40) }}</small></td>
+                <td><small>{{ log.alteradoPor.name }}</small></td>
+                <td><small data-utc="{{ log.alteradoEm|date('Y-m-d H:i:s') }}">{{ log.alteradoEm|date('d/m/Y') }}</small></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── Comentários ── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header fw-semibold">💬 Comentários dos Editores</div>
+        <div class="card-body">
+
+          {% if app.user %}
+          <form method="POST" action="{{ path('escola_inep_comentario_add', {id: escola.id}) }}" class="mb-4">
+            <div class="mb-2">
+              <textarea name="texto" class="form-control" rows="3"
+                        placeholder="Adicionar observação sobre esta escola (situação no Waze, pendências, etc.)…"
+                        required></textarea>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">Comentar</button>
+          </form>
+          {% endif %}
+
+          {% if escola.comentarios is empty %}
+            <p class="text-muted fst-italic mb-0">Nenhum comentário ainda.</p>
+          {% else %}
+            {% for c in escola.comentarios %}
+            <div class="d-flex gap-2 mb-3">
+              <div class="avatar-sm bg-primary text-white d-flex align-items-center justify-content-center fw-bold rounded-circle flex-shrink-0"
+                   style="width:36px;height:36px;font-size:.8rem">
+                {{ c.autor.name|first|upper }}
+              </div>
+              <div class="flex-grow-1">
+                <div class="d-flex gap-2 align-items-baseline">
+                  <strong class="small">{{ c.autor.name }}</strong>
+                  <small class="text-muted" data-utc="{{ c.criadoEm|date('Y-m-d H:i:s') }}">{{ c.criadoEm|date('d/m/Y H:i') }}</small>
+                </div>
+                <div class="mt-1">{{ c.texto|nl2br }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+
   </div>{# /row #}
-
-  <div class="mt-3">
-    <a href="{{ path('escola_inep_index') }}" class="btn btn-secondary btn-sm">
-      <i class="bi bi-arrow-left me-1"></i>Voltar
-    </a>
-  </div>
-
 </div>
+
+{# ── Modal edição de links ── #}
+{% if app.user %}
+<div class="modal fade" id="modalLinks" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ path('escola_inep_link_save', {id: escola.id}) }}">
+        <div class="modal-header">
+          <h5 class="modal-title">✏️ Editar Links Waze</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">🚸 Zona Escolar — Permanent Hazard</label>
+            <input type="url" name="link_waze" class="form-control"
+                   value="{{ escola.linkWaze }}"
+                   placeholder="https://waze.com/pt-BR/editor?env=row&permanentHazards=XXXXXXX">
+            <div class="form-text">O link deve conter <code>permanentHazards=</code> com o ID numérico.</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">🏫 Área Escolar (Place)</label>
+            <input type="url" name="link_area_escolar" class="form-control"
+                   value="{{ escola.linkAreaEscolar }}"
+                   placeholder="https://waze.com/pt-BR/editor?env=row&venues=XXXXXXX">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Observação (opcional)</label>
+            <textarea name="observacao" class="form-control" rows="2"
+                      placeholder="Ex: zona escolar criada, aguardando aprovação…"></textarea>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

@@ -23,7 +23,7 @@ class RadarMedidorRepository extends ServiceEntityRepository
     }
 
     // =========================================================================
-    // ORM helpers (usados por comandos de importação, fixtures, etc.)
+    // ORM helpers
     // =========================================================================
 
     public function findByUf(string $uf): array
@@ -91,13 +91,6 @@ class RadarMedidorRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /**
-     * Retorna radares recentes: data_verificacao_efetiva nos últimos $days dias.
-     *
-     * @param string|null $uf   Filtra por UF (opcional).
-     * @param int         $days Janela em dias (padrão 30).
-     * @return RadarMedidor[]
-     */
     public function findRecentes(?string $uf = null, int $days = 30): array
     {
         $qb = $this->createQueryBuilder('r')
@@ -135,48 +128,44 @@ class RadarMedidorRepository extends ServiceEntityRepository
     }
 
     // =========================================================================
-    // DBAL – queries de listagem paginada (usadas pelo RadarController)
+    // DBAL – listagem paginada
     // =========================================================================
 
-    /**
-     * Retorna uma página de radares aplicando todos os filtros.
-     *
-     * @param array{uf:string, municipio:string, resultado:string, tipo:string, validade:string, serie:string} $filters
-     */
     public function findPaginated(
         array  $filters,
         ?array $allowedUfs,
         int    $page,
         int    $perPage,
     ): array {
-        $offset = ($page - 1) * $perPage;
+        $offset      = ($page - 1) * $perPage;
         [$where, $params] = $this->buildWhere($filters, $allowedUfs);
         $baseFrom    = $this->buildFrom($filters['serie']);
         $whereClause = $where ? " WHERE $where" : '';
         $dv          = $this->dateConv('rm.data_validade');
 
         return $this->db->fetchAllAssociative(
-            "SELECT DISTINCT rm.id, rm.sigla_uf, rm.estado, rm.municipio,
-                    rm.local_verificacao,
+            "SELECT DISTINCT
+                    rm.id,
+                    rm.sigla_uf,
+                    rm.uf,
+                    rm.municipio,
+                    rm.logradouro,
+                    rm.nome_empresa,
                     rm.data_ultima_verificacao,
                     rm.data_verificacao_efetiva,
                     rm.data_validade,
                     DATE_FORMAT($dv, '%Y-%m-%d') AS data_validade_iso,
-                    rm.ultimo_resultado,
-                    rm.tipo_medidor, rm.proprietario_nome
+                    rm.situacao,
+                    rm.tipo_medidor,
+                    rm.link_waze
              FROM radar_medidor rm $baseFrom
              $whereClause
-             ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao
+             ORDER BY rm.sigla_uf, rm.municipio, rm.logradouro
              LIMIT $perPage OFFSET $offset",
             $params
         );
     }
 
-    /**
-     * Conta o total de radares que atendem aos filtros (para paginação).
-     *
-     * @param array{uf:string, municipio:string, resultado:string, tipo:string, validade:string, serie:string} $filters
-     */
     public function countFiltered(array $filters, ?array $allowedUfs): int
     {
         [$where, $params] = $this->buildWhere($filters, $allowedUfs);
@@ -189,12 +178,8 @@ class RadarMedidorRepository extends ServiceEntityRepository
         );
     }
 
-    /**
-     * Retorna as listas de valores únicos para os selects de filtro.
-     */
     public function findFilterOptions(?array $allowedUfs): array
     {
-        // UFs disponíveis
         $ufsQuery  = 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL';
         $ufsParams = [];
         if ($allowedUfs !== null && count($allowedUfs) > 0) {
@@ -209,8 +194,8 @@ class RadarMedidorRepository extends ServiceEntityRepository
         $ufs = array_column($this->db->fetchAllAssociative($ufsQuery, $ufsParams), 'sigla_uf');
 
         $resultados = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT ultimo_resultado FROM radar_medidor WHERE ultimo_resultado IS NOT NULL AND merged_into_id IS NULL ORDER BY ultimo_resultado'
-        ), 'ultimo_resultado');
+            'SELECT DISTINCT situacao FROM radar_medidor WHERE situacao IS NOT NULL AND merged_into_id IS NULL ORDER BY situacao'
+        ), 'situacao');
 
         $tipos = array_column($this->db->fetchAllAssociative(
             'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL AND merged_into_id IS NULL ORDER BY tipo_medidor'
@@ -219,9 +204,6 @@ class RadarMedidorRepository extends ServiceEntityRepository
         return compact('ufs', 'resultados', 'tipos');
     }
 
-    /**
-     * Busca um radar por ID retornando array puro (DBAL), com data_validade_iso.
-     */
     public function findRawById(int $id): array|false
     {
         $dv = $this->dateConv('data_validade');
@@ -251,15 +233,11 @@ class RadarMedidorRepository extends ServiceEntityRepository
         return $serie !== '' ? 'LEFT JOIN radar_faixa rf ON rf.radar_medidor_id = rm.id' : '';
     }
 
-    /**
-     * @return array{string, array} [$whereClause, $params]
-     */
     private function buildWhere(array $filters, ?array $allowedUfs): array
     {
         $parts  = [];
         $params = [];
 
-        // Sempre excluir radares mesclados
         $parts[] = 'rm.merged_into_id IS NULL';
 
         if ($allowedUfs !== null) {
@@ -282,8 +260,9 @@ class RadarMedidorRepository extends ServiceEntityRepository
             $parts[]  = 'rm.municipio LIKE ?';
             $params[] = '%' . $this->escapeLike($filters['municipio']) . '%';
         }
-        if ($filters['resultado'] !== '') {
-            $parts[]  = 'rm.ultimo_resultado = ?';
+        // resultado agora filtra por situacao
+        if (($filters['resultado'] ?? '') !== '') {
+            $parts[]  = 'rm.situacao = ?';
             $params[] = $filters['resultado'];
         }
         if ($filters['tipo'] !== '') {

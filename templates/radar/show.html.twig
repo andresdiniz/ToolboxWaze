@@ -1,13 +1,13 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ radar.local_verificacao }} — Radar #{{ radar.id }}{% endblock %}
+{% block title %}{{ radar.logradouro|default('Radar #' ~ radar.id) }} — Radar #{{ radar.id }}{% endblock %}
 
 {% block body %}
 
 <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="{{ path('radar_index') }}">Radares</a></li>
-        <li class="breadcrumb-item active">{{ radar.local_verificacao|default('Radar #' ~ radar.id) }}</li>
+        <li class="breadcrumb-item active">{{ radar.logradouro|default('Radar #' ~ radar.id) }}</li>
     </ol>
 </nav>
 
@@ -16,19 +16,19 @@
     <div>
         <h1 class="h4 mb-1 fw-bold">
             <span class="badge badge-uf me-2">{{ radar.sigla_uf }}</span>
-            {{ radar.local_verificacao }}
+            {{ radar.logradouro ?? '—' }}
         </h1>
         <div class="text-muted small">
-            <i class="bi bi-geo-alt me-1"></i>{{ radar.municipio }} — {{ radar.estado }}
+            <i class="bi bi-geo-alt me-1"></i>{{ radar.municipio }} — {{ radar.sigla_uf }}
         </div>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
-        {% if radar.ultimo_resultado == 'APROVADO' %}
+        {% if radar.situacao == 'APROVADO' %}
             <span class="badge badge-aprovado fs-6 px-3 py-2"><i class="bi bi-check-circle me-1"></i>APROVADO</span>
-        {% elseif radar.ultimo_resultado == 'REPROVADO' %}
+        {% elseif radar.situacao == 'REPROVADO' %}
             <span class="badge badge-reprovado fs-6 px-3 py-2"><i class="bi bi-x-circle me-1"></i>REPROVADO</span>
-        {% elseif radar.ultimo_resultado %}
-            <span class="badge bg-secondary fs-6 px-3 py-2">{{ radar.ultimo_resultado }}</span>
+        {% elseif radar.situacao %}
+            <span class="badge bg-secondary fs-6 px-3 py-2">{{ radar.situacao }}</span>
         {% endif %}
 
         {% if radar.data_validade_iso %}
@@ -72,14 +72,14 @@
                         <div class="detail-value">{{ radar.tipo_medidor ?? '—' }}</div>
                     </div>
                     <div class="col-sm-6">
-                        <div class="detail-label">Resultado</div>
+                        <div class="detail-label">Situação</div>
                         <div class="detail-value">
-                            {% if radar.ultimo_resultado == 'APROVADO' %}
-                                <span class="text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>{{ radar.ultimo_resultado }}</span>
-                            {% elseif radar.ultimo_resultado == 'REPROVADO' %}
-                                <span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>{{ radar.ultimo_resultado }}</span>
+                            {% if radar.situacao == 'APROVADO' %}
+                                <span class="text-success fw-semibold"><i class="bi bi-check-circle me-1"></i>{{ radar.situacao }}</span>
+                            {% elseif radar.situacao == 'REPROVADO' %}
+                                <span class="text-danger fw-semibold"><i class="bi bi-x-circle me-1"></i>{{ radar.situacao }}</span>
                             {% else %}
-                                {{ radar.ultimo_resultado ?? '—' }}
+                                {{ radar.situacao ?? '—' }}
                             {% endif %}
                         </div>
                     </div>
@@ -110,35 +110,43 @@
                         </div>
                     </div>
                     <div class="col-sm-6">
-                        <div class="detail-label">Estado</div>
-                        <div class="detail-value">{{ radar.estado ?? '—' }}</div>
+                        <div class="detail-label">Estado (UF)</div>
+                        <div class="detail-value">{{ radar.sigla_uf ?? radar.uf ?? '—' }}</div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Município</div>
                         <div class="detail-value">{{ radar.municipio ?? '—' }}</div>
                     </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">Logradouro</div>
+                        <div class="detail-value">{{ radar.logradouro ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">CEP</div>
+                        <div class="detail-value">{{ radar.cep ?? '—' }}</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        {# Proprietário #}
+        {# Empresa / Proprietário #}
         <div class="card mb-4">
             <div class="card-header fw-semibold">
-                <i class="bi bi-building me-2"></i>Proprietário
+                <i class="bi bi-building me-2"></i>Empresa / Proprietário
             </div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-12">
                         <div class="detail-label">Nome</div>
-                        <div class="detail-value">{{ radar.proprietario_nome ?? '—' }}</div>
+                        <div class="detail-value">{{ radar.nome_empresa ?? '—' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="detail-label">CNPJ</div>
+                        <div class="detail-value">{{ radar.cnpj_empresa ?? '—' }}</div>
                     </div>
                     <div class="col-sm-6">
                         <div class="detail-label">Município</div>
-                        <div class="detail-value">{{ radar.proprietario_municipio ?? '—' }}</div>
-                    </div>
-                    <div class="col-sm-6">
-                        <div class="detail-label">Estado</div>
-                        <div class="detail-value">{{ radar.proprietario_estado ?? '—' }}</div>
+                        <div class="detail-value">{{ radar.municipio ?? '—' }}</div>
                     </div>
                 </div>
             </div>
@@ -236,9 +244,6 @@
     {# ── Coluna direita ── #}
     <div class="col-lg-5">
 
-        {# ══════════════════════════════════════════════
-           CARD: EDITOR WAZE + MAPA OSM
-           ══════════════════════════════════════════════ #}
         {% if app.user %}
         <div class="card mb-4" id="card-waze">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center"
@@ -274,7 +279,6 @@
             </div>
             <div class="card-body p-0">
 
-                {# ── MAPA OSM — usa wazeLink da tabela ou radar.link_waze da planilha #}
                 {% set mapaUrl = wazeLink ? wazeLink.waze_link : radar.link_waze %}
                 {% if mapaUrl %}
                 <div id="waze-map"
@@ -285,7 +289,6 @@
 
                 <div class="p-3">
 
-                {# ── Banner: link importado da planilha (ainda sem cadastro manual) #}
                 {% if not wazeLink and radar.link_waze %}
                 <div class="alert alert-info py-2 px-3 mb-3 small d-flex align-items-start gap-2" role="alert">
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor"
@@ -299,7 +302,6 @@
                 </div>
                 {% endif %}
 
-                {# Estado atual (somente leitura) quando já existe link #}
                 {% if wazeLink %}
                 <div class="mb-3 p-3 rounded" style="background:var(--color-surface-2);border:1px solid var(--color-border)">
                     <div class="row g-2">
@@ -329,7 +331,6 @@
                 </div>
                 {% endif %}
 
-                {# Botão para recolher/expandir o formulário (só quando já tem link manual) #}
                 {% if wazeLink %}
                 <button class="btn btn-sm w-100 mb-3"
                         type="button"
@@ -357,13 +358,6 @@
                             <label class="form-label fw-semibold small">
                                 Link do Editor Waze <span class="text-danger">*</span>
                             </label>
-                            {#
-                              Prioridade do valor pré-preenchido:
-                                1. Dado postado com erro (wazeFormData)
-                                2. Link manual já cadastrado (wazeLink.waze_link)
-                                3. Link importado da planilha (radar.link_waze)
-                                4. Vazio
-                            #}
                             <input type="url"
                                    name="waze_link"
                                    id="waze-link-input"
@@ -375,7 +369,7 @@
                                                : radar.link_waze|default(''))
                                    }}"
                                    class="form-control form-control-sm font-monospace {{ wazeErrors.waze_link is defined ? 'is-invalid' : '' }}"
-                                   placeholder="https://waze.com/pt-BR/editor?…&permanentHazards=272464"
+                                   placeholder="https://waze.com/pt-BR/editor?&permanentHazards=272464"
                                    required>
                             {% if wazeErrors.waze_link is defined %}
                                 <div class="invalid-feedback">{{ wazeErrors.waze_link }}</div>
@@ -418,7 +412,6 @@
 
                 </div>{# /waze-form-wrap #}
 
-                {# TIMELINE DE HISTÓRICO DO LINK WAZE #}
                 {% if wazeLog is not empty %}
                 <hr class="my-3" style="border-color:var(--color-border)">
                 <button class="btn btn-sm w-100 mb-2"
@@ -438,29 +431,22 @@
                         <div class="waze-timeline-item">
                             <div class="waze-timeline-dot
                                 {{ log.campo_alterado == 'waze_link' ? 'dot-link' : 'dot-obs' }}"></div>
-
                             <div class="waze-timeline-content">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
                                     <span class="badge
                                         {{ log.campo_alterado == 'waze_link' ? 'bg-primary' : 'bg-secondary' }}
                                         badge-sm">
-                                        {% if log.campo_alterado == 'waze_link' %}
-                                            Link alterado
-                                        {% elseif log.campo_alterado == 'motivo_revisao' %}
-                                            Motivo
-                                        {% else %}
-                                            {{ log.campo_alterado }}
-                                        {% endif %}
+                                        {% if log.campo_alterado == 'waze_link' %}Link alterado
+                                        {% elseif log.campo_alterado == 'motivo_revisao' %}Motivo
+                                        {% else %}{{ log.campo_alterado }}{% endif %}
                                     </span>
                                     <small class="text-muted ms-2" style="white-space:nowrap">
                                         {{ log.changed_at|date('d/m/Y H:i') }}
                                     </small>
                                 </div>
-
                                 <div class="small mb-1">
                                     <span class="fw-semibold">{{ log.changed_by_email }}</span>
                                 </div>
-
                                 {% if log.campo_alterado == 'waze_link' %}
                                     {% if log.valor_anterior %}
                                     <div class="small text-muted">
@@ -468,7 +454,7 @@
                                         <a href="{{ log.valor_anterior }}" target="_blank" rel="noopener"
                                            class="font-monospace text-decoration-none text-muted"
                                            style="word-break:break-all;font-size:.7rem">
-                                            {{ log.valor_anterior|slice(0, 60) }}{% if log.valor_anterior|length > 60 %}…{% endif %}
+                                            {{ log.valor_anterior|slice(0,60) }}{% if log.valor_anterior|length > 60 %}…{% endif %}
                                         </a>
                                     </div>
                                     {% else %}
@@ -479,18 +465,13 @@
                                         <a href="{{ log.valor_novo }}" target="_blank" rel="noopener"
                                            class="font-monospace text-decoration-none"
                                            style="word-break:break-all;font-size:.7rem">
-                                            {{ log.valor_novo|slice(0, 60) }}{% if log.valor_novo|length > 60 %}…{% endif %}
+                                            {{ log.valor_novo|slice(0,60) }}{% if log.valor_novo|length > 60 %}…{% endif %}
                                         </a>
                                     </div>
                                 {% else %}
-                                    {% if log.valor_anterior %}
-                                    <div class="small text-muted"><em>{{ log.valor_anterior }}</em></div>
-                                    {% endif %}
-                                    {% if log.valor_novo %}
-                                    <div class="small">→ {{ log.valor_novo }}</div>
-                                    {% endif %}
+                                    {% if log.valor_anterior %}<div class="small text-muted"><em>{{ log.valor_anterior }}</em></div>{% endif %}
+                                    {% if log.valor_novo %}<div class="small">→ {{ log.valor_novo }}</div>{% endif %}
                                 {% endif %}
-
                                 {% if log.observacao %}
                                 <div class="small text-muted fst-italic mt-1">{{ log.observacao }}</div>
                                 {% endif %}
@@ -498,11 +479,10 @@
                         </div>
                         {% endfor %}
                     </div>
-                </div>{# /waze-historico-wrap #}
-                {% endif %}{# wazeLog #}
+                </div>
+                {% endif %}
 
                 </div>{# /p-3 #}
-
             </div>{# /card-body #}
         </div>{# /card editor waze #}
         {% endif %}{# app.user #}
@@ -510,83 +490,27 @@
     </div>{# /col-lg-5 #}
 </div>
 
-{# ═══════════════════════════════════════════════════════
-   ESTILOS — Timeline Waze + Mapa OSM (dark-mode aware)
-   ═══════════════════════════════════════════════════════ #}
 <style>
-/* Timeline */
-.waze-timeline {
-    position: relative;
-    padding-left: 1.5rem;
-}
-.waze-timeline::before {
-    content: '';
-    position: absolute;
-    left: .45rem; top: .5rem; bottom: .5rem;
-    width: 2px;
-    background: var(--color-border);
-    border-radius: 2px;
-}
-.waze-timeline-item {
-    position: relative;
-    margin-bottom: 1rem;
-}
-.waze-timeline-item:last-child { margin-bottom: 0; }
-.waze-timeline-dot {
-    position: absolute;
-    left: -1.5rem; top: .3rem;
-    width: .7rem; height: .7rem;
-    border-radius: 50%;
-    border: 2px solid var(--color-surface);
-    box-shadow: 0 0 0 2px currentColor;
-}
-.waze-timeline-dot.dot-link  { color: var(--tw); }
-.waze-timeline-dot.dot-obs   { color: var(--color-text-muted); }
-.waze-timeline-content {
-    background: var(--color-surface-2);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: .5rem .75rem;
-}
-.badge-sm { font-size: .7rem; padding: .2em .5em; }
-
-/* Mapa Leaflet — overrides mínimos para dark mode */
-#waze-map .leaflet-tile-pane { filter: none; }
-[data-theme="dark"] #waze-map .leaflet-tile-pane {
-    filter: brightness(.85) saturate(.7) invert(1) hue-rotate(180deg);
-}
-[data-theme="dark"] #waze-map .leaflet-marker-icon { filter: none; }
-.leaflet-popup-content-wrapper {
-    background: var(--color-surface);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
-    box-shadow: var(--shadow-md);
-    border-radius: var(--radius-md);
-}
-.leaflet-popup-tip { background: var(--color-surface); }
-.waze-map-actions {
-    display: flex;
-    gap: .5rem;
-    padding: .6rem .75rem;
-    background: var(--color-surface-2);
-    border-bottom: 1px solid var(--color-border);
-    font-size: .78rem;
-    align-items: center;
-}
-.waze-map-coords {
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: .72rem;
-    color: var(--color-text-muted);
-    margin-left: auto;
-}
+.waze-timeline { position:relative; padding-left:1.5rem; }
+.waze-timeline::before { content:''; position:absolute; left:.45rem; top:.5rem; bottom:.5rem; width:2px; background:var(--color-border); border-radius:2px; }
+.waze-timeline-item { position:relative; margin-bottom:1rem; }
+.waze-timeline-item:last-child { margin-bottom:0; }
+.waze-timeline-dot { position:absolute; left:-1.5rem; top:.3rem; width:.7rem; height:.7rem; border-radius:50%; border:2px solid var(--color-surface); box-shadow:0 0 0 2px currentColor; }
+.waze-timeline-dot.dot-link { color:var(--tw); }
+.waze-timeline-dot.dot-obs  { color:var(--color-text-muted); }
+.waze-timeline-content { background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:.5rem .75rem; }
+.badge-sm { font-size:.7rem; padding:.2em .5em; }
+#waze-map .leaflet-tile-pane { filter:none; }
+[data-theme="dark"] #waze-map .leaflet-tile-pane { filter:brightness(.85) saturate(.7) invert(1) hue-rotate(180deg); }
+[data-theme="dark"] #waze-map .leaflet-marker-icon { filter:none; }
+.leaflet-popup-content-wrapper { background:var(--color-surface); color:var(--color-text); border:1px solid var(--color-border); box-shadow:var(--shadow-md); border-radius:var(--radius-md); }
+.leaflet-popup-tip { background:var(--color-surface); }
+.waze-map-actions { display:flex; gap:.5rem; padding:.6rem .75rem; background:var(--color-surface-2); border-bottom:1px solid var(--color-border); font-size:.78rem; align-items:center; }
+.waze-map-coords { font-family:'SFMono-Regular',Consolas,monospace; font-size:.72rem; color:var(--color-text-muted); margin-left:auto; }
 </style>
 
-{# ═══════════════════════════════════════════════════════
-   SCRIPTS — Hazard preview + Mapa OSM Leaflet
-   ═══════════════════════════════════════════════════════ #}
 <script>
 (function () {
-    /* ── Hazard ID preview no input ── */
     const input    = document.getElementById('waze-link-input');
     const preview  = document.getElementById('waze-hazard-preview');
     const hazardEl = document.getElementById('waze-hazard-id');
@@ -600,26 +524,15 @@
         updateHazard();
     }
 
-    /* ── Mapa OSM Leaflet ── */
     const mapDiv = document.getElementById('waze-map');
     if (!mapDiv) return;
-
-    const wazeUrl = mapDiv.dataset.wazeUrl || '';
-
-    /* Extrai lat e lon da URL do Waze Editor */
+    const wazeUrl  = mapDiv.dataset.wazeUrl || '';
     const latMatch = wazeUrl.match(/[?&]lat=(-?[\d.]+)/);
     const lonMatch = wazeUrl.match(/[?&]lon=(-?[\d.]+)/);
-
-    if (!latMatch || !lonMatch) {
-        /* Sem coordenadas: esconde o container do mapa */
-        mapDiv.style.display = 'none';
-        return;
-    }
-
+    if (!latMatch || !lonMatch) { mapDiv.style.display = 'none'; return; }
     const lat = parseFloat(latMatch[1]);
     const lon = parseFloat(lonMatch[1]);
 
-    /* Cria barra de ações acima do mapa */
     const actions = document.createElement('div');
     actions.className = 'waze-map-actions';
     actions.innerHTML =
@@ -627,51 +540,28 @@
         '<span style="color:var(--color-text);font-weight:600">Localização no mapa</span>' +
         '<span class="waze-map-coords">' + lat.toFixed(5) + ', ' + lon.toFixed(5) + '</span>' +
         '<a href="https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '&zoom=17" ' +
-           'target="_blank" rel="noopener" ' +
-           'style="color:var(--tw);font-size:.72rem;text-decoration:none;margin-left:.5rem">OSM ↗</a>';
+           'target="_blank" rel="noopener" style="color:var(--tw);font-size:.72rem;text-decoration:none;margin-left:.5rem">OSM ↗</a>';
     mapDiv.parentNode.insertBefore(actions, mapDiv);
 
-    /* Carrega Leaflet via CDN e inicializa o mapa */
     function initMap() {
         const L = window.L;
-        const map = L.map(mapDiv, {
-            center: [lat, lon],
-            zoom: 17,
-            scrollWheelZoom: false,
-            attributionControl: true,
-            zoomControl: true
-        });
-
+        const map = L.map(mapDiv, { center:[lat,lon], zoom:17, scrollWheelZoom:false });
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
             maxZoom: 19
         }).addTo(map);
-
-        /* Marcador com popup linkando para o editor Waze */
-        const marker = L.marker([lat, lon]).addTo(map);
-        marker.bindPopup(
-            '<div style="font-size:.82rem;line-height:1.5">' +
-            '<strong style="display:block;margin-bottom:.3rem">📍 Radar</strong>' +
-            '<a href="' + wazeUrl + '" target="_blank" rel="noopener" ' +
-               'style="color:var(--tw);text-decoration:none;font-weight:600">' +
-               '🗺 Abrir no Editor Waze</a>' +
-            '</div>'
-        ).openPopup();
-
-        /* Recalcula tamanho após BS collapse / DOM ready */
+        L.marker([lat,lon]).addTo(map)
+            .bindPopup('<div style="font-size:.82rem"><strong style="display:block;margin-bottom:.3rem">📍 Radar</strong>' +
+                '<a href="' + wazeUrl + '" target="_blank" rel="noopener" style="color:var(--tw);font-weight:600">🗺 Abrir no Editor Waze</a></div>')
+            .openPopup();
         setTimeout(function(){ map.invalidateSize(); }, 300);
     }
 
-    if (window.L) {
-        initMap();
-    } else {
-        /* Carrega CSS do Leaflet */
+    if (window.L) { initMap(); }
+    else {
         const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.rel = 'stylesheet'; link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
         document.head.appendChild(link);
-
-        /* Carrega JS do Leaflet */
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
         script.onload = initMap;

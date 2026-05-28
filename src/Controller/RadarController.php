@@ -4,167 +4,371 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\Entity\User;
-use App\Repository\RadarFaixaRepository;
-use App\Repository\RadarHistoricoRepository;
-use App\Repository\RadarMedidorRepository;
-use App\Repository\RadarWazeLinkRepository;
-use App\Service\RadarStatsService;
-use App\Service\RadarWazeLinkService;
+use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-#[Route('/radares', name: 'radar_')]
-final class RadarController extends AbstractController
+#[Route('/radares')]
+#[IsGranted('ROLE_USER')]
+class RadarController extends AbstractController
 {
-    private const PER_PAGE = 25;
+    private const PER_PAGE = 50;
 
-    public function __construct(
-        private readonly RadarMedidorRepository  $radarRepo,
-        private readonly RadarWazeLinkRepository $wazeRepo,
-        private readonly RadarFaixaRepository    $faixaRepo,
-        private readonly RadarHistoricoRepository $historicoRepo,
-        private readonly RadarStatsService        $statsService,
-        private readonly RadarWazeLinkService     $wazeLinkService,
-    ) {}
+    // Campos editáveis e seus rótulos de exibição
+    private const CAMPOS_EDITAVEIS = [
+        'sigla_uf'                  => 'UF',
+        'uf'                        => 'Estado (nome)',
+        'municipio'                 => 'Município',
+        'logradouro'                => 'Logradouro',
+        'cep'                       => 'CEP',
+        'nome_empresa'              => 'Empresa',
+        'cnpj_empresa'              => 'CNPJ',
+        'tipo_medidor'              => 'Tipo de Medidor',
+        'modelo_medidor'            => 'Modelo do Medidor',
+        'marca_medidor'             => 'Marca do Medidor',
+        'numero_serie'              => 'Nº de Série',
+        'numero_certificado'        => 'Nº Certificado',
+        'orgao_verificador'         => 'Órgão Verificador',
+        'data_ultima_verificacao'   => 'Última Verificação',
+        'data_verificacao_efetiva'  => 'Data Verificação Efetiva',
+        'data_verificacao'          => 'Data Verificação',
+        'data_lacre'                => 'Data Lacre',
+        'lacre'                     => 'Lacre',
+        'data_validade'             => 'Validade',
+        'data_validade_iso'         => 'Validade (ISO)',
+        'situacao'                  => 'Situação',
+        'capacidade'                => 'Capacidade',
+        'latitude'                  => 'Latitude',
+        'longitude'                 => 'Longitude',
+        'link_waze'                 => 'Link Waze',
+    ];
 
-    #[Route('', name: 'index')]
-    public function index(Request $req): Response
+    public function __construct(private readonly Connection $db) {}
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Listagem
+    // ─────────────────────────────────────────────────────────────────────────
+    #[Route('', name: 'radar_index', methods: ['GET'])]
+    public function index(Request $request): Response
     {
-        /** @var User|null $user */
-        $user       = $this->getUser();
-        $allowedUfs = $user?->getUfsForQuery();
+        $page     = max(1, (int) $request->query->get('page', 1));
+        $uf       = trim((string) $request->query->get('uf', ''));
+        $municipio= trim((string) $request->query->get('municipio', ''));
+        $resultado= trim((string) $request->query->get('resultado', ''));
+        $tipo     = trim((string) $request->query->get('tipo', ''));
+        $validade = trim((string) $request->query->get('validade', ''));
+        $serie    = trim((string) $request->query->get('serie', ''));
+        $offset   = ($page - 1) * self::PER_PAGE;
 
-        $filters = [
-            'uf'        => strtoupper(trim((string) $req->query->get('uf', ''))),
-            'municipio' => trim((string) $req->query->get('municipio', '')),
-            'resultado' => trim((string) $req->query->get('resultado', '')),
-            'tipo'      => trim((string) $req->query->get('tipo', '')),
-            'validade'  => trim((string) $req->query->get('validade', '')),
-            'serie'     => trim((string) $req->query->get('serie', '')),
-        ];
+        $hoje = (new \DateTimeImmutable())->format('Y-m-d');
+        $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $ha30 = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
 
-        // Garante que o usuário não filtre por UF fora de suas permissões
-        if ($filters['uf'] !== '' && $allowedUfs !== null && !in_array($filters['uf'], $allowedUfs, true)) {
-            $filters['uf'] = '';
+        $where  = ['1=1'];
+        $params = [];
+
+        if ($uf !== '') {
+            $where[]  = 'r.sigla_uf = ?';
+            $params[] = $uf;
         }
+        if ($municipio !== '') {
+            $where[]  = 'r.municipio LIKE ?';
+            $params[] = "%$municipio%";
+        }
+        if ($resultado !== '') {
+            $where[]  = 'r.situacao = ?';
+            $params[] = $resultado;
+        }
+        if ($tipo !== '') {
+            $where[]  = 'r.tipo_medidor = ?';
+            $params[] = $tipo;
+        }
+        if ($serie !== '') {
+            $where[]  = 'r.numero_serie LIKE ?';
+            $params[] = "%$serie%";
+        }
+        match ($validade) {
+            'valido'     => ($where[] = "r.data_validade_iso >= '$hoje'"),
+            '30dias'     => ($where[] = "r.data_validade_iso >= '$hoje' AND r.data_validade_iso <= '$em30'"),
+            'vencido'    => ($where[] = "r.data_validade_iso < '$hoje'"),
+            'recentes30' => ($where[] = "r.data_verificacao_efetiva >= '$ha30' AND r.data_verificacao_efetiva <= '$hoje'"),
+            default      => null,
+        };
 
-        $page  = max(1, (int) $req->query->get('page', 1));
-        $total = $this->radarRepo->countFiltered($filters, $allowedUfs);
-        $rows  = $this->radarRepo->findPaginated($filters, $allowedUfs, $page, self::PER_PAGE);
+        $wc = implode(' AND ', $where);
 
-        $filterOptions = $this->radarRepo->findFilterOptions($allowedUfs);
-        $stats         = $this->statsService->getKpis($allowedUfs);
+        $total = (int) $this->db->fetchOne("SELECT COUNT(*) FROM radar r WHERE $wc", $params);
+        $pages = max(1, (int) ceil($total / self::PER_PAGE));
+        $page  = min($page, $pages);
+        $offset = ($page - 1) * self::PER_PAGE;
 
-        $hoje     = (new \DateTimeImmutable())->format('Y-m-d');
-        $em30     = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
-        $ha30dias = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+        $rows = $this->db->fetchAllAssociative(
+            "SELECT r.id, r.sigla_uf, r.uf, r.municipio, r.logradouro, r.nome_empresa,
+                    r.data_ultima_verificacao, r.data_verificacao_efetiva,
+                    r.data_validade, r.data_validade_iso, r.situacao, r.tipo_medidor, r.link_waze
+             FROM radar r WHERE $wc ORDER BY r.sigla_uf, r.municipio LIMIT $offset, " . self::PER_PAGE,
+            $params
+        );
+
+        $allowedUfs = null;
+        $ufs        = array_column($this->db->fetchAllAssociative(
+            'SELECT DISTINCT sigla_uf FROM radar WHERE sigla_uf IS NOT NULL ORDER BY sigla_uf'
+        ), 'sigla_uf');
+        $resultados = array_column($this->db->fetchAllAssociative(
+            'SELECT DISTINCT situacao FROM radar WHERE situacao IS NOT NULL ORDER BY situacao'
+        ), 'situacao');
+        $tipos = array_column($this->db->fetchAllAssociative(
+            'SELECT DISTINCT tipo_medidor FROM radar WHERE tipo_medidor IS NOT NULL ORDER BY tipo_medidor'
+        ), 'tipo_medidor');
+
+        $stats = ($uf === '' && $municipio === '' && $resultado === '' && $tipo === '' && $validade === '' && $serie === '')
+            ? ($this->db->fetchAssociative(
+                "SELECT COUNT(*) AS total,
+                        SUM(situacao = 'APROVADO') AS aprovados,
+                        SUM(situacao = 'REPROVADO') AS reprovados,
+                        SUM(data_validade_iso < '$hoje') AS vencidos,
+                        SUM(data_validade_iso >= '$hoje' AND data_validade_iso <= '$em30') AS vencendo,
+                        COUNT(DISTINCT sigla_uf) AS estados
+                 FROM radar"
+              ) ?: null)
+            : null;
 
         return $this->render('radar/index.html.twig', [
             'rows'       => $rows,
-            'total'      => $total,
             'page'       => $page,
+            'pages'      => $pages,
+            'total'      => $total,
             'per_page'   => self::PER_PAGE,
-            'pages'      => (int) ceil($total / self::PER_PAGE),
-            'filters'    => $filters,
-            'ufs'        => $filterOptions['ufs'],
-            'resultados' => $filterOptions['resultados'],
-            'tipos'      => $filterOptions['tipos'],
             'stats'      => $stats,
+            'ufs'        => $ufs,
+            'resultados' => $resultados,
+            'tipos'      => $tipos,
+            'allowedUfs' => $allowedUfs,
             'hoje'       => $hoje,
             'em30'       => $em30,
-            'ha30dias'   => $ha30dias,
-            'allowedUfs' => $allowedUfs,
+            'ha30dias'   => $ha30,
+            'filters'    => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
         ]);
     }
 
-    #[Route('/{id}', name: 'show', requirements: ['id' => '\\d+'])]
-    public function show(int $id, Request $req): Response
+    // ─────────────────────────────────────────────────────────────────────────
+    // Detalhe
+    // ─────────────────────────────────────────────────────────────────────────
+    #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
+    public function show(int $id): Response
     {
-        /** @var User|null $user */
-        $user  = $this->getUser();
-        $radar = $this->radarRepo->findRawById($id);
-
+        $radar = $this->db->fetchAssociative('SELECT * FROM radar WHERE id = ?', [$id]);
         if (!$radar) {
-            throw $this->createNotFoundException('Radar não encontrado.');
+            throw $this->createNotFoundException("Radar #{$id} não encontrado.");
         }
 
-        if ($user && !$user->canAccessUf((string) ($radar['sigla_uf'] ?? ''))) {
-            throw $this->createAccessDeniedException('Você não tem acesso a dados deste estado.');
-        }
+        $hoje = (new \DateTimeImmutable())->format('Y-m-d');
+        $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+        $ha30 = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
 
-        // Doctrine findBy usa o nome da PROPRIEDADE da entidade (não da coluna).
-        // RadarFaixa::$radarMedidor é um ManyToOne — passar o ID direto funciona.
-        $faixas    = $this->faixaRepo->findBy(['radarMedidor' => $id], ['numeroFaixa' => 'ASC']);
-        $historico = $this->historicoRepo->findBy(['radarMedidor' => $id], ['ano' => 'DESC', 'dataLaudo' => 'DESC']);
+        $wazeLink = $this->db->fetchAssociative(
+            'SELECT wl.*, u1.email AS inserted_by_email, u2.email AS updated_by_email
+             FROM radar_waze_link wl
+             LEFT JOIN user u1 ON u1.id = wl.inserted_by
+             LEFT JOIN user u2 ON u2.id = wl.updated_by
+             WHERE wl.radar_id = ? ORDER BY wl.id DESC LIMIT 1',
+            [$id]
+        ) ?: null;
 
-        $wazeLink = $this->wazeRepo->findRawByRadarId($id);
-        $wazeLog  = $wazeLink ? $this->wazeRepo->findLogByLinkId($wazeLink['id']) : [];
+        $wazeLog = $this->db->fetchAllAssociative(
+            'SELECT wll.*, u.email AS changed_by_email
+             FROM radar_waze_link_log wll
+             LEFT JOIN user u ON u.id = wll.changed_by
+             WHERE wll.radar_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
+            [$id]
+        );
 
-        $session      = $req->getSession();
-        $wazeErrors   = $session->remove('_waze_errors_' . $id) ?? [];
-        $wazeFormData = $session->remove('_waze_form_'   . $id) ?? [];
-
-        $hoje     = (new \DateTimeImmutable())->format('Y-m-d');
-        $em30     = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
-        $ha30dias = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+        $historico = $this->db->fetchAllAssociative(
+            'SELECT * FROM radar_historico WHERE radar_id = ? ORDER BY data_laudo DESC LIMIT 10',
+            [$id]
+        );
+        $faixas = $this->db->fetchAllAssociative(
+            'SELECT * FROM radar_faixa WHERE radar_id = ? ORDER BY numero_faixa',
+            [$id]
+        );
 
         return $this->render('radar/show.html.twig', [
-            'radar'        => $radar,
-            'faixas'       => $faixas,
-            'historico'    => $historico,
-            'wazeLink'     => $wazeLink,
-            'wazeLog'      => $wazeLog,
-            'wazeErrors'   => $wazeErrors,
-            'wazeFormData' => $wazeFormData,
-            'hoje'         => $hoje,
-            'em30'         => $em30,
-            'ha30dias'     => $ha30dias,
+            'radar'     => $radar,
+            'wazeLink'  => $wazeLink,
+            'wazeLog'   => $wazeLog,
+            'historico' => $historico,
+            'faixas'    => $faixas,
+            'hoje'      => $hoje,
+            'em30'      => $em30,
+            'ha30dias'  => $ha30,
         ]);
     }
 
-    #[Route('/{id}/waze-salvar', name: 'waze_save', requirements: ['id' => '\\d+'], methods: ['POST'])]
-    public function wazeSave(int $id, Request $req): Response
+    // ─────────────────────────────────────────────────────────────────────────
+    // Editar radar (GET: formulário / POST: salvar)
+    // ─────────────────────────────────────────────────────────────────────────
+    #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\\d+'])]
+    public function edit(int $id, Request $request): Response
     {
-        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
+        $radar = $this->db->fetchAssociative('SELECT * FROM radar WHERE id = ?', [$id]);
+        if (!$radar) {
+            throw $this->createNotFoundException("Radar #{$id} não encontrado.");
+        }
 
-        if (!$this->isCsrfTokenValid('waze_save_' . $id, $req->request->get('_token'))) {
-            $this->addFlash('error', 'Token de segurança inválido.');
+        if ($request->isMethod('POST')) {
+            /** @var \App\Entity\User $user */
+            $user      = $this->getUser();
+            $userEmail = $user->getUserIdentifier();
+            $agora     = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+            $alteracoes = [];
+
+            foreach (self::CAMPOS_EDITAVEIS as $campo => $rotulo) {
+                if (!$request->request->has($campo)) {
+                    continue;
+                }
+                $novoValor   = trim((string) $request->request->get($campo, '')) ?: null;
+                $valorAntigo = isset($radar[$campo]) ? ($radar[$campo] === '' ? null : $radar[$campo]) : null;
+
+                if ($novoValor !== $valorAntigo) {
+                    // Registra auditoria
+                    $this->db->insert('radar_edit_log', [
+                        'radar_id'      => $id,
+                        'campo'         => $campo,
+                        'valor_anterior'=> $valorAntigo,
+                        'valor_novo'    => $novoValor,
+                        'editado_por'   => $userEmail,
+                        'editado_em'    => $agora,
+                    ]);
+                    $alteracoes[$campo] = $novoValor;
+                }
+            }
+
+            if (!empty($alteracoes)) {
+                $alteracoes['updated_at'] = $agora;
+                $alteracoes['inserted_by'] = $userEmail;
+                $this->db->update('radar', $alteracoes, ['id' => $id]);
+                $this->addFlash('success', count($alteracoes) - 2 . ' campo(s) atualizado(s) com sucesso.');
+            } else {
+                $this->addFlash('info', 'Nenhuma alteração detectada.');
+            }
+
             return $this->redirectToRoute('radar_show', ['id' => $id]);
         }
 
-        $radar = $this->radarRepo->findRawById($id);
+        // GET — busca log de edições
+        $editLog = $this->db->fetchAllAssociative(
+            'SELECT * FROM radar_edit_log WHERE radar_id = ? ORDER BY editado_em DESC LIMIT 30',
+            [$id]
+        );
+
+        return $this->render('radar/edit.html.twig', [
+            'radar'          => $radar,
+            'camposEditaveis'=> self::CAMPOS_EDITAVEIS,
+            'editLog'        => $editLog,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Salvar link Waze
+    // ─────────────────────────────────────────────────────────────────────────
+    #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
+    public function wazeSave(int $id, Request $request): Response
+    {
+        $radar = $this->db->fetchAssociative('SELECT id, link_waze FROM radar WHERE id = ?', [$id]);
         if (!$radar) {
-            throw $this->createNotFoundException('Radar não encontrado.');
+            throw $this->createNotFoundException();
         }
 
-        /** @var User $user */
+        $errors = [];
+        $wazeLink = trim((string) $request->request->get('waze_link', ''));
+        $motivo   = trim((string) $request->request->get('motivo_revisao', '')) ?: null;
+
+        if ($wazeLink === '') {
+            $errors['waze_link'] = 'O link é obrigatório.';
+        } elseif (!filter_var($wazeLink, FILTER_VALIDATE_URL)) {
+            $errors['waze_link'] = 'URL inválida.';
+        } elseif (!str_contains($wazeLink, 'permanentHazards=')) {
+            $errors['waze_link'] = 'O link deve conter permanentHazards=NÚMERO.';
+        }
+
+        /** @var \App\Entity\User $user */
         $user = $this->getUser();
-        if (!$user->canAccessUf((string) ($radar['sigla_uf'] ?? ''))) {
-            throw $this->createAccessDeniedException('Você não tem acesso a dados deste estado.');
-        }
 
-        $wazeLink      = trim((string) $req->request->get('waze_link', ''));
-        $motivoRevisao = trim((string) $req->request->get('motivo_revisao', ''));
-        $isUpdate      = $this->wazeRepo->findRawByRadarId($id) !== null;
-
-        $errors = $this->wazeLinkService->validate($wazeLink, $motivoRevisao, $isUpdate);
-
-        if ($errors !== []) {
-            $req->getSession()->set('_waze_errors_' . $id, $errors);
-            $req->getSession()->set('_waze_form_'   . $id, [
-                'waze_link'      => $wazeLink,
-                'motivo_revisao' => $motivoRevisao,
+        if (!empty($errors)) {
+            $radar    = $this->db->fetchAssociative('SELECT * FROM radar WHERE id = ?', [$id]);
+            $hoje     = (new \DateTimeImmutable())->format('Y-m-d');
+            $em30     = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+            $ha30     = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+            $wazeRow  = $this->db->fetchAssociative(
+                'SELECT wl.*, u1.email AS inserted_by_email, u2.email AS updated_by_email
+                 FROM radar_waze_link wl
+                 LEFT JOIN user u1 ON u1.id = wl.inserted_by
+                 LEFT JOIN user u2 ON u2.id = wl.updated_by
+                 WHERE wl.radar_id = ? ORDER BY wl.id DESC LIMIT 1',
+                [$id]
+            ) ?: null;
+            $wazeLog  = $this->db->fetchAllAssociative(
+                'SELECT wll.*, u.email AS changed_by_email FROM radar_waze_link_log wll
+                 LEFT JOIN user u ON u.id = wll.changed_by
+                 WHERE wll.radar_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
+                [$id]
+            );
+            return $this->render('radar/show.html.twig', [
+                'radar'        => $radar,
+                'wazeLink'     => $wazeRow,
+                'wazeLog'      => $wazeLog,
+                'historico'    => [],
+                'faixas'       => [],
+                'hoje'         => $hoje,
+                'em30'         => $em30,
+                'ha30dias'     => $ha30,
+                'wazeErrors'   => $errors,
+                'wazeFormData' => ['waze_link' => $wazeLink, 'motivo_revisao' => $motivo],
             ]);
-            return $this->redirectToRoute('radar_show', ['id' => $id, '_fragment' => 'waze-form-collapse']);
         }
 
-        $this->wazeLinkService->save($id, $wazeLink, $motivoRevisao, $user);
+        preg_match('/permanentHazards=(\d+)/', $wazeLink, $m);
+        $hazardId = $m[1] ?? null;
+        $agora    = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
-        $this->addFlash('success', $isUpdate ? 'Link Waze atualizado com sucesso.' : 'Link Waze cadastrado com sucesso.');
+        $existing = $this->db->fetchAssociative(
+            'SELECT * FROM radar_waze_link WHERE radar_id = ?', [$id]
+        );
 
+        if ($existing) {
+            $this->db->insert('radar_waze_link_log', [
+                'radar_id'        => $id,
+                'campo_alterado'  => 'waze_link',
+                'valor_anterior'  => $existing['waze_link'],
+                'valor_novo'      => $wazeLink,
+                'changed_by'      => $user->getId(),
+                'changed_at'      => $agora,
+                'observacao'      => $motivo,
+            ]);
+            $this->db->update('radar_waze_link', [
+                'waze_link'          => $wazeLink,
+                'permanent_hazard_id'=> $hazardId,
+                'updated_by'         => $user->getId(),
+                'updated_at'         => $agora,
+                'observacao'         => $motivo,
+            ], ['radar_id' => $id]);
+        } else {
+            $this->db->insert('radar_waze_link', [
+                'radar_id'           => $id,
+                'waze_link'          => $wazeLink,
+                'permanent_hazard_id'=> $hazardId,
+                'inserted_by'        => $user->getId(),
+                'inserted_at'        => $agora,
+                'observacao'         => $motivo,
+            ]);
+        }
+
+        $this->db->update('radar', ['link_waze' => $wazeLink, 'updated_at' => $agora], ['id' => $id]);
+
+        $this->addFlash('success', 'Link Waze salvo com sucesso.');
         return $this->redirectToRoute('radar_show', ['id' => $id]);
     }
 }

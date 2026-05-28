@@ -1,0 +1,273 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Editar Radar #{{ radar.id }}{% endblock %}
+
+{% block body %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ path('radar_index') }}">Radares</a></li>
+        <li class="breadcrumb-item"><a href="{{ path('radar_show', {id: radar.id}) }}">Radar #{{ radar.id }}</a></li>
+        <li class="breadcrumb-item active">Editar</li>
+    </ol>
+</nav>
+
+<div class="d-flex align-items-center justify-content-between mb-4 gap-3 flex-wrap">
+    <div>
+        <h1 class="h4 mb-1 fw-bold">
+            <i class="bi bi-pencil-square me-2 text-warning"></i>Editar Radar #{{ radar.id }}
+        </h1>
+        <div class="text-muted small">
+            <span class="badge-uf me-1">{{ radar.sigla_uf }}</span>
+            {{ radar.municipio }} — {{ radar.logradouro ?? '—' }}
+        </div>
+    </div>
+    <a href="{{ path('radar_show', {id: radar.id}) }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Cancelar
+    </a>
+</div>
+
+{% for type, messages in app.flashes %}
+    {% for msg in messages %}
+        <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show">
+            {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+{% endfor %}
+
+<div class="row g-4">
+
+    {# ── Formulário de edição ── #}
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-pencil me-2"></i>Dados do Radar
+                <small class="text-muted fw-normal ms-2">Apenas campos alterados serão salvos</small>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ path('radar_edit', {id: radar.id}) }}" novalidate>
+                    <input type="hidden" name="_token" value="{{ csrf_token('radar_edit_' ~ radar.id) }}">
+
+                    {# Localização #}
+                    <h6 class="text-muted fw-semibold mt-1 mb-3 pb-1" style="border-bottom:1px solid var(--color-border)">
+                        <i class="bi bi-geo-alt me-1"></i>Localização
+                    </h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-2">
+                            <label class="form-label detail-label">UF</label>
+                            <input type="text" name="sigla_uf" class="form-control form-control-sm text-uppercase"
+                                   value="{{ radar.sigla_uf }}" maxlength="2">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Estado (nome)</label>
+                            <input type="text" name="uf" class="form-control form-control-sm"
+                                   value="{{ radar.uf }}">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label detail-label">Município</label>
+                            <input type="text" name="municipio" class="form-control form-control-sm"
+                                   value="{{ radar.municipio }}">
+                        </div>
+                        <div class="col-sm-8">
+                            <label class="form-label detail-label">Logradouro</label>
+                            <input type="text" name="logradouro" class="form-control form-control-sm"
+                                   value="{{ radar.logradouro }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">CEP</label>
+                            <input type="text" name="cep" class="form-control form-control-sm"
+                                   value="{{ radar.cep }}">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label detail-label">Latitude</label>
+                            <input type="text" name="latitude" class="form-control form-control-sm font-monospace"
+                                   value="{{ radar.latitude }}">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label detail-label">Longitude</label>
+                            <input type="text" name="longitude" class="form-control form-control-sm font-monospace"
+                                   value="{{ radar.longitude }}">
+                        </div>
+                    </div>
+
+                    {# Empresa #}
+                    <h6 class="text-muted fw-semibold mb-3 pb-1" style="border-bottom:1px solid var(--color-border)">
+                        <i class="bi bi-building me-1"></i>Empresa
+                    </h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-8">
+                            <label class="form-label detail-label">Nome da Empresa</label>
+                            <input type="text" name="nome_empresa" class="form-control form-control-sm"
+                                   value="{{ radar.nome_empresa }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">CNPJ</label>
+                            <input type="text" name="cnpj_empresa" class="form-control form-control-sm font-monospace"
+                                   value="{{ radar.cnpj_empresa }}">
+                        </div>
+                    </div>
+
+                    {# Equipamento #}
+                    <h6 class="text-muted fw-semibold mb-3 pb-1" style="border-bottom:1px solid var(--color-border)">
+                        <i class="bi bi-camera-video me-1"></i>Equipamento
+                    </h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Tipo de Medidor</label>
+                            <input type="text" name="tipo_medidor" class="form-control form-control-sm"
+                                   value="{{ radar.tipo_medidor }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Modelo</label>
+                            <input type="text" name="modelo_medidor" class="form-control form-control-sm"
+                                   value="{{ radar.modelo_medidor }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Marca</label>
+                            <input type="text" name="marca_medidor" class="form-control form-control-sm"
+                                   value="{{ radar.marca_medidor }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Nº de Série</label>
+                            <input type="text" name="numero_serie" class="form-control form-control-sm font-monospace"
+                                   value="{{ radar.numero_serie }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Capacidade</label>
+                            <input type="text" name="capacidade" class="form-control form-control-sm"
+                                   value="{{ radar.capacidade }}">
+                        </div>
+                    </div>
+
+                    {# Verificação #}
+                    <h6 class="text-muted fw-semibold mb-3 pb-1" style="border-bottom:1px solid var(--color-border)">
+                        <i class="bi bi-clipboard-check me-1"></i>Verificação
+                    </h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6">
+                            <label class="form-label detail-label">Situação</label>
+                            <select name="situacao" class="form-select form-select-sm">
+                                <option value="">— selecione —</option>
+                                {% for s in ['APROVADO','REPROVADO','EM VERIFICAÇÃO','CANCELADO'] %}
+                                    <option value="{{ s }}" {% if radar.situacao == s %}selected{% endif %}>{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label detail-label">Órgão Verificador</label>
+                            <input type="text" name="orgao_verificador" class="form-control form-control-sm"
+                                   value="{{ radar.orgao_verificador }}">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label detail-label">Nº Certificado</label>
+                            <input type="text" name="numero_certificado" class="form-control form-control-sm font-monospace"
+                                   value="{{ radar.numero_certificado }}">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label detail-label">Lacre</label>
+                            <input type="text" name="lacre" class="form-control form-control-sm font-monospace"
+                                   value="{{ radar.lacre }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Data Verificação</label>
+                            <input type="text" name="data_verificacao" class="form-control form-control-sm"
+                                   placeholder="dd/mm/aaaa" value="{{ radar.data_verificacao }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Data Verificação Efetiva</label>
+                            <input type="text" name="data_verificacao_efetiva" class="form-control form-control-sm"
+                                   placeholder="dd/mm/aaaa" value="{{ radar.data_verificacao_efetiva }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Última Verificação</label>
+                            <input type="text" name="data_ultima_verificacao" class="form-control form-control-sm"
+                                   placeholder="dd/mm/aaaa" value="{{ radar.data_ultima_verificacao }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Data Lacre</label>
+                            <input type="text" name="data_lacre" class="form-control form-control-sm"
+                                   placeholder="dd/mm/aaaa" value="{{ radar.data_lacre }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Validade</label>
+                            <input type="text" name="data_validade" class="form-control form-control-sm"
+                                   placeholder="dd/mm/aaaa" value="{{ radar.data_validade }}">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label detail-label">Validade (ISO)</label>
+                            <input type="date" name="data_validade_iso" class="form-control form-control-sm"
+                                   value="{{ radar.data_validade_iso }}">
+                        </div>
+                    </div>
+
+                    {# Waze #}
+                    <h6 class="text-muted fw-semibold mb-3 pb-1" style="border-bottom:1px solid var(--color-border)">
+                        <i class="bi bi-pin-map me-1"></i>Waze
+                    </h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-12">
+                            <label class="form-label detail-label">Link Waze</label>
+                            <input type="url" name="link_waze" class="form-control form-control-sm font-monospace"
+                                   placeholder="https://waze.com/pt-BR/editor?…" value="{{ radar.link_waze }}">
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 pt-2">
+                        <button type="submit" class="btn btn-warning btn-sm px-4 fw-semibold">
+                            <i class="bi bi-floppy me-1"></i>Salvar alterações
+                        </button>
+                        <a href="{{ path('radar_show', {id: radar.id}) }}" class="btn btn-outline-secondary btn-sm">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Log de edições ── #}
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-clock-history me-2"></i>Histórico de edições
+                {% if editLog|length > 0 %}
+                    <span class="badge bg-secondary ms-1">{{ editLog|length }}</span>
+                {% endif %}
+            </div>
+            {% if editLog|length > 0 %}
+            <div class="list-group list-group-flush" style="max-height:65vh;overflow-y:auto">
+                {% for log in editLog %}
+                <div class="list-group-item px-3 py-2">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <span class="badge bg-primary" style="font-size:.7rem">{{ log.campo }}</span>
+                        <small class="text-muted ms-2" style="white-space:nowrap;font-size:.72rem">
+                            {{ log.editado_em }}
+                        </small>
+                    </div>
+                    <div class="small fw-semibold mb-1" style="color:var(--color-text)">
+                        <i class="bi bi-person me-1"></i>{{ log.editado_por }}
+                    </div>
+                    {% if log.valor_anterior is not null and log.valor_anterior != '' %}
+                    <div class="small text-muted">
+                        <span class="text-danger">Antes:</span>
+                        <span class="font-monospace">{{ log.valor_anterior|slice(0,80) }}{% if log.valor_anterior|length > 80 %}…{% endif %}</span>
+                    </div>
+                    {% endif %}
+                    <div class="small">
+                        <span class="text-success">Agora:</span>
+                        <span class="font-monospace">{{ log.valor_novo ?? '(vazio)' }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card-body text-muted small text-center py-4">
+                <i class="bi bi-journal-x d-block mb-2" style="font-size:1.8rem"></i>
+                Nenhuma edição registrada ainda.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

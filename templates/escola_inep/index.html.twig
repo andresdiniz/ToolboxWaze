@@ -28,13 +28,18 @@
              class="form-control form-control-sm"
              placeholder="Buscar escola, INEP ou município…">
     </div>
-    <div class="col-6 col-md-2">
-      <select name="uf" class="form-select form-select-sm">
-        <option value="">Todos os estados</option>
+    <div class="col-6 col-md-1">
+      <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">Estado</option>
         {% for uf in ufs %}
           <option value="{{ uf }}" {% if filters.uf == uf %}selected{% endif %}>{{ uf }}</option>
         {% endfor %}
       </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <input type="text" name="municipio" value="{{ filters.municipio }}"
+             class="form-control form-control-sm"
+             placeholder="Cidade…">
     </div>
     <div class="col-6 col-md-2">
       <select name="dependencia" class="form-select form-select-sm">
@@ -52,22 +57,41 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-md-1">
       <select name="situacao" class="form-select form-select-sm">
-        <option value="">Todas as situações</option>
-        <option value="ativa"     {% if filters.situacao == 'ativa' %}selected{% endif %}>✅ Ativas</option>
+        <option value="">Situação</option>
+        <option value="ativa"      {% if filters.situacao == 'ativa' %}selected{% endif %}>✅ Ativas</option>
         <option value="paralisada" {% if filters.situacao == 'paralisada' %}selected{% endif %}>🔴 Paralisadas</option>
-        <option value="sem_link"  {% if filters.situacao == 'sem_link' %}selected{% endif %}>🔗 Sem link Waze</option>
-        <option value="com_link"  {% if filters.situacao == 'com_link' %}selected{% endif %}>✔ Com link Waze</option>
+        <option value="sem_link"   {% if filters.situacao == 'sem_link' %}selected{% endif %}>🔗 Sem link</option>
+        <option value="com_link"   {% if filters.situacao == 'com_link' %}selected{% endif %}>✔ Com link</option>
       </select>
     </div>
     <div class="col-6 col-md-2 d-flex gap-1">
       <button type="submit" class="btn btn-primary btn-sm flex-grow-1">🔍 Filtrar</button>
       {% if filters.busca or filters.uf or filters.municipio or filters.dependencia or filters.localizacao or filters.situacao %}
-        <a href="{{ path('escola_inep_index') }}" class="btn btn-outline-secondary btn-sm">✕</a>
+        <a href="{{ path('escola_inep_index') }}" class="btn btn-outline-secondary btn-sm" title="Limpar filtros">✕</a>
       {% endif %}
     </div>
   </form>
+
+  {# Tags de filtros ativos #}
+  {% set activeFilters = [] %}
+  {% if filters.busca %}{% set activeFilters = activeFilters|merge([{label: 'Busca', value: filters.busca, key: 'busca'}]) %}{% endif %}
+  {% if filters.uf %}{% set activeFilters = activeFilters|merge([{label: 'Estado', value: filters.uf, key: 'uf'}]) %}{% endif %}
+  {% if filters.municipio %}{% set activeFilters = activeFilters|merge([{label: 'Cidade', value: filters.municipio, key: 'municipio'}]) %}{% endif %}
+  {% if filters.dependencia %}{% set activeFilters = activeFilters|merge([{label: 'Dependência', value: filters.dependencia, key: 'dependencia'}]) %}{% endif %}
+  {% if filters.localizacao %}{% set activeFilters = activeFilters|merge([{label: 'Localização', value: filters.localizacao, key: 'localizacao'}]) %}{% endif %}
+  {% if filters.situacao %}{% set activeFilters = activeFilters|merge([{label: 'Situação', value: filters.situacao, key: 'situacao'}]) %}{% endif %}
+  {% if activeFilters|length > 0 %}
+  <div class="d-flex flex-wrap gap-1 mb-2">
+    {% for f in activeFilters %}
+      <span class="badge border" style="background:var(--color-surface-2,#f8f9fa);color:var(--color-text,#212529);border-color:#dee2e6 !important">
+        {{ f.label }}: <strong>{{ f.value }}</strong>
+        <a href="{{ path('escola_inep_index', filters|merge({(f.key): '', page: 1})) }}" class="text-danger ms-1">×</a>
+      </span>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   {# ── Tabela ── #}
   <div class="table-responsive">
@@ -145,26 +169,21 @@
             <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page - 1})) }}">&#8249;</a>
           </li>
         {% endif %}
-
         {% set start = (page - 2) > 1 ? (page - 2) : 1 %}
         {% set end   = (page + 2) < pages ? (page + 2) : pages %}
-
         {% if start > 1 %}
           <li class="page-item"><a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: 1})) }}">1</a></li>
           {% if start > 2 %}<li class="page-item disabled"><span class="page-link">&hellip;</span></li>{% endif %}
         {% endif %}
-
         {% for p in start..end %}
           <li class="page-item {% if p == page %}active{% endif %}">
             <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: p})) }}">{{ p }}</a>
           </li>
         {% endfor %}
-
         {% if end < pages %}
           {% if end < pages - 1 %}<li class="page-item disabled"><span class="page-link">&hellip;</span></li>{% endif %}
           <li class="page-item"><a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
         {% endif %}
-
         {% if page < pages %}
           <li class="page-item">
             <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page + 1})) }}">&#8250;</a>

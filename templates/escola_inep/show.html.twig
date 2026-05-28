@@ -1,0 +1,139 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ escola.escola }} — Escolas INEP{% endblock %}
+
+{% block body %}
+<div class="container py-3">
+
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ path('escola_inep_index') }}">Escolas INEP</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ escola.escola }}</li>
+    </ol>
+  </nav>
+
+  <div class="row g-3">
+
+    {# ── Card principal ── #}
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center gap-2">
+          <i class="bi bi-building fs-5"></i>
+          <strong class="flex-grow-1">{{ escola.escola }}</strong>
+          {% if 'SEM RESTRIÇÃO' in escola.restricao_atendimento|upper %}
+            <span class="badge bg-success">Em funcionamento</span>
+          {% elseif 'PARALISADA' in escola.restricao_atendimento|upper %}
+            <span class="badge bg-danger">Paralisada</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ escola.restricao_atendimento|slice(0,30) }}</span>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Código INEP</dt>
+            <dd class="col-sm-8"><code>{{ escola.codigo_inep }}</code></dd>
+
+            <dt class="col-sm-4">UF / Município</dt>
+            <dd class="col-sm-8">{{ escola.uf }} — {{ escola.municipio }}</dd>
+
+            <dt class="col-sm-4">Localização</dt>
+            <dd class="col-sm-8">{{ escola.localizacao }}</dd>
+
+            {% if escola.localidade_diferenciada and 'não está' not in escola.localidade_diferenciada|lower %}
+              <dt class="col-sm-4">Localidade Dif.</dt>
+              <dd class="col-sm-8">{{ escola.localidade_diferenciada }}</dd>
+            {% endif %}
+
+            <dt class="col-sm-4">Categoria Adm.</dt>
+            <dd class="col-sm-8">{{ escola.categoria_administrativa }}</dd>
+
+            <dt class="col-sm-4">Dependência Adm.</dt>
+            <dd class="col-sm-8">{{ escola.dependencia_administrativa }}</dd>
+
+            {% if escola.categoria_escola_privada and escola.categoria_escola_privada != 'Não Informado' %}
+              <dt class="col-sm-4">Cat. Escola Privada</dt>
+              <dd class="col-sm-8">{{ escola.categoria_escola_privada }}</dd>
+            {% endif %}
+
+            <dt class="col-sm-4">Conveniada</dt>
+            <dd class="col-sm-8">{{ escola.conveniada ?? '—' }}</dd>
+
+            <dt class="col-sm-4">Regulamentação</dt>
+            <dd class="col-sm-8">{{ escola.regulamentacao ?? '—' }}</dd>
+
+            <dt class="col-sm-4">Porte</dt>
+            <dd class="col-sm-8">{{ escola.porte ?? '—' }}</dd>
+
+            <dt class="col-sm-4">Etapas de Ensino</dt>
+            <dd class="col-sm-8">{{ escola.etapas_ensino ?? '—' }}</dd>
+
+            {% if escola.outras_ofertas %}
+              <dt class="col-sm-4">Outras Ofertas</dt>
+              <dd class="col-sm-8">{{ escola.outras_ofertas }}</dd>
+            {% endif %}
+
+            <dt class="col-sm-4">Endereço</dt>
+            <dd class="col-sm-8">{{ escola.endereco ?? '—' }}</dd>
+
+            {% if escola.telefone %}
+              <dt class="col-sm-4">Telefone</dt>
+              <dd class="col-sm-8">{{ escola.telefone }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    {# ── Card lateral: mapa + Waze ── #}
+    <div class="col-12 col-lg-4">
+
+      {% if escola.latitude and escola.longitude %}
+        <div class="card shadow-sm mb-3">
+          <div class="card-header"><i class="bi bi-geo-alt me-1"></i>Localização</div>
+          <div class="card-body">
+            <dl class="row mb-2">
+              <dt class="col-5">Latitude</dt>
+              <dd class="col-7"><code>{{ escola.latitude }}</code></dd>
+              <dt class="col-5">Longitude</dt>
+              <dd class="col-7"><code>{{ escola.longitude }}</code></dd>
+            </dl>
+            <div class="d-grid gap-2">
+              <a href="https://www.google.com/maps?q={{ escola.latitude }},{{ escola.longitude }}"
+                 target="_blank" rel="noopener"
+                 class="btn btn-outline-success btn-sm">
+                <i class="bi bi-map me-1"></i>Google Maps
+              </a>
+              <a href="https://waze.com/ul?ll={{ escola.latitude }},{{ escola.longitude }}&navigate=yes"
+                 target="_blank" rel="noopener"
+                 class="btn btn-outline-info btn-sm">
+                <i class="bi bi-sign-turn-right me-1"></i>Waze
+              </a>
+              <a href="https://www.waze.com/pt-BR/editor?env=row&lat={{ escola.latitude }}&lon={{ escola.longitude }}&marker=true&zoomLevel=17"
+                 target="_blank" rel="noopener"
+                 class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-pencil-square me-1"></i>Waze Editor
+              </a>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="card shadow-sm">
+        <div class="card-header"><i class="bi bi-info-circle me-1"></i>Importação</div>
+        <div class="card-body small text-muted">
+          <p class="mb-1">Importado em: {{ escola.imported_at ? escola.imported_at|date('d/m/Y H:i') : '—' }}</p>
+          <p class="mb-0">Atualizado em: {{ escola.updated_at ? escola.updated_at|date('d/m/Y H:i') : '—' }}</p>
+        </div>
+      </div>
+
+    </div>{# /col-lg-4 #}
+  </div>{# /row #}
+
+  <div class="mt-3">
+    <a href="{{ path('escola_inep_index') }}" class="btn btn-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Voltar
+    </a>
+  </div>
+
+</div>
+{% endblock %}

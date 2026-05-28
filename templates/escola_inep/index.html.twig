@@ -1,0 +1,177 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Escolas INEP{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-3">
+
+  {# ── Cabeçalho ── #}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-building me-2"></i>Escolas INEP</h4>
+      {% if stats is not null %}
+        <small class="text-muted">
+          {{ stats.total|number_format(0, ',', '.') }} escolas ·
+          {{ stats.estados }} estados ·
+          {{ stats.municipios|number_format(0, ',', '.') }} municípios
+        </small>
+      {% else %}
+        <small class="text-muted">{{ total|number_format(0, ',', '.') }} resultado(s)</small>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Filtros ── #}
+  <form method="GET" action="{{ path('escola_inep_index') }}" class="row g-2 mb-3" id="form-filtros">
+    <div class="col-12 col-md-4">
+      <input type="text" name="busca" value="{{ filters.busca }}"
+             class="form-control form-control-sm"
+             placeholder="Buscar escola, INEP ou município…">
+    </div>
+    <div class="col-6 col-md-2">
+      <select name="uf" class="form-select form-select-sm">
+        <option value="">Todos os estados</option>
+        {% for uf in ufs %}
+          <option value="{{ uf }}" {% if filters.uf == uf %}selected{% endif %}>{{ uf }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <select name="dependencia" class="form-select form-select-sm">
+        <option value="">Dependência</option>
+        {% for dep in dependencias %}
+          <option value="{{ dep }}" {% if filters.dependencia == dep %}selected{% endif %}>{{ dep }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <select name="localizacao" class="form-select form-select-sm">
+        <option value="">Localização</option>
+        {% for loc in localizacoes %}
+          <option value="{{ loc }}" {% if filters.localizacao == loc %}selected{% endif %}>{{ loc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2 d-flex gap-1">
+      <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+        <i class="bi bi-search"></i> Filtrar
+      </button>
+      {% if filters.busca or filters.uf or filters.municipio or filters.dependencia or filters.localizacao %}
+        <a href="{{ path('escola_inep_index') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x"></i>
+        </a>
+      {% endif %}
+    </div>
+  </form>
+
+  {# ── Tabela ── #}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Escola</th>
+          <th>Cód. INEP</th>
+          <th>UF</th>
+          <th>Município</th>
+          <th>Dependência</th>
+          <th>Localização</th>
+          <th>Porte</th>
+          <th>Situação</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="fw-semibold">{{ row.escola }}</td>
+            <td><code>{{ row.codigo_inep }}</code></td>
+            <td>{{ row.uf }}</td>
+            <td>{{ row.municipio }}</td>
+            <td>
+              {% if row.dependencia_administrativa == 'Estadual' %}
+                <span class="badge bg-primary">Estadual</span>
+              {% elseif row.dependencia_administrativa == 'Municipal' %}
+                <span class="badge bg-success">Municipal</span>
+              {% elseif row.dependencia_administrativa == 'Federal' %}
+                <span class="badge bg-dark">Federal</span>
+              {% elseif row.dependencia_administrativa == 'Privada' %}
+                <span class="badge bg-warning text-dark">Privada</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ row.dependencia_administrativa }}</span>
+              {% endif %}
+            </td>
+            <td>{{ row.localizacao }}</td>
+            <td><small>{{ row.porte }}</small></td>
+            <td>
+              {% if 'SEM RESTRIÇÃO' in row.restricao_atendimento|upper %}
+                <span class="badge bg-success"><i class="bi bi-check-circle"></i> OK</span>
+              {% elseif 'PARALISADA' in row.restricao_atendimento|upper %}
+                <span class="badge bg-danger">Paralisada</span>
+              {% elseif 'EXCLUSIVAMENTE' in row.restricao_atendimento|upper %}
+                <span class="badge bg-info text-dark">Esp.</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ row.restricao_atendimento|slice(0, 20) }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ path('escola_inep_show', {id: row.id}) }}"
+                 class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-eye"></i>
+              </a>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">
+              Nenhuma escola encontrada.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Paginação ── #}
+  {% if pages > 1 %}
+    <nav class="mt-3">
+      <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
+        {% if page > 1 %}
+          <li class="page-item">
+            <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page - 1})) }}">‹</a>
+          </li>
+        {% endif %}
+
+        {% set start = [1, page - 2]|max %}
+        {% set end   = [pages, page + 2]|min %}
+
+        {% if start > 1 %}
+          <li class="page-item"><a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: 1})) }}">1</a></li>
+          {% if start > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+        {% endif %}
+
+        {% for p in start..end %}
+          <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: p})) }}">{{ p }}</a>
+          </li>
+        {% endfor %}
+
+        {% if end < pages %}
+          {% if end < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+          <li class="page-item"><a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
+        {% endif %}
+
+        {% if page < pages %}
+          <li class="page-item">
+            <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page + 1})) }}">›</a>
+          </li>
+        {% endif %}
+      </ul>
+    </nav>
+
+    <p class="text-center text-muted small mt-1">
+      Página {{ page }} de {{ pages }} — {{ total|number_format(0, ',', '.') }} escolas
+    </p>
+  {% endif %}
+
+</div>
+{% endblock %}

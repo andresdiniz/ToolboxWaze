@@ -37,13 +37,15 @@ class RadarController extends AbstractController
         'data_lacre'                => 'Data Lacre',
         'lacre'                     => 'Lacre',
         'data_validade'             => 'Validade',
-        'data_validade_iso'         => 'Validade (ISO)',
         'situacao'                  => 'Situação',
         'capacidade'                => 'Capacidade',
         'latitude'                  => 'Latitude',
         'longitude'                 => 'Longitude',
         'link_waze'                 => 'Link Waze',
     ];
+
+    // Expressão SQL que converte data_validade (dd/mm/aaaa) para DATE para comparar com datas ISO
+    private const VALIDADE_ISO_EXPR = "STR_TO_DATE(r.data_validade, '%d/%m/%Y')";
 
     public function __construct(private readonly Connection $db) {}
 
@@ -64,6 +66,8 @@ class RadarController extends AbstractController
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $ha30 = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+
+        $viso = self::VALIDADE_ISO_EXPR;
 
         $where  = ['1=1'];
         $params = [];
@@ -89,9 +93,9 @@ class RadarController extends AbstractController
             $params[] = "%$serie%";
         }
         match ($validade) {
-            'valido'     => ($where[] = "r.data_validade_iso >= '$hoje'"),
-            '30dias'     => ($where[] = "r.data_validade_iso >= '$hoje' AND r.data_validade_iso <= '$em30'"),
-            'vencido'    => ($where[] = "r.data_validade_iso < '$hoje'"),
+            'valido'     => ($where[] = "$viso >= '$hoje'"),
+            '30dias'     => ($where[] = "$viso >= '$hoje' AND $viso <= '$em30'"),
+            'vencido'    => ($where[] = "$viso < '$hoje'"),
             'recentes30' => ($where[] = "r.data_verificacao_efetiva >= '$ha30' AND r.data_verificacao_efetiva <= '$hoje'"),
             default      => null,
         };
@@ -106,7 +110,8 @@ class RadarController extends AbstractController
         $rows = $this->db->fetchAllAssociative(
             "SELECT r.id, r.sigla_uf, r.uf, r.municipio, r.logradouro, r.nome_empresa,
                     r.data_ultima_verificacao, r.data_verificacao_efetiva,
-                    r.data_validade, r.data_validade_iso, r.situacao, r.tipo_medidor, r.link_waze
+                    r.data_validade, r.situacao, r.tipo_medidor, r.link_waze,
+                    DATE_FORMAT($viso, '%Y-%m-%d') AS data_validade_iso
              FROM radar_medidor r WHERE $wc ORDER BY r.sigla_uf, r.municipio LIMIT $offset, " . self::PER_PAGE,
             $params
         );
@@ -128,8 +133,9 @@ class RadarController extends AbstractController
                 "SELECT COUNT(*) AS total,
                         SUM(situacao = 'APROVADO') AS aprovados,
                         SUM(situacao = 'REPROVADO') AS reprovados,
-                        SUM(data_validade_iso < '$hoje') AS vencidos,
-                        SUM(data_validade_iso >= '$hoje' AND data_validade_iso <= '$em30') AS vencendo,
+                        SUM(STR_TO_DATE(data_validade, '%d/%m/%Y') < '$hoje') AS vencidos,
+                        SUM(STR_TO_DATE(data_validade, '%d/%m/%Y') >= '$hoje'
+                            AND STR_TO_DATE(data_validade, '%d/%m/%Y') <= '$em30') AS vencendo,
                         COUNT(DISTINCT sigla_uf) AS estados
                  FROM radar_medidor"
               ) ?: null)
@@ -158,7 +164,11 @@ class RadarController extends AbstractController
     #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
-        $radar = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$id]);
+        $viso  = self::VALIDADE_ISO_EXPR;
+        $radar = $this->db->fetchAssociative(
+            "SELECT r.*, DATE_FORMAT($viso, '%Y-%m-%d') AS data_validade_iso FROM radar_medidor r WHERE r.id = ?",
+            [$id]
+        );
         if (!$radar) {
             throw $this->createNotFoundException("Radar #{$id} não encontrado.");
         }
@@ -211,7 +221,11 @@ class RadarController extends AbstractController
     #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\\d+'])]
     public function edit(int $id, Request $request): Response
     {
-        $radar = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$id]);
+        $viso  = self::VALIDADE_ISO_EXPR;
+        $radar = $this->db->fetchAssociative(
+            "SELECT r.*, DATE_FORMAT($viso, '%Y-%m-%d') AS data_validade_iso FROM radar_medidor r WHERE r.id = ?",
+            [$id]
+        );
         if (!$radar) {
             throw $this->createNotFoundException("Radar #{$id} não encontrado.");
         }
@@ -295,11 +309,15 @@ class RadarController extends AbstractController
         $user = $this->getUser();
 
         if (!empty($errors)) {
-            $radar    = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$id]);
-            $hoje     = (new \DateTimeImmutable())->format('Y-m-d');
-            $em30     = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
-            $ha30     = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
-            $wazeRow  = $this->db->fetchAssociative(
+            $viso    = self::VALIDADE_ISO_EXPR;
+            $radar   = $this->db->fetchAssociative(
+                "SELECT r.*, DATE_FORMAT($viso, '%Y-%m-%d') AS data_validade_iso FROM radar_medidor r WHERE r.id = ?",
+                [$id]
+            );
+            $hoje    = (new \DateTimeImmutable())->format('Y-m-d');
+            $em30    = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
+            $ha30    = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+            $wazeRow = $this->db->fetchAssociative(
                 'SELECT wl.*, u1.email AS inserted_by_email, u2.email AS updated_by_email
                  FROM radar_waze_link wl
                  LEFT JOIN user u1 ON u1.id = wl.inserted_by
@@ -307,7 +325,7 @@ class RadarController extends AbstractController
                  WHERE wl.radar_medidor_id = ? ORDER BY wl.id DESC LIMIT 1',
                 [$id]
             ) ?: null;
-            $wazeLog  = $this->db->fetchAllAssociative(
+            $wazeLog = $this->db->fetchAllAssociative(
                 'SELECT wll.*, u.email AS changed_by_email FROM radar_waze_link_log wll
                  LEFT JOIN user u ON u.id = wll.changed_by
                  WHERE wll.radar_medidor_id = ? ORDER BY wll.changed_at DESC LIMIT 20',

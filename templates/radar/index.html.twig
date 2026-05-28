@@ -255,12 +255,12 @@
                     </th>
                     <th class="ps-2">UF</th>
                     <th>Município</th>
-                    <th>Local</th>
+                    <th>Local / Logradouro</th>
                     <th>Tipo</th>
-                    <th>Resultado</th>
+                    <th>Situação</th>
                     <th>Ú. Verificação</th>
                     <th>Validade</th>
-                    <th>Proprietário</th>
+                    <th>Empresa</th>
                     <th></th>
                 </tr>
             </thead>
@@ -272,10 +272,6 @@
                     ? row.data_ultima_verificacao
                     : (row.data_verificacao_efetiva is not empty ? row.data_verificacao_efetiva : null) %}
 
-                {#
-                  Usar delimitador # em vez de / para não precisar escapar as barras
-                  do formato dd/mm/yyyy. Ex: '#^[0-9]{2}/[0-9]{2}/[0-9]{4}$#'
-                #}
                 {% set dveRaw = row.data_verificacao_efetiva ?? '' %}
                 {% set dveIso = '' %}
                 {% if dveRaw matches '#^[0-9]{2}/[0-9]{2}/[0-9]{4}$#' %}
@@ -296,16 +292,16 @@
                     </td>
                     <td class="text-nowrap">{{ row.municipio }}</td>
                     <td style="max-width:220px">
-                        <span class="d-block text-truncate" title="{{ row.local_verificacao }}">{{ row.local_verificacao }}</span>
+                        <span class="d-block text-truncate" title="{{ row.logradouro }}">{{ row.logradouro ?? '—' }}</span>
                     </td>
                     <td class="text-muted small text-nowrap">{{ row.tipo_medidor ?? '—' }}</td>
                     <td>
-                        {% if row.ultimo_resultado == 'APROVADO' %}
+                        {% if row.situacao == 'APROVADO' %}
                             <span class="badge badge-aprovado"><i class="bi bi-check-circle me-1"></i>Aprovado</span>
-                        {% elseif row.ultimo_resultado == 'REPROVADO' %}
+                        {% elseif row.situacao == 'REPROVADO' %}
                             <span class="badge badge-reprovado"><i class="bi bi-x-circle me-1"></i>Reprovado</span>
                         {% else %}
-                            <span class="text-muted small">{{ row.ultimo_resultado ?? '—' }}</span>
+                            <span class="text-muted small">{{ row.situacao ?? '—' }}</span>
                         {% endif %}
                     </td>
                     <td class="text-nowrap">
@@ -331,7 +327,7 @@
                         {% endif %}
                     </td>
                     <td class="text-muted small" style="max-width:160px">
-                        <span class="d-block text-truncate" title="{{ row.proprietario_nome }}">{{ row.proprietario_nome ?? '—' }}</span>
+                        <span class="d-block text-truncate" title="{{ row.nome_empresa }}">{{ row.nome_empresa ?? '—' }}</span>
                     </td>
                     <td class="text-end pe-3">
                         <a href="{{ path('radar_show', {id: row.id}) }}"

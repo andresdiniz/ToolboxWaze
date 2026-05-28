@@ -17,7 +17,6 @@ class RadarController extends AbstractController
 {
     private const PER_PAGE = 50;
 
-    // Campos editáveis e seus rótulos de exibição
     private const CAMPOS_EDITAVEIS = [
         'sigla_uf'                  => 'UF',
         'uf'                        => 'Estado (nome)',
@@ -54,14 +53,13 @@ class RadarController extends AbstractController
     #[Route('', name: 'radar_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
-        $page     = max(1, (int) $request->query->get('page', 1));
-        $uf       = trim((string) $request->query->get('uf', ''));
-        $municipio= trim((string) $request->query->get('municipio', ''));
-        $resultado= trim((string) $request->query->get('resultado', ''));
-        $tipo     = trim((string) $request->query->get('tipo', ''));
-        $validade = trim((string) $request->query->get('validade', ''));
-        $serie    = trim((string) $request->query->get('serie', ''));
-        $offset   = ($page - 1) * self::PER_PAGE;
+        $page      = max(1, (int) $request->query->get('page', 1));
+        $uf        = trim((string) $request->query->get('uf', ''));
+        $municipio = trim((string) $request->query->get('municipio', ''));
+        $resultado = trim((string) $request->query->get('resultado', ''));
+        $tipo      = trim((string) $request->query->get('tipo', ''));
+        $validade  = trim((string) $request->query->get('validade', ''));
+        $serie     = trim((string) $request->query->get('serie', ''));
 
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
@@ -100,7 +98,7 @@ class RadarController extends AbstractController
 
         $wc = implode(' AND ', $where);
 
-        $total = (int) $this->db->fetchOne("SELECT COUNT(*) FROM radar r WHERE $wc", $params);
+        $total = (int) $this->db->fetchOne("SELECT COUNT(*) FROM radar_medidor r WHERE $wc", $params);
         $pages = max(1, (int) ceil($total / self::PER_PAGE));
         $page  = min($page, $pages);
         $offset = ($page - 1) * self::PER_PAGE;
@@ -109,19 +107,20 @@ class RadarController extends AbstractController
             "SELECT r.id, r.sigla_uf, r.uf, r.municipio, r.logradouro, r.nome_empresa,
                     r.data_ultima_verificacao, r.data_verificacao_efetiva,
                     r.data_validade, r.data_validade_iso, r.situacao, r.tipo_medidor, r.link_waze
-             FROM radar r WHERE $wc ORDER BY r.sigla_uf, r.municipio LIMIT $offset, " . self::PER_PAGE,
+             FROM radar_medidor r WHERE $wc ORDER BY r.sigla_uf, r.municipio LIMIT $offset, " . self::PER_PAGE,
             $params
         );
 
-        $allowedUfs = null;
-        $ufs        = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT sigla_uf FROM radar WHERE sigla_uf IS NOT NULL ORDER BY sigla_uf'
+        $ufs = array_column($this->db->fetchAllAssociative(
+            'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL ORDER BY sigla_uf'
         ), 'sigla_uf');
+
         $resultados = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT situacao FROM radar WHERE situacao IS NOT NULL ORDER BY situacao'
+            'SELECT DISTINCT situacao FROM radar_medidor WHERE situacao IS NOT NULL ORDER BY situacao'
         ), 'situacao');
+
         $tipos = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT tipo_medidor FROM radar WHERE tipo_medidor IS NOT NULL ORDER BY tipo_medidor'
+            'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL ORDER BY tipo_medidor'
         ), 'tipo_medidor');
 
         $stats = ($uf === '' && $municipio === '' && $resultado === '' && $tipo === '' && $validade === '' && $serie === '')
@@ -132,7 +131,7 @@ class RadarController extends AbstractController
                         SUM(data_validade_iso < '$hoje') AS vencidos,
                         SUM(data_validade_iso >= '$hoje' AND data_validade_iso <= '$em30') AS vencendo,
                         COUNT(DISTINCT sigla_uf) AS estados
-                 FROM radar"
+                 FROM radar_medidor"
               ) ?: null)
             : null;
 
@@ -146,7 +145,6 @@ class RadarController extends AbstractController
             'ufs'        => $ufs,
             'resultados' => $resultados,
             'tipos'      => $tipos,
-            'allowedUfs' => $allowedUfs,
             'hoje'       => $hoje,
             'em30'       => $em30,
             'ha30dias'   => $ha30,
@@ -160,7 +158,7 @@ class RadarController extends AbstractController
     #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
-        $radar = $this->db->fetchAssociative('SELECT * FROM radar WHERE id = ?', [$id]);
+        $radar = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$id]);
         if (!$radar) {
             throw $this->createNotFoundException("Radar #{$id} não encontrado.");
         }
@@ -174,7 +172,7 @@ class RadarController extends AbstractController
              FROM radar_waze_link wl
              LEFT JOIN user u1 ON u1.id = wl.inserted_by
              LEFT JOIN user u2 ON u2.id = wl.updated_by
-             WHERE wl.radar_id = ? ORDER BY wl.id DESC LIMIT 1',
+             WHERE wl.radar_medidor_id = ? ORDER BY wl.id DESC LIMIT 1',
             [$id]
         ) ?: null;
 
@@ -182,16 +180,16 @@ class RadarController extends AbstractController
             'SELECT wll.*, u.email AS changed_by_email
              FROM radar_waze_link_log wll
              LEFT JOIN user u ON u.id = wll.changed_by
-             WHERE wll.radar_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
+             WHERE wll.radar_medidor_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
             [$id]
         );
 
         $historico = $this->db->fetchAllAssociative(
-            'SELECT * FROM radar_historico WHERE radar_id = ? ORDER BY data_laudo DESC LIMIT 10',
+            'SELECT * FROM radar_historico WHERE radar_medidor_id = ? ORDER BY data_laudo DESC LIMIT 10',
             [$id]
         );
         $faixas = $this->db->fetchAllAssociative(
-            'SELECT * FROM radar_faixa WHERE radar_id = ? ORDER BY numero_faixa',
+            'SELECT * FROM radar_faixa WHERE radar_medidor_id = ? ORDER BY numero_faixa',
             [$id]
         );
 
@@ -208,21 +206,21 @@ class RadarController extends AbstractController
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Editar radar (GET: formulário / POST: salvar)
+    // Editar radar
     // ─────────────────────────────────────────────────────────────────────────
     #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\\d+'])]
     public function edit(int $id, Request $request): Response
     {
-        $radar = $this->db->fetchAssociative('SELECT * FROM radar WHERE id = ?', [$id]);
+        $radar = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$id]);
         if (!$radar) {
             throw $this->createNotFoundException("Radar #{$id} não encontrado.");
         }
 
         if ($request->isMethod('POST')) {
             /** @var \App\Entity\User $user */
-            $user      = $this->getUser();
-            $userEmail = $user->getUserIdentifier();
-            $agora     = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+            $user       = $this->getUser();
+            $userEmail  = $user->getUserIdentifier();
+            $agora      = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
             $alteracoes = [];
 
             foreach (self::CAMPOS_EDITAVEIS as $campo => $rotulo) {
@@ -233,24 +231,24 @@ class RadarController extends AbstractController
                 $valorAntigo = isset($radar[$campo]) ? ($radar[$campo] === '' ? null : $radar[$campo]) : null;
 
                 if ($novoValor !== $valorAntigo) {
-                    // Registra auditoria
                     $this->db->insert('radar_edit_log', [
-                        'radar_id'      => $id,
-                        'campo'         => $campo,
-                        'valor_anterior'=> $valorAntigo,
-                        'valor_novo'    => $novoValor,
-                        'editado_por'   => $userEmail,
-                        'editado_em'    => $agora,
+                        'radar_medidor_id' => $id,
+                        'campo'            => $campo,
+                        'valor_anterior'   => $valorAntigo,
+                        'valor_novo'       => $novoValor,
+                        'editado_por'      => $userEmail,
+                        'editado_em'       => $agora,
                     ]);
                     $alteracoes[$campo] = $novoValor;
                 }
             }
 
             if (!empty($alteracoes)) {
-                $alteracoes['updated_at'] = $agora;
+                $alteracoes['updated_at']  = $agora;
                 $alteracoes['inserted_by'] = $userEmail;
-                $this->db->update('radar', $alteracoes, ['id' => $id]);
-                $this->addFlash('success', count($alteracoes) - 2 . ' campo(s) atualizado(s) com sucesso.');
+                $this->db->update('radar_medidor', $alteracoes, ['id' => $id]);
+                $count = count($alteracoes) - 2;
+                $this->addFlash('success', "$count campo(s) atualizado(s) com sucesso.");
             } else {
                 $this->addFlash('info', 'Nenhuma alteração detectada.');
             }
@@ -258,16 +256,15 @@ class RadarController extends AbstractController
             return $this->redirectToRoute('radar_show', ['id' => $id]);
         }
 
-        // GET — busca log de edições
         $editLog = $this->db->fetchAllAssociative(
-            'SELECT * FROM radar_edit_log WHERE radar_id = ? ORDER BY editado_em DESC LIMIT 30',
+            'SELECT * FROM radar_edit_log WHERE radar_medidor_id = ? ORDER BY editado_em DESC LIMIT 30',
             [$id]
         );
 
         return $this->render('radar/edit.html.twig', [
-            'radar'          => $radar,
-            'camposEditaveis'=> self::CAMPOS_EDITAVEIS,
-            'editLog'        => $editLog,
+            'radar'           => $radar,
+            'camposEditaveis' => self::CAMPOS_EDITAVEIS,
+            'editLog'         => $editLog,
         ]);
     }
 
@@ -277,12 +274,12 @@ class RadarController extends AbstractController
     #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
-        $radar = $this->db->fetchAssociative('SELECT id, link_waze FROM radar WHERE id = ?', [$id]);
+        $radar = $this->db->fetchAssociative('SELECT id, link_waze FROM radar_medidor WHERE id = ?', [$id]);
         if (!$radar) {
             throw $this->createNotFoundException();
         }
 
-        $errors = [];
+        $errors   = [];
         $wazeLink = trim((string) $request->request->get('waze_link', ''));
         $motivo   = trim((string) $request->request->get('motivo_revisao', '')) ?: null;
 
@@ -298,7 +295,7 @@ class RadarController extends AbstractController
         $user = $this->getUser();
 
         if (!empty($errors)) {
-            $radar    = $this->db->fetchAssociative('SELECT * FROM radar WHERE id = ?', [$id]);
+            $radar    = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$id]);
             $hoje     = (new \DateTimeImmutable())->format('Y-m-d');
             $em30     = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
             $ha30     = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
@@ -307,13 +304,13 @@ class RadarController extends AbstractController
                  FROM radar_waze_link wl
                  LEFT JOIN user u1 ON u1.id = wl.inserted_by
                  LEFT JOIN user u2 ON u2.id = wl.updated_by
-                 WHERE wl.radar_id = ? ORDER BY wl.id DESC LIMIT 1',
+                 WHERE wl.radar_medidor_id = ? ORDER BY wl.id DESC LIMIT 1',
                 [$id]
             ) ?: null;
             $wazeLog  = $this->db->fetchAllAssociative(
                 'SELECT wll.*, u.email AS changed_by_email FROM radar_waze_link_log wll
                  LEFT JOIN user u ON u.id = wll.changed_by
-                 WHERE wll.radar_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
+                 WHERE wll.radar_medidor_id = ? ORDER BY wll.changed_at DESC LIMIT 20',
                 [$id]
             );
             return $this->render('radar/show.html.twig', [
@@ -331,42 +328,43 @@ class RadarController extends AbstractController
         }
 
         preg_match('/permanentHazards=(\d+)/', $wazeLink, $m);
-        $hazardId = $m[1] ?? null;
+        $hazardId = (int) ($m[1] ?? 0);
         $agora    = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
         $existing = $this->db->fetchAssociative(
-            'SELECT * FROM radar_waze_link WHERE radar_id = ?', [$id]
+            'SELECT * FROM radar_waze_link WHERE radar_medidor_id = ?', [$id]
         );
 
         if ($existing) {
             $this->db->insert('radar_waze_link_log', [
-                'radar_id'        => $id,
-                'campo_alterado'  => 'waze_link',
-                'valor_anterior'  => $existing['waze_link'],
-                'valor_novo'      => $wazeLink,
-                'changed_by'      => $user->getId(),
-                'changed_at'      => $agora,
-                'observacao'      => $motivo,
+                'radar_waze_link_id'  => $existing['id'],
+                'radar_medidor_id'    => $id,
+                'campo_alterado'      => 'waze_link',
+                'valor_anterior'      => $existing['waze_link'],
+                'valor_novo'          => $wazeLink,
+                'changed_by'          => $user->getId(),
+                'changed_at'          => $agora,
+                'observacao'          => $motivo,
             ]);
             $this->db->update('radar_waze_link', [
-                'waze_link'          => $wazeLink,
-                'permanent_hazard_id'=> $hazardId,
-                'updated_by'         => $user->getId(),
-                'updated_at'         => $agora,
-                'observacao'         => $motivo,
-            ], ['radar_id' => $id]);
+                'waze_link'           => $wazeLink,
+                'permanent_hazard_id' => $hazardId,
+                'updated_by'          => $user->getId(),
+                'updated_at'          => $agora,
+                'observacao'          => $motivo,
+            ], ['radar_medidor_id' => $id]);
         } else {
             $this->db->insert('radar_waze_link', [
-                'radar_id'           => $id,
-                'waze_link'          => $wazeLink,
-                'permanent_hazard_id'=> $hazardId,
-                'inserted_by'        => $user->getId(),
-                'inserted_at'        => $agora,
-                'observacao'         => $motivo,
+                'radar_medidor_id'    => $id,
+                'waze_link'           => $wazeLink,
+                'permanent_hazard_id' => $hazardId,
+                'inserted_by'         => $user->getId(),
+                'inserted_at'         => $agora,
+                'observacao'          => $motivo,
             ]);
         }
 
-        $this->db->update('radar', ['link_waze' => $wazeLink, 'updated_at' => $agora], ['id' => $id]);
+        $this->db->update('radar_medidor', ['link_waze' => $wazeLink, 'updated_at' => $agora], ['id' => $id]);
 
         $this->addFlash('success', 'Link Waze salvo com sucesso.');
         return $this->redirectToRoute('radar_show', ['id' => $id]);

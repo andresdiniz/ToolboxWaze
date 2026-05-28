@@ -1,181 +1,123 @@
 /**
- * Cliente JavaScript (fetch / Ajax) para a API de consulta de radares do ToolboxWaze.
+ * WazeToolbox — Consulta de radares via JavaScript / Ajax
+ * =========================================================
  *
- * Pode ser usado:
- *   - No browser (import como módulo ES ou incluir via <script type="module">)
- *   - No Node.js 18+ (fetch nativo)
- *   - Adaptável para jQuery $.ajax se necessário
+ * Autenticação
+ * -----------
+ * Cada usuário possui um token pessoal. Obtenha o seu em:
  *
- * Configuração: defina as constantes abaixo ou exporte-as de um config.js separado.
+ *     https://<seu-dominio>/perfil/api-token
+ *
+ * Como obter o token (passo a passo)
+ * -----------------------------------
+ * 1. Acesse https://<seu-dominio>/perfil/api-token
+ * 2. Clique em "Gerar meu token"
+ * 3. Copie o token exibido (64 caracteres hex)
+ * 4. Substitua 'SEU_TOKEN_AQUI' abaixo
+ *
+ * Revogação
+ * ---------
+ * Acesse /perfil/api-token e clique em "Revogar token".
  */
 
-const API_URL   = 'https://wazetoolbox.exemplo.com.br';  // sem barra final
-const API_TOKEN = 'SEU_TOKEN_AQUI';
+const WAZE_BASE_URL  = 'https://<seu-dominio>';
+const WAZE_API_TOKEN = 'SEU_TOKEN_AQUI'; // cole aqui ou leia de uma variável segura
 
 const HEADERS = {
-  'Authorization': `Bearer ${API_TOKEN}`,
-  'Content-Type':  'application/json',
-  'Accept':        'application/json',
+    'Authorization': `Bearer ${WAZE_API_TOKEN}`,
+    'Content-Type':  'application/json',
+    'Accept':        'application/json',
 };
 
-
-// =============================================================================
-// Consulta individual
-// =============================================================================
-
-/**
- * Busca um radar pelo número de série.
- * @param {string} numeroSerie
- * @returns {Promise<object|null>} Dados do radar ou null se não encontrado.
- */
-async function consultarPorSerie(numeroSerie) {
-  const url = new URL(`${API_URL}/api/radares/consultar`);
-  url.searchParams.set('numero_serie', numeroSerie);
-
-  const resp = await fetch(url.toString(), { method: 'GET', headers: HEADERS });
-
-  if (resp.status === 404) return null;
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
-
-  return resp.json();
-}
-
+// ---------------------------------------------------------------------------
+// Fetch nativo
+// ---------------------------------------------------------------------------
 
 /**
- * Busca um radar pelo número INMETRO da faixa.
- * @param {string} numeroInmetro
- * @returns {Promise<object|null>} Dados do radar ou null se não encontrado.
- */
-async function consultarPorInmetro(numeroInmetro) {
-  const url = new URL(`${API_URL}/api/radares/consultar`);
-  url.searchParams.set('numero_inmetro', numeroInmetro);
-
-  const resp = await fetch(url.toString(), { method: 'GET', headers: HEADERS });
-
-  if (resp.status === 404) return null;
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
-
-  return resp.json();
-}
-
-
-// =============================================================================
-// Consulta em lote
-// =============================================================================
-
-/**
- * Busca múltiplos radares por números de série (máx. 100 por chamada).
- * @param {string[]} numeros
- * @returns {Promise<{total: number, resultados: object[]}>}
- */
-async function consultarLoteSerie(numeros) {
-  return _consultarLote({ numeros_serie: numeros });
-}
-
-
-/**
- * Busca múltiplos radares por números INMETRO (máx. 100 por chamada).
- * @param {string[]} numeros
- * @returns {Promise<{total: number, resultados: object[]}>}
- */
-async function consultarLoteInmetro(numeros) {
-  return _consultarLote({ numeros_inmetro: numeros });
-}
-
-
-async function _consultarLote(payload) {
-  const resp = await fetch(`${API_URL}/api/radares/consultar/lote`, {
-    method:  'POST',
-    headers: HEADERS,
-    body:    JSON.stringify(payload),
-  });
-
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
-  return resp.json();
-}
-
-
-// =============================================================================
-// Exemplos de uso
-// =============================================================================
-
-async function exemplos() {
-
-  // --- Consulta individual por número de série ---
-  const radar = await consultarPorSerie('ABC123456');
-  if (radar) {
-    console.log('Radar encontrado:', radar.municipio, radar.sigla_uf);
-    console.log('Situação:', radar.situacao);
-    console.log('Validade:', radar.data_validade);
-    console.log('Faixas:', radar.faixas);
-  } else {
-    console.warn('Radar não encontrado.');
-  }
-
-  // --- Consulta individual por número INMETRO ---
-  const radarInmetro = await consultarPorInmetro('001/2025');
-  if (radarInmetro) {
-    console.log('Radar via INMETRO:', radarInmetro.tipo_medidor, radarInmetro.numero_serie);
-  }
-
-  // --- Consulta em lote por séries ---
-  const { total, resultados } = await consultarLoteSerie(['ABC123', 'DEF456', 'GHI789']);
-  console.log(`Encontrados ${total} de 3 consultados.`);
-  resultados.forEach(r => {
-    console.log(`  ${r.numero_serie} → ${r.municipio}/${r.sigla_uf} | ${r.situacao}`);
-  });
-
-  // --- Lote grande com chunking manual ---
-  const todosOsNumeros = ['NS001', 'NS002' /* ... até N números */];
-  const CHUNK = 100;
-  const todosResultados = [];
-
-  for (let i = 0; i < todosOsNumeros.length; i += CHUNK) {
-    const chunk = todosOsNumeros.slice(i, i + CHUNK);
-    const { resultados: parcial } = await consultarLoteSerie(chunk);
-    todosResultados.push(...parcial);
-    console.log(`Chunk ${Math.floor(i/CHUNK)+1}: ${parcial.length} encontrados.`);
-  }
-
-  console.log('Total geral:', todosResultados.length);
-}
-
-// Descomente para executar os exemplos:
-// exemplos().catch(console.error);
-
-
-// =============================================================================
-// Adaptador jQuery (alternativa ao fetch)
-// =============================================================================
-
-/**
- * Versão jQuery $.ajax — use se fetch não estiver disponível.
- * Requer jQuery carregado na página.
+ * Consulta um radar por Número de Série ou Número INMETRO.
  *
- * @param {string} numeroSerie
- * @returns {Promise<object|null>}
+ * @param {'numero_serie'|'numero_inmetro'} campo
+ * @param {string} valor
+ * @returns {Promise<object|null>}  null se não encontrado (404)
  */
-function consultarPorSerieJQuery(numeroSerie) {
-  return new Promise((resolve, reject) => {
-    $.ajax({
-      url:     `${API_URL}/api/radares/consultar`,
-      method:  'GET',
-      headers:  HEADERS,
-      data:    { numero_serie: numeroSerie },
-      success: (data) => resolve(data),
-      error:   (xhr) => {
-        if (xhr.status === 404) return resolve(null);
-        reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
-      },
-    });
-  });
+async function consultarRadar(campo, valor) {
+    const url = new URL(`${WAZE_BASE_URL}/api/radares/consultar`);
+    url.searchParams.set(campo, valor);
+
+    const resp = await fetch(url.toString(), { headers: HEADERS });
+
+    if (resp.status === 401) {
+        throw new Error('Token inválido. Acesse /perfil/api-token para gerar um novo.');
+    }
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`);
+
+    return resp.json();
 }
 
+/**
+ * Consulta até 100 radares em lote.
+ *
+ * @param {{ numeros_serie?: string[], numeros_inmetro?: string[] }} params
+ * @returns {Promise<object[]>}
+ */
+async function consultarLote(params) {
+    const resp = await fetch(`${WAZE_BASE_URL}/api/radares/consultar/lote`, {
+        method:  'POST',
+        headers: HEADERS,
+        body:    JSON.stringify(params),
+    });
 
-export {
-  consultarPorSerie,
-  consultarPorInmetro,
-  consultarLoteSerie,
-  consultarLoteInmetro,
-  consultarPorSerieJQuery,
-};
+    if (resp.status === 401) {
+        throw new Error('Token inválido. Acesse /perfil/api-token para gerar um novo.');
+    }
+    if (!resp.ok) throw new Error(`Erro ${resp.status}: ${await resp.text()}`);
+
+    const data = await resp.json();
+    return data.resultados ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Adapter jQuery ($.ajax)
+// ---------------------------------------------------------------------------
+
+function consultarRadarJQuery(campo, valor) {
+    return $.ajax({
+        url:     `${WAZE_BASE_URL}/api/radares/consultar`,
+        method:  'GET',
+        headers: HEADERS,
+        data:    { [campo]: valor },
+    });
+}
+
+function consultarLoteJQuery(params) {
+    return $.ajax({
+        url:         `${WAZE_BASE_URL}/api/radares/consultar/lote`,
+        method:      'POST',
+        headers:     HEADERS,
+        contentType: 'application/json',
+        data:        JSON.stringify(params),
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Exemplos de uso
+// ---------------------------------------------------------------------------
+
+// Busca individual por Número de Série
+consultarRadar('numero_serie', 'ABC123456')
+    .then(radar => {
+        if (radar) console.log('Radar encontrado:', radar);
+        else       console.log('Radar não encontrado.');
+    })
+    .catch(console.error);
+
+// Busca individual por INMETRO
+consultarRadar('numero_inmetro', '001/2025')
+    .then(console.log)
+    .catch(console.error);
+
+// Lote por Número de Série
+consultarLote({ numeros_serie: ['ABC123', 'DEF456', 'GHI789'] })
+    .then(resultados => console.log(`${resultados.length} radares encontrados`, resultados))
+    .catch(console.error);

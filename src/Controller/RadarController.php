@@ -142,19 +142,20 @@ class RadarController extends AbstractController
             : null;
 
         return $this->render('radar/index.html.twig', [
-            'rows'       => $rows,
-            'page'       => $page,
-            'pages'      => $pages,
-            'total'      => $total,
-            'per_page'   => self::PER_PAGE,
-            'stats'      => $stats,
-            'ufs'        => $ufs,
-            'resultados' => $resultados,
-            'tipos'      => $tipos,
-            'hoje'       => $hoje,
-            'em30'       => $em30,
-            'ha30dias'   => $ha30,
-            'filters'    => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
+            'rows'        => $rows,
+            'page'        => $page,
+            'pages'       => $pages,
+            'total'       => $total,
+            'per_page'    => self::PER_PAGE,
+            'stats'       => $stats,
+            'ufs'         => $ufs,
+            'resultados'  => $resultados,
+            'tipos'       => $tipos,
+            'hoje'        => $hoje,
+            'em30'        => $em30,
+            'ha30dias'    => $ha30,
+            'filters'     => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
+            'allowedUfs'  => null,  // null = sem restrição; array de siglas = acesso restrito
         ]);
     }
 

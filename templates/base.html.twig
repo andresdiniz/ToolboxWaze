@@ -204,6 +204,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {% if app.request.pathInfo starts with '/escolas' %}active{% endif %}"
+                       href="{{ path('escola_inep_index') }}">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8.211 2.047a.5.5 0 0 0-.422 0l-7.5 3.5a.5.5 0 0 0 .025.917l7.5 3a.5.5 0 0 0 .372 0L14 7.14V13a1 1 0 0 0-1 1v2h3v-2a1 1 0 0 0-1-1V6.739l.686-.275a.5.5 0 0 0 .025-.917zM8 8.46 1.758 5.965 8 3.052l6.242 2.913z"/><path d="M4.176 9.032a.5.5 0 0 0-.656.327l-.5 1.7a.5.5 0 0 0 .294.605l4.5 1.8a.5.5 0 0 0 .372 0l4.5-1.8a.5.5 0 0 0 .294-.605l-.5-1.7a.5.5 0 0 0-.656-.327L8 10.466z"/></svg>
+                        Escolas
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}"
                        href="{{ path('solicitacao_hub') }}">
                         <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/><path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0m-3.5-2a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1a.5.5 0 0 0-.5-.5"/></svg>
@@ -479,6 +486,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     });
   }, { threshold: 0.1 });
   document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+}());
 }());
 </script>
 

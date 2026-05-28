@@ -31,7 +31,6 @@ final class ImportEscolaInepCommand extends Command
 {
     public function __construct(
         private readonly ImportEscolaInepHandler $handler,
-        private readonly string $escolaInepCsvUrl,
     ) {
         parent::__construct();
     }
@@ -49,7 +48,8 @@ final class ImportEscolaInepCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io  = new SymfonyStyle($input, $output);
-        $url = $input->getOption('url') ?: $this->escolaInepCsvUrl;
+        $url = $input->getOption('url')
+            ?: ($_ENV['ESCOLA_INEP_CSV_URL'] ?? $_SERVER['ESCOLA_INEP_CSV_URL'] ?? '');
 
         if (empty($url)) {
             $io->error('URL não definida. Configure ESCOLA_INEP_CSV_URL no .env ou use --url.');

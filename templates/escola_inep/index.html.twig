@@ -137,16 +137,16 @@
       <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
         {% if page > 1 %}
           <li class="page-item">
-            <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page - 1})) }}">‹</a>
+            <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page - 1})) }}">&#8249;</a>
           </li>
         {% endif %}
 
-        {% set start = [1, page - 2]|max %}
-        {% set end   = [pages, page + 2]|min %}
+        {% set start = (page - 2) > 1 ? (page - 2) : 1 %}
+        {% set end   = (page + 2) < pages ? (page + 2) : pages %}
 
         {% if start > 1 %}
           <li class="page-item"><a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: 1})) }}">1</a></li>
-          {% if start > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+          {% if start > 2 %}<li class="page-item disabled"><span class="page-link">&hellip;</span></li>{% endif %}
         {% endif %}
 
         {% for p in start..end %}
@@ -156,13 +156,13 @@
         {% endfor %}
 
         {% if end < pages %}
-          {% if end < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+          {% if end < pages - 1 %}<li class="page-item disabled"><span class="page-link">&hellip;</span></li>{% endif %}
           <li class="page-item"><a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
         {% endif %}
 
         {% if page < pages %}
           <li class="page-item">
-            <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page + 1})) }}">›</a>
+            <a class="page-link" href="{{ path('escola_inep_index', filters|merge({page: page + 1})) }}">&#8250;</a>
           </li>
         {% endif %}
       </ul>

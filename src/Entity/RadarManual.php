@@ -108,8 +108,12 @@ class RadarManual
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $criadoEm;
 
+    /**
+     * FK fixada com o nome real do índice no banco (fk_rm_criado_por),
+     * evitando que o migrations:diff gere renomeações/drops destrutivos.
+     */
     #[ORM\ManyToOne(targetEntity: User::class)]
-    #[ORM\JoinColumn(nullable: true)]
+    #[ORM\JoinColumn(name: 'criado_por_id', referencedColumnName: 'id', nullable: true)]
     private ?User $criadoPor = null;
 
     public function __construct()

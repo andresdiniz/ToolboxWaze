@@ -14,7 +14,18 @@
 {% endblock %}
 
 {% block body %}
-<div class="container py-3">
+{# ── data-* seguros para JS ── #}
+{% set hasCoords = escola.latitude is not null and escola.latitude != '' and escola.latitude != '0.00000000'
+                  and escola.longitude is not null and escola.longitude != '' and escola.longitude != '0.00000000' %}
+
+<div class="container py-3"
+     id="escola-data"
+     data-lat="{% if hasCoords %}{{ escola.latitude }}{% endif %}"
+     data-lon="{% if hasCoords %}{{ escola.longitude }}{% endif %}"
+     data-waze="{{ escola.linkWaze|default('')|e('html_attr') }}"
+     data-nome="{{ escola.escola|default('')|e('html_attr') }}"
+     data-municipio="{{ escola.municipio|default('')|e('html_attr') }}"
+     data-uf="{{ escola.uf|default('')|e('html_attr') }}">
 
   <div class="mb-3">
     <a href="{{ path('escola_inep_index') }}" class="btn btn-sm btn-outline-secondary">← Voltar</a>
@@ -52,7 +63,7 @@
               <tr><th class="ps-3">Etapas de Ensino</th><td><small>{{ escola.etapasEnsino }}</small></td></tr>
               <tr><th class="ps-3">Situação</th><td>{{ escola.restricaoAtendimento }}</td></tr>
               <tr><th class="ps-3">Telefone</th><td>{{ escola.telefone }}</td></tr>
-              {% if escola.latitude and escola.longitude %}
+              {% if hasCoords %}
               <tr>
                 <th class="ps-3">Coordenadas</th>
                 <td>
@@ -237,56 +248,51 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 (function () {
-  // 1. Coordenadas diretas da entidade (prioridade máxima)
-  var entityLat = {{ escola.latitude  is not null ? escola.latitude  : 'null' }};
-  var entityLon = {{ escola.longitude is not null ? escola.longitude : 'null' }};
-
-  // 2. Link do editor Waze (extração via URL params)
-  var wazeLink = {{ escola.linkWaze is not null ? ('"' ~ escola.linkWaze|e('js') ~ '"') : 'null' }};
+  var el   = document.getElementById('escola-data');
+  var nome = el.dataset.nome;
+  var mun  = el.dataset.municipio;
+  var uf   = el.dataset.uf;
 
   var lat = null, lon = null, fonte = '';
 
-  // Tenta extrair lat/lon do link Waze: ?zoom=17&lat=-19.123&lon=-43.456
-  function extractFromWaze(url) {
-    try {
-      var u = new URL(url);
-      var la = parseFloat(u.searchParams.get('lat'));
-      var lo = parseFloat(u.searchParams.get('lon'));
-      if (!isNaN(la) && !isNaN(lo)) return { lat: la, lon: lo };
-    } catch (e) {}
-    // Fallback: regex para lat=X&lon=Y em qualquer posição
-    var m = url.match(/[?&]lat=(-?[\d.]+).*?[?&]lon=(-?[\d.]+)/);
-    if (!m) m = url.match(/[?&]lon=(-?[\d.]+).*?[?&]lat=(-?[\d.]+)/);
-    if (m) {
-      if (url.match(/[?&]lat=/) && url.match(/[?&]lon=/)) {
-        var mLat = url.match(/[?&]lat=(-?[\d.]+)/);
-        var mLon = url.match(/[?&]lon=(-?[\d.]+)/);
-        if (mLat && mLon) return { lat: parseFloat(mLat[1]), lon: parseFloat(mLon[1]) };
+  // 1. Coordenadas diretas da entidade (via data-*)
+  var dLat = parseFloat(el.dataset.lat);
+  var dLon = parseFloat(el.dataset.lon);
+  if (el.dataset.lat !== '' && el.dataset.lon !== '' && !isNaN(dLat) && !isNaN(dLon)) {
+    lat = dLat;
+    lon = dLon;
+    fonte = 'Coordenadas INEP';
+  }
+
+  // 2. Extrai lat/lon do link do editor Waze
+  if (lat === null) {
+    var wazeUrl = el.dataset.waze;
+    if (wazeUrl) {
+      try {
+        var u = new URL(wazeUrl);
+        var wLat = parseFloat(u.searchParams.get('lat'));
+        var wLon = parseFloat(u.searchParams.get('lon'));
+        if (!isNaN(wLat) && !isNaN(wLon)) {
+          lat = wLat; lon = wLon;
+          fonte = 'Extraído do link Waze';
+        }
+      } catch (e) {
+        var mLat = wazeUrl.match(/[?&]lat=(-?[\d.]+)/);
+        var mLon = wazeUrl.match(/[?&]lon=(-?[\d.]+)/);
+        if (mLat && mLon) {
+          lat = parseFloat(mLat[1]);
+          lon = parseFloat(mLon[1]);
+          fonte = 'Extraído do link Waze';
+        }
       }
     }
-    return null;
   }
 
-  if (entityLat !== null && entityLon !== null) {
-    lat = entityLat;
-    lon = entityLon;
-    fonte = 'Coordenadas INEP';
-  } else if (wazeLink) {
-    var wc = extractFromWaze(wazeLink);
-    if (wc) {
-      lat = wc.lat;
-      lon = wc.lon;
-      fonte = 'Extraído do link Waze';
-    }
-  }
+  if (lat === null || lon === null) return;
 
-  if (lat === null || lon === null) return; // sem coordenadas disponíveis
-
-  // Exibe o card
   document.getElementById('card-mapa').style.display = '';
   document.getElementById('mapa-fonte').textContent = fonte;
 
-  // Inicializa Leaflet após o card ser visível
   requestAnimationFrame(function () {
     var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat, lon], 17);
 
@@ -304,7 +310,7 @@
 
     L.marker([lat, lon], { icon: icon })
       .addTo(map)
-      .bindPopup('<strong>{{ escola.escola|e('js') }}</strong><br>{{ escola.municipio|e('js') }} — {{ escola.uf|e('js') }}')
+      .bindPopup('<strong>' + nome + '</strong><br>' + mun + ' — ' + uf)
       .openPopup();
   });
 }());

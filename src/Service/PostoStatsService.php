@@ -20,16 +20,16 @@ final class PostoStatsService
         $row = $this->db->fetchAssociative(
             "SELECT COUNT(DISTINCT f.cnpj) AS total
              FROM fuel_reseller_raw f
-             $wc"
-            , $params
+             $wc",
+            $params
         ) ?: ['total' => 0];
 
         $comWazeQ = $allowedUfs !== null
-            ? "SELECT COUNT(DISTINCT pwl.fuel_reseller_raw_id)
+            ? "SELECT COUNT(DISTINCT pwl.posto_id)
                FROM posto_waze_link pwl
-               INNER JOIN fuel_reseller_raw f ON f.id = pwl.fuel_reseller_raw_id
+               INNER JOIN fuel_reseller_raw f ON f.id = pwl.posto_id
                WHERE f.uf IN (" . implode(',', array_fill(0, count($allowedUfs), '?')) . ")"
-            : 'SELECT COUNT(DISTINCT fuel_reseller_raw_id) FROM posto_waze_link';
+            : 'SELECT COUNT(DISTINCT posto_id) FROM posto_waze_link';
 
         $comWaze = (int) $this->db->fetchOne($comWazeQ, $allowedUfs ?? []);
         $total   = (int) ($row['total'] ?? 0);

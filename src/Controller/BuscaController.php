@@ -148,7 +148,7 @@ final class BuscaController extends AbstractController
         array_push($params, $like, $like, $like);
 
         return $this->db->fetchAllAssociative(
-            'SELECT id, uf, municipio, razao_social, nome_fantasia, bandeira, status
+            'SELECT id, uf, municipio, razao_social, nome_fantasia, bandeira
              FROM fuel_reseller_raw
              WHERE ' . implode(' AND ', $where) . '
              ORDER BY uf, municipio LIMIT ' . $limit,

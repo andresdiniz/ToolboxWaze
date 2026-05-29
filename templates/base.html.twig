@@ -33,7 +33,7 @@
         animation: twFadeOut 300ms ease forwards;
     }
 
-    /* ── Busca global ─────────────────────────────────────── */
+    /* ── Busca global ─────────────────────────────────── */
     .navbar-search-wrap {
         position: relative;
     }
@@ -109,7 +109,7 @@
     }
     </style>
 
-    {# ── Google Tag Manager — inicialização do dataLayer ───────────── #}
+    {# ── Google Tag Manager — inicialização do dataLayer ───────────────── #}
     {% set gtmId = app_gtm_id|default('') %}
     {% if gtmId %}
     <script>
@@ -241,11 +241,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         Admin
                     </a>
                     <ul class="dropdown-menu shadow">
-
                         <li>
-                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">
-                                Gerenciamento
-                            </h6>
+                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Gerenciamento</h6>
                         </li>
                         <li>
                             <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/usuarios' %}active{% endif %}"
@@ -268,13 +265,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 Links Waze
                             </a>
                         </li>
-
                         <li><hr class="dropdown-divider"></li>
-
                         <li>
-                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">
-                                Monitoramento
-                            </h6>
+                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Monitoramento</h6>
                         </li>
                         <li>
                             <a class="dropdown-item {% if app.request.pathInfo starts with '/auditoria' %}active{% endif %}"
@@ -290,14 +283,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 Requisições Suspeitas
                             </a>
                         </li>
-
                     </ul>
                 </li>
                 {% endif %}
-
             </ul>
 
-            {# ── Busca global ─────────────────────────────────────── #}
+            {# ── Busca global ────────────────────────────────────── #}
             {% if app.user %}
             <div class="navbar-search-wrap d-none d-lg-block me-2">
                 <svg class="navbar-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -334,8 +325,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                             </div>
                         </li>
                         <li><hr class="dropdown-divider"></li>
-
-                        {# ── Meu Perfil ── #}
                         <li>
                             <a class="dropdown-item {% if app.request.pathInfo == '/perfil' %}active{% endif %}"
                                href="{{ path('perfil_index') }}">
@@ -345,8 +334,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 Meu Perfil
                             </a>
                         </li>
-
-                        {# ── Token de API ── #}
                         <li>
                             <a class="dropdown-item {% if app.request.pathInfo starts with '/perfil/api-token' %}active{% endif %}"
                                href="{{ path('perfil_api_token') }}">
@@ -361,9 +348,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 {% endif %}
                             </a>
                         </li>
-
                         <li><hr class="dropdown-divider"></li>
-
                         <li>
                             <a class="dropdown-item" href="{{ path('export_radares_csv') }}"
                                onclick="window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'export_csv',export_tipo:'radares'});">
@@ -504,7 +489,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     });
   }, { threshold: 0.1 });
   document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
-}());
 }());
 </script>
 

@@ -10,8 +10,8 @@
     <title>Gerenciar Usuários — ToolboxWaze Admin</title>
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
     <style>
-        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--surface2:#f3f0ec;--border:#d4d1ca;--divider:#e8e5e0;--text:#28251d;--muted:#7a7974;--faint:#bab9b4;--primary:#01696f;--primary-h:#0c4e54;--primary-hl:color-mix(in oklab,#01696f 12%,transparent);--success:#437a22;--success-hl:color-mix(in oklab,#437a22 12%,transparent);--error:#a12c7b;--error-hl:color-mix(in oklab,#a12c7b 12%,transparent);--warning:#964219;--warning-hl:color-mix(in oklab,#964219 12%,transparent);--amber:#7a5c00;--amber-hl:color-mix(in oklab,#7a5c00 10%,transparent);--champ:#6b21a8;--champ-hl:color-mix(in oklab,#6b21a8 12%,transparent);--radius:.75rem;--shadow:0 2px 12px rgba(0,0,0,.07)}
-        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--surface2:#22211f;--border:#393836;--divider:#2a2927;--text:#cdccca;--muted:#797876;--faint:#5a5957;--primary:#4f98a3;--primary-h:#227f8b;--primary-hl:color-mix(in oklab,#4f98a3 15%,transparent);--success:#6daa45;--success-hl:color-mix(in oklab,#6daa45 15%,transparent);--error:#d163a7;--error-hl:color-mix(in oklab,#d163a7 15%,transparent);--warning:#bb653b;--warning-hl:color-mix(in oklab,#bb653b 15%,transparent);--amber:#c8960a;--amber-hl:color-mix(in oklab,#c8960a 15%,transparent);--champ:#a855f7;--champ-hl:color-mix(in oklab,#a855f7 15%,transparent)}
+        :root,[data-theme=light]{--bg:#f7f6f2;--surface:#fff;--surface2:#f3f0ec;--border:#d4d1ca;--divider:#e8e5e0;--text:#28251d;--muted:#7a7974;--faint:#bab9b4;--primary:#01696f;--primary-h:#0c4e54;--primary-hl:color-mix(in oklab,#01696f 12%,transparent);--success:#437a22;--success-hl:color-mix(in oklab,#437a22 12%,transparent);--error:#a12c7b;--error-hl:color-mix(in oklab,#a12c7b 12%,transparent);--warning:#964219;--warning-hl:color-mix(in oklab,#964219 12%,transparent);--amber:#7a5c00;--amber-hl:color-mix(in oklab,#7a5c00 10%,transparent);--champ:#6b21a8;--champ-hl:color-mix(in oklab,#6b21a8 12%,transparent);--gchamp:#be185d;--gchamp-hl:color-mix(in oklab,#be185d 12%,transparent);--radius:.75rem;--shadow:0 2px 12px rgba(0,0,0,.07)}
+        [data-theme=dark]{--bg:#171614;--surface:#1c1b19;--surface2:#22211f;--border:#393836;--divider:#2a2927;--text:#cdccca;--muted:#797876;--faint:#5a5957;--primary:#4f98a3;--primary-h:#227f8b;--primary-hl:color-mix(in oklab,#4f98a3 15%,transparent);--success:#6daa45;--success-hl:color-mix(in oklab,#6daa45 15%,transparent);--error:#d163a7;--error-hl:color-mix(in oklab,#d163a7 15%,transparent);--warning:#bb653b;--warning-hl:color-mix(in oklab,#bb653b 15%,transparent);--amber:#c8960a;--amber-hl:color-mix(in oklab,#c8960a 15%,transparent);--champ:#a855f7;--champ-hl:color-mix(in oklab,#a855f7 15%,transparent);--gchamp:#f472b6;--gchamp-hl:color-mix(in oklab,#f472b6 15%,transparent)}
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html{-webkit-font-smoothing:antialiased}
         body{font-family:'Satoshi',sans-serif;font-size:1rem;color:var(--text);background:var(--bg);min-height:100dvh}
@@ -46,22 +46,27 @@
         .badge-rejected{background:var(--error-hl);color:var(--error)}
         .badge-admin{background:var(--primary-hl);color:var(--primary)}
         .badge-champ{background:var(--champ-hl);color:var(--champ)}
+        .badge-gchamp{background:var(--gchamp-hl);color:var(--gchamp)}
         .chevron{color:var(--faint);transition:transform .2s;flex-shrink:0}
         .user-card.open .chevron{transform:rotate(180deg)}
         .user-card-body{display:none;border-top:1px solid var(--divider);padding:1.25rem}
         .user-card.open .user-card-body{display:block}
         .section-label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-bottom:.75rem}
-        .perms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem;margin-bottom:1.25rem}
-        .perm-check{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;cursor:pointer;transition:.15s}
-        .perm-check:hover{border-color:var(--primary);background:var(--primary-hl)}
-        .perm-check input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
-        .perm-check span{font-size:.875rem;font-weight:500}
-        .admin-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--primary);border-radius:.5rem;background:var(--primary-hl);margin-bottom:.6rem;width:fit-content}
-        .admin-toggle input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
-        .admin-toggle label{font-size:.875rem;font-weight:600;color:var(--primary);cursor:pointer}
-        .champ-toggle{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;border:1px solid var(--champ);border-radius:.5rem;background:var(--champ-hl);margin-bottom:.5rem;width:fit-content}
-        .champ-toggle input{accent-color:var(--champ);width:15px;height:15px;cursor:pointer}
-        .champ-toggle label{font-size:.875rem;font-weight:600;color:var(--champ);cursor:pointer}
+
+        /* ── Toggles de perfil em linha ── */
+        .role-toggles{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+        .role-toggle{display:flex;align-items:center;gap:.55rem;padding:.55rem .85rem;border-radius:.5rem;cursor:pointer;transition:.15s;border:1.5px solid var(--border);background:var(--surface2);font-family:inherit}
+        .role-toggle:hover{border-color:currentColor;opacity:.9}
+        .role-toggle input{width:15px;height:15px;cursor:pointer;flex-shrink:0}
+        .role-toggle label{font-size:.875rem;font-weight:600;cursor:pointer;white-space:nowrap}
+        .role-toggle.admin-t  {border-color:var(--primary);background:var(--primary-hl);color:var(--primary)}
+        .role-toggle.admin-t input{accent-color:var(--primary)}
+        .role-toggle.champ-t  {border-color:var(--champ);background:var(--champ-hl);color:var(--champ)}
+        .role-toggle.champ-t input{accent-color:var(--champ)}
+        .role-toggle.gchamp-t {border-color:var(--gchamp);background:var(--gchamp-hl);color:var(--gchamp)}
+        .role-toggle.gchamp-t input{accent-color:var(--gchamp)}
+        /* Inativo = neutro */
+        .role-toggle.inactive{border-color:var(--border);background:var(--surface2);color:var(--muted)}
 
         /* Downgrade fields */
         .downgrade-fields{border:1px solid var(--champ);border-radius:.5rem;padding:.85rem 1rem;margin-bottom:1rem;background:var(--champ-hl)}
@@ -79,6 +84,9 @@
         .downgrade-tipo-check input{accent-color:var(--champ);width:13px;height:13px;cursor:pointer}
         .downgrade-tipo-check.is-checked{border-color:var(--champ);background:var(--champ-hl);color:var(--champ);font-weight:600}
         .downgrade-tipos-hint{font-size:.73rem;color:var(--muted);margin-top:.4rem}
+
+        /* Nota Global Champ */
+        .gchamp-note{font-size:.8rem;color:var(--gchamp);background:var(--gchamp-hl);border:1px solid var(--gchamp);border-radius:.4rem;padding:.45rem .75rem;margin-bottom:1rem;display:none}
 
         /* UFs */
         .ufs-section{margin-top:1rem;margin-bottom:1.25rem}
@@ -114,11 +122,16 @@
         .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:var(--text)}
         .info-row{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.85rem;color:var(--muted)}
         .info-row strong{color:var(--text)}
+        .perms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem;margin-bottom:1.25rem}
+        .perm-check{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;cursor:pointer;transition:.15s}
+        .perm-check:hover{border-color:var(--primary);background:var(--primary-hl)}
+        .perm-check input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
+        .perm-check span{font-size:.875rem;font-weight:500}
         .empty{text-align:center;padding:3rem 1rem;color:var(--muted)}
         .empty svg{margin:0 auto 1rem;color:var(--faint)}
         .theme-btn{position:fixed;top:1rem;right:1rem;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);z-index:100}
 
-        /* Modal de confirmação */
+        /* Modal */
         .modal-overlay{position:fixed;inset:0;background:oklch(0 0 0/0.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem;opacity:0;pointer-events:none;transition:opacity .18s}
         .modal-overlay.open{opacity:1;pointer-events:all}
         .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:380px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.15);transform:translateY(8px);transition:transform .18s}
@@ -174,18 +187,57 @@
         </button>
     </div>
 
-    {# ──────────────────────────────────────────────────────────────────
-       MACRO: bloco de Estados (UFs)
+    {# ─────────────────────────────────────────────────────────────────
+       MACRO: bloco de perfis/roles
        Parâmetros:
-         user      - entidade User
-         allUfs    - lista de todas as UFs
-         isPending - true para pendentes/rejeitados (inicializa "Todos" marcado)
-         prefix    - prefixo de ID para evitar colisão entre painéis (ex: 're')
-    ────────────────────────────────────────────────────────────────── #}
+         user           - entidade User
+         uid            - string identificadora única do bloco
+         initAdmin      - bool
+         initChamp      - bool (ROLE_CHAMP mas não ROLE_GLOBAL_CHAMP)
+         initGlobalChamp- bool (ROLE_GLOBAL_CHAMP)
+    ───────────────────────────────────────────────────────────────── #}
+    {% macro rolesBlock(user, uid, initAdmin, initChamp, initGlobalChamp) %}
+    <div class="section-label" style="margin-bottom:.5rem">Perfil do usuário</div>
+    <div class="role-toggles">
+        {# Admin #}
+        <div class="role-toggle admin-t{{ not initAdmin ? ' inactive' : '' }}" id="toggle_admin_{{ uid }}">
+            <input type="checkbox" name="is_admin" id="is_admin_{{ uid }}" value="1"
+                   {{ initAdmin ? 'checked' : '' }}
+                   onchange="syncRoleToggle('admin','{{ uid }}',this.checked)">
+            <label for="is_admin_{{ uid }}">🔑 Administrador</label>
+        </div>
+        {# Champ (simples — oculto quando Global Champ ativo) #}
+        <div class="role-toggle champ-t{{ not initChamp ? ' inactive' : '' }}"
+             id="toggle_champ_{{ uid }}"
+             style="{{ initGlobalChamp ? 'display:none' : '' }}">
+            <input type="checkbox" name="is_champ" id="is_champ_{{ uid }}" value="1"
+                   {{ initChamp ? 'checked' : '' }}
+                   onchange="syncRoleToggle('champ','{{ uid }}',this.checked)">
+            <label for="is_champ_{{ uid }}">⭐ Champ</label>
+        </div>
+        {# Global Champ #}
+        <div class="role-toggle gchamp-t{{ not initGlobalChamp ? ' inactive' : '' }}"
+             id="toggle_gchamp_{{ uid }}">
+            <input type="checkbox" name="is_global_champ" id="is_global_champ_{{ uid }}" value="1"
+                   {{ initGlobalChamp ? 'checked' : '' }}
+                   onchange="syncRoleToggle('gchamp','{{ uid }}',this.checked)">
+            <label for="is_global_champ_{{ uid }}">🌟 Global Champ</label>
+        </div>
+    </div>
+    {# Nota informativa quando Global Champ está ativo #}
+    <div class="gchamp-note" id="gchamp_note_{{ uid }}"
+         style="{{ initGlobalChamp ? 'display:block' : 'display:none' }}">
+        🌟 <strong>Global Champ</strong> — acesso irrestrito a <em>todos os estados</em>. O seletor de UFs abaixo será ignorado.
+    </div>
+    {% endmacro %}
+
+    {# ─────────────────────────────────────────────────────────────────
+       MACRO: bloco de Estados (UFs)
+    ───────────────────────────────────────────────────────────────── #}
     {% macro ufsBlock(user, allUfs, isPending, prefix) %}
     {% set uid = prefix ~ user.id %}
     {% set allChecked = isPending ? true : (user.allowedUfs is null) %}
-    <div class="ufs-section">
+    <div class="ufs-section" id="ufs_section_{{ uid }}">
         <div class="ufs-header">
             <div class="section-label" style="margin-bottom:0">Estados com acesso</div>
             <label class="all-ufs-toggle">
@@ -200,7 +252,6 @@
         <div class="ufs-grid" id="ufs_grid_{{ uid }}"
              style="{{ allChecked ? 'opacity:.4;pointer-events:none' : '' }}">
             {% for uf in allUfs %}
-            {# Para pendentes/rejeitados: todas marcadas por padrão; para aprovados: respeita allowedUfs #}
             {% set checked = allChecked or (not isPending and uf in (user.allowedUfs ?? [])) %}
             <label class="uf-check {{ checked ? 'is-checked' : '' }}">
                 <input type="checkbox" name="allowed_ufs[]" value="{{ uf }}"
@@ -214,8 +265,7 @@
     </div>
     {% endmacro %}
 
-    {# MACRO: bloco de Tipos de Solicitação
-       prefix - mesmo prefixo usado no ufsBlock para consistência de IDs #}
+    {# MACRO: bloco de Tipos de Solicitação #}
     {% macro tiposBlock(user, allTipos, isPending, prefix) %}
     {% set uid = prefix ~ user.id %}
     {% set allChecked = isPending ? true : (user.solicitacaoTipos is null) %}
@@ -247,8 +297,7 @@
     </div>
     {% endmacro %}
 
-    {# MACRO: bloco de configurações Champ (downgrade)
-       prefix - prefixo de ID para evitar colisão entre painéis (ex: 're') #}
+    {# MACRO: bloco de configurações Champ (downgrade) #}
     {% macro champDowngradeBlock(user, champTipos, isChamp, prefix) %}
     {% set uid = prefix ~ user.id %}
     <div class="downgrade-fields" id="downgrade_fields_{{ uid }}"
@@ -275,7 +324,6 @@
             <div class="downgrade-tipos-grid">
                 {% set champDowngradeTiposAtivos = user.champDowngradeTipos ?? [] %}
                 {% for tipoVal, tipoLabel in champTipos %}
-                {# null = todos; array vazio = nenhum marcado; array com itens = somente esses #}
                 {% set tipoChecked = user.champDowngradeTipos is null or tipoVal in champDowngradeTiposAtivos %}
                 <label class="downgrade-tipo-check {{ tipoChecked ? 'is-checked' : '' }}">
                     <input type="checkbox" name="champ_downgrade_tipos[]" value="{{ tipoVal }}"
@@ -320,18 +368,8 @@
                 <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
 
-                    <div class="admin-toggle">
-                        <input type="checkbox" name="is_admin" id="is_admin_{{ user.id }}" value="1">
-                        <label for="is_admin_{{ user.id }}">Conceder privilégios de Administrador</label>
-                    </div>
+                    {{ _self.rolesBlock(user, user.id, false, false, false) }}
 
-                    <div class="champ-toggle">
-                        <input type="checkbox" name="is_champ" id="is_champ_{{ user.id }}" value="1"
-                               onchange="toggleDowngradeFields('{{ user.id }}', this.checked)">
-                        <label for="is_champ_{{ user.id }}">⭐ Conceder perfil Champ (processa downgrades)</label>
-                    </div>
-
-                    {# prefix vazio — IDs padrão ex: downgrade_fields_5 #}
                     {{ _self.champDowngradeBlock(user, champTipos, false, '') }}
 
                     <div class="section-label">Permissões de Área</div>
@@ -344,7 +382,6 @@
                         {% endfor %}
                     </div>
 
-                    {# isPending=true, prefix vazio: IDs ex: all_ufs_5, ufs_grid_5 #}
                     {{ _self.ufsBlock(user, allUfs, true, '') }}
                     {{ _self.tiposBlock(user, allTipos, true, '') }}
 
@@ -381,7 +418,8 @@
         {% else %}
         <div class="user-list">
         {% for user in approved %}
-        {% set userIsChamp = 'ROLE_CHAMP' in user.roles %}
+        {% set userIsGlobalChamp = 'ROLE_GLOBAL_CHAMP' in user.roles %}
+        {% set userIsChamp = (not userIsGlobalChamp) and ('ROLE_CHAMP' in user.roles) %}
         <div class="user-card" id="card-{{ user.id }}">
             <div class="user-card-header" onclick="toggleCard({{ user.id }})">
                 <div class="avatar">
@@ -393,7 +431,9 @@
                         <span>{{ user.email }}</span>
                         {% if user.wazeNickname %}<span>🗺 {{ user.wazeNickname }}</span>{% endif %}
                         {% if user.lastLoginAt %}<span>Último acesso {{ user.lastLoginAt|date('d/m/Y') }}</span>{% endif %}
-                        {% if user.allowedUfs is not null %}
+                        {% if userIsGlobalChamp %}
+                            <span title="Global Champ: acesso a todos os estados">🌟 Todos os estados</span>
+                        {% elseif user.allowedUfs is not null %}
                             <span title="Estados com acesso">
                                 🗺
                                 {% for uf in user.allowedUfs|slice(0,4) %}{{ uf }}{% if not loop.last %}, {% endif %}{% endfor %}
@@ -404,8 +444,9 @@
                         {% endif %}
                     </div>
                 </div>
-                {% if user.isAdmin %}<span class="badge badge-admin">Admin</span>{% else %}<span class="badge badge-approved">Ativo</span>{% endif %}
-                {% if userIsChamp %}<span class="badge badge-champ">⭐ Champ</span>{% endif %}
+                {% if user.isAdmin %}<span class="badge badge-admin">🔑 Admin</span>{% else %}<span class="badge badge-approved">Ativo</span>{% endif %}
+                {% if userIsGlobalChamp %}<span class="badge badge-gchamp">🌟 Global Champ</span>
+                {% elseif userIsChamp %}<span class="badge badge-champ">⭐ Champ</span>{% endif %}
                 <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
             </div>
             <div class="user-card-body">
@@ -417,20 +458,9 @@
                 <form method="POST" action="{{ path('admin_users_permissions', {id: user.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_perms_' ~ user.id) }}">
 
-                    <div class="admin-toggle">
-                        <input type="checkbox" name="is_admin" id="admin_{{ user.id }}" value="1" {{ user.isAdmin ? 'checked' : '' }}>
-                        <label for="admin_{{ user.id }}">Privilégios de Administrador</label>
-                    </div>
+                    {{ _self.rolesBlock(user, user.id, user.isAdmin, userIsChamp, userIsGlobalChamp) }}
 
-                    <div class="champ-toggle">
-                        <input type="checkbox" name="is_champ" id="champ_{{ user.id }}" value="1"
-                               {{ userIsChamp ? 'checked' : '' }}
-                               onchange="toggleDowngradeFields('{{ user.id }}', this.checked)">
-                        <label for="champ_{{ user.id }}">⭐ Perfil Champ (processa downgrades)</label>
-                    </div>
-
-                    {# Aprovados: prefix vazio, IDs padrão ex: downgrade_fields_5 #}
-                    {{ _self.champDowngradeBlock(user, champTipos, userIsChamp, '') }}
+                    {{ _self.champDowngradeBlock(user, champTipos, userIsChamp or userIsGlobalChamp, '') }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -442,7 +472,6 @@
                         {% endfor %}
                     </div>
 
-                    {# isPending=false, prefix vazio: carrega estado salvo do usuário #}
                     {{ _self.ufsBlock(user, allUfs, false, '') }}
                     {{ _self.tiposBlock(user, allTipos, false, '') }}
 
@@ -479,8 +508,6 @@
         {% else %}
         <div class="user-list">
         {% for user in rejected %}
-        {# Rejeitados usam prefix 're' em todos os IDs para evitar colisão
-           com cards de Pendentes que podem ter o mesmo user.id na mesma página #}
         <div class="user-card" id="card-re{{ user.id }}">
             <div class="user-card-header" onclick="toggleCard('re{{ user.id }}')">
                 <div class="avatar">{{ user.name|first|upper }}</div>
@@ -495,19 +522,8 @@
                 <form method="POST" action="{{ path('admin_users_approve', {id: user.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
 
-                    <div class="admin-toggle">
-                        <input type="checkbox" name="is_admin" id="readmin_{{ user.id }}" value="1">
-                        <label for="readmin_{{ user.id }}">Conceder privilégios de Administrador</label>
-                    </div>
+                    {{ _self.rolesBlock(user, 're' ~ user.id, false, false, false) }}
 
-                    <div class="champ-toggle">
-                        {# toggleDowngradeFields recebe uid com prefix 're' para encontrar o ID correto #}
-                        <input type="checkbox" name="is_champ" id="rechamp_{{ user.id }}" value="1"
-                               onchange="toggleDowngradeFields('re{{ user.id }}', this.checked)">
-                        <label for="rechamp_{{ user.id }}">⭐ Conceder perfil Champ</label>
-                    </div>
-
-                    {# prefix 're': IDs ex: downgrade_fields_re5, all_ufs_re5, ufs_grid_re5 #}
                     {{ _self.champDowngradeBlock(user, champTipos, false, 're') }}
 
                     <div class="section-label" style="margin-top:.75rem">Permissões de Área</div>
@@ -520,7 +536,6 @@
                         {% endfor %}
                     </div>
 
-                    {# isPending=true (inicializa "Todos" marcado), prefix 're' #}
                     {{ _self.ufsBlock(user, allUfs, true, 're') }}
                     {{ _self.tiposBlock(user, allTipos, true, 're') }}
 
@@ -555,12 +570,11 @@ function switchTab(name, btn) {
     btn.classList.add('active');
 }
 
-// Aceita id numérico ou string com prefixo (ex: 're5')
 function toggleCard(id) {
     document.getElementById('card-' + id).classList.toggle('open');
 }
 
-/* ── Modal de confirmação ── */
+/* ── Modal ── */
 let _modalForm = null;
 function openModal(title, body, confirmLabel, confirmColor, form) {
     document.getElementById('modal-title').textContent = title;
@@ -586,22 +600,62 @@ document.getElementById('confirm-modal').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-/* ── Downgrade fields (Champ) ──
-   uid: string com ou sem prefixo, ex: '5' ou 're5' — deve bater com o id do elemento */
+/* ── Sincronização visual dos toggles de perfil ──
+   Regras:
+   - Global Champ ativado → oculta Champ simples, mostra nota, desabilita UFs
+   - Global Champ desativado → mostra Champ simples, oculta nota, reabilita UFs
+   - Champ ativado/desativado → mostra/oculta downgrade fields
+   - Global Champ ativado → também mostra downgrade fields
+*/
+function syncRoleToggle(role, uid, checked) {
+    const champEl     = document.getElementById('toggle_champ_'  + uid);
+    const gchampEl    = document.getElementById('toggle_gchamp_' + uid);
+    const champCb     = document.getElementById('is_champ_'       + uid);
+    const gchampCb    = document.getElementById('is_global_champ_'+ uid);
+    const gchampNote  = document.getElementById('gchamp_note_'   + uid);
+    const ufsSection  = document.getElementById('ufs_section_'   + uid);
+
+    if (role === 'gchamp') {
+        if (checked) {
+            // Global Champ ON: oculta champ simples, mostra nota, desabilita UFs
+            if (champEl)   champEl.style.display = 'none';
+            if (champCb)   champCb.checked = false;
+            if (gchampNote) gchampNote.style.display = 'block';
+            if (ufsSection) { ufsSection.style.opacity = '.4'; ufsSection.style.pointerEvents = 'none'; }
+            // Mostra downgrade fields pois Global Champ também processa downgrades
+            toggleDowngradeFields(uid, true);
+        } else {
+            // Global Champ OFF: mostra champ simples, oculta nota, reabilita UFs
+            if (champEl)   champEl.style.display = '';
+            if (gchampNote) gchampNote.style.display = 'none';
+            if (ufsSection) { ufsSection.style.opacity = ''; ufsSection.style.pointerEvents = ''; }
+            toggleDowngradeFields(uid, false);
+        }
+        // Atualiza classe inactive no próprio toggle
+        if (gchampEl) gchampEl.classList.toggle('inactive', !checked);
+
+    } else if (role === 'champ') {
+        if (champEl) champEl.classList.toggle('inactive', !checked);
+        toggleDowngradeFields(uid, checked);
+
+    } else if (role === 'admin') {
+        const adminEl = document.getElementById('toggle_admin_' + uid);
+        if (adminEl) adminEl.classList.toggle('inactive', !checked);
+    }
+}
+
+/* ── Downgrade fields ── */
 function toggleDowngradeFields(uid, show) {
     const el = document.getElementById('downgrade_fields_' + uid);
     if (el) el.style.display = show ? '' : 'none';
 }
 
-/* ── UFs ──
-   uid: string identificadora do bloco (ex: '5' para aprovados, 're5' para rejeitados) */
+/* ── UFs ── */
 function toggleAllUfs(uid, allChecked) {
     const grid = document.getElementById('ufs_grid_' + uid);
     if (!grid) return;
     grid.style.opacity = allChecked ? '.4' : '1';
     grid.style.pointerEvents = allChecked ? 'none' : '';
-    // Ao marcar "Todos": força todas as UFs checadas (backend ignora via all_ufs=1)
-    // Ao desmarcar "Todos": mantém todas marcadas — admin escolhe quais remover
     if (allChecked) {
         grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
             cb.checked = true;
@@ -659,15 +713,12 @@ function updateTiposCount(uid) {
     }
 }
 
-/* ── Inicialização: usa data-uid para iterar corretamente
-   (resolve o bug de prefix 're' que causava IDs sem match) ── */
+/* ── Inicialização ── */
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializa contadores de UFs para todos os blocos
     document.querySelectorAll('[id^="all_ufs_"]').forEach(el => {
         const uid = el.dataset.uid;
         if (uid) updateUfsCount(uid);
     });
-    // Inicializa contadores de Tipos e vincula evento de change
     document.querySelectorAll('[id^="all_tipos_"]').forEach(el => {
         const uid = el.dataset.uid;
         if (!uid) return;
@@ -677,6 +728,14 @@ document.addEventListener('DOMContentLoaded', () => {
             grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
                 cb.addEventListener('change', () => updateTiposCount(uid));
             });
+        }
+    });
+    // Desabilita seção de UFs para usuários Global Champ já salvos
+    document.querySelectorAll('[id^="is_global_champ_"]').forEach(cb => {
+        if (cb.checked) {
+            const uid = cb.id.replace('is_global_champ_', '');
+            const ufsSection = document.getElementById('ufs_section_' + uid);
+            if (ufsSection) { ufsSection.style.opacity = '.4'; ufsSection.style.pointerEvents = 'none'; }
         }
     });
 });

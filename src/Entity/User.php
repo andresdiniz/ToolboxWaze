@@ -203,13 +203,14 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function canAccessUf(string $uf): bool
     {
         if ($this->isAdmin()) { return true; }
+        if ($this->isGlobalChamp()) { return true; }
         if ($this->allowedUfs === null) { return true; }
         return in_array(strtoupper($uf), $this->allowedUfs, true);
     }
 
     public function getUfsForQuery(): ?array
     {
-        if ($this->isAdmin() || $this->allowedUfs === null) { return null; }
+        if ($this->isAdmin() || $this->isGlobalChamp() || $this->allowedUfs === null) { return null; }
         return $this->allowedUfs;
     }
 
@@ -266,4 +267,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setLastLoginAt(?\DateTimeImmutable $v): static { $this->lastLoginAt = $v; return $this; }
 
     public function isAdmin(): bool { return in_array('ROLE_ADMIN', $this->getRoles(), true); }
+
+    /**
+     * Global Champ: Champ com acesso irrestrito a todos os estados.
+     * Implica ROLE_CHAMP + ignora allowedUfs na verificação de acesso.
+     */
+    public function isGlobalChamp(): bool { return in_array('ROLE_GLOBAL_CHAMP', $this->getRoles(), true); }
+
+    /**
+     * Retorna true se o usuário tem perfil Champ (simples ou global).
+     */
+    public function isAnyChamp(): bool
+    {
+        return $this->isGlobalChamp() || in_array('ROLE_CHAMP', $this->getRoles(), true);
+    }
 }

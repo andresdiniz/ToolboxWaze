@@ -1,40 +1,77 @@
 {% extends 'base.html.twig' %}
-{% block title %}Busca — {{ q }} — ToolboxWaze{% endblock %}
+{% block title %}Busca — ToolboxWaze{% endblock %}
 
 {% block body %}
-<div class="container-fluid py-4">
+<div class="container-fluid py-4" style="max-width:1100px">
 
-  <div class="mb-4">
-    <form method="get" action="{{ path('busca_index') }}" class="d-flex gap-2" style="max-width:600px">
-      <input type="search" name="q" value="{{ q }}" class="form-control"
-             placeholder="Buscar município, local, razão social..." autofocus>
-      <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
-    </form>
-  </div>
+  <h1 class="h4 fw-bold mb-4">Busca Global</h1>
+
+  {# ── Formulário ── #}
+  <form method="get" action="{{ path('busca_index') }}" class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label fw-semibold small">Termo</label>
+          <input type="search" name="q" value="{{ q }}" autofocus
+                 class="form-control" placeholder="Município, razão social, local…">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold small">Tipo</label>
+          <select name="tipo" class="form-select">
+            <option value="">— todos —</option>
+            <option value="radar"  {{ tipo == 'radar'  ? 'selected' }}>Radar</option>
+            <option value="posto"  {{ tipo == 'posto'  ? 'selected' }}>Posto</option>
+            <option value="escola" {{ tipo == 'escola' ? 'selected' }}>Escola</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold small">UF</label>
+          <select name="uf" class="form-select">
+            <option value="">— todas —</option>
+            {% for u in ufs %}
+              <option value="{{ u }}" {{ uf == u ? 'selected' }}>{{ u }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-1">
+          <button class="btn btn-primary w-100" type="submit">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
 
   {% if q|length >= 2 %}
+    {% set total = radares|length + postos|length + escolas|length %}
     <p class="text-muted small mb-3">
-      {{ radares|length }} radar(es) e {{ postos|length }} posto(s) encontrados para <strong>"{{ q }}"</strong>
+      <strong>{{ total }}</strong> resultado(s) para <strong>"{{ q }}"</strong>
+      {% if tipo %} · tipo: <strong>{{ tipo }}</strong>{% endif %}
+      {% if uf %}   · UF: <strong>{{ uf }}</strong>{% endif %}
     </p>
   {% endif %}
 
+  {# ── Radares ── #}
   {% if radares %}
-  <h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-broadcast me-1"></i>Radares</h6>
+  <h6 class="text-uppercase text-muted fw-semibold small mb-2">Radares ({{ radares|length }})</h6>
   <div class="card mb-4">
-    <div class="card-body p-0">
+    <div class="table-responsive">
       <table class="table table-sm table-hover mb-0">
-        <thead><tr><th>UF</th><th>Município</th><th>Local</th><th>Resultado</th><th></th></tr></thead>
+        <thead class="table-light"><tr><th>UF</th><th>Município</th><th>Local</th><th>Tipo</th><th>Resultado</th><th></th></tr></thead>
         <tbody>
         {% for r in radares %}
           <tr>
             <td><span class="badge bg-secondary">{{ r.sigla_uf }}</span></td>
-            <td>{{ r.municipio }}</td>
+            <td class="small">{{ r.municipio }}</td>
             <td class="small">{{ r.local_verificacao }}</td>
+            <td class="small">{{ r.tipo_medidor }}</td>
             <td>
               {% set cls = r.ultimo_resultado == 'APROVADO' ? 'success' : (r.ultimo_resultado == 'REPROVADO' ? 'danger' : 'secondary') %}
               <span class="badge bg-{{ cls }}">{{ r.ultimo_resultado ?? 'SEM INFO' }}</span>
             </td>
-            <td><a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-xs btn-outline-primary py-0 px-2">Ver</a></td>
+            <td><a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-sm btn-outline-primary py-0 px-2">Ver</a></td>
           </tr>
         {% endfor %}
         </tbody>
@@ -43,20 +80,25 @@
   </div>
   {% endif %}
 
+  {# ── Postos ── #}
   {% if postos %}
-  <h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-fuel-pump me-1"></i>Postos</h6>
+  <h6 class="text-uppercase text-muted fw-semibold small mb-2">Postos ({{ postos|length }})</h6>
   <div class="card mb-4">
-    <div class="card-body p-0">
+    <div class="table-responsive">
       <table class="table table-sm table-hover mb-0">
-        <thead><tr><th>UF</th><th>Município</th><th>Razão Social</th><th>Bandeira</th><th></th></tr></thead>
+        <thead class="table-light"><tr><th>UF</th><th>Município</th><th>Nome</th><th>Bandeira</th><th>Status</th><th></th></tr></thead>
         <tbody>
         {% for p in postos %}
           <tr>
             <td><span class="badge bg-secondary">{{ p.uf }}</span></td>
-            <td>{{ p.municipio }}</td>
+            <td class="small">{{ p.municipio }}</td>
             <td class="small">{{ p.nome_fantasia ?: p.razao_social }}</td>
             <td class="small">{{ p.bandeira }}</td>
-            <td><a href="{{ path('posto_show', {id: p.id}) }}" class="btn btn-xs btn-outline-primary py-0 px-2">Ver</a></td>
+            <td>
+              {% set sc = p.status == 'ATIVO' ? 'success' : 'secondary' %}
+              <span class="badge bg-{{ sc }}">{{ p.status }}</span>
+            </td>
+            <td><a href="{{ path('posto_show', {id: p.id}) }}" class="btn btn-sm btn-outline-primary py-0 px-2">Ver</a></td>
           </tr>
         {% endfor %}
         </tbody>
@@ -65,10 +107,36 @@
   </div>
   {% endif %}
 
-  {% if q|length >= 2 and not radares and not postos %}
+  {# ── Escolas ── #}
+  {% if escolas %}
+  <h6 class="text-uppercase text-muted fw-semibold small mb-2">Escolas ({{ escolas|length }})</h6>
+  <div class="card mb-4">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light"><tr><th>UF</th><th>Município</th><th>Nome</th><th>Dependência</th><th>INEP</th><th></th></tr></thead>
+        <tbody>
+        {% for e in escolas %}
+          <tr>
+            <td><span class="badge bg-secondary">{{ e.uf }}</span></td>
+            <td class="small">{{ e.municipio }}</td>
+            <td class="small">{{ e.escola }}</td>
+            <td class="small">{{ e.dependencia_administrativa }}</td>
+            <td class="small text-muted">{{ e.codigo_inep }}</td>
+            <td><a href="{{ path('escola_inep_show', {id: e.id}) }}" class="btn btn-sm btn-outline-primary py-0 px-2">Ver</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if q|length >= 2 and not radares and not postos and not escolas %}
   <div class="text-center text-muted py-5">
-    <i class="bi bi-search fs-1 d-block mb-3"></i>
-    <p>Nenhum resultado encontrado para <strong>"{{ q }}"</strong>.</p>
+    <svg width="48" height="48" fill="currentColor" viewBox="0 0 16 16" class="d-block mx-auto mb-3 opacity-25">
+      <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>
+    </svg>
+    <p>Nenhum resultado para <strong>"{{ q }}"</strong>.</p>
   </div>
   {% endif %}
 

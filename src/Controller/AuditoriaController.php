@@ -110,7 +110,9 @@ final class AuditoriaController extends AbstractController
             SELECT
                 wll.id, wll.campo_alterado, wll.valor_anterior, wll.valor_novo, wll.changed_at,
                 u.email AS changed_by_email,
-                rm.id AS objeto_id, rm.local_verificacao AS objeto_nome, rm.municipio, rm.sigla_uf AS uf,
+                rm.id AS objeto_id,
+                CONCAT_WS(' — ', rm.logradouro, rm.municipio, rm.sigla_uf) AS objeto_nome,
+                rm.municipio, rm.sigla_uf AS uf,
                 'radar' AS tipo
             FROM radar_waze_link_log wll
             JOIN user u ON u.id = wll.changed_by

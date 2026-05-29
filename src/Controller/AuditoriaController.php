@@ -15,6 +15,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class AuditoriaController extends AbstractController
 {
     private const PER_PAGE = 40;
+    private const COLL     = 'COLLATE utf8mb4_unicode_ci';
 
     public function __construct(
         private readonly Connection $db,
@@ -37,13 +38,15 @@ final class AuditoriaController extends AbstractController
         $page        = max(1, (int) $req->query->get('page', 1));
         $offset      = ($page - 1) * self::PER_PAGE;
 
+        $c = self::COLL;
+
         // ------------------------------------------------------------------
-        // Builder de filtros por bloco (cada bloco tem seu campo de UF)
+        // Builder de filtros por bloco
         // ------------------------------------------------------------------
         $blocks = [
-            'posto'  => ['ufCol' => 'frr.uf',      'timeCol' => 'wll.changed_at',  'userCol' => 'wll.changed_by',  'campoCol' => 'wll.campo_alterado'],
-            'radar'  => ['ufCol' => 'rm.sigla_uf', 'timeCol' => 'wll.changed_at',  'userCol' => 'wll.changed_by',  'campoCol' => 'wll.campo_alterado'],
-            'escola' => ['ufCol' => 'e.uf',         'timeCol' => 'wll.alterado_em', 'userCol' => 'wll.alterado_por', 'campoCol' => 'wll.campo'],
+            'posto'  => ['ufCol' => 'frr.uf',       'timeCol' => 'wll.changed_at',  'userCol' => 'wll.changed_by',   'campoCol' => 'wll.campo_alterado'],
+            'radar'  => ['ufCol' => 'rm.sigla_uf',  'timeCol' => 'wll.changed_at',  'userCol' => 'wll.changed_by',   'campoCol' => 'wll.campo_alterado'],
+            'escola' => ['ufCol' => 'e.uf',          'timeCol' => 'wll.alterado_em', 'userCol' => 'wll.alterado_por', 'campoCol' => 'wll.campo'],
         ];
 
         $blockWhere  = [];
@@ -85,16 +88,21 @@ final class AuditoriaController extends AbstractController
         }
 
         // ------------------------------------------------------------------
-        // UNION dos três tipos
+        // UNION com COLLATE uniforme em todas as colunas de texto
         // ------------------------------------------------------------------
         $postoSql = "
             SELECT
-                wll.id, wll.campo_alterado AS campo, wll.valor_anterior, wll.valor_novo,
-                wll.changed_at AS alterado_em,
-                u.email AS changed_by_email,
-                frr.id AS objeto_id, frr.razao_social AS objeto_nome,
-                frr.municipio, frr.uf,
-                'posto' AS tipo
+                wll.id,
+                wll.campo_alterado   $c AS campo,
+                wll.valor_anterior   $c AS valor_anterior,
+                wll.valor_novo       $c AS valor_novo,
+                wll.changed_at           AS alterado_em,
+                u.email              $c AS changed_by_email,
+                frr.id                   AS objeto_id,
+                frr.razao_social     $c AS objeto_nome,
+                frr.municipio        $c AS municipio,
+                frr.uf               $c AS uf,
+                'posto'              $c AS tipo
             FROM posto_waze_link_log wll
             JOIN user u ON u.id = wll.changed_by
             JOIN posto_waze_link pwl ON pwl.id = wll.posto_waze_link_id
@@ -104,13 +112,17 @@ final class AuditoriaController extends AbstractController
 
         $radarSql = "
             SELECT
-                wll.id, wll.campo_alterado AS campo, wll.valor_anterior, wll.valor_novo,
-                wll.changed_at AS alterado_em,
-                u.email AS changed_by_email,
-                rm.id AS objeto_id,
-                CONCAT_WS(' — ', rm.logradouro, rm.municipio, rm.sigla_uf) AS objeto_nome,
-                rm.municipio, rm.sigla_uf AS uf,
-                'radar' AS tipo
+                wll.id,
+                wll.campo_alterado                               $c AS campo,
+                wll.valor_anterior                               $c AS valor_anterior,
+                wll.valor_novo                                   $c AS valor_novo,
+                wll.changed_at                                       AS alterado_em,
+                u.email                                          $c AS changed_by_email,
+                rm.id                                                AS objeto_id,
+                CONCAT_WS(' — ', rm.logradouro, rm.municipio, rm.sigla_uf) $c AS objeto_nome,
+                rm.municipio                                     $c AS municipio,
+                rm.sigla_uf                                      $c AS uf,
+                'radar'                                          $c AS tipo
             FROM radar_waze_link_log wll
             JOIN user u ON u.id = wll.changed_by
             JOIN radar_waze_link rwl ON rwl.id = wll.radar_waze_link_id
@@ -120,31 +132,31 @@ final class AuditoriaController extends AbstractController
 
         $escolaSql = "
             SELECT
-                wll.id, wll.campo AS campo, wll.valor_anterior, wll.valor_novo,
-                wll.alterado_em,
-                u.email AS changed_by_email,
-                e.id AS objeto_id, e.escola AS objeto_nome,
-                e.municipio, e.uf,
-                'escola' AS tipo
+                wll.id,
+                wll.campo            $c AS campo,
+                wll.valor_anterior   $c AS valor_anterior,
+                wll.valor_novo       $c AS valor_novo,
+                wll.alterado_em          AS alterado_em,
+                u.email              $c AS changed_by_email,
+                e.id                     AS objeto_id,
+                e.escola             $c AS objeto_nome,
+                e.municipio          $c AS municipio,
+                e.uf                 $c AS uf,
+                'escola'             $c AS tipo
             FROM escola_inep_waze_link_log wll
             JOIN user u ON u.id = wll.alterado_por
             JOIN escola_inep e ON e.id = wll.escola_id
             {$blockWhere['escola']}
         ";
 
-        // Monta os tipos ativos (para filtro de tipo)
         $activeSqls   = [];
         $activeParams = [];
 
         foreach (['posto' => $postoSql, 'radar' => $radarSql, 'escola' => $escolaSql] as $t => $sql) {
             if ($filtroTipo === '' || $filtroTipo === $t) {
-                $activeSqls[]   = $sql;
-                $activeParams   = array_merge($activeParams, $blockParams[$t]);
+                $activeSqls[]  = $sql;
+                $activeParams  = array_merge($activeParams, $blockParams[$t]);
             }
-        }
-
-        if (empty($activeSqls)) {
-            $activeSqls[]  = "SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'none' WHERE 1=0";
         }
 
         $unionSql = implode(' UNION ALL ', $activeSqls);
@@ -164,24 +176,24 @@ final class AuditoriaController extends AbstractController
         $usuarios = $this->db->fetchAllAssociative(
             "SELECT DISTINCT u.email
              FROM (
-                SELECT changed_by FROM posto_waze_link_log
+                SELECT changed_by AS uid FROM posto_waze_link_log
                 UNION
                 SELECT changed_by FROM radar_waze_link_log
                 UNION
                 SELECT alterado_por FROM escola_inep_waze_link_log
              ) all_logs
-             JOIN user u ON u.id = all_logs.changed_by
+             JOIN user u ON u.id = all_logs.uid
              ORDER BY u.email"
         );
 
         return $this->render('auditoria/index.html.twig', [
-            'logs'       => $logs,
-            'total'      => $total,
-            'page'       => $page,
-            'pages'      => (int) ceil(max(1, $total) / self::PER_PAGE),
-            'per_page'   => self::PER_PAGE,
-            'filtros'    => compact('filtroUser', 'filtroCampo', 'dataInicio', 'dataFim', 'filtroTipo'),
-            'usuarios'   => array_column($usuarios, 'email'),
+            'logs'     => $logs,
+            'total'    => $total,
+            'page'     => $page,
+            'pages'    => (int) ceil(max(1, $total) / self::PER_PAGE),
+            'per_page' => self::PER_PAGE,
+            'filtros'  => compact('filtroUser', 'filtroCampo', 'dataInicio', 'dataFim', 'filtroTipo'),
+            'usuarios' => array_column($usuarios, 'email'),
         ]);
     }
 }

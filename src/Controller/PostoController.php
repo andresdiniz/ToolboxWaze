@@ -35,7 +35,7 @@ class PostoController extends AbstractController
     #[Route('', name: 'posto_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_FUEL);
+        $this->requirePermission(User::PERMISSION_POSTOS);
 
         $page      = max(1, (int) $request->query->get('page', 1));
         $busca     = trim((string) $request->query->get('busca', ''));
@@ -47,7 +47,6 @@ class PostoController extends AbstractController
         $where  = ['1=1'];
         $params = [];
 
-        // ── Restrição de UFs do usuário ──────────────────────────────────────
         $ufRestriction = $this->enforceUfsOnQuery('r.uf');
         if ($ufRestriction['clause'] !== '') {
             $where[]  = $ufRestriction['clause'];
@@ -110,7 +109,6 @@ class PostoController extends AbstractController
             ) ?: null;
         }
 
-        // UFs disponíveis no filtro: limitadas às UFs do usuário
         $ufsQuery = $allowedUfs !== null
             ? 'SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL AND uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY uf'
             : 'SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL ORDER BY uf';
@@ -148,7 +146,7 @@ class PostoController extends AbstractController
     #[Route('/{id}', name: 'posto_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
-        $this->requirePermission(User::PERMISSION_FUEL);
+        $this->requirePermission(User::PERMISSION_POSTOS);
 
         $posto = $this->postoRepo->find($id)
             ?? throw $this->createNotFoundException("Posto #$id não encontrado.");
@@ -170,7 +168,7 @@ class PostoController extends AbstractController
     #[Route('/{id}/waze-save', name: 'posto_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_FUEL);
+        $this->requirePermission(User::PERMISSION_POSTOS);
 
         if (!$this->isCsrfTokenValid('posto_waze_save_' . $id, $request->request->get('_token'))) {
             throw new AccessDeniedException('Token CSRF inválido.');
@@ -226,7 +224,7 @@ class PostoController extends AbstractController
     #[Route('/{id}/waze-delete', name: 'posto_waze_delete', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeDelete(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_FUEL);
+        $this->requirePermission(User::PERMISSION_POSTOS);
 
         if (!$this->isCsrfTokenValid('waze_posto_delete_' . $id, $request->request->get('_token'))) {
             throw new AccessDeniedException('Token CSRF inválido.');
@@ -252,7 +250,7 @@ class PostoController extends AbstractController
     #[Route('/{id}/waze-suggest', name: 'posto_waze_suggest', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function wazeSuggest(int $id): JsonResponse
     {
-        $this->requirePermission(User::PERMISSION_FUEL);
+        $this->requirePermission(User::PERMISSION_POSTOS);
 
         $posto = $this->postoRepo->find($id)
             ?? throw $this->createNotFoundException();

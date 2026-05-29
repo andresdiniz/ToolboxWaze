@@ -24,7 +24,7 @@ class RadarController extends AbstractController
     private const CAMPOS_EDITAVEIS = [
         'sigla_uf'                  => 'UF',
         'uf'                        => 'Estado (nome)',
-        'municipio'                 => 'Município',
+        'municipio'                 => 'Munícipio',
         'logradouro'                => 'Logradouro',
         'cep'                       => 'CEP',
         'nome_empresa'              => 'Empresa',
@@ -52,13 +52,13 @@ class RadarController extends AbstractController
 
     public function __construct(private readonly Connection $db) {}
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     // Listagem
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     #[Route('', name: 'radar_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_RADARS);
+        $this->requirePermission(User::PERMISSION_RADARES);
 
         $page      = max(1, (int) $request->query->get('page', 1));
         $uf        = trim((string) $request->query->get('uf', ''));
@@ -77,14 +77,12 @@ class RadarController extends AbstractController
         $where  = ['1=1'];
         $params = [];
 
-        // ── Restrição de UFs do usuário ──────────────────────────────────────
         $ufRestriction = $this->enforceUfsOnQuery('r.sigla_uf');
         if ($ufRestriction['clause'] !== '') {
             $where[]  = $ufRestriction['clause'];
             $params   = array_merge($params, $ufRestriction['params']);
         }
 
-        // Se o usuário pediu uma UF específica, valida que ele tem acesso a ela
         if ($uf !== '') {
             $this->requireUfAccess($uf);
             $where[]  = 'r.sigla_uf = ?';
@@ -130,7 +128,6 @@ class RadarController extends AbstractController
             $params
         );
 
-        // UFs disponíveis no filtro: limitadas às UFs do usuário
         $allowedUfs = $this->allowedUfsForView();
         $ufsQuery   = $allowedUfs !== null
             ? 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND sigla_uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY sigla_uf'
@@ -148,7 +145,6 @@ class RadarController extends AbstractController
             'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL ORDER BY tipo_medidor'
         ), 'tipo_medidor');
 
-        // Stats só são exibidos quando sem filtros e sem restrição de UF
         $semFiltros = $uf === '' && $municipio === '' && $resultado === '' && $tipo === '' && $validade === '' && $serie === '';
         $stats = ($semFiltros && $allowedUfs === null)
             ? ($this->db->fetchAssociative(
@@ -181,13 +177,13 @@ class RadarController extends AbstractController
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     // Detalhe
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(int $id): Response
     {
-        $this->requirePermission(User::PERMISSION_RADARS);
+        $this->requirePermission(User::PERMISSION_RADARES);
 
         $viso  = self::VALIDADE_ISO_EXPR;
         $radar = $this->db->fetchAssociative(
@@ -246,13 +242,13 @@ class RadarController extends AbstractController
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     // Editar radar
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function edit(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_RADARS);
+        $this->requirePermission(User::PERMISSION_RADARES);
 
         $viso  = self::VALIDADE_ISO_EXPR;
         $radar = $this->db->fetchAssociative(
@@ -317,13 +313,13 @@ class RadarController extends AbstractController
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     // Salvar link Waze
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
     #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_RADARS);
+        $this->requirePermission(User::PERMISSION_RADARES);
 
         $radar = $this->db->fetchAssociative('SELECT id, sigla_uf, link_waze FROM radar_medidor WHERE id = ?', [$id]);
         if (!$radar) {

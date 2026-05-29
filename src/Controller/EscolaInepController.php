@@ -32,13 +32,11 @@ class EscolaInepController extends AbstractController
     }
 
     // -------------------------------------------------------------------------
-    // Listagem
-    // -------------------------------------------------------------------------
 
     #[Route('', name: 'escola_inep_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_TOOLS);
+        $this->requirePermission(User::PERMISSION_ESCOLAS);
 
         $page        = max(1, (int) $request->query->get('page', 1));
         $busca       = trim((string) $request->query->get('busca', ''));
@@ -52,7 +50,6 @@ class EscolaInepController extends AbstractController
         $where  = ['1=1'];
         $params = [];
 
-        // ── Restrição de UFs do usuário ──────────────────────────────────────
         $ufRestriction = $this->enforceUfsOnQuery('e.uf');
         if ($ufRestriction['clause'] !== '') {
             $where[]  = $ufRestriction['clause'];
@@ -126,7 +123,6 @@ class EscolaInepController extends AbstractController
             ) ?: null;
         }
 
-        // UFs disponíveis no filtro: limitadas às UFs do usuário
         $ufsQuery = $allowedUfs !== null
             ? 'SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL AND uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY uf'
             : 'SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL ORDER BY uf';
@@ -173,13 +169,11 @@ class EscolaInepController extends AbstractController
     }
 
     // -------------------------------------------------------------------------
-    // Detalhe
-    // -------------------------------------------------------------------------
 
     #[Route('/{id}', name: 'escola_inep_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
-        $this->requirePermission(User::PERMISSION_TOOLS);
+        $this->requirePermission(User::PERMISSION_ESCOLAS);
 
         /** @var EscolaInep|null $escola */
         $escola = $this->em->find(EscolaInep::class, $id);
@@ -200,13 +194,11 @@ class EscolaInepController extends AbstractController
     }
 
     // -------------------------------------------------------------------------
-    // Salvar links Waze
-    // -------------------------------------------------------------------------
 
     #[Route('/{id}/link', name: 'escola_inep_link_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function linkSave(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_TOOLS);
+        $this->requirePermission(User::PERMISSION_ESCOLAS);
 
         /** @var EscolaInep|null $escola */
         $escola = $this->em->find(EscolaInep::class, $id);
@@ -253,13 +245,11 @@ class EscolaInepController extends AbstractController
     }
 
     // -------------------------------------------------------------------------
-    // Adicionar comentário
-    // -------------------------------------------------------------------------
 
     #[Route('/{id}/comentario', name: 'escola_inep_comentario_add', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function comentarioAdd(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_TOOLS);
+        $this->requirePermission(User::PERMISSION_ESCOLAS);
 
         /** @var EscolaInep|null $escola */
         $escola = $this->em->find(EscolaInep::class, $id);

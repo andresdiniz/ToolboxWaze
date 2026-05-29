@@ -369,15 +369,32 @@
     options: { responsive: true, plugins: { legend: { display: false } }, scales: sc() },
   });
 
+  // ── count-up corrigido ────────────────────────────────────────────────────
+  function formatVal(val, isInt, suffix) {
+    if (isNaN(val)) return '0' + suffix;
+    return (isInt ? Math.round(val).toLocaleString('pt-BR') : val.toFixed(1)) + suffix;
+  }
+
   document.querySelectorAll('.count-up').forEach(el => {
-    const target = parseFloat(el.dataset.target ?? '0');
+    const raw    = parseFloat(el.dataset.target ?? '0');
+    const target = isNaN(raw) ? 0 : raw;
     const suffix = el.dataset.suffix ?? '';
-    if (!target) { el.textContent = '0' + suffix; return; }
-    const dur = 1000, start = performance.now(), isInt = Number.isInteger(target);
+    const isInt  = Number.isInteger(target);
+
+    // Escreve o valor final imediatamente como fallback
+    el.textContent = formatVal(target, isInt, suffix);
+
+    if (target === 0) return;
+
+    const dur   = 1000;
+    const start = performance.now();
+
     const step = t => {
-      const p = Math.min((t - start) / dur, 1), e = 1 - Math.pow(1 - p, 3);
-      el.textContent = (isInt ? Math.round(e * target).toLocaleString('pt-BR') : (e * target).toFixed(1)) + suffix;
+      const p = Math.min((t - start) / dur, 1);
+      const e = 1 - Math.pow(1 - p, 3);          // ease-out cubic
+      el.textContent = formatVal(e * target, isInt, suffix);
       if (p < 1) requestAnimationFrame(step);
+      else        el.textContent = formatVal(target, isInt, suffix); // valor exato no final
     };
     requestAnimationFrame(step);
   });

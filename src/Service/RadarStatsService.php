@@ -32,8 +32,8 @@ final class RadarStatsService
 
             $row = $this->db->fetchAssociative(
                 "SELECT COUNT(*) AS total,
-                        SUM(situacao = 'APROVADO')  AS aprovados,
-                        SUM(situacao = 'REPROVADO') AS reprovados,
+                        SUM(UPPER(situacao) = 'APROVADO')  AS aprovados,
+                        SUM(UPPER(situacao) = 'REPROVADO') AS reprovados,
                         SUM(data_validade IS NOT NULL AND $dv < ?)    AS vencidos,
                         SUM(data_validade IS NOT NULL AND $dv >= ? AND $dv <= ?) AS vencendo,
                         COUNT(DISTINCT sigla_uf)     AS estados
@@ -70,8 +70,8 @@ final class RadarStatsService
 
             return $this->db->fetchAllAssociative(
                 "SELECT sigla_uf AS uf, COUNT(*) AS total,
-                        SUM(situacao = 'APROVADO')  AS aprovados,
-                        SUM(situacao = 'REPROVADO') AS reprovados
+                        SUM(UPPER(situacao) = 'APROVADO')  AS aprovados,
+                        SUM(UPPER(situacao) = 'REPROVADO') AS reprovados
                  FROM radar_medidor $wc
                  GROUP BY sigla_uf ORDER BY sigla_uf",
                 $params
@@ -90,9 +90,9 @@ final class RadarStatsService
             $wc = $where ? "WHERE $where" : '';
 
             return $this->db->fetchAllAssociative(
-                "SELECT COALESCE(situacao, 'SEM INFO') AS resultado, COUNT(*) AS total
+                "SELECT COALESCE(UPPER(situacao), 'SEM INFO') AS resultado, COUNT(*) AS total
                  FROM radar_medidor $wc
-                 GROUP BY situacao ORDER BY total DESC",
+                 GROUP BY UPPER(situacao) ORDER BY total DESC",
                 $params
             );
         });
@@ -109,7 +109,8 @@ final class RadarStatsService
                         COUNT(*) AS total
                  FROM radar_historico
                  WHERE data_laudo IS NOT NULL
-                   AND STR_TO_DATE(data_laudo, '%d/%m/%Y') >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                   AND STR_TO_DATE(data_laudo, '%d/%m/%Y') IS NOT NULL
+                   AND STR_TO_DATE(data_laudo, '%d/%m/%Y') BETWEEN DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND CURDATE()
                  GROUP BY mes ORDER BY mes"
             );
         });
@@ -154,7 +155,7 @@ final class RadarStatsService
              FROM radar_medidor rm
              LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
              WHERE rwl.id IS NULL
-               AND rm.situacao = 'APROVADO'
+               AND UPPER(rm.situacao) = 'APROVADO'
                $andUf
              ORDER BY rm.sigla_uf, rm.municipio
              LIMIT $lim",

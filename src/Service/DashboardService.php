@@ -21,7 +21,7 @@ final class DashboardService
             $item->expiresAfter(600);
             try {
                 return $this->db->fetchAssociative(
-                    'SELECT COUNT(*) AS total, COUNT(DISTINCT sigla_uf) AS estados FROM escola_inep'
+                    'SELECT COUNT(*) AS total, COUNT(DISTINCT uf) AS estados FROM escola_inep'
                 ) ?: ['total' => 0, 'estados' => 0];
             } catch (\Throwable) {
                 return ['total' => 0, 'estados' => 0];

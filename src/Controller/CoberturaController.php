@@ -27,23 +27,21 @@ final class CoberturaController extends AbstractController
     #[Route('/radares', name: 'radar')]
     public function radar(): Response
     {
-        $this->requirePermission(User::PERMISSION_RADARS);
+        $this->requirePermission(User::PERMISSION_RADARES);
 
         /** @var User|null $user */
         $user       = $this->getUser();
         $allowedUfs = $user?->getUfsForQuery();
 
-        $porUf   = $this->radarStats->getCoberturaWazePorUf($allowedUfs);
-        $semWaze = $this->radarStats->getSemWazePrioritarios($allowedUfs, 50);
-        $kpis    = $this->radarStats->getKpis($allowedUfs);
+        $porUf    = $this->radarStats->getCoberturaWazePorUf($allowedUfs);
+        $semWaze  = $this->radarStats->getSemWazePrioritarios($allowedUfs, 50);
+        $kpis     = $this->radarStats->getKpis($allowedUfs);
         $porUfAll = $this->radarStats->getPorUf($allowedUfs);
 
-        // classifica UFs por cobertura Waze
         $criticas = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] <  25));
         $parciais = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] >= 25 && (float)$r['pct'] < 75));
         $boas     = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] >= 75));
 
-        // dados para gráfico de cobertura por UF
         $chartLabels  = array_column($porUf, 'uf');
         $chartComWaze = array_map('intval', array_column($porUf, 'com_waze'));
         $chartSemWaze = array_map('intval', array_column($porUf, 'sem_waze'));
@@ -68,14 +66,14 @@ final class CoberturaController extends AbstractController
     #[Route('/postos', name: 'posto')]
     public function posto(): Response
     {
-        $this->requirePermission(User::PERMISSION_FUEL);
+        $this->requirePermission(User::PERMISSION_POSTOS);
 
         /** @var User|null $user */
         $user       = $this->getUser();
         $allowedUfs = $user?->getUfsForQuery();
 
-        $porUf   = $this->postoStats->getCoberturaPorUf($allowedUfs);
-        $kpis    = $this->postoStats->getKpis($allowedUfs);
+        $porUf = $this->postoStats->getCoberturaPorUf($allowedUfs);
+        $kpis  = $this->postoStats->getKpis($allowedUfs);
 
         $criticas = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] <  25));
         $parciais = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] >= 25 && (float)$r['pct'] < 75));

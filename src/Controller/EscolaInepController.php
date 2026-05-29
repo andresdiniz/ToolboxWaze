@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Controller\Trait\AccessControlTrait;
 use App\Entity\EscolaInep;
 use App\Entity\EscolaInepComentario;
 use App\Entity\EscolaInepWazeLinkLog;
+use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -19,6 +21,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_USER')]
 class EscolaInepController extends AbstractController
 {
+    use AccessControlTrait;
+
     private const PER_PAGE = 50;
 
     public function __construct(
@@ -34,6 +38,8 @@ class EscolaInepController extends AbstractController
     #[Route('', name: 'escola_inep_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
+        $this->requirePermission(User::PERMISSION_TOOLS);
+
         $page        = max(1, (int) $request->query->get('page', 1));
         $busca       = trim((string) $request->query->get('busca', ''));
         $uf          = trim((string) $request->query->get('uf', ''));
@@ -46,6 +52,13 @@ class EscolaInepController extends AbstractController
         $where  = ['1=1'];
         $params = [];
 
+        // ── Restrição de UFs do usuário ──────────────────────────────────────
+        $ufRestriction = $this->enforceUfsOnQuery('e.uf');
+        if ($ufRestriction['clause'] !== '') {
+            $where[]  = $ufRestriction['clause'];
+            $params   = array_merge($params, $ufRestriction['params']);
+        }
+
         if ($busca !== '') {
             $where[]  = '(e.escola LIKE ? OR e.codigo_inep LIKE ? OR e.municipio LIKE ?)';
             $params[] = "%$busca%";
@@ -53,6 +66,7 @@ class EscolaInepController extends AbstractController
             $params[] = "%$busca%";
         }
         if ($uf !== '') {
+            $this->requireUfAccess($uf);
             $where[]  = 'e.uf = ?';
             $params[] = $uf;
         }
@@ -69,7 +83,6 @@ class EscolaInepController extends AbstractController
             $params[] = $localizacao;
         }
 
-        // Filtro de situação
         match ($situacao) {
             'ativa'      => ($where[] = "(e.restricao_atendimento IS NULL OR UPPER(e.restricao_atendimento) LIKE '%SEM RESTRI%')"),
             'paralisada' => ($where[] = "UPPER(e.restricao_atendimento) LIKE '%PARALISADA%'"),
@@ -101,8 +114,10 @@ class EscolaInepController extends AbstractController
             $params
         );
 
+        $allowedUfs = $this->allowedUfsForView();
+
         $stats = null;
-        if ($busca === '' && $uf === '' && $municipio === '' && $dependencia === '' && $localizacao === '' && $situacao === '') {
+        if ($busca === '' && $uf === '' && $municipio === '' && $dependencia === '' && $localizacao === '' && $situacao === '' && $allowedUfs === null) {
             $stats = $this->db->fetchAssociative(
                 "SELECT COUNT(*)                                    AS total,
                         COUNT(DISTINCT e.uf)                        AS estados,
@@ -111,12 +126,15 @@ class EscolaInepController extends AbstractController
             ) ?: null;
         }
 
+        // UFs disponíveis no filtro: limitadas às UFs do usuário
+        $ufsQuery = $allowedUfs !== null
+            ? 'SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL AND uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY uf'
+            : 'SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL ORDER BY uf';
         $ufs = array_column(
-            $this->db->fetchAllAssociative(
-                'SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL ORDER BY uf'
-            ),
+            $this->db->fetchAllAssociative($ufsQuery, $allowedUfs ?? []),
             'uf'
         );
+
         $dependencias = array_column(
             $this->db->fetchAllAssociative(
                 'SELECT DISTINCT dependencia_administrativa FROM escola_inep
@@ -142,6 +160,7 @@ class EscolaInepController extends AbstractController
             'ufs'          => $ufs,
             'dependencias' => $dependencias,
             'localizacoes' => $localizacoes,
+            'allowedUfs'   => $allowedUfs,
             'filters'      => [
                 'busca'       => $busca,
                 'uf'          => $uf,
@@ -160,12 +179,16 @@ class EscolaInepController extends AbstractController
     #[Route('/{id}', name: 'escola_inep_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
+        $this->requirePermission(User::PERMISSION_TOOLS);
+
         /** @var EscolaInep|null $escola */
         $escola = $this->em->find(EscolaInep::class, $id);
 
         if (!$escola) {
             throw $this->createNotFoundException("Escola #{$id} não encontrada.");
         }
+
+        $this->requireUfAccess($escola->getUf());
 
         $linkLogs = $this->em->getRepository(EscolaInepWazeLinkLog::class)
             ->findBy(['escola' => $escola], ['alteradoEm' => 'DESC'], 20);
@@ -183,18 +206,21 @@ class EscolaInepController extends AbstractController
     #[Route('/{id}/link', name: 'escola_inep_link_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function linkSave(int $id, Request $request): Response
     {
+        $this->requirePermission(User::PERMISSION_TOOLS);
+
         /** @var EscolaInep|null $escola */
         $escola = $this->em->find(EscolaInep::class, $id);
         if (!$escola) {
             throw $this->createNotFoundException();
         }
 
+        $this->requireUfAccess($escola->getUf());
+
         $novoLinkWaze        = trim((string) $request->request->get('link_waze', '')) ?: null;
         $novoLinkAreaEscolar = trim((string) $request->request->get('link_area_escolar', '')) ?: null;
         $observacao          = trim((string) $request->request->get('observacao', '')) ?: null;
         $user                = $this->getUser();
 
-        // Log e atualiza link_waze
         if ($novoLinkWaze !== $escola->getLinkWaze()) {
             $log = (new EscolaInepWazeLinkLog())
                 ->setEscola($escola)
@@ -207,7 +233,6 @@ class EscolaInepController extends AbstractController
             $escola->setLinkWaze($novoLinkWaze);
         }
 
-        // Log e atualiza link_area_escolar
         if ($novoLinkAreaEscolar !== $escola->getLinkAreaEscolar()) {
             $log = (new EscolaInepWazeLinkLog())
                 ->setEscola($escola)
@@ -234,11 +259,15 @@ class EscolaInepController extends AbstractController
     #[Route('/{id}/comentario', name: 'escola_inep_comentario_add', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function comentarioAdd(int $id, Request $request): Response
     {
+        $this->requirePermission(User::PERMISSION_TOOLS);
+
         /** @var EscolaInep|null $escola */
         $escola = $this->em->find(EscolaInep::class, $id);
         if (!$escola) {
             throw $this->createNotFoundException();
         }
+
+        $this->requireUfAccess($escola->getUf());
 
         $texto = trim((string) $request->request->get('texto', ''));
         if ($texto === '') {

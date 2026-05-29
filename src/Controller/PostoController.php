@@ -1,8 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller;
 
+use App\Controller\Trait\AccessControlTrait;
 use App\Entity\PostoWazeLink;
+use App\Entity\User;
 use App\Repository\FuelResellerRawRepository;
 use App\Repository\PostoWazeLinkRepository;
 use Doctrine\DBAL\Connection;
@@ -18,6 +22,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_USER')]
 class PostoController extends AbstractController
 {
+    use AccessControlTrait;
+
     private const PER_PAGE = 50;
 
     public function __construct(
@@ -29,6 +35,8 @@ class PostoController extends AbstractController
     #[Route('', name: 'posto_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
+        $this->requirePermission(User::PERMISSION_FUEL);
+
         $page      = max(1, (int) $request->query->get('page', 1));
         $busca     = trim((string) $request->query->get('busca', ''));
         $uf        = trim((string) $request->query->get('uf', ''));
@@ -39,6 +47,13 @@ class PostoController extends AbstractController
         $where  = ['1=1'];
         $params = [];
 
+        // ── Restrição de UFs do usuário ──────────────────────────────────────
+        $ufRestriction = $this->enforceUfsOnQuery('r.uf');
+        if ($ufRestriction['clause'] !== '') {
+            $where[]  = $ufRestriction['clause'];
+            $params   = array_merge($params, $ufRestriction['params']);
+        }
+
         if ($busca !== '') {
             $where[]  = '(r.nome_fantasia LIKE ? OR r.razao_social LIKE ? OR r.cnpj LIKE ?)';
             $params[] = "%$busca%";
@@ -46,6 +61,7 @@ class PostoController extends AbstractController
             $params[] = "%$busca%";
         }
         if ($uf !== '') {
+            $this->requireUfAccess($uf);
             $where[]  = 'r.uf = ?';
             $params[] = $uf;
         }
@@ -66,6 +82,7 @@ class PostoController extends AbstractController
         );
         $pages = max(1, (int) ceil($total / self::PER_PAGE));
         $page  = min($page, $pages);
+        $offset = ($page - 1) * self::PER_PAGE;
 
         $rows = $this->db->fetchAllAssociative(
             "SELECT r.id, r.nome_fantasia, r.razao_social, r.cnpj,
@@ -80,8 +97,10 @@ class PostoController extends AbstractController
             $params
         );
 
+        $allowedUfs = $this->allowedUfsForView();
+
         $stats = null;
-        if ($busca === '' && $uf === '' && $municipio === '' && $bandeira === '') {
+        if ($busca === '' && $uf === '' && $municipio === '' && $bandeira === '' && $allowedUfs === null) {
             $stats = $this->db->fetchAssociative(
                 "SELECT COUNT(*)                      AS total,
                         COUNT(DISTINCT r.uf)           AS estados,
@@ -91,10 +110,12 @@ class PostoController extends AbstractController
             ) ?: null;
         }
 
+        // UFs disponíveis no filtro: limitadas às UFs do usuário
+        $ufsQuery = $allowedUfs !== null
+            ? 'SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL AND uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY uf'
+            : 'SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL ORDER BY uf';
         $ufs = array_column(
-            $this->db->fetchAllAssociative(
-                "SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL ORDER BY uf"
-            ),
+            $this->db->fetchAllAssociative($ufsQuery, $allowedUfs ?? []),
             'uf'
         );
 
@@ -106,15 +127,16 @@ class PostoController extends AbstractController
         );
 
         return $this->render('posto/index.html.twig', [
-            'rows'      => $rows,
-            'page'      => $page,
-            'pages'     => $pages,
-            'total'     => $total,
-            'perPage'   => self::PER_PAGE,
-            'stats'     => $stats,
-            'ufs'       => $ufs,
-            'bandeiras' => $bandeiras,
-            'filters'   => [
+            'rows'       => $rows,
+            'page'       => $page,
+            'pages'      => $pages,
+            'total'      => $total,
+            'perPage'    => self::PER_PAGE,
+            'stats'      => $stats,
+            'ufs'        => $ufs,
+            'bandeiras'  => $bandeiras,
+            'allowedUfs' => $allowedUfs,
+            'filters'    => [
                 'busca'     => $busca,
                 'uf'        => $uf,
                 'municipio' => $municipio,
@@ -126,13 +148,15 @@ class PostoController extends AbstractController
     #[Route('/{id}', name: 'posto_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
+        $this->requirePermission(User::PERMISSION_FUEL);
+
         $posto = $this->postoRepo->find($id)
-            ?? throw $this->createNotFoundException("Posto #$id n\u00e3o encontrado.");
+            ?? throw $this->createNotFoundException("Posto #$id não encontrado.");
+
+        $this->requireUfAccess($posto->getUf());
 
         $wazeLink = $this->linkRepo->findOneBy(['posto' => $posto]);
-
-        // Histórico de alterações
-        $wazeLog = $wazeLink ? $wazeLink->getLogs()->toArray() : [];
+        $wazeLog  = $wazeLink ? $wazeLink->getLogs()->toArray() : [];
 
         return $this->render('posto/show.html.twig', [
             'posto'        => $posto,
@@ -146,13 +170,16 @@ class PostoController extends AbstractController
     #[Route('/{id}/waze-save', name: 'posto_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
-        // Valida o token CSRF usando a chave correta do template
+        $this->requirePermission(User::PERMISSION_FUEL);
+
         if (!$this->isCsrfTokenValid('posto_waze_save_' . $id, $request->request->get('_token'))) {
-            throw new AccessDeniedException('Token CSRF inv\u00e1lido.');
+            throw new AccessDeniedException('Token CSRF inválido.');
         }
 
         $posto = $this->postoRepo->find($id)
-            ?? throw $this->createNotFoundException("Posto #$id n\u00e3o encontrado.");
+            ?? throw $this->createNotFoundException("Posto #$id não encontrado.");
+
+        $this->requireUfAccess($posto->getUf());
 
         $wazeUrl    = trim((string) $request->request->get('waze_link', ''));
         $observacao = trim((string) $request->request->get('observacao', '')) ?: null;
@@ -162,7 +189,7 @@ class PostoController extends AbstractController
         $venueId = PostoWazeLink::extractVenueId($wazeUrl);
 
         if ($venueId === null) {
-            $this->addFlash('danger', 'O link deve conter o par\u00e2metro venues com valor num\u00e9rico (ex: &venues=207160888).');
+            $this->addFlash('danger', 'O link deve conter o parâmetro venues com valor numérico (ex: &venues=207160888).');
             return $this->redirectToRoute('posto_show', [
                 'id'        => $id,
                 '_fragment' => 'waze-form-collapse',
@@ -199,12 +226,16 @@ class PostoController extends AbstractController
     #[Route('/{id}/waze-delete', name: 'posto_waze_delete', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeDelete(int $id, Request $request): Response
     {
+        $this->requirePermission(User::PERMISSION_FUEL);
+
         if (!$this->isCsrfTokenValid('waze_posto_delete_' . $id, $request->request->get('_token'))) {
-            throw new AccessDeniedException('Token CSRF inv\u00e1lido.');
+            throw new AccessDeniedException('Token CSRF inválido.');
         }
 
         $posto = $this->postoRepo->find($id)
-            ?? throw $this->createNotFoundException("Posto #$id n\u00e3o encontrado.");
+            ?? throw $this->createNotFoundException("Posto #$id não encontrado.");
+
+        $this->requireUfAccess($posto->getUf());
 
         $link = $this->linkRepo->findOneBy(['posto' => $posto]);
 
@@ -221,8 +252,12 @@ class PostoController extends AbstractController
     #[Route('/{id}/waze-suggest', name: 'posto_waze_suggest', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function wazeSuggest(int $id): JsonResponse
     {
+        $this->requirePermission(User::PERMISSION_FUEL);
+
         $posto = $this->postoRepo->find($id)
             ?? throw $this->createNotFoundException();
+
+        $this->requireUfAccess($posto->getUf());
 
         $lat = $posto->getLatitude();
         $lon = $posto->getLongitude();

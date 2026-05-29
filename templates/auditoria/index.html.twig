@@ -30,10 +30,10 @@
                 <label class="form-label fw-semibold small">Campo alterado</label>
                 <select name="campo" class="form-select form-select-sm">
                     <option value="">— todos —</option>
-                    <option value="waze_link"      {{ filtros.filtroCampo == 'waze_link'      ? 'selected' }}>waze_link</option>
-                    <option value="link_waze"      {{ filtros.filtroCampo == 'link_waze'      ? 'selected' }}>link_waze</option>
-                    <option value="motivo_revisao" {{ filtros.filtroCampo == 'motivo_revisao' ? 'selected' }}>motivo_revisao</option>
-                    <option value="link_area_escolar" {{ filtros.filtroCampo == 'link_area_escolar' ? 'selected' }}>link_area_escolar</option>
+                    <option value="waze_link"           {{ filtros.filtroCampo == 'waze_link'           ? 'selected' }}>waze_link</option>
+                    <option value="link_waze"           {{ filtros.filtroCampo == 'link_waze'           ? 'selected' }}>link_waze</option>
+                    <option value="motivo_revisao"      {{ filtros.filtroCampo == 'motivo_revisao'      ? 'selected' }}>motivo_revisao</option>
+                    <option value="link_area_escolar"   {{ filtros.filtroCampo == 'link_area_escolar'   ? 'selected' }}>link_area_escolar</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -91,7 +91,7 @@
                                 <span class="small">{{ log.objeto_nome|slice(0,35) }}{% if log.objeto_nome|length > 35 %}…{% endif %}</span>
                             </a>
                         {% elseif log.tipo == 'escola' %}
-                            <a href="{{ path('escola_show', {id: log.objeto_id}) }}" class="text-decoration-none">
+                            <a href="{{ path('escola_inep_show', {id: log.objeto_id}) }}" class="text-decoration-none">
                                 <span class="badge badge-uf me-1">{{ log.uf }}</span>
                                 <span class="small">{{ log.objeto_nome|slice(0,35) }}{% if log.objeto_nome|length > 35 %}…{% endif %}</span>
                             </a>

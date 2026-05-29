@@ -75,7 +75,6 @@ class AuthController extends AbstractController
             $confirm      = $req->request->getString('confirm');
             $wazeNickname = trim($req->request->getString('waze_nickname'));
 
-            // Estados solicitados: filtra apenas UFs válidas
             $rawUfs       = $req->request->all('requested_ufs') ?? [];
             $requestedUfs = array_values(array_filter(
                 array_map('strtoupper', (array) $rawUfs),
@@ -221,15 +220,5 @@ class AuthController extends AbstractController
             'token'  => $token,
             'errors' => $errors,
         ]);
-    }
-
-    // ──────────────────────── DASHBOARD ────────────────────────
-    // Redireciona para o DashboardController real (rota dashboard_index em /)
-
-    #[Route('/dashboard', name: 'app_dashboard')]
-    public function dashboard(): Response
-    {
-        $this->denyAccessUnlessGranted('ROLE_USER');
-        return $this->redirectToRoute('dashboard_index');
     }
 }

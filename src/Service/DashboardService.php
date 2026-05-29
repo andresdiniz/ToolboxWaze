@@ -15,24 +15,24 @@ use Symfony\Contracts\Cache\ItemInterface;
 final class DashboardService
 {
     public function __construct(
-        private readonly Connection    $db,
+        private readonly Connection     $db,
         private readonly CacheInterface $cache,
     ) {}
 
-    /** KPIs de escolas INEP */
+    /** KPIs de escolas INEP — adapta-se à estrutura real da tabela */
     public function getEscolaKpis(): array
     {
         return $this->cache->get('dash_escola_kpis', function (ItemInterface $item) {
             $item->expiresAfter(600);
-            return $this->db->fetchAssociative(
-                "SELECT COUNT(*)                              AS total,
-                        COUNT(DISTINCT sigla_uf)              AS estados,
-                        SUM(situacao = 'ATIVA')               AS ativas,
-                        SUM(situacao != 'ATIVA')              AS inativas,
-                        SUM(waze_place_id IS NOT NULL)        AS com_waze,
-                        SUM(waze_place_id IS NULL)            AS sem_waze
-                 FROM escola_inep"
-            ) ?: [];
+            try {
+                return $this->db->fetchAssociative(
+                    'SELECT COUNT(*) AS total,
+                            COUNT(DISTINCT sigla_uf) AS estados
+                     FROM escola_inep'
+                ) ?: ['total' => 0, 'estados' => 0];
+            } catch (\Throwable) {
+                return ['total' => 0, 'estados' => 0];
+            }
         });
     }
 
@@ -41,50 +41,59 @@ final class DashboardService
     {
         return $this->cache->get('dash_estados_ativos', function (ItemInterface $item) {
             $item->expiresAfter(600);
-            return (int) $this->db->fetchOne('SELECT COUNT(DISTINCT sigla_uf) FROM radar_medidor');
+            return (int) $this->db->fetchOne(
+                'SELECT COUNT(DISTINCT sigla_uf) FROM radar_medidor'
+            );
         });
     }
 
-    /** KPIs de usuários */
+    /** KPIs de usuários — baseado na coluna `status` da tabela `user` */
     public function getUsuarioKpis(): array
     {
         return $this->cache->get('dash_usuario_kpis', function (ItemInterface $item) {
             $item->expiresAfter(300);
             return $this->db->fetchAssociative(
-                "SELECT COUNT(*)                         AS total,
-                        SUM(is_verified = 1)             AS verificados,
-                        SUM(is_verified = 0)             AS pendentes,
-                        SUM(is_active   = 1)             AS ativos
-                 FROM user"
-            ) ?: [];
+                "SELECT COUNT(*)                                    AS total,
+                        SUM(status = 'approved')                    AS aprovados,
+                        SUM(status = 'pending')                     AS pendentes,
+                        SUM(status NOT IN ('pending', 'blocked'))   AS ativos
+                 FROM `user`"
+            ) ?: ['total' => 0, 'aprovados' => 0, 'pendentes' => 0, 'ativos' => 0];
         });
     }
 
-    /** KPIs de solicitações por tipo + atendidas */
+    /**
+     * KPIs de solicitações por tipo + totais gerais.
+     * Tabela: solicitacoes | status: PENDENTE / ATENDIDA / RECUSADA
+     * Data:   criada_em
+     */
     public function getSolicitacaoKpis(): array
     {
         return $this->cache->get('dash_solicitacao_kpis', function (ItemInterface $item) {
             $item->expiresAfter(300);
-
-            $totais = $this->db->fetchAllAssociative(
-                "SELECT tipo, COUNT(*) AS total,
-                        SUM(status = 'ATENDIDA')  AS atendidas,
-                        SUM(status = 'PENDENTE')  AS pendentes,
-                        SUM(status = 'RECUSADA')  AS recusadas
-                 FROM solicitacao
-                 GROUP BY tipo
-                 ORDER BY total DESC"
-            );
-
-            $geral = $this->db->fetchAssociative(
-                "SELECT COUNT(*)                       AS total,
-                        SUM(status = 'ATENDIDA')       AS atendidas,
-                        SUM(status = 'PENDENTE')       AS pendentes,
-                        SUM(status = 'RECUSADA')       AS recusadas,
-                        SUM(DATE(criado_em) = CURDATE()) AS hoje
-                 FROM solicitacao"
-            ) ?: [];
-
+            try {
+                $totais = $this->db->fetchAllAssociative(
+                    "SELECT tipo,
+                            COUNT(*)                    AS total,
+                            SUM(status = 'ATENDIDA')    AS atendidas,
+                            SUM(status = 'PENDENTE')    AS pendentes,
+                            SUM(status = 'RECUSADA')    AS recusadas
+                     FROM solicitacoes
+                     GROUP BY tipo
+                     ORDER BY total DESC"
+                );
+                $geral = $this->db->fetchAssociative(
+                    "SELECT COUNT(*)                         AS total,
+                            SUM(status = 'ATENDIDA')         AS atendidas,
+                            SUM(status = 'PENDENTE')         AS pendentes,
+                            SUM(status = 'RECUSADA')         AS recusadas,
+                            SUM(DATE(criada_em) = CURDATE()) AS hoje
+                     FROM solicitacoes"
+                ) ?: [];
+            } catch (\Throwable) {
+                $totais = [];
+                $geral  = ['total' => 0, 'atendidas' => 0, 'pendentes' => 0, 'recusadas' => 0, 'hoje' => 0];
+            }
             return ['totais' => $totais, 'geral' => $geral];
         });
     }
@@ -94,12 +103,16 @@ final class DashboardService
     {
         return $this->cache->get('dash_solic_diarias', function (ItemInterface $item) {
             $item->expiresAfter(300);
-            return $this->db->fetchAllAssociative(
-                "SELECT DATE(criado_em) AS dia, COUNT(*) AS total
-                 FROM solicitacao
-                 WHERE criado_em >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-                 GROUP BY dia ORDER BY dia"
-            );
+            try {
+                return $this->db->fetchAllAssociative(
+                    'SELECT DATE(criada_em) AS dia, COUNT(*) AS total
+                     FROM solicitacoes
+                     WHERE criada_em >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                     GROUP BY dia ORDER BY dia'
+                );
+            } catch (\Throwable) {
+                return [];
+            }
         });
     }
 }

@@ -99,8 +99,8 @@ final class BuscaController extends AbstractController
         foreach ($this->searchRadares($like, '', $allowedUfs, 3) as $r) {
             $items[] = [
                 'tipo'  => 'radar',
-                'label' => '[' . $r['sigla_uf'] . '] ' . ($r['local_verificacao'] ?: $r['municipio']),
-                'url'   => '/radar/' . $r['id'],
+                'label' => '[' . $r['sigla_uf'] . '] ' . ($r['logradouro'] ?: $r['municipio']),
+                'url'   => '/radares/' . $r['id'],
             ];
         }
         // 3 postos
@@ -108,7 +108,7 @@ final class BuscaController extends AbstractController
             $items[] = [
                 'tipo'  => 'posto',
                 'label' => '[' . $p['uf'] . '] ' . ($p['nome_fantasia'] ?: $p['razao_social']),
-                'url'   => '/posto/' . $p['id'],
+                'url'   => '/postos/' . $p['id'],
             ];
         }
         // 2 escolas
@@ -129,11 +129,11 @@ final class BuscaController extends AbstractController
     private function searchRadares(string $like, string $uf, ?array $allowedUfs, int $limit = self::LIMIT): array
     {
         [$where, $params] = $this->baseUfWhere('sigla_uf', $uf, $allowedUfs);
-        $where[] = '(municipio LIKE ? OR local_verificacao LIKE ? OR proprietario_nome LIKE ?)';
+        $where[] = '(municipio LIKE ? OR logradouro LIKE ? OR nome_empresa LIKE ?)';
         array_push($params, $like, $like, $like);
 
         return $this->db->fetchAllAssociative(
-            'SELECT id, sigla_uf, municipio, local_verificacao, ultimo_resultado, tipo_medidor
+            'SELECT id, sigla_uf, municipio, logradouro, situacao, tipo_medidor
              FROM radar_medidor
              WHERE ' . implode(' AND ', $where) . '
              ORDER BY sigla_uf, municipio LIMIT ' . $limit,

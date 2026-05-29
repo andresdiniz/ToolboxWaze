@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Controller\Trait\AccessControlTrait;
 use App\Entity\User;
 use App\Service\PostoStatsService;
 use App\Service\RadarStatsService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/cobertura', name: 'cobertura_')]
+#[IsGranted('ROLE_USER')]
 final class CoberturaController extends AbstractController
 {
+    use AccessControlTrait;
+
     public function __construct(
         private readonly RadarStatsService $radarStats,
         private readonly PostoStatsService $postoStats,
@@ -22,49 +27,76 @@ final class CoberturaController extends AbstractController
     #[Route('/radares', name: 'radar')]
     public function radar(): Response
     {
+        $this->requirePermission(User::PERMISSION_RADARS);
+
         /** @var User|null $user */
         $user       = $this->getUser();
         $allowedUfs = $user?->getUfsForQuery();
 
-        $porUf      = $this->radarStats->getCoberturaWazePorUf($allowedUfs);
-        $semWaze    = $this->radarStats->getSemWazePrioritarios($allowedUfs, 50);
-        $kpis       = $this->radarStats->getKpis($allowedUfs);
+        $porUf   = $this->radarStats->getCoberturaWazePorUf($allowedUfs);
+        $semWaze = $this->radarStats->getSemWazePrioritarios($allowedUfs, 50);
+        $kpis    = $this->radarStats->getKpis($allowedUfs);
+        $porUfAll = $this->radarStats->getPorUf($allowedUfs);
 
-        // classifica UFs por cobertura
-        $criticas   = array_filter($porUf, fn($r) => (float)$r['pct'] < 25);
-        $parciais   = array_filter($porUf, fn($r) => (float)$r['pct'] >= 25 && (float)$r['pct'] < 75);
-        $boas       = array_filter($porUf, fn($r) => (float)$r['pct'] >= 75);
+        // classifica UFs por cobertura Waze
+        $criticas = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] <  25));
+        $parciais = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] >= 25 && (float)$r['pct'] < 75));
+        $boas     = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] >= 75));
+
+        // dados para gráfico de cobertura por UF
+        $chartLabels  = array_column($porUf, 'uf');
+        $chartComWaze = array_map('intval', array_column($porUf, 'com_waze'));
+        $chartSemWaze = array_map('intval', array_column($porUf, 'sem_waze'));
+        $chartPct     = array_map('floatval', array_column($porUf, 'pct'));
 
         return $this->render('cobertura/radar.html.twig', [
-            'porUf'    => $porUf,
-            'semWaze'  => $semWaze,
-            'kpis'     => $kpis,
-            'criticas' => array_values($criticas),
-            'parciais' => array_values($parciais),
-            'boas'     => array_values($boas),
+            'porUf'        => $porUf,
+            'porUfAll'     => $porUfAll,
+            'semWaze'      => $semWaze,
+            'kpis'         => $kpis,
+            'criticas'     => $criticas,
+            'parciais'     => $parciais,
+            'boas'         => $boas,
+            'chartLabels'  => $chartLabels,
+            'chartComWaze' => $chartComWaze,
+            'chartSemWaze' => $chartSemWaze,
+            'chartPct'     => $chartPct,
+            'allowedUfs'   => $allowedUfs,
         ]);
     }
 
     #[Route('/postos', name: 'posto')]
     public function posto(): Response
     {
+        $this->requirePermission(User::PERMISSION_FUEL);
+
         /** @var User|null $user */
         $user       = $this->getUser();
         $allowedUfs = $user?->getUfsForQuery();
 
-        $porUf      = $this->postoStats->getCoberturaPorUf($allowedUfs);
-        $kpis       = $this->postoStats->getKpis($allowedUfs);
+        $porUf   = $this->postoStats->getCoberturaPorUf($allowedUfs);
+        $kpis    = $this->postoStats->getKpis($allowedUfs);
 
-        $criticas   = array_filter($porUf, fn($r) => (float)$r['pct'] < 25);
-        $parciais   = array_filter($porUf, fn($r) => (float)$r['pct'] >= 25 && (float)$r['pct'] < 75);
-        $boas       = array_filter($porUf, fn($r) => (float)$r['pct'] >= 75);
+        $criticas = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] <  25));
+        $parciais = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] >= 25 && (float)$r['pct'] < 75));
+        $boas     = array_values(array_filter($porUf, fn($r) => (float)$r['pct'] >= 75));
+
+        $chartLabels  = array_column($porUf, 'uf');
+        $chartComWaze = array_map('intval', array_column($porUf, 'com_waze'));
+        $chartSemWaze = array_map('intval', array_column($porUf, 'sem_waze'));
+        $chartPct     = array_map('floatval', array_column($porUf, 'pct'));
 
         return $this->render('cobertura/posto.html.twig', [
-            'porUf'    => $porUf,
-            'kpis'     => $kpis,
-            'criticas' => array_values($criticas),
-            'parciais' => array_values($parciais),
-            'boas'     => array_values($boas),
+            'porUf'        => $porUf,
+            'kpis'         => $kpis,
+            'criticas'     => $criticas,
+            'parciais'     => $parciais,
+            'boas'         => $boas,
+            'chartLabels'  => $chartLabels,
+            'chartComWaze' => $chartComWaze,
+            'chartSemWaze' => $chartSemWaze,
+            'chartPct'     => $chartPct,
+            'allowedUfs'   => $allowedUfs,
         ]);
     }
 }

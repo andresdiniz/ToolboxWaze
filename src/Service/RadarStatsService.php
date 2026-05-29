@@ -28,7 +28,7 @@ final class RadarStatsService
             $dv   = "STR_TO_DATE(data_validade, '%d/%m/%Y')";
 
             [$where, $params] = $this->ufWhere($allowedUfs);
-            $wc = $where ? "WHERE merged_into_id IS NULL AND $where" : 'WHERE merged_into_id IS NULL';
+            $wc = $where ? "WHERE $where" : '';
 
             $row = $this->db->fetchAssociative(
                 "SELECT COUNT(*) AS total,
@@ -41,9 +41,14 @@ final class RadarStatsService
                 array_merge([$hoje, $hoje, $em30], $params)
             );
 
-            $comWaze = (int) $this->db->fetchOne(
-                'SELECT COUNT(DISTINCT rwl.radar_medidor_id) FROM radar_waze_link rwl'
-            );
+            $comWazeQuery = $allowedUfs !== null
+                ? 'SELECT COUNT(DISTINCT rwl.radar_medidor_id)
+                   FROM radar_waze_link rwl
+                   INNER JOIN radar_medidor rm ON rm.id = rwl.radar_medidor_id
+                   WHERE rm.sigla_uf IN (' . implode(',', array_fill(0, count($allowedUfs), '?')) . ')'
+                : 'SELECT COUNT(DISTINCT rwl.radar_medidor_id) FROM radar_waze_link rwl';
+
+            $comWaze = (int) $this->db->fetchOne($comWazeQuery, $allowedUfs ?? []);
 
             $total   = (int) ($row['total']     ?? 0);
             $semWaze = $total - $comWaze;
@@ -61,7 +66,7 @@ final class RadarStatsService
         return $this->cache->get($key, function (ItemInterface $item) use ($allowedUfs) {
             $item->expiresAfter(600);
             [$where, $params] = $this->ufWhere($allowedUfs);
-            $wc = $where ? "WHERE merged_into_id IS NULL AND $where" : 'WHERE merged_into_id IS NULL';
+            $wc = $where ? "WHERE $where" : '';
 
             return $this->db->fetchAllAssociative(
                 "SELECT sigla_uf AS uf, COUNT(*) AS total,
@@ -82,7 +87,7 @@ final class RadarStatsService
         return $this->cache->get($key, function (ItemInterface $item) use ($allowedUfs) {
             $item->expiresAfter(600);
             [$where, $params] = $this->ufWhere($allowedUfs);
-            $wc = $where ? "WHERE merged_into_id IS NULL AND $where" : 'WHERE merged_into_id IS NULL';
+            $wc = $where ? "WHERE $where" : '';
 
             return $this->db->fetchAllAssociative(
                 "SELECT COALESCE(situacao, 'SEM INFO') AS resultado, COUNT(*) AS total
@@ -118,7 +123,7 @@ final class RadarStatsService
         return $this->cache->get($key, function (ItemInterface $item) use ($allowedUfs) {
             $item->expiresAfter(600);
             [$where, $params] = $this->ufWhere($allowedUfs, 'rm');
-            $wc = $where ? "WHERE rm.merged_into_id IS NULL AND $where" : 'WHERE rm.merged_into_id IS NULL';
+            $wc = $where ? "WHERE $where" : '';
 
             return $this->db->fetchAllAssociative(
                 "SELECT rm.sigla_uf AS uf,
@@ -141,15 +146,14 @@ final class RadarStatsService
     {
         [$where, $params] = $this->ufWhere($allowedUfs, 'rm');
         $andUf = $where ? "AND $where" : '';
+        $lim   = (int) $limit;
 
-        $lim = (int) $limit;
         return $this->db->fetchAllAssociative(
             "SELECT rm.id, rm.sigla_uf, rm.municipio, rm.logradouro,
                     rm.situacao, rm.data_validade
              FROM radar_medidor rm
              LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
              WHERE rwl.id IS NULL
-               AND rm.merged_into_id IS NULL
                AND rm.situacao = 'APROVADO'
                $andUf
              ORDER BY rm.sigla_uf, rm.municipio

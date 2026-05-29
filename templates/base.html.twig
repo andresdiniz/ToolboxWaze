@@ -33,7 +33,7 @@
         animation: twFadeOut 300ms ease forwards;
     }
 
-    /* ── Busca global ─────────────────────────────────── */
+    /* ── Busca global ─────────────────────────────────────── */
     .navbar-search-wrap {
         position: relative;
     }
@@ -90,7 +90,7 @@
         border-bottom: 1px solid var(--bs-border-color, #dee2e6);
     }
     .search-item:last-child { border-bottom: none; }
-    .search-item:hover { background: var(--bs-tertiary-bg, #f5f5f5); }
+    .search-item:hover, .search-item:focus { background: var(--bs-tertiary-bg, #f5f5f5); outline: none; }
     .search-item-label { flex: 1; line-height: 1.3; }
     .search-item-type {
         font-size: .7rem;
@@ -99,17 +99,28 @@
         font-weight: 600;
         white-space: nowrap;
     }
-    .search-item-type.radar { background: rgba(13,110,253,.15); color: #0d6efd; }
-    .search-item-type.posto { background: rgba(253,126,20,.15); color: #fd7e14; }
+    .search-item-type.radar  { background: rgba(13,110,253,.15);  color: #0d6efd; }
+    .search-item-type.posto  { background: rgba(253,126,20,.15);   color: #fd7e14; }
+    .search-item-type.escola { background: rgba(25,135,84,.15);    color: #198754; }
     .search-empty {
         padding: .75rem 1rem;
         font-size: .82rem;
         color: var(--bs-secondary-color, #6c757d);
         text-align: center;
     }
+    .search-footer {
+        display: block;
+        padding: .45rem 1rem;
+        font-size: .75rem;
+        color: var(--bs-secondary-color, #6c757d);
+        text-align: center;
+        border-top: 1px solid var(--bs-border-color, #dee2e6);
+        text-decoration: none;
+    }
+    .search-footer:hover { background: var(--bs-tertiary-bg, #f5f5f5); color: var(--bs-body-color); }
     </style>
 
-    {# ── Google Tag Manager — inicialização do dataLayer ───────────────── #}
+    {# ── Google Tag Manager — inicialização do dataLayer ──────────────────── #}
     {% set gtmId = app_gtm_id|default('') %}
     {% if gtmId %}
     <script>
@@ -288,7 +299,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 {% endif %}
             </ul>
 
-            {# ── Busca global ────────────────────────────────────── #}
+            {# ── Busca global ─────────────────────────────────────── #}
             {% if app.user %}
             <div class="navbar-search-wrap d-none d-lg-block me-2">
                 <svg class="navbar-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -523,15 +534,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   var timer = null;
   var lastQ = '';
 
-  function badgeClass(tipo) { return tipo === 'radar' ? 'radar' : 'posto'; }
-  function typeLabel(tipo)  { return tipo === 'radar' ? 'Radar' : 'Posto'; }
+  function badgeClass(tipo) {
+    if (tipo === 'radar')  return 'radar';
+    if (tipo === 'escola') return 'escola';
+    return 'posto';
+  }
+  function typeLabel(tipo) {
+    if (tipo === 'radar')  return 'Radar';
+    if (tipo === 'escola') return 'Escola';
+    return 'Posto';
+  }
 
   function trackEvent(event, data) {
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push(Object.assign({ event: event }, data));
   }
 
-  function render(items) {
+  function render(items, q) {
     dropdown.innerHTML = '';
     if (!items.length) {
       dropdown.innerHTML = '<div class="search-empty">Nenhum resultado encontrado.</div>';
@@ -540,6 +559,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         var a = document.createElement('a');
         a.className = 'search-item';
         a.href = r.url;
+        a.setAttribute('tabindex', '0');
         a.innerHTML =
           '<span class="search-item-type ' + badgeClass(r.tipo) + '">' + typeLabel(r.tipo) + '</span>' +
           '<span class="search-item-label">' + escHtml(r.label) + '</span>' +
@@ -550,6 +570,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         dropdown.appendChild(a);
       });
     }
+    // rodapé com link para página completa de busca
+    var footer = document.createElement('a');
+    footer.className = 'search-footer';
+    footer.href = '/busca?q=' + encodeURIComponent(q);
+    footer.textContent = 'Ver todos os resultados para “' + q + '” →';
+    dropdown.appendChild(footer);
     dropdown.classList.add('show');
   }
 
@@ -560,10 +586,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   }
 
   function search(q) {
-    fetch('/api/busca?q=' + encodeURIComponent(q))
+    fetch('/busca/ac?q=' + encodeURIComponent(q))
       .then(function(r){ return r.json(); })
       .then(function(items) {
-        render(items);
+        render(items, q);
         trackEvent('busca_global', { search_term: q, results_count: items.length,
           result_tipos: [...new Set(items.map(function(i){ return i.tipo; }))].join(',') });
       })
@@ -580,10 +606,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   });
 
   input.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { dropdown.classList.remove('show'); input.blur(); }
+    if (e.key === 'Escape') { dropdown.classList.remove('show'); input.blur(); return; }
     if (e.key === 'Enter') {
-      var first = dropdown.querySelector('.search-item');
-      if (first) { e.preventDefault(); window.location.href = first.href; }
+      e.preventDefault();
+      var q = input.value.trim();
+      if (q.length >= 2) { window.location.href = '/busca?q=' + encodeURIComponent(q); }
+      return;
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -593,11 +621,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   });
 
   dropdown.addEventListener('keydown', function(e) {
-    var items = Array.from(dropdown.querySelectorAll('.search-item'));
+    var items = Array.from(dropdown.querySelectorAll('.search-item, .search-footer'));
     var idx   = items.indexOf(document.activeElement);
-    if (e.key === 'ArrowDown' && idx < items.length - 1) { e.preventDefault(); items[idx + 1].focus(); }
-    if (e.key === 'ArrowUp')  { e.preventDefault(); idx > 0 ? items[idx - 1].focus() : input.focus(); }
-    if (e.key === 'Escape')   { dropdown.classList.remove('show'); input.focus(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); idx > 0 ? items[idx - 1].focus() : input.focus(); }
+    if (e.key === 'Escape')    { dropdown.classList.remove('show'); input.focus(); }
+    if (e.key === 'Enter' && document.activeElement === items[items.length - 1]) {
+      // Enter no footer navega para página de busca
+      document.activeElement.click();
+    }
   });
 
   document.addEventListener('click', function(e) {

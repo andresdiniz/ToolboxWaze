@@ -1,0 +1,167 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Requisições Suspeitas (Bots){% endblock %}
+
+{% block body %}
+<div class="container-fluid mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">
+            <i class="bi bi-shield-exclamation text-danger me-2"></i>
+            Requisições Suspeitas
+        </h2>
+        <div class="d-flex gap-2">
+            <span class="badge bg-secondary fs-6">Total: {{ total }}</span>
+            {# Limpar registros antigos #}
+            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalClearOld">
+                <i class="bi bi-trash3"></i> Limpar antigos
+            </button>
+        </div>
+    </div>
+
+    {# Flash messages #}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    {# IPs mais bloqueados #}
+    {% if blockedIps is not empty %}
+    <div class="card mb-4 border-danger">
+        <div class="card-header bg-danger text-white"><i class="bi bi-ban me-1"></i> Top IPs Bloqueados</div>
+        <div class="card-body p-2">
+            <div class="d-flex flex-wrap gap-2">
+                {% for row in blockedIps|slice(0, 20) %}
+                    <a href="?ip={{ row.ip|url_encode }}" class="badge bg-danger text-decoration-none">
+                        {{ row.ip }} ({{ row.total }}x)
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Filtros #}
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-auto">
+            <select name="action" class="form-select form-select-sm">
+                <option value="" {% if filterAction == '' %}selected{% endif %}>Todas as ações</option>
+                <option value="block" {% if filterAction == 'block' %}selected{% endif %}>🚫 Bloqueadas</option>
+                <option value="flag" {% if filterAction == 'flag' %}selected{% endif %}>⚠️ Suspeitas</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <input type="text" name="ip" class="form-control form-control-sm" placeholder="Filtrar por IP" value="{{ filterIp }}">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+            <a href="{{ path('admin_suspicious_requests_index') }}" class="btn btn-outline-secondary btn-sm">Limpar</a>
+        </div>
+    </form>
+
+    {# Tabela #}
+    <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Ação</th>
+                    <th>IP</th>
+                    <th>User-Agent</th>
+                    <th>Path</th>
+                    <th>Motivos</th>
+                    <th>Data</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr class="{{ r.action == 'block' ? 'table-danger' : 'table-warning' }}">
+                    <td class="text-muted">{{ r.id }}</td>
+                    <td>
+                        {% if r.action == 'block' %}
+                            <span class="badge bg-danger">🚫 Bloqueado</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">⚠️ Suspeito</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="?ip={{ r.ip|url_encode }}" class="text-decoration-none fw-bold">{{ r.ip }}</a>
+                    </td>
+                    <td class="text-truncate" style="max-width:220px;" title="{{ r.userAgent }}">
+                        <small>{{ r.userAgent ?: '<vazio>' }}</small>
+                    </td>
+                    <td class="text-truncate" style="max-width:180px;" title="{{ r.path }}">
+                        <code>{{ r.path }}</code>
+                    </td>
+                    <td>
+                        {% for motivo in r.reasons|split(', ') %}
+                            <span class="badge bg-secondary">{{ motivo }}</span>
+                        {% endfor %}
+                    </td>
+                    <td class="text-nowrap">
+                        <small>{{ r.createdAt|date('d/m/Y H:i:s') }}</small>
+                    </td>
+                    <td>
+                        <form method="post" action="{{ path('admin_suspicious_requests_delete', {id: r.id}) }}" onsubmit="return confirm('Remover este registro?')">
+                            <input type="hidden" name="_token" value="{{ csrf_token('suspicious_delete_' ~ r.id) }}">
+                            <button class="btn btn-outline-danger btn-sm py-0 px-1" title="Remover">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">Nenhum registro encontrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# Paginação #}
+    {% if pages > 1 %}
+    <nav>
+        <ul class="pagination pagination-sm">
+            {% for p in 1..pages %}
+            <li class="page-item {{ p == page ? 'active' : '' }}">
+                <a class="page-link" href="?page={{ p }}&action={{ filterAction }}&ip={{ filterIp|url_encode }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+
+</div>
+
+{# Modal Limpar Antigos #}
+<div class="modal fade" id="modalClearOld" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ path('admin_suspicious_requests_clear_old') }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('suspicious_clear_old') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Limpar registros antigos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Remover registros mais antigos que:</label>
+                    <div class="input-group">
+                        <input type="number" name="days" class="form-control" value="30" min="1">
+                        <span class="input-group-text">dias</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Limpar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

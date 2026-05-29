@@ -101,12 +101,10 @@ class AuthController extends AbstractController
                 $user->setStatus(User::STATUS_PENDING);
 
                 $em->persist($user);
-                $em->flush(); // precisa do ID antes de despachar as mensagens
+                $em->flush();
 
-                // 1) Confirmação ao próprio usuário (via Messenger → async)
                 $bus->dispatch(new EnviarEmailConta('conta_criada', $user->getId()));
 
-                // 2) Notificação a cada admin aprovado (via Messenger → async)
                 foreach ($userRepo->findAdmins() as $admin) {
                     $bus->dispatch(new EnviarEmailConta('solicitacao_admin', $user->getId(), $admin->getId()));
                 }
@@ -135,7 +133,6 @@ class AuthController extends AbstractController
     #[Route('/connect/google/callback', name: 'app_google_callback')]
     public function googleCallback(): Response
     {
-        // Handled by GoogleAuthenticator
         throw new \LogicException('This method should not be reached.');
     }
 
@@ -227,11 +224,12 @@ class AuthController extends AbstractController
     }
 
     // ──────────────────────── DASHBOARD ────────────────────────
+    // Redireciona para o DashboardController real (rota dashboard_index em /)
 
     #[Route('/dashboard', name: 'app_dashboard')]
     public function dashboard(): Response
     {
         $this->denyAccessUnlessGranted('ROLE_USER');
-        return $this->render('auth/dashboard.html.twig');
+        return $this->redirectToRoute('dashboard_index');
     }
 }

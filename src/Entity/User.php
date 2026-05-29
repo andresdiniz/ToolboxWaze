@@ -20,31 +20,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
-    public const PERMISSION_RADARS  = 'PERM_RADARS';
-    public const PERMISSION_FUEL    = 'PERM_FUEL';
-    public const PERMISSION_REPORTS = 'PERM_REPORTS';
-    public const PERMISSION_TOOLS   = 'PERM_TOOLS';
-    public const PERMISSION_EXPORT  = 'PERM_EXPORT';
+    public const PERMISSION_RADARES  = 'PERM_RADARES';
+    public const PERMISSION_ESCOLAS  = 'PERM_ESCOLAS';
+    public const PERMISSION_POSTOS   = 'PERM_POSTOS';
+    public const PERMISSION_EXPORT   = 'PERM_EXPORT';
 
     public const ALL_PERMISSIONS = [
-        self::PERMISSION_RADARS  => 'Radares',
-        self::PERMISSION_FUEL    => 'Combustível',
-        self::PERMISSION_REPORTS => 'Relatórios',
-        self::PERMISSION_TOOLS   => 'Ferramentas',
-        self::PERMISSION_EXPORT  => 'Exportação de Dados',
+        self::PERMISSION_RADARES => 'Radares',
+        self::PERMISSION_ESCOLAS => 'Escolas',
+        self::PERMISSION_POSTOS  => 'Postos',
+        self::PERMISSION_EXPORT  => 'Exportação',
     ];
 
     public const ALL_UFS = [
         'AC','AL','AM','AP','BA','CE','DF','ES','GO',
         'MA','MG','MS','MT','PA','PB','PE','PI','PR',
         'RJ','RN','RO','RR','RS','SC','SE','SP','TO',
-    ];
-
-    /** Tipos de downgrade que um Champ pode processar */
-    public const CHAMP_DOWNGRADE_TIPOS = [
-        'radar'  => 'Radar',
-        'posto'  => 'Posto de combustível',
-        'camera' => 'Câmera',
     ];
 
     #[ORM\Id]
@@ -69,34 +60,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private array $permissions = [];
 
-    /**
-     * @var list<string>
-     */
+    /** @var list<string> */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $solicitacaoTipos = [];
 
-    /**
-     * @var list<string>
-     */
+    /** @var list<string> */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $allowedUfs = [];
-
-    /** Limite diário de downgrades que o Champ pode processar (null = sem limite) */
-    #[ORM\Column(nullable: true)]
-    private ?int $champLimitDay = null;
-
-    /** Limite mensal de downgrades que o Champ pode processar (null = sem limite) */
-    #[ORM\Column(nullable: true)]
-    private ?int $champLimitMonth = null;
-
-    /**
-     * Tipos de downgrade permitidos ao Champ (null = todos).
-     * Valores possíveis: 'radar', 'posto', 'camera'
-     *
-     * @var list<string>|null
-     */
-    #[ORM\Column(type: 'json', nullable: true)]
-    private ?array $champDowngradeTipos = null;
 
     #[ORM\Column(nullable: true)]
     private ?string $password = null;
@@ -116,14 +86,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $resetTokenExpiresAt = null;
 
-    /**
-     * Token de API pessoal do usuário (64 hex chars = 256 bits).
-     * Gerado sob demanda. Nulo enquanto não solicitado.
-     */
     #[ORM\Column(length: 64, nullable: true, unique: true)]
     private ?string $apiToken = null;
 
-    /** Data/hora em que o token de API foi gerado pela última vez. */
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $apiTokenGeneratedAt = null;
 
@@ -147,8 +112,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->createdAt = new \DateTimeImmutable();
     }
 
-    // -------------------------------------------------------------------------
-    // Getters / Setters
     // -------------------------------------------------------------------------
 
     public function getId(): ?int { return $this->id; }
@@ -214,22 +177,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->allowedUfs;
     }
 
-    public function getChampLimitDay(): ?int { return $this->champLimitDay; }
-    public function setChampLimitDay(?int $v): static { $this->champLimitDay = $v; return $this; }
-
-    public function getChampLimitMonth(): ?int { return $this->champLimitMonth; }
-    public function setChampLimitMonth(?int $v): static { $this->champLimitMonth = $v; return $this; }
-
-    public function getChampDowngradeTipos(): ?array { return $this->champDowngradeTipos; }
-    public function setChampDowngradeTipos(?array $tipos): static
-    {
-        $allowed = array_keys(self::CHAMP_DOWNGRADE_TIPOS);
-        $this->champDowngradeTipos = $tipos !== null
-            ? array_values(array_filter($tipos, fn($t) => in_array($t, $allowed, true)))
-            : null;
-        return $this;
-    }
-
     public function getPassword(): ?string { return $this->password; }
     public function setPassword(?string $v): static { $this->password = $v; return $this; }
     public function eraseCredentials(): void {}
@@ -268,15 +215,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function isAdmin(): bool { return in_array('ROLE_ADMIN', $this->getRoles(), true); }
 
-    /**
-     * Global Champ: Champ com acesso irrestrito a todos os estados.
-     * Implica ROLE_CHAMP + ignora allowedUfs na verificação de acesso.
-     */
     public function isGlobalChamp(): bool { return in_array('ROLE_GLOBAL_CHAMP', $this->getRoles(), true); }
 
-    /**
-     * Retorna true se o usuário tem perfil Champ (simples ou global).
-     */
     public function isAnyChamp(): bool
     {
         return $this->isGlobalChamp() || in_array('ROLE_CHAMP', $this->getRoles(), true);

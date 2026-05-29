@@ -53,7 +53,7 @@
         .user-card.open .user-card-body{display:block}
         .section-label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-bottom:.75rem}
 
-        /* ── Toggles de perfil em linha ── */
+        /* Toggles de perfil */
         .role-toggles{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
         .role-toggle{display:flex;align-items:center;gap:.55rem;padding:.55rem .85rem;border-radius:.5rem;cursor:pointer;transition:.15s;border:1.5px solid var(--border);background:var(--surface2);font-family:inherit}
         .role-toggle:hover{border-color:currentColor;opacity:.9}
@@ -65,28 +65,10 @@
         .role-toggle.champ-t input{accent-color:var(--champ)}
         .role-toggle.gchamp-t {border-color:var(--gchamp);background:var(--gchamp-hl);color:var(--gchamp)}
         .role-toggle.gchamp-t input{accent-color:var(--gchamp)}
-        /* Inativo = neutro */
         .role-toggle.inactive{border-color:var(--border);background:var(--surface2);color:var(--muted)}
 
-        /* Downgrade fields */
-        .downgrade-fields{border:1px solid var(--champ);border-radius:.5rem;padding:.85rem 1rem;margin-bottom:1rem;background:var(--champ-hl)}
-        .downgrade-fields .section-label{color:var(--champ);margin-bottom:.6rem}
-        .downgrade-row{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end}
-        .downgrade-field{display:flex;flex-direction:column;gap:.25rem;flex:1;min-width:140px}
-        .downgrade-field label{font-size:.78rem;font-weight:600;color:var(--champ)}
-        .downgrade-field input[type=number]{width:100%;padding:.4rem .6rem;border:1px solid var(--champ);border-radius:.4rem;background:var(--surface);color:var(--text);font-size:.875rem;font-family:inherit}
-        .downgrade-field input[type=number]:focus{outline:2px solid var(--champ);outline-offset:1px}
-        .downgrade-field .hint{font-size:.73rem;color:var(--muted);margin-top:.2rem}
-        .downgrade-tipos{margin-top:.75rem}
-        .downgrade-tipos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.4rem;margin-top:.4rem}
-        .downgrade-tipo-check{display:flex;align-items:center;gap:.45rem;padding:.4rem .6rem;border:1px solid color-mix(in oklab,var(--champ) 40%,var(--border));border-radius:.4rem;cursor:pointer;transition:.15s;background:var(--surface);font-size:.82rem;font-weight:500}
-        .downgrade-tipo-check:hover{border-color:var(--champ);background:var(--champ-hl)}
-        .downgrade-tipo-check input{accent-color:var(--champ);width:13px;height:13px;cursor:pointer}
-        .downgrade-tipo-check.is-checked{border-color:var(--champ);background:var(--champ-hl);color:var(--champ);font-weight:600}
-        .downgrade-tipos-hint{font-size:.73rem;color:var(--muted);margin-top:.4rem}
-
         /* Nota Global Champ */
-        .gchamp-note{font-size:.8rem;color:var(--gchamp);background:var(--gchamp-hl);border:1px solid var(--gchamp);border-radius:.4rem;padding:.45rem .75rem;margin-bottom:1rem;display:none}
+        .gchamp-note{font-size:.8rem;color:var(--gchamp);background:var(--gchamp-hl);border:1px solid var(--gchamp);border-radius:.4rem;padding:.45rem .75rem;margin-bottom:1rem}
 
         /* UFs */
         .ufs-section{margin-top:1rem;margin-bottom:1.25rem}
@@ -122,7 +104,7 @@
         .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:var(--text)}
         .info-row{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem;font-size:.85rem;color:var(--muted)}
         .info-row strong{color:var(--text)}
-        .perms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem;margin-bottom:1.25rem}
+        .perms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.5rem;margin-bottom:1.25rem}
         .perm-check{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:.5rem;cursor:pointer;transition:.15s}
         .perm-check:hover{border-color:var(--primary);background:var(--primary-hl)}
         .perm-check input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
@@ -145,7 +127,6 @@
 </head>
 <body>
 
-{# Modal de confirmação reutilizável #}
 <div class="modal-overlay" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-box">
         <div class="modal-title" id="modal-title"></div>
@@ -163,9 +144,7 @@
 
 <div class="page">
     <div class="page-header">
-        <div>
-            <div class="page-title">Gerenciar Usuários <span>Painel Admin</span></div>
-        </div>
+        <div class="page-title">Gerenciar Usuários <span>Painel Admin</span></div>
         <a href="{{ path('app_logout') }}" style="font-size:.875rem;color:var(--muted);text-decoration:none">Sair →</a>
     </div>
 
@@ -187,26 +166,16 @@
         </button>
     </div>
 
-    {# ─────────────────────────────────────────────────────────────────
-       MACRO: bloco de perfis/roles
-       Parâmetros:
-         user           - entidade User
-         uid            - string identificadora única do bloco
-         initAdmin      - bool
-         initChamp      - bool (ROLE_CHAMP mas não ROLE_GLOBAL_CHAMP)
-         initGlobalChamp- bool (ROLE_GLOBAL_CHAMP)
-    ───────────────────────────────────────────────────────────────── #}
+    {# MACRO: Perfil/roles #}
     {% macro rolesBlock(user, uid, initAdmin, initChamp, initGlobalChamp) %}
     <div class="section-label" style="margin-bottom:.5rem">Perfil do usuário</div>
     <div class="role-toggles">
-        {# Admin #}
         <div class="role-toggle admin-t{{ not initAdmin ? ' inactive' : '' }}" id="toggle_admin_{{ uid }}">
             <input type="checkbox" name="is_admin" id="is_admin_{{ uid }}" value="1"
                    {{ initAdmin ? 'checked' : '' }}
                    onchange="syncRoleToggle('admin','{{ uid }}',this.checked)">
             <label for="is_admin_{{ uid }}">🔑 Administrador</label>
         </div>
-        {# Champ (simples — oculto quando Global Champ ativo) #}
         <div class="role-toggle champ-t{{ not initChamp ? ' inactive' : '' }}"
              id="toggle_champ_{{ uid }}"
              style="{{ initGlobalChamp ? 'display:none' : '' }}">
@@ -215,7 +184,6 @@
                    onchange="syncRoleToggle('champ','{{ uid }}',this.checked)">
             <label for="is_champ_{{ uid }}">⭐ Champ</label>
         </div>
-        {# Global Champ #}
         <div class="role-toggle gchamp-t{{ not initGlobalChamp ? ' inactive' : '' }}"
              id="toggle_gchamp_{{ uid }}">
             <input type="checkbox" name="is_global_champ" id="is_global_champ_{{ uid }}" value="1"
@@ -224,16 +192,18 @@
             <label for="is_global_champ_{{ uid }}">🌟 Global Champ</label>
         </div>
     </div>
-    {# Nota informativa quando Global Champ está ativo #}
-    <div class="gchamp-note" id="gchamp_note_{{ uid }}"
-         style="{{ initGlobalChamp ? 'display:block' : 'display:none' }}">
-        🌟 <strong>Global Champ</strong> — acesso irrestrito a <em>todos os estados</em>. O seletor de UFs abaixo será ignorado.
+    {% if initGlobalChamp %}
+    <div class="gchamp-note" id="gchamp_note_{{ uid }}">
+        🌟 <strong>Global Champ</strong> — acesso irrestrito a <em>todos os estados</em>. O seletor de UFs será ignorado.
     </div>
+    {% else %}
+    <div class="gchamp-note" id="gchamp_note_{{ uid }}" style="display:none">
+        🌟 <strong>Global Champ</strong> — acesso irrestrito a <em>todos os estados</em>. O seletor de UFs será ignorado.
+    </div>
+    {% endif %}
     {% endmacro %}
 
-    {# ─────────────────────────────────────────────────────────────────
-       MACRO: bloco de Estados (UFs)
-    ───────────────────────────────────────────────────────────────── #}
+    {# MACRO: Estados (UFs) #}
     {% macro ufsBlock(user, allUfs, isPending, prefix) %}
     {% set uid = prefix ~ user.id %}
     {% set allChecked = isPending ? true : (user.allowedUfs is null) %}
@@ -242,8 +212,7 @@
             <div class="section-label" style="margin-bottom:0">Estados com acesso</div>
             <label class="all-ufs-toggle">
                 <input type="checkbox" name="all_ufs" value="1"
-                    id="all_ufs_{{ uid }}"
-                    data-uid="{{ uid }}"
+                    id="all_ufs_{{ uid }}" data-uid="{{ uid }}"
                     {{ allChecked ? 'checked' : '' }}
                     onchange="toggleAllUfs('{{ uid }}', this.checked)">
                 Todos os estados
@@ -265,7 +234,7 @@
     </div>
     {% endmacro %}
 
-    {# MACRO: bloco de Tipos de Solicitação #}
+    {# MACRO: Tipos de Solicitação #}
     {% macro tiposBlock(user, allTipos, isPending, prefix) %}
     {% set uid = prefix ~ user.id %}
     {% set allChecked = isPending ? true : (user.solicitacaoTipos is null) %}
@@ -274,8 +243,7 @@
             <div class="section-label" style="margin-bottom:0">Tipos de Solicitação que pode tratar</div>
             <label class="all-tipos-toggle">
                 <input type="checkbox" name="all_tipos" value="1"
-                    id="all_tipos_{{ uid }}"
-                    data-uid="{{ uid }}"
+                    id="all_tipos_{{ uid }}" data-uid="{{ uid }}"
                     {{ allChecked ? 'checked' : '' }}
                     onchange="toggleAllTipos('{{ uid }}', this.checked)">
                 Todos os tipos
@@ -294,47 +262,6 @@
             {% endfor %}
         </div>
         <div class="tipos-count" id="tipos_count_{{ uid }}"></div>
-    </div>
-    {% endmacro %}
-
-    {# MACRO: bloco de configurações Champ (downgrade) #}
-    {% macro champDowngradeBlock(user, champTipos, isChamp, prefix) %}
-    {% set uid = prefix ~ user.id %}
-    <div class="downgrade-fields" id="downgrade_fields_{{ uid }}"
-         style="{{ not isChamp ? 'display:none' : '' }}">
-        <div class="section-label">⭐ Configurações Champ — Downgrade</div>
-        <div class="downgrade-row">
-            <div class="downgrade-field">
-                <label for="champ_limit_day_{{ uid }}">Limite diário de downgrades</label>
-                <input type="number" id="champ_limit_day_{{ uid }}" name="champ_limit_day"
-                       min="0" max="9999" placeholder="Ex: 50"
-                       value="{{ user.champLimitDay ?? '' }}">
-                <span class="hint">Deixe em branco para sem limite</span>
-            </div>
-            <div class="downgrade-field">
-                <label for="champ_limit_month_{{ uid }}">Limite mensal de downgrades</label>
-                <input type="number" id="champ_limit_month_{{ uid }}" name="champ_limit_month"
-                       min="0" max="99999" placeholder="Ex: 500"
-                       value="{{ user.champLimitMonth ?? '' }}">
-                <span class="hint">Deixe em branco para sem limite</span>
-            </div>
-        </div>
-        <div class="downgrade-tipos">
-            <div class="section-label" style="margin-top:.5rem;margin-bottom:.35rem">Tipos de downgrade permitidos</div>
-            <div class="downgrade-tipos-grid">
-                {% set champDowngradeTiposAtivos = user.champDowngradeTipos ?? [] %}
-                {% for tipoVal, tipoLabel in champTipos %}
-                {% set tipoChecked = user.champDowngradeTipos is null or tipoVal in champDowngradeTiposAtivos %}
-                <label class="downgrade-tipo-check {{ tipoChecked ? 'is-checked' : '' }}">
-                    <input type="checkbox" name="champ_downgrade_tipos[]" value="{{ tipoVal }}"
-                           {{ tipoChecked ? 'checked' : '' }}
-                           onchange="this.closest('.downgrade-tipo-check').classList.toggle('is-checked', this.checked)">
-                    {{ tipoLabel }}
-                </label>
-                {% endfor %}
-            </div>
-            <div class="downgrade-tipos-hint">Se nenhum for marcado, todos os tipos serão liberados.</div>
-        </div>
     </div>
     {% endmacro %}
 
@@ -370,8 +297,6 @@
 
                     {{ _self.rolesBlock(user, user.id, false, false, false) }}
 
-                    {{ _self.champDowngradeBlock(user, champTipos, false, '') }}
-
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
                         {% for key, label in allPerms %}
@@ -396,7 +321,7 @@
                 <form method="POST" action="{{ path('admin_users_reject', {id: user.id}) }}" style="margin-top:.5rem">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_action_' ~ user.id) }}">
                     <button type="button" class="btn btn-reject"
-                            onclick="openModal('Rejeitar usuário', 'Confirma a rejeição de <strong>{{ user.name|e('html') }}</strong>? O usuário será notificado por e-mail.', 'Rejeitar', 'var(--warning)', this.closest('form'))">
+                            onclick="openModal('Rejeitar usuário','Confirma a rejeição de <strong>{{ user.name|e('html') }}</strong>?','Rejeitar','var(--warning)',this.closest('form'))">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
                         Rejeitar
                     </button>
@@ -432,15 +357,14 @@
                         {% if user.wazeNickname %}<span>🗺 {{ user.wazeNickname }}</span>{% endif %}
                         {% if user.lastLoginAt %}<span>Último acesso {{ user.lastLoginAt|date('d/m/Y') }}</span>{% endif %}
                         {% if userIsGlobalChamp %}
-                            <span title="Global Champ: acesso a todos os estados">🌟 Todos os estados</span>
+                            <span>🌟 Todos os estados</span>
                         {% elseif user.allowedUfs is not null %}
-                            <span title="Estados com acesso">
-                                🗺
+                            <span>🗺
                                 {% for uf in user.allowedUfs|slice(0,4) %}{{ uf }}{% if not loop.last %}, {% endif %}{% endfor %}
                                 {% if user.allowedUfs|length > 4 %}+{{ user.allowedUfs|length - 4 }} UFs{% endif %}
                             </span>
                         {% else %}
-                            <span title="Acesso a todos os estados">🌎 Todos os estados</span>
+                            <span>🌎 Todos os estados</span>
                         {% endif %}
                     </div>
                 </div>
@@ -459,8 +383,6 @@
                     <input type="hidden" name="_token" value="{{ csrf_token('user_perms_' ~ user.id) }}">
 
                     {{ _self.rolesBlock(user, user.id, user.isAdmin, userIsChamp, userIsGlobalChamp) }}
-
-                    {{ _self.champDowngradeBlock(user, champTipos, userIsChamp or userIsGlobalChamp, '') }}
 
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
@@ -486,7 +408,7 @@
                 <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}" style="margin-top:.5rem">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
                     <button type="button" class="btn btn-delete"
-                            onclick="openModal('Remover usuário', 'Tem certeza que deseja remover <strong>{{ user.name|e('html') }}</strong> permanentemente? Esta ação não pode ser desfeita.', 'Remover', 'var(--error)', this.closest('form'))">
+                            onclick="openModal('Remover usuário','Tem certeza que deseja remover <strong>{{ user.name|e('html') }}</strong> permanentemente?','Remover','var(--error)',this.closest('form'))">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                         Remover
                     </button>
@@ -524,8 +446,6 @@
 
                     {{ _self.rolesBlock(user, 're' ~ user.id, false, false, false) }}
 
-                    {{ _self.champDowngradeBlock(user, champTipos, false, 're') }}
-
                     <div class="section-label" style="margin-top:.75rem">Permissões de Área</div>
                     <div class="perms-grid">
                         {% for key, label in allPerms %}
@@ -550,7 +470,7 @@
                 <form method="POST" action="{{ path('admin_users_delete', {id: user.id}) }}" style="margin-top:.5rem">
                     <input type="hidden" name="_token" value="{{ csrf_token('user_delete_' ~ user.id) }}">
                     <button type="button" class="btn btn-delete"
-                            onclick="openModal('Remover usuário', 'Tem certeza que deseja remover <strong>{{ user.name|e('html') }}</strong> permanentemente?', 'Remover', 'var(--error)', this.closest('form'))">
+                            onclick="openModal('Remover usuário','Tem certeza que deseja remover <strong>{{ user.name|e('html') }}</strong> permanentemente?','Remover','var(--error)',this.closest('form'))">
                         Remover permanentemente
                     </button>
                 </form>
@@ -569,12 +489,11 @@ function switchTab(name, btn) {
     document.getElementById('tab-' + name).classList.add('active');
     btn.classList.add('active');
 }
-
 function toggleCard(id) {
     document.getElementById('card-' + id).classList.toggle('open');
 }
 
-/* ── Modal ── */
+/* Modal */
 let _modalForm = null;
 function openModal(title, body, confirmLabel, confirmColor, form) {
     document.getElementById('modal-title').textContent = title;
@@ -591,151 +510,93 @@ function closeModal() {
     document.getElementById('confirm-modal').classList.remove('open');
     _modalForm = null;
 }
-document.getElementById('modal-confirm-btn').addEventListener('click', () => {
-    if (_modalForm) _modalForm.submit();
-    closeModal();
-});
-document.getElementById('confirm-modal').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeModal();
-});
+document.getElementById('modal-confirm-btn').addEventListener('click', () => { if (_modalForm) _modalForm.submit(); closeModal(); });
+document.getElementById('confirm-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-/* ── Sincronização visual dos toggles de perfil ──
-   Regras:
-   - Global Champ ativado → oculta Champ simples, mostra nota, desabilita UFs
-   - Global Champ desativado → mostra Champ simples, oculta nota, reabilita UFs
-   - Champ ativado/desativado → mostra/oculta downgrade fields
-   - Global Champ ativado → também mostra downgrade fields
-*/
+/* Toggles de perfil */
 function syncRoleToggle(role, uid, checked) {
-    const champEl     = document.getElementById('toggle_champ_'  + uid);
-    const gchampEl    = document.getElementById('toggle_gchamp_' + uid);
-    const champCb     = document.getElementById('is_champ_'       + uid);
-    const gchampCb    = document.getElementById('is_global_champ_'+ uid);
-    const gchampNote  = document.getElementById('gchamp_note_'   + uid);
-    const ufsSection  = document.getElementById('ufs_section_'   + uid);
+    const champEl    = document.getElementById('toggle_champ_'   + uid);
+    const champCb    = document.getElementById('is_champ_'        + uid);
+    const gchampEl   = document.getElementById('toggle_gchamp_'  + uid);
+    const gchampNote = document.getElementById('gchamp_note_'    + uid);
+    const ufsSection = document.getElementById('ufs_section_'    + uid);
 
     if (role === 'gchamp') {
         if (checked) {
-            // Global Champ ON: oculta champ simples, mostra nota, desabilita UFs
-            if (champEl)   champEl.style.display = 'none';
-            if (champCb)   champCb.checked = false;
+            if (champEl)  champEl.style.display = 'none';
+            if (champCb)  champCb.checked = false;
             if (gchampNote) gchampNote.style.display = 'block';
             if (ufsSection) { ufsSection.style.opacity = '.4'; ufsSection.style.pointerEvents = 'none'; }
-            // Mostra downgrade fields pois Global Champ também processa downgrades
-            toggleDowngradeFields(uid, true);
         } else {
-            // Global Champ OFF: mostra champ simples, oculta nota, reabilita UFs
-            if (champEl)   champEl.style.display = '';
+            if (champEl)  champEl.style.display = '';
             if (gchampNote) gchampNote.style.display = 'none';
             if (ufsSection) { ufsSection.style.opacity = ''; ufsSection.style.pointerEvents = ''; }
-            toggleDowngradeFields(uid, false);
         }
-        // Atualiza classe inactive no próprio toggle
         if (gchampEl) gchampEl.classList.toggle('inactive', !checked);
-
     } else if (role === 'champ') {
         if (champEl) champEl.classList.toggle('inactive', !checked);
-        toggleDowngradeFields(uid, checked);
-
     } else if (role === 'admin') {
         const adminEl = document.getElementById('toggle_admin_' + uid);
         if (adminEl) adminEl.classList.toggle('inactive', !checked);
     }
 }
 
-/* ── Downgrade fields ── */
-function toggleDowngradeFields(uid, show) {
-    const el = document.getElementById('downgrade_fields_' + uid);
-    if (el) el.style.display = show ? '' : 'none';
-}
-
-/* ── UFs ── */
+/* UFs */
 function toggleAllUfs(uid, allChecked) {
     const grid = document.getElementById('ufs_grid_' + uid);
     if (!grid) return;
     grid.style.opacity = allChecked ? '.4' : '1';
     grid.style.pointerEvents = allChecked ? 'none' : '';
-    if (allChecked) {
-        grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
-            cb.checked = true;
-            cb.closest('.uf-check').classList.add('is-checked');
-        });
-    }
+    if (allChecked) grid.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = true; cb.closest('.uf-check').classList.add('is-checked'); });
     updateUfsCount(uid);
 }
 function updateUfsCount(uid) {
-    const grid  = document.getElementById('ufs_grid_' + uid);
-    const all   = document.getElementById('all_ufs_' + uid);
+    const grid  = document.getElementById('ufs_grid_'  + uid);
+    const all   = document.getElementById('all_ufs_'   + uid);
     const count = document.getElementById('ufs_count_' + uid);
     if (!count) return;
-    if (all && all.checked) {
-        count.textContent = 'Acesso a todos os estados';
-        count.style.color = '';
-    } else {
-        const n = grid ? grid.querySelectorAll('input:checked').length : 0;
-        if (n === 0) {
-            count.textContent = '⚠ Nenhum estado selecionado — salvar removerá todo acesso.';
-            count.style.color = 'var(--warning)';
-        } else {
-            count.textContent = n + ' estado(s) selecionado(s)';
-            count.style.color = '';
-        }
-    }
+    if (all && all.checked) { count.textContent = 'Acesso a todos os estados'; count.style.color = ''; return; }
+    const n = grid ? grid.querySelectorAll('input:checked').length : 0;
+    if (n === 0) { count.textContent = '⚠ Nenhum estado selecionado — salvar removerá todo acesso.'; count.style.color = 'var(--warning)'; }
+    else { count.textContent = n + ' estado(s) selecionado(s)'; count.style.color = ''; }
 }
 
-/* ── Tipos ── */
+/* Tipos */
 function toggleAllTipos(uid, allChecked) {
     const grid = document.getElementById('tipos_grid_' + uid);
     if (!grid) return;
     grid.style.opacity = allChecked ? '.4' : '1';
     grid.style.pointerEvents = allChecked ? 'none' : '';
-    if (allChecked) {
-        grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
-            cb.checked = true;
-            cb.closest('.tipo-check').classList.add('is-checked');
-        });
-    }
+    if (allChecked) grid.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = true; cb.closest('.tipo-check').classList.add('is-checked'); });
     updateTiposCount(uid);
 }
 function updateTiposCount(uid) {
-    const grid  = document.getElementById('tipos_grid_' + uid);
-    const all   = document.getElementById('all_tipos_' + uid);
+    const grid  = document.getElementById('tipos_grid_'  + uid);
+    const all   = document.getElementById('all_tipos_'   + uid);
     const count = document.getElementById('tipos_count_' + uid);
     if (!count) return;
-    if (all && all.checked) {
-        count.textContent = 'Todos os tipos habilitados';
-        count.style.color = '';
-    } else {
-        const n = grid ? grid.querySelectorAll('input:checked').length : 0;
-        count.textContent = n + ' tipo(s) selecionado(s)';
-        count.style.color = '';
-    }
+    if (all && all.checked) { count.textContent = 'Todos os tipos habilitados'; count.style.color = ''; return; }
+    const n = grid ? grid.querySelectorAll('input:checked').length : 0;
+    count.textContent = n + ' tipo(s) selecionado(s)';
 }
 
-/* ── Inicialização ── */
+/* Init */
 document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('[id^="all_ufs_"]').forEach(el => {
-        const uid = el.dataset.uid;
-        if (uid) updateUfsCount(uid);
-    });
+    document.querySelectorAll('[id^="all_ufs_"]').forEach(el => { const uid = el.dataset.uid; if (uid) updateUfsCount(uid); });
     document.querySelectorAll('[id^="all_tipos_"]').forEach(el => {
         const uid = el.dataset.uid;
         if (!uid) return;
         updateTiposCount(uid);
         const grid = document.getElementById('tipos_grid_' + uid);
-        if (grid) {
-            grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
-                cb.addEventListener('change', () => updateTiposCount(uid));
-            });
-        }
+        if (grid) grid.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => updateTiposCount(uid)));
     });
-    // Desabilita seção de UFs para usuários Global Champ já salvos
+    // Bloqueia UFs para Global Champs já salvos
     document.querySelectorAll('[id^="is_global_champ_"]').forEach(cb => {
         if (cb.checked) {
             const uid = cb.id.replace('is_global_champ_', '');
-            const ufsSection = document.getElementById('ufs_section_' + uid);
-            if (ufsSection) { ufsSection.style.opacity = '.4'; ufsSection.style.pointerEvents = 'none'; }
+            const sec = document.getElementById('ufs_section_' + uid);
+            if (sec) { sec.style.opacity = '.4'; sec.style.pointerEvents = 'none'; }
         }
     });
 });
@@ -744,7 +605,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const t=document.querySelector('[data-theme-toggle]'),r=document.documentElement;
     let d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
     r.setAttribute('data-theme',d);
-    if(t)t.addEventListener('click',()=>{d=d==='dark'?'light':'dark';r.setAttribute('data-theme',d);
+    if(t)t.addEventListener('click',()=>{
+        d=d==='dark'?'light':'dark';r.setAttribute('data-theme',d);
         t.innerHTML=d==='dark'?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
     });
 })();

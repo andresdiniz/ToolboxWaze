@@ -32,13 +32,12 @@ class AdminUserController extends AbstractController
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
         return $this->render('admin/users/index.html.twig', [
-            'pending'    => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
-            'approved'   => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
-            'rejected'   => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
-            'allPerms'   => User::ALL_PERMISSIONS,
-            'allUfs'     => User::ALL_UFS,
-            'allTipos'   => Solicitacao::TIPOS,
-            'champTipos' => User::CHAMP_DOWNGRADE_TIPOS,
+            'pending'  => $this->userRepo->findBy(['status' => User::STATUS_PENDING],  ['createdAt' => 'ASC']),
+            'approved' => $this->userRepo->findBy(['status' => User::STATUS_APPROVED], ['name' => 'ASC']),
+            'rejected' => $this->userRepo->findBy(['status' => User::STATUS_REJECTED], ['createdAt' => 'DESC']),
+            'allPerms' => User::ALL_PERMISSIONS,
+            'allUfs'   => User::ALL_UFS,
+            'allTipos' => Solicitacao::TIPOS,
         ]);
     }
 
@@ -50,10 +49,9 @@ class AdminUserController extends AbstractController
         if ($request->request->getBoolean('is_admin')) {
             $roles[] = 'ROLE_ADMIN';
         }
-        // ROLE_GLOBAL_CHAMP implica acesso irrestrito de UF + capacidade de downgrade
         if ($request->request->getBoolean('is_global_champ')) {
             $roles[] = 'ROLE_GLOBAL_CHAMP';
-            $roles[] = 'ROLE_CHAMP'; // garante retrocompatibilidade
+            $roles[] = 'ROLE_CHAMP';
         } elseif ($request->request->getBoolean('is_champ')) {
             $roles[] = 'ROLE_CHAMP';
         }
@@ -66,7 +64,6 @@ class AdminUserController extends AbstractController
 
         $isGlobalChamp = $request->request->getBoolean('is_global_champ');
 
-        // Global Champ ignora restrição de UF (null = todos)
         $allowedUfs = ($request->request->getBoolean('all_ufs') || $isGlobalChamp)
             ? null
             : array_values(array_filter(
@@ -85,22 +82,6 @@ class AdminUserController extends AbstractController
              ->setPermissions($permissions)
              ->setAllowedUfs($allowedUfs)
              ->setSolicitacaoTipos($solicitacaoTipos);
-
-        $isChamp = $request->request->getBoolean('is_champ') || $isGlobalChamp;
-        if ($isChamp) {
-            $limitDay = $request->request->get('champ_limit_day');
-            $user->setChampLimitDay($limitDay !== '' && $limitDay !== null ? (int) $limitDay : null);
-
-            $limitMonth = $request->request->get('champ_limit_month');
-            $user->setChampLimitMonth($limitMonth !== '' && $limitMonth !== null ? (int) $limitMonth : null);
-
-            $champTipos = (array) $request->request->all('champ_downgrade_tipos');
-            $user->setChampDowngradeTipos(!empty($champTipos) ? $champTipos : null);
-        } else {
-            $user->setChampLimitDay(null)
-                 ->setChampLimitMonth(null)
-                 ->setChampDowngradeTipos(null);
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -139,10 +120,8 @@ class AdminUserController extends AbstractController
 
         $this->dispatchEmail('aprovado', $user->getId());
 
-        $ufsLabel       = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
-        $isGlobalChamp  = $user->isGlobalChamp();
-        $isChamp        = $user->isAnyChamp();
-        $champLabel     = $isGlobalChamp ? ' | Global Champ' : ($isChamp ? ' | Champ' : '');
+        $ufsLabel      = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
+        $champLabel    = $user->isGlobalChamp() ? ' | Global Champ' : ($user->isAnyChamp() ? ' | Champ' : '');
         $this->addFlash('success', "Usuário {$user->getName()} aprovado. Estados: $ufsLabel$champLabel.");
         return $this->redirectToRoute('admin_users_index');
     }
@@ -181,10 +160,8 @@ class AdminUserController extends AbstractController
 
         $this->dispatchEmail('permissoes_atualizadas', $user->getId());
 
-        $ufsLabel      = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
-        $isGlobalChamp = $user->isGlobalChamp();
-        $isChamp       = $user->isAnyChamp();
-        $champLabel    = $isGlobalChamp ? ' | Global Champ' : ($isChamp ? ' | Champ' : '');
+        $ufsLabel   = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
+        $champLabel = $user->isGlobalChamp() ? ' | Global Champ' : ($user->isAnyChamp() ? ' | Champ' : '');
         $this->addFlash('success', "Permissões de {$user->getName()} atualizadas. Estados: $ufsLabel$champLabel.");
         return $this->redirectToRoute('admin_users_index');
     }

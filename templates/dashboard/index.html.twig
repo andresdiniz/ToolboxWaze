@@ -16,8 +16,8 @@
     <a href="{{ path('radar_index') }}"       class="btn btn-sm btn-outline-secondary"><i class="bi bi-broadcast me-1"></i>Radares</a>
     <a href="{{ path('posto_index') }}"        class="btn btn-sm btn-outline-secondary"><i class="bi bi-fuel-pump me-1"></i>Postos</a>
     <a href="{{ path('escola_inep_index') }}"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-building me-1"></i>Escolas</a>
-    <a href="{{ path('solicitacao_index') }}"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-inbox me-1"></i>Solicitações</a>
-    {% if isAdmin %}<a href="{{ path('admin_user_index') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-people me-1"></i>Usuários</a>{% endif %}
+    <a href="{{ path('solicitacao_hub') }}"    class="btn btn-sm btn-outline-secondary"><i class="bi bi-inbox me-1"></i>Solicitações</a>
+    {% if isAdmin %}<a href="{{ path('admin_users_index') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-people me-1"></i>Usuários</a>{% endif %}
     <a href="{{ path('cobertura_radar') }}"    class="btn btn-sm btn-outline-danger"><i class="bi bi-broadcast me-1"></i>Cobertura</a>
   </div>
 </div>
@@ -169,7 +169,7 @@
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-inbox me-1 text-info"></i>Solicitações por Tipo</span>
-        <a href="{{ path('solicitacao_index') }}" class="btn btn-sm btn-outline-secondary">Ver todas</a>
+        <a href="{{ path('solicitacao_hub') }}" class="btn btn-sm btn-outline-secondary">Ver todas</a>
       </div>
       <div class="card-body p-0">
         {% if solicKpis.geral.total is defined %}
@@ -250,7 +250,7 @@
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-people me-1 text-secondary"></i>Usuários</span>
-        <a href="{{ path('admin_user_index') }}" class="btn btn-sm btn-outline-secondary">Gerenciar</a>
+        <a href="{{ path('admin_users_index') }}" class="btn btn-sm btn-outline-secondary">Gerenciar</a>
       </div>
       <div class="card-body">
         <div class="row g-2">
@@ -284,7 +284,6 @@
 (function(){
   'use strict';
 
-  {# |default([]) garante [] se o PHP retornar false/null #}
   const radarUf      = {{ (radarPorUf     is iterable ? radarPorUf     : []) | json_encode | raw }};
   const resultado    = {{ (radarResultado is iterable ? radarResultado : []) | json_encode | raw }};
   const mensais      = {{ (radarMensais   is iterable ? radarMensais   : []) | json_encode | raw }};
@@ -308,7 +307,6 @@
     if (el) { try { new Chart(el, config); } catch(e) { console.warn('Chart ' + id, e); } }
   }
 
-  // 1. Radares por UF (barras empilhadas)
   safeChart('chartRadarUf', {
     type: 'bar',
     data: {
@@ -322,7 +320,6 @@
     options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: tc() } } }, scales: sc(true) },
   });
 
-  // 2. Resultado geral (rosca)
   const rc = { 'APROVADO': '#20c997', 'REPROVADO': '#dc3545', 'SEM INFO': '#6c757d' };
   safeChart('chartRadarResultado', {
     type: 'doughnut',
@@ -333,7 +330,6 @@
     options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: tc() } } } },
   });
 
-  // 3. Verificações mensais (linha)
   safeChart('chartVerifMensais', {
     type: 'line',
     data: {
@@ -343,7 +339,6 @@
     options: { responsive: true, plugins: { legend: { display: false } }, scales: sc() },
   });
 
-  // 4. Cobertura Waze por UF (horizontal)
   safeChart('chartCoberturaUf', {
     type: 'bar',
     data: {
@@ -356,7 +351,6 @@
     options: { indexAxis: 'y', responsive: true, plugins: { legend: { position: 'bottom', labels: { color: tc() } } }, scales: sc() },
   });
 
-  // 5. Atividade postos (linha)
   safeChart('chartPostoAtividade', {
     type: 'line',
     data: {
@@ -366,7 +360,6 @@
     options: { responsive: true, plugins: { legend: { display: false } }, scales: sc() },
   });
 
-  // 6. Solicitações diárias (linha)
   safeChart('chartSolicDiarias', {
     type: 'line',
     data: {
@@ -376,7 +369,6 @@
     options: { responsive: true, plugins: { legend: { display: false } }, scales: sc() },
   });
 
-  // Count-up animado
   document.querySelectorAll('.count-up').forEach(el => {
     const target = parseFloat(el.dataset.target ?? '0');
     const suffix = el.dataset.suffix ?? '';

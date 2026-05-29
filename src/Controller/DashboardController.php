@@ -27,11 +27,11 @@ final class DashboardController extends AbstractController
     public function index(): Response
     {
         /** @var User|null $user */
-        $user       = $this->getUser();
-        $allowedUfs = $user?->getUfsForQuery();
-        $isAdmin    = $this->isGranted('ROLE_ADMIN');
+        $user          = $this->getUser();
+        $allowedUfs    = $user?->getUfsForQuery();
+        $isAdmin       = $this->isGranted('ROLE_ADMIN');
 
-        // ── Radares ──────────────────────────────────────────────
+        // ── Radares
         $radarKpis      = $this->radarStats->getKpis($allowedUfs);
         $radarPorUf     = $this->radarStats->getPorUf($allowedUfs);
         $radarResultado = $this->radarStats->getPorResultado($allowedUfs);
@@ -39,36 +39,33 @@ final class DashboardController extends AbstractController
         $radarCobertura = $this->radarStats->getCoberturaWazePorUf($allowedUfs);
         $radarSemWaze   = $this->radarStats->getSemWazePrioritarios($allowedUfs, 8);
 
-        // ── Postos ───────────────────────────────────────────────
+        // ── Postos
         $postoKpis      = $this->postoStats->getKpis($allowedUfs);
         $postoAtividade = $this->postoStats->getAtividadeDiaria();
 
-        // ── Globais (admin only ou todos) ────────────────────────
-        $escolaKpis   = $this->dashService->getEscolaKpis();
-        $usuarioKpis  = $isAdmin ? $this->dashService->getUsuarioKpis() : [];
-        $solicKpis    = $this->dashService->getSolicitacaoKpis();
-        $solicDiarias = $this->dashService->getSolicitacoesDiarias();
+        // ── Globais
+        $escolaKpis    = $this->dashService->getEscolaKpis();
+        $usuarioKpis   = $isAdmin ? $this->dashService->getUsuarioKpis() : [];
+        $solicKpis     = $this->dashService->getSolicitacaoKpis();
+        $solicDiarias  = $this->dashService->getSolicitacoesDiarias();
         $estadosAtivos = $this->dashService->getEstadosAtivos();
 
         return $this->render('dashboard/index.html.twig', [
-            // Radares
             'radarKpis'      => $radarKpis,
             'radarPorUf'     => $radarPorUf,
             'radarResultado' => $radarResultado,
             'radarMensais'   => $radarMensais,
             'radarCobertura' => $radarCobertura,
             'radarSemWaze'   => $radarSemWaze,
-            // Postos
             'postoKpis'      => $postoKpis,
             'postoAtividade' => $postoAtividade,
-            // Globais
-            'escolaKpis'    => $escolaKpis,
-            'usuarioKpis'   => $usuarioKpis,
-            'solicKpis'     => $solicKpis,
-            'solicDiarias'  => $solicDiarias,
-            'estadosAtivos' => $estadosAtivos,
-            'isAdmin'       => $isAdmin,
-            'allowedUfs'    => $allowedUfs,
+            'escolaKpis'     => $escolaKpis,
+            'usuarioKpis'    => $usuarioKpis,
+            'solicKpis'      => $solicKpis,
+            'solicDiarias'   => $solicDiarias,
+            'estadosAtivos'  => $estadosAtivos,
+            'isAdmin'        => $isAdmin,
+            'allowedUfs'     => $allowedUfs,
         ]);
     }
 }

@@ -56,11 +56,14 @@ final class BuscaController extends AbstractController
 
         $ufs = array_column(
             $this->db->fetchAllAssociative(
-                "SELECT DISTINCT sigla_uf AS uf FROM radar_medidor WHERE sigla_uf IS NOT NULL
+                "SELECT DISTINCT CONVERT(sigla_uf USING utf8mb4) COLLATE utf8mb4_unicode_ci AS uf
+                 FROM radar_medidor WHERE sigla_uf IS NOT NULL
                  UNION
-                 SELECT DISTINCT uf FROM fuel_reseller_raw WHERE uf IS NOT NULL
+                 SELECT DISTINCT CONVERT(uf USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                 FROM fuel_reseller_raw WHERE uf IS NOT NULL
                  UNION
-                 SELECT DISTINCT uf FROM escola_inep WHERE uf IS NOT NULL
+                 SELECT DISTINCT CONVERT(uf USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                 FROM escola_inep WHERE uf IS NOT NULL
                  ORDER BY uf"
             ),
             'uf'

@@ -2,6 +2,17 @@
 
 {% block title %}{{ escola.escola }} — Escolas INEP{% endblock %}
 
+{% block stylesheets %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+#escola-map {
+    height: 280px;
+    border-radius: 0 0 .375rem .375rem;
+    z-index: 0;
+}
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="container py-3">
 
@@ -97,6 +108,15 @@
           </div>
 
         </div>
+      </div>
+
+      {# ── Mapa OSM ── #}
+      <div class="card mt-3" id="card-mapa" style="display:none">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+          🗺 Localização no Mapa
+          <small class="text-muted fw-normal" id="mapa-fonte"></small>
+        </div>
+        <div id="escola-map"></div>
       </div>
 
       {# ── Histórico de links ── #}
@@ -211,4 +231,82 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block javascripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function () {
+  // 1. Coordenadas diretas da entidade (prioridade máxima)
+  var entityLat = {{ escola.latitude  is not null ? escola.latitude  : 'null' }};
+  var entityLon = {{ escola.longitude is not null ? escola.longitude : 'null' }};
+
+  // 2. Link do editor Waze (extração via URL params)
+  var wazeLink = {{ escola.linkWaze is not null ? ('"' ~ escola.linkWaze|e('js') ~ '"') : 'null' }};
+
+  var lat = null, lon = null, fonte = '';
+
+  // Tenta extrair lat/lon do link Waze: ?zoom=17&lat=-19.123&lon=-43.456
+  function extractFromWaze(url) {
+    try {
+      var u = new URL(url);
+      var la = parseFloat(u.searchParams.get('lat'));
+      var lo = parseFloat(u.searchParams.get('lon'));
+      if (!isNaN(la) && !isNaN(lo)) return { lat: la, lon: lo };
+    } catch (e) {}
+    // Fallback: regex para lat=X&lon=Y em qualquer posição
+    var m = url.match(/[?&]lat=(-?[\d.]+).*?[?&]lon=(-?[\d.]+)/);
+    if (!m) m = url.match(/[?&]lon=(-?[\d.]+).*?[?&]lat=(-?[\d.]+)/);
+    if (m) {
+      if (url.match(/[?&]lat=/) && url.match(/[?&]lon=/)) {
+        var mLat = url.match(/[?&]lat=(-?[\d.]+)/);
+        var mLon = url.match(/[?&]lon=(-?[\d.]+)/);
+        if (mLat && mLon) return { lat: parseFloat(mLat[1]), lon: parseFloat(mLon[1]) };
+      }
+    }
+    return null;
+  }
+
+  if (entityLat !== null && entityLon !== null) {
+    lat = entityLat;
+    lon = entityLon;
+    fonte = 'Coordenadas INEP';
+  } else if (wazeLink) {
+    var wc = extractFromWaze(wazeLink);
+    if (wc) {
+      lat = wc.lat;
+      lon = wc.lon;
+      fonte = 'Extraído do link Waze';
+    }
+  }
+
+  if (lat === null || lon === null) return; // sem coordenadas disponíveis
+
+  // Exibe o card
+  document.getElementById('card-mapa').style.display = '';
+  document.getElementById('mapa-fonte').textContent = fonte;
+
+  // Inicializa Leaflet após o card ser visível
+  requestAnimationFrame(function () {
+    var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat, lon], 17);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    var icon = L.divIcon({
+      className: '',
+      html: '<div style="font-size:28px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))">🏫</div>',
+      iconAnchor: [14, 28],
+      popupAnchor: [0, -28]
+    });
+
+    L.marker([lat, lon], { icon: icon })
+      .addTo(map)
+      .bindPopup('<strong>{{ escola.escola|e('js') }}</strong><br>{{ escola.municipio|e('js') }} — {{ escola.uf|e('js') }}')
+      .openPopup();
+  });
+}());
+</script>
 {% endblock %}

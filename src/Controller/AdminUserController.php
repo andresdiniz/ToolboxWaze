@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Controller\Admin;
+namespace App\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,7 +13,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * Mantido apenas para não quebrar bookmarks antigos.
  */
 #[Route('/admin/users-legacy', name: 'admin_users_legacy_')]
-class AdminUserLegacyController extends AbstractController
+class AdminUserController extends AbstractController
 {
     #[Route('', name: 'index')]
     public function index(): Response

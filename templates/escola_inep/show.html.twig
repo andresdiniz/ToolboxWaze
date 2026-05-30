@@ -260,11 +260,9 @@
     var lon = coordLink.dataset.lonVal;
     var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
-      // geo: URI abre o seletor nativo de apps (GMaps, Waze, Apple Maps…)
       coordLink.href = 'geo:' + lat + ',' + lon + '?q=' + lat + ',' + lon;
       coordLink.removeAttribute('target');
     } else {
-      // Desktop: abre o WME centralizado nas coordenadas
       coordLink.href = 'https://www.waze.com/pt-BR/editor?env=row&lat=' + lat + '&lon=' + lon + '&zoom=17';
     }
   }
@@ -313,16 +311,23 @@
 
   if (lat2 === null || lon2 === null) return;
 
-  document.getElementById('card-mapa').style.display = '';
+  // Exibe o card ANTES de inicializar o Leaflet para que o elemento tenha
+  // dimensões reais no momento da inicialização.
+  var cardMapa = document.getElementById('card-mapa');
+  cardMapa.style.display = '';
   document.getElementById('mapa-fonte').textContent = fonte;
 
-  requestAnimationFrame(function () {
+  // Pequeno delay garante que o browser terminou o reflow após display:block
+  setTimeout(function () {
     var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat2, lon2], 17);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19
     }).addTo(map);
+
+    // Corrige tiles em branco causados por render antes do reflow completo
+    map.invalidateSize();
 
     var icon = L.divIcon({
       className: '',
@@ -335,7 +340,8 @@
       .addTo(map)
       .bindPopup('<strong>' + nome + '</strong><br>' + mun + ' — ' + uf)
       .openPopup();
-  });
+  }, 50);
+
 }());
 </script>
 {% endblock %}

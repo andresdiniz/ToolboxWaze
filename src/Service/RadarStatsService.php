@@ -8,6 +8,18 @@ use Doctrine\DBAL\Connection;
 
 final class RadarStatsService
 {
+    /**
+     * Termos que identificam radar APROVADO (case-insensitive, parcial).
+     * Cobre: Aprovado, APROVADO, aprovado, APTO, Apto, Conforme, CONFORME etc.
+     */
+    private const APROVADO_LIKE  = ['%APROV%', '%APTO%', '%CONFORM%'];
+
+    /**
+     * Termos que identificam radar REPROVADO (case-insensitive, parcial).
+     * Cobre: Reprovado, REPROVADO, NAO APTO, Não Apto, Não Conforme etc.
+     */
+    private const REPROVADO_LIKE = ['%REPROV%', '%NAO APTO%', '%NÃO APTO%', '%INCONF%', '%N\u00c3O CONF%'];
+
     public function __construct(
         private readonly Connection $db,
     ) {}
@@ -21,10 +33,13 @@ final class RadarStatsService
         [$where, $params] = $this->ufWhere($allowedUfs);
         $wc = $where ? "WHERE $where" : '';
 
+        $aprovExpr  = $this->likeOr('situacao', self::APROVADO_LIKE);
+        $reprovExpr = $this->likeOr('situacao', self::REPROVADO_LIKE);
+
         $row = $this->db->fetchAssociative(
             "SELECT COUNT(*) AS total,
-                    SUM(UPPER(situacao) = 'APROVADO')  AS aprovados,
-                    SUM(UPPER(situacao) = 'REPROVADO') AS reprovados,
+                    SUM($aprovExpr)  AS aprovados,
+                    SUM($reprovExpr) AS reprovados,
                     SUM(data_validade IS NOT NULL AND $dv < ?)    AS vencidos,
                     SUM(data_validade IS NOT NULL AND $dv >= ? AND $dv <= ?) AS vencendo,
                     COUNT(DISTINCT sigla_uf) AS estados
@@ -52,10 +67,13 @@ final class RadarStatsService
         [$where, $params] = $this->ufWhere($allowedUfs);
         $wc = $where ? "WHERE $where" : '';
 
+        $aprovExpr  = $this->likeOr('situacao', self::APROVADO_LIKE);
+        $reprovExpr = $this->likeOr('situacao', self::REPROVADO_LIKE);
+
         return $this->db->fetchAllAssociative(
             "SELECT sigla_uf AS uf, COUNT(*) AS total,
-                    SUM(UPPER(situacao) = 'APROVADO')  AS aprovados,
-                    SUM(UPPER(situacao) = 'REPROVADO') AS reprovados
+                    SUM($aprovExpr)  AS aprovados,
+                    SUM($reprovExpr) AS reprovados
              FROM radar_medidor $wc
              GROUP BY sigla_uf ORDER BY sigla_uf",
             $params
@@ -114,18 +132,38 @@ final class RadarStatsService
         $andUf = $where ? "AND $where" : '';
         $lim   = (int) $limit;
 
+        $aprovExpr = $this->likeOr('UPPER(rm.situacao)', [
+            '%APROV%', '%APTO%', '%CONFORM%',
+        ]);
+
         return $this->db->fetchAllAssociative(
             "SELECT rm.id, rm.sigla_uf, rm.municipio, rm.logradouro,
                     rm.situacao, rm.data_validade
              FROM radar_medidor rm
              LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
              WHERE rwl.id IS NULL
-               AND UPPER(rm.situacao) = 'APROVADO'
+               AND $aprovExpr
                $andUf
              ORDER BY rm.sigla_uf, rm.municipio
              LIMIT $lim",
             $params
         );
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Gera expressão SQL: UPPER(col) LIKE '%X%' OR UPPER(col) LIKE '%Y%' ...
+     * Envolve tudo em parênteses e usa IS NOT NULL para excluir NULLs.
+     */
+    private function likeOr(string $col, array $patterns): string
+    {
+        $parts = [];
+        foreach ($patterns as $p) {
+            $escaped = addslashes($p);
+            $parts[] = "UPPER($col) LIKE '$escaped'";
+        }
+        return '(' . implode(' OR ', $parts) . ')';
     }
 
     private function ufWhere(?array $allowedUfs, string $alias = ''): array

@@ -47,6 +47,17 @@ class EscolaInepController extends AbstractController
         $situacao    = trim((string) $request->query->get('situacao', ''));
         $offset      = ($page - 1) * self::PER_PAGE;
 
+        // Salva os filtros ativos na sessão para restaurar ao clicar em Voltar
+        $request->getSession()->set('escola_filtros', [
+            'busca'       => $busca,
+            'uf'          => $uf,
+            'municipio'   => $municipio,
+            'dependencia' => $dependencia,
+            'localizacao' => $localizacao,
+            'situacao'    => $situacao,
+            'page'        => $page,
+        ]);
+
         $where  = ['1=1'];
         $params = [];
 
@@ -171,7 +182,7 @@ class EscolaInepController extends AbstractController
     // -------------------------------------------------------------------------
 
     #[Route('/{id}', name: 'escola_inep_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
-    public function show(int $id): Response
+    public function show(int $id, Request $request): Response
     {
         $this->requirePermission(User::PERMISSION_ESCOLAS);
 
@@ -187,9 +198,12 @@ class EscolaInepController extends AbstractController
         $linkLogs = $this->em->getRepository(EscolaInepWazeLinkLog::class)
             ->findBy(['escola' => $escola], ['alteradoEm' => 'DESC'], 20);
 
+        $voltarParams = $request->getSession()->get('escola_filtros', []);
+
         return $this->render('escola_inep/show.html.twig', [
-            'escola'   => $escola,
-            'linkLogs' => $linkLogs,
+            'escola'       => $escola,
+            'linkLogs'     => $linkLogs,
+            'voltarParams' => $voltarParams,
         ]);
     }
 

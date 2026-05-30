@@ -22,6 +22,7 @@
      id="escola-data"
      data-lat="{% if hasCoords %}{{ escola.latitude }}{% endif %}"
      data-lon="{% if hasCoords %}{{ escola.longitude }}{% endif %}"
+     data-place="{{ escola.linkAreaEscolar|default('')|e('html_attr') }}"
      data-waze="{{ escola.linkWaze|default('')|e('html_attr') }}"
      data-nome="{{ escola.escola|default('')|e('html_attr') }}"
      data-municipio="{{ escola.municipio|default('')|e('html_attr') }}"
@@ -255,7 +256,21 @@
 
   var lat = null, lon = null, fonte = '';
 
-  // 1. Coordenadas diretas da entidade (via data-*)
+  function extractLatLon(url) {
+    if (!url) return null;
+    try {
+      var u = new URL(url);
+      var wLat = parseFloat(u.searchParams.get('lat'));
+      var wLon = parseFloat(u.searchParams.get('lon'));
+      if (!isNaN(wLat) && !isNaN(wLon)) return { lat: wLat, lon: wLon };
+    } catch (e) {}
+    var mLat = url.match(/[?&]lat=(-?[\d.]+)/);
+    var mLon = url.match(/[?&]lon=(-?[\d.]+)/);
+    if (mLat && mLon) return { lat: parseFloat(mLat[1]), lon: parseFloat(mLon[1]) };
+    return null;
+  }
+
+  // 1. Coordenadas diretas INEP
   var dLat = parseFloat(el.dataset.lat);
   var dLon = parseFloat(el.dataset.lon);
   if (el.dataset.lat !== '' && el.dataset.lon !== '' && !isNaN(dLat) && !isNaN(dLon)) {
@@ -264,27 +279,21 @@
     fonte = 'Coordenadas INEP';
   }
 
-  // 2. Extrai lat/lon do link do editor Waze
+  // 2. Extrai lat/lon do link do Place (prioridade sobre Hazard)
   if (lat === null) {
-    var wazeUrl = el.dataset.waze;
-    if (wazeUrl) {
-      try {
-        var u = new URL(wazeUrl);
-        var wLat = parseFloat(u.searchParams.get('lat'));
-        var wLon = parseFloat(u.searchParams.get('lon'));
-        if (!isNaN(wLat) && !isNaN(wLon)) {
-          lat = wLat; lon = wLon;
-          fonte = 'Extraído do link Waze';
-        }
-      } catch (e) {
-        var mLat = wazeUrl.match(/[?&]lat=(-?[\d.]+)/);
-        var mLon = wazeUrl.match(/[?&]lon=(-?[\d.]+)/);
-        if (mLat && mLon) {
-          lat = parseFloat(mLat[1]);
-          lon = parseFloat(mLon[1]);
-          fonte = 'Extraído do link Waze';
-        }
-      }
+    var coords = extractLatLon(el.dataset.place);
+    if (coords) {
+      lat = coords.lat; lon = coords.lon;
+      fonte = 'Extraído do link Place';
+    }
+  }
+
+  // 3. Fallback: extrai lat/lon do link do Permanent Hazard
+  if (lat === null) {
+    var coords2 = extractLatLon(el.dataset.waze);
+    if (coords2) {
+      lat = coords2.lat; lon = coords2.lon;
+      fonte = 'Extraído do link Waze';
     }
   }
 

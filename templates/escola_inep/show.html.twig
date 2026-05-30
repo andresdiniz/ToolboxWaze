@@ -68,7 +68,10 @@
               <tr>
                 <th class="ps-3">Coordenadas</th>
                 <td>
-                  <a href="https://www.google.com/maps?q={{ escola.latitude }},{{ escola.longitude }}"
+                  <a id="coords-link"
+                     href="https://www.google.com/maps?q={{ escola.latitude }},{{ escola.longitude }}"
+                     data-lat-val="{{ escola.latitude }}"
+                     data-lon-val="{{ escola.longitude }}"
                      target="_blank" class="text-decoration-none">
                     {{ escola.latitude }}, {{ escola.longitude }} 🗺
                   </a>
@@ -249,12 +252,30 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 (function () {
+
+  // ── Link coordenadas: WME no desktop, geo: no mobile ──
+  var coordLink = document.getElementById('coords-link');
+  if (coordLink) {
+    var lat = coordLink.dataset.latVal;
+    var lon = coordLink.dataset.lonVal;
+    var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      // geo: URI abre o seletor nativo de apps (GMaps, Waze, Apple Maps…)
+      coordLink.href = 'geo:' + lat + ',' + lon + '?q=' + lat + ',' + lon;
+      coordLink.removeAttribute('target');
+    } else {
+      // Desktop: abre o WME centralizado nas coordenadas
+      coordLink.href = 'https://www.waze.com/pt-BR/editor?env=row&lat=' + lat + '&lon=' + lon + '&zoom=17';
+    }
+  }
+
+  // ── Mapa Leaflet ──
   var el   = document.getElementById('escola-data');
   var nome = el.dataset.nome;
   var mun  = el.dataset.municipio;
   var uf   = el.dataset.uf;
 
-  var lat = null, lon = null, fonte = '';
+  var lat2 = null, lon2 = null, fonte = '';
 
   function extractLatLon(url) {
     if (!url) return null;
@@ -274,36 +295,29 @@
   var dLat = parseFloat(el.dataset.lat);
   var dLon = parseFloat(el.dataset.lon);
   if (el.dataset.lat !== '' && el.dataset.lon !== '' && !isNaN(dLat) && !isNaN(dLon)) {
-    lat = dLat;
-    lon = dLon;
+    lat2 = dLat; lon2 = dLon;
     fonte = 'Coordenadas INEP';
   }
 
-  // 2. Extrai lat/lon do link do Place (prioridade sobre Hazard)
-  if (lat === null) {
+  // 2. Extrai lat/lon do link do Place
+  if (lat2 === null) {
     var coords = extractLatLon(el.dataset.place);
-    if (coords) {
-      lat = coords.lat; lon = coords.lon;
-      fonte = 'Extraído do link Place';
-    }
+    if (coords) { lat2 = coords.lat; lon2 = coords.lon; fonte = 'Extraído do link Place'; }
   }
 
-  // 3. Fallback: extrai lat/lon do link do Permanent Hazard
-  if (lat === null) {
+  // 3. Fallback: link do Permanent Hazard
+  if (lat2 === null) {
     var coords2 = extractLatLon(el.dataset.waze);
-    if (coords2) {
-      lat = coords2.lat; lon = coords2.lon;
-      fonte = 'Extraído do link Waze';
-    }
+    if (coords2) { lat2 = coords2.lat; lon2 = coords2.lon; fonte = 'Extraído do link Waze'; }
   }
 
-  if (lat === null || lon === null) return;
+  if (lat2 === null || lon2 === null) return;
 
   document.getElementById('card-mapa').style.display = '';
   document.getElementById('mapa-fonte').textContent = fonte;
 
   requestAnimationFrame(function () {
-    var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat, lon], 17);
+    var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat2, lon2], 17);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -317,7 +331,7 @@
       popupAnchor: [0, -28]
     });
 
-    L.marker([lat, lon], { icon: icon })
+    L.marker([lat2, lon2], { icon: icon })
       .addTo(map)
       .bindPopup('<strong>' + nome + '</strong><br>' + mun + ' — ' + uf)
       .openPopup();

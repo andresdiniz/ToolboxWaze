@@ -45,7 +45,6 @@ class EscolaInepController extends AbstractController
         $dependencia = trim((string) $request->query->get('dependencia', ''));
         $localizacao = trim((string) $request->query->get('localizacao', ''));
         $situacao    = trim((string) $request->query->get('situacao', ''));
-        $offset      = ($page - 1) * self::PER_PAGE;
 
         // Salva os filtros ativos na sessão para restaurar ao clicar em Voltar
         $request->getSession()->set('escola_filtros', [
@@ -94,8 +93,14 @@ class EscolaInepController extends AbstractController
         match ($situacao) {
             'ativa'      => ($where[] = "(e.restricao_atendimento IS NULL OR UPPER(e.restricao_atendimento) LIKE '%SEM RESTRI%')"),
             'paralisada' => ($where[] = "UPPER(e.restricao_atendimento) LIKE '%PARALISADA%'"),
-            'sem_link'   => ($where[] = '(e.link_waze IS NULL OR e.link_waze = \'\')'),
-            'com_link'   => ($where[] = 'e.link_waze IS NOT NULL AND e.link_waze != \'\'' ),
+            // sem nenhum dos dois links
+            'sem_link'   => ($where[] = "(e.link_waze IS NULL OR e.link_waze = '') AND (e.link_area_escolar IS NULL OR e.link_area_escolar = '')"),
+            // tem ao menos um dos dois links
+            'com_link'   => ($where[] = "(e.link_waze IS NOT NULL AND e.link_waze != '') OR (e.link_area_escolar IS NOT NULL AND e.link_area_escolar != '')"),
+            // sem o Place cadastrado
+            'sem_place'  => ($where[] = "(e.link_area_escolar IS NULL OR e.link_area_escolar = '')"),
+            // com o Place cadastrado
+            'com_place'  => ($where[] = "e.link_area_escolar IS NOT NULL AND e.link_area_escolar != ''"),
             default      => null,
         };
 
@@ -105,9 +110,10 @@ class EscolaInepController extends AbstractController
             "SELECT COUNT(*) FROM escola_inep e WHERE $whereClause",
             $params
         );
-        $pages = max(1, (int) ceil($total / self::PER_PAGE));
-        $page  = min($page, $pages);
-        $offset = ($page - 1) * self::PER_PAGE;
+        $pages  = max(1, (int) ceil($total / self::PER_PAGE));
+        $page   = min($page, $pages);
+        $offset = (int) (($page - 1) * self::PER_PAGE);
+        $limit  = (int) self::PER_PAGE;
 
         $rows = $this->db->fetchAllAssociative(
             "SELECT e.id, e.escola, e.codigo_inep, e.uf, e.municipio,
@@ -118,7 +124,7 @@ class EscolaInepController extends AbstractController
              FROM escola_inep e
              WHERE $whereClause
              ORDER BY e.escola
-             LIMIT $offset, " . self::PER_PAGE,
+             LIMIT {$offset}, {$limit}",
             $params
         );
 

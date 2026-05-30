@@ -30,13 +30,17 @@ final class DashboardService
 
     public function getUsuarioKpis(): array
     {
-        return $this->db->fetchAssociative(
-            "SELECT COUNT(*)                                  AS total,
-                    SUM(status = 'approved')                  AS aprovados,
-                    SUM(status = 'pending')                   AS pendentes,
-                    SUM(status NOT IN ('pending','blocked'))  AS ativos
-             FROM `user`"
-        ) ?: ['total' => 0, 'aprovados' => 0, 'pendentes' => 0, 'ativos' => 0];
+        try {
+            return $this->db->fetchAssociative(
+                "SELECT COUNT(*)                                  AS total,
+                        SUM(status = 'approved')                  AS aprovados,
+                        SUM(status = 'pending')                   AS pendentes,
+                        SUM(status NOT IN ('pending','blocked'))  AS ativos
+                 FROM `user`"
+            ) ?: ['total' => 0, 'aprovados' => 0, 'pendentes' => 0, 'ativos' => 0];
+        } catch (\Throwable) {
+            return ['total' => 0, 'aprovados' => 0, 'pendentes' => 0, 'ativos' => 0];
+        }
     }
 
     public function getSolicitacaoKpis(): array

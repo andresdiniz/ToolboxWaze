@@ -174,6 +174,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getUfsForQuery(): ?array
     {
         if ($this->isAdmin() || $this->isGlobalChamp() || $this->allowedUfs === null) { return null; }
+        // array vazio significa que nenhuma UF foi configurada ainda → acesso total
+        if (count($this->allowedUfs) === 0) { return null; }
         return $this->allowedUfs;
     }
 

@@ -23,10 +23,12 @@ final class RadarService
     private array $camposEditaveis;
 
     public function __construct(
-        private readonly Connection    $db,
+        private readonly Connection       $db,
         private readonly PaginatorService $paginator,
-        private readonly CacheInterface $cache,
-        #[Autowire('%kernel.project_dir%')] string $projectDir
+        #[Autowire(service: 'cache.app')]
+        private readonly CacheInterface   $cache,
+        #[Autowire('%kernel.project_dir%')]
+        string $projectDir
     ) {
         $this->camposEditaveis = require $projectDir . '/config/radar_campos.php';
     }

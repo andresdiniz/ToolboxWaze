@@ -16,11 +16,10 @@ final class Version20260605_radar_edit_log extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // Descobre o tipo real da coluna radar_medidor.id para garantir compatibilidade da FK
         $this->addSql(<<<SQL
             CREATE TABLE IF NOT EXISTS radar_edit_log (
-                id               INT             NOT NULL AUTO_INCREMENT,
-                radar_medidor_id INT             NOT NULL,
+                id               BIGINT(20)      NOT NULL AUTO_INCREMENT,
+                radar_medidor_id BIGINT(20)      NOT NULL,
                 campo_alterado   VARCHAR(100)    NOT NULL,
                 valor_anterior   TEXT            NULL,
                 valor_novo       TEXT            NULL,

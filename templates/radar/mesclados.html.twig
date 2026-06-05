@@ -1,0 +1,103 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Radares Mesclados — Auditoria{% endblock %}
+
+{% block body %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ path('radar_index') }}">Radares</a></li>
+        <li class="breadcrumb-item active">Mesclados</li>
+    </ol>
+</nav>
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="h4 fw-bold mb-0"><i class="bi bi-git me-2"></i>Radares Mesclados</h1>
+        <p class="text-muted small mb-0">Radares absorvidos por mesclagem — removidos da listagem principal para auditoria.</p>
+    </div>
+    <a href="{{ path('radar_index') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Voltar à listagem
+    </a>
+</div>
+
+{% for type, messages in app.flashes %}
+    {% for msg in messages %}
+        <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+{% endfor %}
+
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="fw-semibold">{{ total }} radar(es) mesclado(s)</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>UF</th>
+                    <th>Município</th>
+                    <th>Logradouro</th>
+                    <th>Tipo</th>
+                    <th>Absorvido por</th>
+                    <th>Mesclado em</th>
+                    <th>Por</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td><code>#{{ r.id }}</code></td>
+                    <td><span class="badge badge-uf">{{ r.sigla_uf }}</span></td>
+                    <td>{{ r.municipio ?? '—' }}</td>
+                    <td class="text-muted small">{{ r.logradouro ?? '—' }}</td>
+                    <td>{{ r.tipo_medidor ?? '—' }}</td>
+                    <td>
+                        <a href="{{ path('radar_show', {id: r.merged_into_id}) }}" class="fw-semibold text-decoration-none" style="color:var(--tw)">
+                            <i class="bi bi-arrow-right-circle me-1"></i>#{{ r.merged_into_id }}
+                            {% if r.survivor_municipio %}
+                                <span class="text-muted fw-normal small">— {{ r.survivor_municipio }}</span>
+                            {% endif %}
+                        </a>
+                    </td>
+                    <td class="text-muted small">{{ r.merged_at ? r.merged_at|date('d/m/Y H:i') : '—' }}</td>
+                    <td class="text-muted small">{{ r.merged_by ?? '—' }}</td>
+                    <td>
+                        <a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-xs btn-outline-secondary" title="Ver radar absorvido">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">Nenhum radar mesclado encontrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if pages > 1 %}
+    <div class="card-footer d-flex justify-content-center">
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item {{ page <= 1 ? 'disabled' }}"><a class="page-link" href="{{ path('radar_mesclados', {page: page - 1}) }}">‹</a></li>
+                {% for p in 1..pages %}
+                    {% if p == page or p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+                        <li class="page-item {{ p == page ? 'active' }}"><a class="page-link" href="{{ path('radar_mesclados', {page: p}) }}">{{ p }}</a></li>
+                    {% elseif p == page - 3 or p == page + 3 %}
+                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {{ page >= pages ? 'disabled' }}"><a class="page-link" href="{{ path('radar_mesclados', {page: page + 1}) }}">›</a></li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

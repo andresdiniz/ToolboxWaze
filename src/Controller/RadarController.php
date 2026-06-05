@@ -53,7 +53,7 @@ class RadarController extends AbstractController
     public function __construct(private readonly Connection $db) {}
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Listagem
+    // Listagem principal (exclui mesclados)
     // ─────────────────────────────────────────────────────────────────────────────
     #[Route('', name: 'radar_index', methods: ['GET'])]
     public function index(Request $request): Response
@@ -74,7 +74,8 @@ class RadarController extends AbstractController
 
         $viso = self::VALIDADE_ISO_EXPR;
 
-        $where  = ['1=1'];
+        // Exclui sempre radares absorvidos por mesclagem
+        $where  = ['r.merged_into_id IS NULL'];
         $params = [];
 
         $ufRestriction = $this->enforceUfsOnQuery('r.sigla_uf');
@@ -130,21 +131,26 @@ class RadarController extends AbstractController
             $params
         );
 
+        // Contagem de mesclados (para link na aba)
+        $totalMesclados = (int) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM radar_medidor WHERE merged_into_id IS NOT NULL'
+        );
+
         $allowedUfs = $this->allowedUfsForView();
         $ufsQuery   = $allowedUfs !== null
-            ? 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND sigla_uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY sigla_uf'
-            : 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL ORDER BY sigla_uf';
+            ? 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL AND sigla_uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY sigla_uf'
+            : 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL ORDER BY sigla_uf';
         $ufs = array_column(
             $this->db->fetchAllAssociative($ufsQuery, $allowedUfs ?? []),
             'sigla_uf'
         );
 
         $resultados = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT situacao FROM radar_medidor WHERE situacao IS NOT NULL ORDER BY situacao'
+            'SELECT DISTINCT situacao FROM radar_medidor WHERE situacao IS NOT NULL AND merged_into_id IS NULL ORDER BY situacao'
         ), 'situacao');
 
         $tipos = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL ORDER BY tipo_medidor'
+            'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL AND merged_into_id IS NULL ORDER BY tipo_medidor'
         ), 'tipo_medidor');
 
         $semFiltros = $uf === '' && $municipio === '' && $resultado === '' && $tipo === '' && $validade === '' && $serie === '';
@@ -157,25 +163,65 @@ class RadarController extends AbstractController
                         SUM(STR_TO_DATE(data_validade, '%d/%m/%Y') >= '$hoje'
                             AND STR_TO_DATE(data_validade, '%d/%m/%Y') <= '$em30') AS vencendo,
                         COUNT(DISTINCT sigla_uf) AS estados
-                 FROM radar_medidor"
+                 FROM radar_medidor WHERE merged_into_id IS NULL"
               ) ?: null)
             : null;
 
         return $this->render('radar/index.html.twig', [
-            'rows'        => $rows,
-            'page'        => $page,
-            'pages'       => $pages,
-            'total'       => $total,
-            'per_page'    => self::PER_PAGE,
-            'stats'       => $stats,
-            'ufs'         => $ufs,
-            'resultados'  => $resultados,
-            'tipos'       => $tipos,
-            'hoje'        => $hoje,
-            'em30'        => $em30,
-            'ha30dias'    => $ha30,
-            'filters'     => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
-            'allowedUfs'  => $allowedUfs,
+            'rows'           => $rows,
+            'page'           => $page,
+            'pages'          => $pages,
+            'total'          => $total,
+            'per_page'       => self::PER_PAGE,
+            'stats'          => $stats,
+            'ufs'            => $ufs,
+            'resultados'     => $resultados,
+            'tipos'          => $tipos,
+            'hoje'           => $hoje,
+            'em30'           => $em30,
+            'ha30dias'       => $ha30,
+            'filters'        => compact('uf', 'municipio', 'resultado', 'tipo', 'validade', 'serie'),
+            'allowedUfs'     => $allowedUfs,
+            'totalMesclados' => $totalMesclados,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Aba: radares mesclados (auditoria)
+    // ─────────────────────────────────────────────────────────────────────────────
+    #[Route('/mesclados', name: 'radar_mesclados', methods: ['GET'])]
+    public function mesclados(Request $request): Response
+    {
+        $this->requirePermission(User::PERMISSION_RADARES);
+
+        $page   = max(1, (int) $request->query->get('page', 1));
+        $offset = ($page - 1) * self::PER_PAGE;
+
+        $total = (int) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM radar_medidor WHERE merged_into_id IS NOT NULL'
+        );
+        $pages = max(1, (int) ceil($total / self::PER_PAGE));
+        $page  = min($page, $pages);
+
+        $rows = $this->db->fetchAllAssociative(
+            'SELECT r.id, r.sigla_uf, r.municipio,
+                    NULLIF(TRIM(r.logradouro),\'\') AS logradouro,
+                    r.tipo_medidor, r.situacao, r.merged_into_id, r.merged_at, r.merged_by,
+                    s.municipio AS survivor_municipio,
+                    NULLIF(TRIM(s.logradouro),\'\') AS survivor_logradouro
+             FROM radar_medidor r
+             JOIN radar_medidor s ON s.id = r.merged_into_id
+             WHERE r.merged_into_id IS NOT NULL
+             ORDER BY r.merged_at DESC, r.id DESC
+             LIMIT ' . $offset . ', ' . self::PER_PAGE,
+            []
+        );
+
+        return $this->render('radar/mesclados.html.twig', [
+            'rows'  => $rows,
+            'page'  => $page,
+            'pages' => $pages,
+            'total' => $total,
         ]);
     }
 
@@ -201,6 +247,24 @@ class RadarController extends AbstractController
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $ha30 = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
+
+        // Se este radar foi absorvido por outro, carrega o sobrevivente
+        $survivorRadar = null;
+        if (!empty($radar['merged_into_id'])) {
+            $survivorRadar = $this->db->fetchAssociative(
+                'SELECT id, sigla_uf, municipio, logradouro FROM radar_medidor WHERE id = ?',
+                [(int) $radar['merged_into_id']]
+            ) ?: null;
+        }
+
+        // Se este radar absorveu outros, lista os absorvidos
+        $absorbedRadares = $this->db->fetchAllAssociative(
+            'SELECT id, sigla_uf, municipio, logradouro, merged_at, merged_by
+             FROM radar_medidor
+             WHERE merged_into_id = ?
+             ORDER BY merged_at DESC',
+            [$id]
+        );
 
         $wazeLink = $this->db->fetchAssociative(
             'SELECT wl.*, u1.email AS inserted_by_email, u2.email AS updated_by_email
@@ -231,16 +295,18 @@ class RadarController extends AbstractController
         );
 
         return $this->render('radar/show.html.twig', [
-            'radar'        => $radar,
-            'wazeLink'     => $wazeLink,
-            'wazeLog'      => $wazeLog,
-            'historico'    => $historico,
-            'faixas'       => $faixas,
-            'hoje'         => $hoje,
-            'em30'         => $em30,
-            'ha30dias'     => $ha30,
-            'wazeErrors'   => [],
-            'wazeFormData' => [],
+            'radar'           => $radar,
+            'survivorRadar'   => $survivorRadar,
+            'absorbedRadares' => $absorbedRadares,
+            'wazeLink'        => $wazeLink,
+            'wazeLog'         => $wazeLog,
+            'historico'       => $historico,
+            'faixas'          => $faixas,
+            'hoje'            => $hoje,
+            'em30'            => $em30,
+            'ha30dias'        => $ha30,
+            'wazeErrors'      => [],
+            'wazeFormData'    => [],
         ]);
     }
 
@@ -372,16 +438,18 @@ class RadarController extends AbstractController
                 [$id]
             );
             return $this->render('radar/show.html.twig', [
-                'radar'        => $radar,
-                'wazeLink'     => $wazeRow,
-                'wazeLog'      => $wazeLog,
-                'historico'    => [],
-                'faixas'       => [],
-                'hoje'         => $hoje,
-                'em30'         => $em30,
-                'ha30dias'     => $ha30,
-                'wazeErrors'   => $errors,
-                'wazeFormData' => ['waze_link' => $wazeLink, 'motivo_revisao' => $motivo],
+                'radar'           => $radar,
+                'survivorRadar'   => null,
+                'absorbedRadares' => [],
+                'wazeLink'        => $wazeRow,
+                'wazeLog'         => $wazeLog,
+                'historico'       => [],
+                'faixas'          => [],
+                'hoje'            => $hoje,
+                'em30'            => $em30,
+                'ha30dias'        => $ha30,
+                'wazeErrors'      => $errors,
+                'wazeFormData'    => ['waze_link' => $wazeLink, 'motivo_revisao' => $motivo],
             ]);
         }
 

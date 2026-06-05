@@ -329,12 +329,26 @@ class RadarController extends AbstractController
 
         $this->requireUfAccess($radar['sigla_uf'] ?? null);
 
+        // Carrega lista de estados para o select + mapa uf->name
+        $estados = $this->db->fetchAllAssociative(
+            'SELECT uf, name FROM brazilian_state ORDER BY uf'
+        );
+        // Mapa para lookup rápido
+        $estadosMap = array_column($estados, 'name', 'uf');
+
         if ($request->isMethod('POST')) {
             /** @var \App\Entity\User $user */
             $user       = $this->getUser();
             $userEmail  = $user->getUserIdentifier();
             $agora      = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
             $alteracoes = [];
+
+            // Se a UF mudou, força o nome do estado correto ignorando o que veio no POST
+            $novaSigla = trim((string) $request->request->get('sigla_uf', '')) ?: null;
+            if ($novaSigla !== null && isset($estadosMap[$novaSigla])) {
+                // Sobrescreve o campo uf com o nome oficial da brazilian_state
+                $request->request->set('uf', $estadosMap[$novaSigla]);
+            }
 
             foreach (self::CAMPOS_EDITAVEIS as $campo => $rotulo) {
                 if (!$request->request->has($campo)) {
@@ -369,6 +383,10 @@ class RadarController extends AbstractController
             return $this->redirectToRoute('radar_show', ['id' => $id]);
         }
 
+        // Para o GET: resolve o nome do estado a partir da sigla_uf via brazilian_state
+        $siglaUf    = $radar['sigla_uf'] ?? '';
+        $estadoNome = $estadosMap[$siglaUf] ?? $radar['uf'] ?? '';
+
         $editLog = $this->db->fetchAllAssociative(
             'SELECT * FROM radar_edit_log WHERE radar_medidor_id = ? ORDER BY editado_em DESC LIMIT 30',
             [$id]
@@ -378,6 +396,8 @@ class RadarController extends AbstractController
             'radar'           => $radar,
             'camposEditaveis' => self::CAMPOS_EDITAVEIS,
             'editLog'         => $editLog,
+            'estados'         => $estados,
+            'estadoNome'      => $estadoNome,
         ]);
     }
 

@@ -7,6 +7,8 @@ namespace App\Service;
 use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Encapsula toda a lógica de negócio, queries SQL e regras de validação
@@ -15,13 +17,15 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class RadarService
 {
     private const VALIDADE_ISO_EXPR = "STR_TO_DATE(r.data_validade, '%d/%m/%Y')";
+    private const CACHE_TTL = 3600; // 1 hora
 
     /** @var array<string,string> */
     private array $camposEditaveis;
 
     public function __construct(
-        private readonly Connection       $db,
+        private readonly Connection    $db,
         private readonly PaginatorService $paginator,
+        private readonly CacheInterface $cache,
         #[Autowire('%kernel.project_dir%')] string $projectDir
     ) {
         $this->camposEditaveis = require $projectDir . '/config/radar_campos.php';
@@ -225,20 +229,85 @@ final class RadarService
         ) ?: null;
     }
 
+    // ── #11 — Cache nas queries de filtros estáticos ───────────────────────────
+
+    /**
+     * Retorna lista de UFs disponíveis, com cache de 1h.
+     * @param array|null $allowedUfs null = sem restrição
+     */
+    public function getUfsParaFiltro(?array $allowedUfs): array
+    {
+        $cacheKey = 'radar_ufs_' . ($allowedUfs === null ? 'all' : implode('_', $allowedUfs));
+
+        return $this->cache->get($cacheKey, function (ItemInterface $item) use ($allowedUfs): array {
+            $item->expiresAfter(self::CACHE_TTL);
+
+            if ($allowedUfs !== null) {
+                $ph  = implode(',', array_fill(0, count($allowedUfs), '?'));
+                $sql = "SELECT DISTINCT sigla_uf FROM radar_medidor
+                        WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL
+                        AND sigla_uf IN ($ph) ORDER BY sigla_uf";
+                return array_column($this->db->fetchAllAssociative($sql, $allowedUfs), 'sigla_uf');
+            }
+
+            return array_column($this->db->fetchAllAssociative(
+                'SELECT DISTINCT sigla_uf FROM radar_medidor
+                 WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL ORDER BY sigla_uf'
+            ), 'sigla_uf');
+        });
+    }
+
+    /** Retorna lista de situações disponíveis, com cache de 1h. */
+    public function getResultadosParaFiltro(): array
+    {
+        return $this->cache->get('radar_resultados', function (ItemInterface $item): array {
+            $item->expiresAfter(self::CACHE_TTL);
+            return array_column($this->db->fetchAllAssociative(
+                'SELECT DISTINCT situacao FROM radar_medidor
+                 WHERE situacao IS NOT NULL AND merged_into_id IS NULL ORDER BY situacao'
+            ), 'situacao');
+        });
+    }
+
+    /** Retorna lista de tipos de medidor disponíveis, com cache de 1h. */
+    public function getTiposParaFiltro(): array
+    {
+        return $this->cache->get('radar_tipos', function (ItemInterface $item): array {
+            $item->expiresAfter(self::CACHE_TTL);
+            return array_column($this->db->fetchAllAssociative(
+                'SELECT DISTINCT tipo_medidor FROM radar_medidor
+                 WHERE tipo_medidor IS NOT NULL AND merged_into_id IS NULL ORDER BY tipo_medidor'
+            ), 'tipo_medidor');
+        });
+    }
+
+    /**
+     * Invalida os caches de filtros estáticos.
+     * Chamar após importação ou edição de campos uf/situacao/tipo_medidor.
+     */
+    public function invalidarCacheFiltros(?array $allowedUfs = null): void
+    {
+        $this->cache->delete('radar_resultados');
+        $this->cache->delete('radar_tipos');
+        $ufsKey = 'radar_ufs_' . ($allowedUfs === null ? 'all' : implode('_', $allowedUfs));
+        $this->cache->delete($ufsKey);
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Escrita
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Persiste as alterações de campos editáveis e grava o log de auditoria.
+     * #12 — inserted_by agora salva o ID do usuário (int), não o e-mail.
      *
      * @return int Número de campos efetivamente alterados
      */
     public function saveEdit(int $id, array $postData, array $estadosMap, User $user): int
     {
-        $radar     = $this->findOrFail($id);
-        $agora     = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-        $userEmail = $user->getUserIdentifier();
+        $radar   = $this->findOrFail($id);
+        $agora   = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $userId  = $user->getId();
 
         $novaSigla = isset($postData['sigla_uf']) ? trim((string) $postData['sigla_uf']) : null;
         if ($novaSigla !== null && isset($estadosMap[$novaSigla])) {
@@ -263,7 +332,7 @@ final class RadarService
                 'campo_alterado'   => $campo,
                 'valor_anterior'   => $valorAntigo,
                 'valor_novo'       => $novoValor,
-                'editado_por'      => $userEmail,
+                'editado_por'      => $userId,  // #12: ID, não e-mail
                 'editado_em'       => $agora,
             ]);
 
@@ -272,7 +341,7 @@ final class RadarService
 
         if (!empty($alteracoes)) {
             $alteracoes['updated_at']  = $agora;
-            $alteracoes['inserted_by'] = $userEmail;
+            $alteracoes['inserted_by'] = $userId;  // #12: ID, não e-mail
             $this->db->update('radar_medidor', $alteracoes, ['id' => $id]);
         }
 

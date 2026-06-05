@@ -59,20 +59,10 @@ class RadarController extends AbstractController
             'SELECT COUNT(*) FROM radar_medidor WHERE merged_into_id IS NOT NULL'
         );
 
-        $ufsQuery = $allowedUfs !== null
-            ? 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL AND sigla_uf IN (?' . str_repeat(',?', count($allowedUfs) - 1) . ') ORDER BY sigla_uf'
-            : 'SELECT DISTINCT sigla_uf FROM radar_medidor WHERE sigla_uf IS NOT NULL AND merged_into_id IS NULL ORDER BY sigla_uf';
-
-        $ufs = array_column(
-            $this->db->fetchAllAssociative($ufsQuery, $allowedUfs ?? []),
-            'sigla_uf'
-        );
-        $resultados = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT situacao FROM radar_medidor WHERE situacao IS NOT NULL AND merged_into_id IS NULL ORDER BY situacao'
-        ), 'situacao');
-        $tipos = array_column($this->db->fetchAllAssociative(
-            'SELECT DISTINCT tipo_medidor FROM radar_medidor WHERE tipo_medidor IS NOT NULL AND merged_into_id IS NULL ORDER BY tipo_medidor'
-        ), 'tipo_medidor');
+        // #11 — filtros estáticos via cache (1 hora)
+        $ufs        = $this->radarService->getUfsParaFiltro($allowedUfs);
+        $resultados = $this->radarService->getResultadosParaFiltro();
+        $tipos      = $this->radarService->getTiposParaFiltro();
 
         return $this->render('radar/index.html.twig', [
             'rows'           => $paginated['rows'],

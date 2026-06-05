@@ -18,8 +18,9 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: intl, pdo, pdo_mysql, mbstring, xml
+          extensions: intl, pdo, pdo_mysql, pdo_sqlite, mbstring, xml
           coverage: none
+          tools: cs2pr
 
       - name: Cache Composer
         uses: actions/cache@v4
@@ -34,11 +35,47 @@ jobs:
       - name: Validate composer.json
         run: composer validate --strict
 
+      # ── Qualidade de código ──────────────────────────────────────────
+
       - name: Check PHP syntax
         run: find src -name '*.php' | xargs php -l
+
+      - name: PHP-CS-Fixer (dry-run)
+        run: |
+          if [ ! -f .php-cs-fixer.dist.php ] && [ ! -f .php-cs-fixer.php ]; then
+            echo "Arquivo .php-cs-fixer.dist.php não encontrado — pulando."
+          else
+            vendor/bin/php-cs-fixer fix --dry-run --diff --format=checkstyle | cs2pr || true
+          fi
+
+      - name: PHPStan (nível 6)
+        run: |
+          if vendor/bin/phpstan --version > /dev/null 2>&1; then
+            vendor/bin/phpstan analyse --level=6 --no-progress src
+          else
+            echo "PHPStan não instalado — instale: composer require --dev phpstan/phpstan phpstan/extension-installer"
+          fi
+
+      # ── Testes ──────────────────────────────────────────────────────
 
       - name: Run PHPUnit
         env:
           APP_ENV: test
           DATABASE_URL: sqlite:///%kernel.project_dir%/var/test.db
         run: php bin/phpunit --testdox
+
+      # ── Migrations ──────────────────────────────────────────────────
+      # Verifica se há migrations pendentes — falha o CI se houver.
+      # #8 — previne tabelas faltando (ex: radar_edit_log) chegando em produção.
+
+      - name: Check pending migrations
+        env:
+          APP_ENV: test
+          DATABASE_URL: sqlite:///%kernel.project_dir%/var/test.db
+        run: |
+          OUTPUT=$(php bin/console doctrine:migrations:status --no-interaction 2>&1)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q 'New Migrations.*[1-9]'; then
+            echo "::error::Há migrations pendentes! Execute doctrine:migrations:diff para criá-las."
+            exit 1
+          fi

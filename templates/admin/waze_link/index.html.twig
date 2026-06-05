@@ -24,9 +24,9 @@
         {% endfor %}
     {% endfor %}
 
-    {# Busca #}
-    <form method="get" class="row g-2 mb-4">
-        <div class="col-md-6">
+    {# Busca + Ordenação #}
+    <form method="get" class="row g-2 mb-4 align-items-center">
+        <div class="col-md-5">
             <div class="input-group">
                 <input type="text" name="q" value="{{ search }}" class="form-control"
                        placeholder="Buscar por município, local, link ou ID hazard…">
@@ -41,6 +41,19 @@
             </div>
         </div>
         <div class="col-auto">
+            <label class="form-label mb-0 text-muted small me-1">Ordenar:</label>
+            <select name="sort" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()">
+                <option value="inserted_at" {{ sortKey == 'inserted_at' ? 'selected' }}>Data inserção</option>
+                <option value="updated_at"  {{ sortKey == 'updated_at'  ? 'selected' }}>Data edição</option>
+                <option value="municipio"   {{ sortKey == 'municipio'   ? 'selected' }}>Município (A→Z)</option>
+                <option value="hazard_id"   {{ sortKey == 'hazard_id'   ? 'selected' }}>Hazard ID</option>
+            </select>
+            <select name="dir" class="form-select form-select-sm d-inline-block w-auto ms-1" onchange="this.form.submit()">
+                <option value="DESC" {{ sortDir == 'DESC' ? 'selected' }}>↓ Mais recente</option>
+                <option value="ASC"  {{ sortDir == 'ASC'  ? 'selected' }}>↑ Mais antigo</option>
+            </select>
+        </div>
+        <div class="col-auto">
             <span class="badge bg-secondary fs-6 py-2 px-3">
                 {{ total }} registro(s)
             </span>
@@ -53,12 +66,45 @@
                 <thead class="table-dark">
                     <tr>
                         <th>#</th>
-                        <th>Radar</th>
+                        <th>
+                            {%- set newDir = (sortKey == 'municipio' and sortDir == 'ASC') ? 'DESC' : 'ASC' %}
+                            <a href="{{ path('admin_waze_link_index', {sort: 'municipio', dir: newDir, q: search, page: 1}) }}"
+                               class="text-white text-decoration-none d-flex align-items-center gap-1">
+                                Radar
+                                {% if sortKey == 'municipio' %}
+                                    <span>{{ sortDir == 'ASC' ? '↑' : '↓' }}</span>
+                                {% else %}
+                                    <span class="opacity-50">↕</span>
+                                {% endif %}
+                            </a>
+                        </th>
                         <th>Link Waze</th>
-                        <th>Hazard ID</th>
+                        <th>
+                            {%- set newDir = (sortKey == 'hazard_id' and sortDir == 'ASC') ? 'DESC' : 'ASC' %}
+                            <a href="{{ path('admin_waze_link_index', {sort: 'hazard_id', dir: newDir, q: search, page: 1}) }}"
+                               class="text-white text-decoration-none d-flex align-items-center gap-1">
+                                Hazard ID
+                                {% if sortKey == 'hazard_id' %}
+                                    <span>{{ sortDir == 'ASC' ? '↑' : '↓' }}</span>
+                                {% else %}
+                                    <span class="opacity-50">↕</span>
+                                {% endif %}
+                            </a>
+                        </th>
                         <th>Observação</th>
                         <th>Inserido por</th>
-                        <th>Data</th>
+                        <th>
+                            {%- set newDir = (sortKey == 'inserted_at' and sortDir == 'ASC') ? 'DESC' : 'ASC' %}
+                            <a href="{{ path('admin_waze_link_index', {sort: 'inserted_at', dir: newDir, q: search, page: 1}) }}"
+                               class="text-white text-decoration-none d-flex align-items-center gap-1">
+                                Data
+                                {% if sortKey == 'inserted_at' %}
+                                    <span>{{ sortDir == 'ASC' ? '↑' : '↓' }}</span>
+                                {% else %}
+                                    <span class="opacity-50">↕</span>
+                                {% endif %}
+                            </a>
+                        </th>
                         <th class="text-center">Ações</th>
                     </tr>
                 </thead>
@@ -123,14 +169,17 @@
             </table>
         </div>
 
-        {# Paginação #}
+        {# Paginação — preserva sort/dir/q #}
         {% if pages > 1 %}
         <div class="card-footer d-flex justify-content-center">
             <nav>
                 <ul class="pagination pagination-sm mb-0">
                     {% for p in 1..pages %}
                     <li class="page-item {{ p == page ? 'active' : '' }}">
-                        <a class="page-link" href="{{ path('admin_waze_link_index', {page: p, q: search}) }}">{{ p }}</a>
+                        <a class="page-link"
+                           href="{{ path('admin_waze_link_index', {page: p, q: search, sort: sortKey, dir: sortDir}) }}">
+                            {{ p }}
+                        </a>
                     </li>
                     {% endfor %}
                 </ul>

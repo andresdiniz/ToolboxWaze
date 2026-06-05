@@ -20,6 +20,13 @@ final class RadarWazeLinkCrudController extends AbstractController
 {
     private const PER_PAGE = 30;
 
+    private const SORT_FIELDS = [
+        'municipio'   => 'rm.municipio',
+        'inserted_at' => 'wl.inserted_at',
+        'updated_at'  => 'wl.updated_at',
+        'hazard_id'   => 'wl.permanent_hazard_id',
+    ];
+
     public function __construct(
         private readonly Connection $db,
         private readonly EntityManagerInterface $em,
@@ -32,16 +39,29 @@ final class RadarWazeLinkCrudController extends AbstractController
     #[Route('', name: 'index')]
     public function index(Request $req): Response
     {
-        $search = trim((string) $req->query->get('q', ''));
-        $page   = max(1, (int) $req->query->get('page', 1));
-        $offset = ($page - 1) * self::PER_PAGE;
+        $search  = trim((string) $req->query->get('q', ''));
+        $page    = max(1, (int) $req->query->get('page', 1));
+        $offset  = ($page - 1) * self::PER_PAGE;
+
+        // Ordenação
+        $sortKey = $req->query->get('sort', 'inserted_at');
+        $sortDir = strtoupper((string) $req->query->get('dir', 'DESC'));
+
+        if (!array_key_exists($sortKey, self::SORT_FIELDS)) {
+            $sortKey = 'inserted_at';
+        }
+        if (!in_array($sortDir, ['ASC', 'DESC'], true)) {
+            $sortDir = 'DESC';
+        }
+
+        $orderBy = self::SORT_FIELDS[$sortKey] . ' ' . $sortDir;
 
         $where  = '';
         $params = [];
 
         if ($search !== '') {
-            $where    = 'WHERE (rm.municipio LIKE ? OR rm.local_verificacao LIKE ? OR wl.waze_link LIKE ? OR wl.permanent_hazard_id = ?)';
-            $params   = ["%$search%", "%$search%", "%$search%", is_numeric($search) ? (int) $search : -1];
+            $where  = 'WHERE (rm.municipio LIKE ? OR rm.local_verificacao LIKE ? OR wl.waze_link LIKE ? OR wl.permanent_hazard_id = ?)';
+            $params = ["%$search%", "%$search%", "%$search%", is_numeric($search) ? (int) $search : -1];
         }
 
         $total = (int) $this->db->fetchOne(
@@ -62,7 +82,7 @@ final class RadarWazeLinkCrudController extends AbstractController
              JOIN user ui ON ui.id = wl.inserted_by
              LEFT JOIN user uu ON uu.id = wl.updated_by
              $where
-             ORDER BY wl.inserted_at DESC
+             ORDER BY $orderBy
              LIMIT " . self::PER_PAGE . " OFFSET $offset",
             $params
         );
@@ -74,6 +94,8 @@ final class RadarWazeLinkCrudController extends AbstractController
             'pages'    => (int) ceil($total / self::PER_PAGE),
             'per_page' => self::PER_PAGE,
             'search'   => $search,
+            'sortKey'  => $sortKey,
+            'sortDir'  => $sortDir,
         ]);
     }
 

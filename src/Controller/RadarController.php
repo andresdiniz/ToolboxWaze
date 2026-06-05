@@ -52,9 +52,9 @@ class RadarController extends AbstractController
 
     public function __construct(private readonly Connection $db) {}
 
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     // Listagem
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     #[Route('', name: 'radar_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
@@ -121,7 +121,7 @@ class RadarController extends AbstractController
 
         $rows = $this->db->fetchAllAssociative(
             "SELECT r.id, r.sigla_uf, r.uf, r.municipio,
-                    COALESCE(NULLIF(TRIM(r.local_verificacao), ''), NULLIF(TRIM(r.logradouro), '')) AS logradouro,
+                    NULLIF(TRIM(r.logradouro), '') AS logradouro,
                     r.nome_empresa,
                     r.data_ultima_verificacao, r.data_verificacao_efetiva,
                     r.data_validade, r.situacao, r.tipo_medidor, r.link_waze,
@@ -179,9 +179,9 @@ class RadarController extends AbstractController
         ]);
     }
 
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     // Detalhe
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
@@ -244,9 +244,9 @@ class RadarController extends AbstractController
         ]);
     }
 
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     // Editar radar
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\\d+'])]
     public function edit(int $id, Request $request): Response
     {
@@ -315,9 +315,9 @@ class RadarController extends AbstractController
         ]);
     }
 
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     // Salvar link Waze
-    // ───────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
     #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {

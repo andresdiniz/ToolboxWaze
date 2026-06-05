@@ -24,7 +24,7 @@ class RadarController extends AbstractController
     private const CAMPOS_EDITAVEIS = [
         'sigla_uf'                  => 'UF',
         'uf'                        => 'Estado (nome)',
-        'municipio'                 => 'Munícipio',
+        'municipio'                 => 'Município',
         'logradouro'                => 'Logradouro',
         'cep'                       => 'CEP',
         'nome_empresa'              => 'Empresa',
@@ -120,7 +120,9 @@ class RadarController extends AbstractController
         $offset = ($page - 1) * self::PER_PAGE;
 
         $rows = $this->db->fetchAllAssociative(
-            "SELECT r.id, r.sigla_uf, r.uf, r.municipio, r.logradouro, r.nome_empresa,
+            "SELECT r.id, r.sigla_uf, r.uf, r.municipio,
+                    COALESCE(NULLIF(TRIM(r.local_verificacao), ''), NULLIF(TRIM(r.logradouro), '')) AS logradouro,
+                    r.nome_empresa,
                     r.data_ultima_verificacao, r.data_verificacao_efetiva,
                     r.data_validade, r.situacao, r.tipo_medidor, r.link_waze,
                     DATE_FORMAT($viso, '%Y-%m-%d') AS data_validade_iso
@@ -180,7 +182,7 @@ class RadarController extends AbstractController
     // ───────────────────────────────────────────────────────────────────────────
     // Detalhe
     // ───────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
     public function show(int $id): Response
     {
         $this->requirePermission(User::PERMISSION_RADARES);
@@ -245,7 +247,7 @@ class RadarController extends AbstractController
     // ───────────────────────────────────────────────────────────────────────────
     // Editar radar
     // ───────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\\d+'])]
     public function edit(int $id, Request $request): Response
     {
         $this->requirePermission(User::PERMISSION_RADARES);
@@ -316,7 +318,7 @@ class RadarController extends AbstractController
     // ───────────────────────────────────────────────────────────────────────────
     // Salvar link Waze
     // ───────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
         $this->requirePermission(User::PERMISSION_RADARES);

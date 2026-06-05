@@ -54,6 +54,40 @@
     {% endfor %}
 {% endfor %}
 
+{# ── Banner: radar absorvido por mesclagem ── #}
+{% if survivorRadar is defined and survivorRadar %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+    <i class="bi bi-git fs-5 flex-shrink-0"></i>
+    <div>
+        Este radar foi <strong>absorvido por mesclagem</strong> e não aparece na listagem principal.
+        Radar sobrevivente:
+        <a href="{{ path('radar_show', {id: survivorRadar.id}) }}" class="fw-bold alert-link">
+            #{{ survivorRadar.id }} — {{ survivorRadar.municipio }}
+            {% if survivorRadar.logradouro %}, {{ survivorRadar.logradouro }}{% endif %}
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{# ── Banner: este radar absorveu outros ── #}
+{% if absorbedRadares is defined and absorbedRadares is not empty %}
+<div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="alert">
+    <i class="bi bi-diagram-2 fs-5 flex-shrink-0 mt-1"></i>
+    <div>
+        <strong>Este radar absorveu {{ absorbedRadares|length }} outro(s) por mesclagem:</strong>
+        <ul class="mb-0 mt-1">
+            {% for a in absorbedRadares %}
+            <li>
+                <a href="{{ path('radar_show', {id: a.id}) }}" class="alert-link fw-semibold">#{{ a.id }}</a>
+                — {{ a.municipio }}{% if a.logradouro %}, {{ a.logradouro }}{% endif %}
+                <span class="text-muted small">({{ a.merged_at ? a.merged_at|date('d/m/Y') : '—' }}{% if a.merged_by %} por {{ a.merged_by }}{% endif %})</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
 <div class="row g-4">
 
     {# ── Coluna esquerda ── #}

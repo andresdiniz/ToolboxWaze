@@ -13,46 +13,60 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Importa radares de uma planilha Google Sheets com 3 abas (GIDs):
+ * Importa radares de uma planilha Google Sheets com até 3 abas (GIDs).
  *
- *   --gid-medidores   Aba 1 — dados técnicos (Município, Local, Tipo, Faixa, Inmetro, Série, Sentido, Velocidade)
- *   --gid-verificacao Aba 2 — dados de verificação (Município, Data Verificação, Data Validade, Resultado, Local)
- *   --gid-links       Aba 3 — links Waze (Local, Link ou colunas que permitam cruzamento)
+ * ════════════════════════════════════════════════════════════
+ * ABA 1 — Simples (formato RBMLQ básico)
+ * ════════════════════════════════════════════════════════════
+ * Colunas:
+ *   Município | Data Verificação | Data Validade | Resultado |
+ *   Local | Tipo | Faixa | Inmetro | Série | Sentido | Velocidade
  *
- * ESTRATÉGIA DE MERGE (sem duplicar, sem perder dados):
+ * ════════════════════════════════════════════════════════════
+ * ABA 2 — Expandida (formato TSV RBMLQ completo)
+ * ════════════════════════════════════════════════════════════
+ * Colunas principais:
+ *   SiglaUf | Estado | Municipio | LocalVerificacao |
+ *   DataUltimaVerificacao | DataValidade | UltimoResultado | TipoMedidor |
+ *   Faixas.0.NumeroFaixa | Faixas.0.NumeroInmetro | Faixas.0.NumeroSerie |
+ *   Faixas.0.Sentido | Faixas.0.VelocidadeNominal |
+ *   Faixas.1.* ... (até N faixas)
+ *   Historico.0.NumeroCertificado | Historico.0.DataLaudo | ... (até N históricos)
+ *   Proprietario.Nome | Proprietario.Municipio | Proprietario.Estado
  *
- *   Prioridade de lookup (do mais confiável ao menos confiável):
- *     1. numero_serie  (identificador único do equipamento físico)
- *     2. numero_inmetro
- *     3. identity_hash = SHA256(sigla_uf | local_verificacao_normalizado | tipo_medidor)
+ * ════════════════════════════════════════════════════════════
+ * ABA 3 — Links Waze
+ * ════════════════════════════════════════════════════════════
+ * Colunas:
+ *   LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE | USUÁRIO |
+ *   VERIFICADO | ALTERADO | AÇÃO
  *
- *   Para cada linha:
- *     - Encontrou por série/inmetro? → UPDATE apenas campos vazios + data se mais recente
- *     - Encontrou por identity_hash?  → UPDATE + preenche serie/inmetro se estavam vazios
- *     - Não encontrou?               → INSERT
+ * ════════════════════════════════════════════════════════════
+ * ESTRATÉGIA DE MERGE (sem duplicar, sem perder dados)
+ * ════════════════════════════════════════════════════════════
+ *   1. numero_serie via JSON_SEARCH em faixas_json
+ *   2. identity_hash = SHA-256(UF|LOCAL_UPPER|TIPO_UPPER)
+ *   3. INSERT se nenhum match
  *
  * USO:
  *   php bin/console app:import-radar-multi-aba \
- *     --spreadsheet-id=SEU_SPREADSHEET_ID \
- *     --uf=MG \
+ *     --spreadsheet-id=SEU_ID \
+ *     --uf=AC \
  *     --gid-medidores=0 \
- *     --gid-verificacao=123456 \
- *     --gid-links=789012
+ *     --gid-expandida=111111 \
+ *     --gid-links=222222
  *
- *   Para importar apenas uma aba, omita as outras duas.
- *   --dry-run   Simula sem gravar no banco.
+ *   --dry-run  Simula sem gravar.
  */
 #[AsCommand(
     name: 'app:import-radar-multi-aba',
-    description: 'Importa radares de planilha Google Sheets com até 3 abas (medidores, verificação, links Waze)',
+    description: 'Importa radares de planilha Google Sheets com até 3 abas (simples, expandida, links Waze)',
 )]
 final class ImportRadarMultiAbaCommand extends Command
 {
     private const CURL_TIMEOUT = 120;
     private const BATCH_SIZE   = 200;
-
-    // URL base de exportação CSV do Google Sheets
-    private const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/%s/export?format=csv&gid=%s';
+    private const SHEETS_URL   = 'https://docs.google.com/spreadsheets/d/%s/export?format=csv&gid=%s';
 
     public function __construct(private readonly Connection $db)
     {
@@ -66,12 +80,12 @@ final class ImportRadarMultiAbaCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('spreadsheet-id',  's', InputOption::VALUE_REQUIRED, 'ID da planilha Google Sheets')
-            ->addOption('uf',              'u', InputOption::VALUE_REQUIRED, 'Sigla UF (ex: MG)', '')
-            ->addOption('gid-medidores',   null, InputOption::VALUE_OPTIONAL, 'GID da aba de medidores técnicos')
-            ->addOption('gid-verificacao', null, InputOption::VALUE_OPTIONAL, 'GID da aba de verificações')
-            ->addOption('gid-links',       null, InputOption::VALUE_OPTIONAL, 'GID da aba de links Waze')
-            ->addOption('dry-run',         null, InputOption::VALUE_NONE,     'Simula sem gravar no banco')
+            ->addOption('spreadsheet-id', 's', InputOption::VALUE_REQUIRED, 'ID da planilha Google Sheets')
+            ->addOption('uf',             'u', InputOption::VALUE_OPTIONAL, 'Sigla UF (ex: MG). Se omitido, usa coluna SiglaUf da planilha.', '')
+            ->addOption('gid-medidores',  null, InputOption::VALUE_OPTIONAL, 'GID da aba simples (Município|Local|Tipo|Faixa|Inmetro|Série...)')
+            ->addOption('gid-expandida',  null, InputOption::VALUE_OPTIONAL, 'GID da aba expandida TSV (SiglaUf|Faixas.N.*|Historico.N.*|Proprietario.*)')
+            ->addOption('gid-links',      null, InputOption::VALUE_OPTIONAL, 'GID da aba de links Waze (LINK|Nº DE SÉRIE|CIDADE...)')
+            ->addOption('dry-run',        null, InputOption::VALUE_NONE,     'Simula sem gravar no banco')
         ;
     }
 
@@ -86,7 +100,7 @@ final class ImportRadarMultiAbaCommand extends Command
         $spreadsheetId = trim((string) $input->getOption('spreadsheet-id'));
         $uf            = strtoupper(trim((string) $input->getOption('uf')));
         $gidMedidores  = $input->getOption('gid-medidores');
-        $gidVerif      = $input->getOption('gid-verificacao');
+        $gidExpandida  = $input->getOption('gid-expandida');
         $gidLinks      = $input->getOption('gid-links');
         $dryRun        = (bool) $input->getOption('dry-run');
 
@@ -94,52 +108,42 @@ final class ImportRadarMultiAbaCommand extends Command
             $io->error('--spreadsheet-id é obrigatório.');
             return Command::FAILURE;
         }
-        if ($gidMedidores === null && $gidVerif === null && $gidLinks === null) {
-            $io->error('Informe pelo menos um GID (--gid-medidores, --gid-verificacao ou --gid-links).');
+        if ($gidMedidores === null && $gidExpandida === null && $gidLinks === null) {
+            $io->error('Informe pelo menos um GID (--gid-medidores, --gid-expandida ou --gid-links).');
             return Command::FAILURE;
         }
-
         if ($dryRun) {
             $io->warning('MODO DRY-RUN — nenhuma alteração será gravada.');
         }
 
         $totais = ['inseridos' => 0, 'atualizados' => 0, 'sem_mudanca' => 0, 'links' => 0, 'erros' => 0];
 
-        // ── Aba 1: Medidores ──────────────────────────────────────
+        // ── Aba 1: Simples ────────────────────────────────────────
         if ($gidMedidores !== null) {
-            $io->section("Aba medidores (GID={$gidMedidores})");
-            $url  = sprintf(self::SHEETS_URL, $spreadsheetId, $gidMedidores);
-            $rows = $this->downloadCsv($url, $io);
+            $io->section("Aba simples (GID={$gidMedidores})");
+            $rows = $this->downloadCsv(sprintf(self::SHEETS_URL, $spreadsheetId, $gidMedidores), $io);
             if ($rows !== null) {
-                $r = $this->processMedidores($rows, $uf, $dryRun, $io);
-                $totais['inseridos']   += $r['inseridos'];
-                $totais['atualizados'] += $r['atualizados'];
-                $totais['sem_mudanca'] += $r['sem_mudanca'];
-                $totais['erros']       += $r['erros'];
+                $r = $this->processAbaSimples($rows, $uf, $dryRun, $io);
+                $this->somaStats($totais, $r);
             }
         }
 
-        // ── Aba 2: Verificações ──────────────────────────────────
-        if ($gidVerif !== null) {
-            $io->section("Aba verificações (GID={$gidVerif})");
-            $url  = sprintf(self::SHEETS_URL, $spreadsheetId, $gidVerif);
-            $rows = $this->downloadCsv($url, $io);
+        // ── Aba 2: Expandida ──────────────────────────────────────
+        if ($gidExpandida !== null) {
+            $io->section("Aba expandida (GID={$gidExpandida})");
+            $rows = $this->downloadCsv(sprintf(self::SHEETS_URL, $spreadsheetId, $gidExpandida), $io);
             if ($rows !== null) {
-                $r = $this->processVerificacoes($rows, $uf, $dryRun, $io);
-                $totais['atualizados'] += $r['atualizados'];
-                $totais['inseridos']   += $r['inseridos'];
-                $totais['sem_mudanca'] += $r['sem_mudanca'];
-                $totais['erros']       += $r['erros'];
+                $r = $this->processAbaExpandida($rows, $uf, $dryRun, $io);
+                $this->somaStats($totais, $r);
             }
         }
 
-        // ── Aba 3: Links Waze ──────────────────────────────────────
+        // ── Aba 3: Links Waze ─────────────────────────────────────
         if ($gidLinks !== null) {
-            $io->section("Aba links Waze (GID={$gidLinks})");
-            $url  = sprintf(self::SHEETS_URL, $spreadsheetId, $gidLinks);
-            $rows = $this->downloadCsv($url, $io);
+            $io->section("Aba links (GID={$gidLinks})");
+            $rows = $this->downloadCsv(sprintf(self::SHEETS_URL, $spreadsheetId, $gidLinks), $io);
             if ($rows !== null) {
-                $r = $this->processLinks($rows, $uf, $dryRun, $io);
+                $r = $this->processAbaLinks($rows, $dryRun, $io);
                 $totais['links']  += $r['links'];
                 $totais['erros']  += $r['erros'];
             }
@@ -154,44 +158,45 @@ final class ImportRadarMultiAbaCommand extends Command
     }
 
     // ════════════════════════════════════════════════════════════
-    // Aba 1 — Medidores técnicos
-    // Colunas esperadas:
-    //   Município | Data Verificação | Data Validade | Resultado |
-    //   Local | Tipo | Faixa | Inmetro | Série | Sentido | Velocidade
+    // ABA 1 — Simples
+    // Município | Data Verificação | Data Validade | Resultado |
+    // Local | Tipo | Faixa | Inmetro | Série | Sentido | Velocidade
     // ════════════════════════════════════════════════════════════
 
-    private function processMedidores(array $rows, string $uf, bool $dryRun, SymfonyStyle $io): array
+    private function processAbaSimples(array $rows, string $uf, bool $dryRun, SymfonyStyle $io): array
     {
         $stats      = ['inseridos' => 0, 'atualizados' => 0, 'sem_mudanca' => 0, 'erros' => 0];
         $importedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $grupos     = [];
 
-        // Agrupa por (local+tipo+data_validade) para acumular faixas
-        $grupos = [];
         foreach ($rows as $row) {
-            $municipio   = $this->normalizeStr($row['municipio']   ?? $row['município'] ?? '');
-            $local       = $this->normalizeStr($row['local']       ?? '');
-            $tipo        = $this->normalizeStr($row['tipo']        ?? $row['tipodemedidor'] ?? $row['tipo_medidor'] ?? '');
-            $dataVerif   = $this->parseDate($row['dataverificacao']  ?? $row['data verificação'] ?? $row['data_verificacao'] ?? '');
-            $dataVal     = $this->parseDate($row['datavalidade']     ?? $row['data validade']    ?? $row['data_validade']    ?? '');
-            $resultado   = $this->normalizeStr($row['resultado'] ?? '');
-            $faixa       = trim($row['faixa']    ?? '');
-            $inmetro     = trim($row['inmetro']  ?? $row['numeroinmetro'] ?? '');
-            $serie       = trim($row['série']    ?? $row['serie']  ?? $row['numeroserie'] ?? '');
-            $sentido     = $this->normalizeStr($row['sentido'] ?? '');
-            $velocidade  = trim($row['velocidade'] ?? $row['velocidadenominal'] ?? '');
+            $municipio  = $this->str($row['municipio'] ?? '');
+            $local      = $this->str($row['local']     ?? '');
+            $tipo       = $this->str($row['tipo']      ?? '');
+            $dataVerif  = $this->parseDate($row['dataverificacao'] ?? $row['data verificacao'] ?? '');
+            $dataVal    = $this->parseDate($row['datavalidade']    ?? $row['data validade']    ?? '');
+            $resultado  = $this->str($row['resultado'] ?? '');
+            $faixa      = trim($row['faixa']    ?? '');
+            $inmetro    = trim($row['inmetro']  ?? '');
+            $serie      = trim($row['serie']    ?? '');  // normalizeKey já remove o acento de Série
+            $sentido    = $this->str($row['sentido']   ?? '');
+            $velocidade = trim($row['velocidade'] ?? '');
 
             if ($local === '' || $municipio === '') {
                 continue;
             }
 
-            $chave = $this->identityHash($uf, $local, $tipo);
+            // UF da linha ou do parâmetro
+            $siglaUf = $uf !== '' ? $uf : null;
+
+            $chave = $this->identityHash($siglaUf ?? '', $local, $tipo);
 
             if (!isset($grupos[$chave])) {
                 $grupos[$chave] = [
-                    'sigla_uf'                  => $uf ?: null,
+                    'sigla_uf'                  => $siglaUf,
                     'municipio'                 => $municipio,
                     'local_verificacao'         => $local,
-                    'tipo_medidor'              => $tipo ?: null,
+                    'tipo_medidor'              => $tipo   ?: null,
                     'data_ultima_verificacao'   => $dataVerif,
                     'data_verificacao_efetiva'  => $dataVerif,
                     'data_validade'             => $dataVal,
@@ -200,38 +205,33 @@ final class ImportRadarMultiAbaCommand extends Command
                     'imported_at'               => $importedAt,
                     'updated_at'                => $importedAt,
                     '_faixas'                   => [],
-                    '_series'                   => [],
                 ];
             } else {
-                // Mantém data mais recente
-                if ($dataVerif && (!$grupos[$chave]['data_ultima_verificacao'] || $dataVerif > $grupos[$chave]['data_ultima_verificacao'])) {
-                    $grupos[$chave]['data_ultima_verificacao']  = $dataVerif;
+                // Mantém data mais recente no grupo
+                if ($dataVerif && $dataVerif > ($grupos[$chave]['data_ultima_verificacao'] ?? '')) {
+                    $grupos[$chave]['data_ultima_verificacao'] = $dataVerif;
                     $grupos[$chave]['data_verificacao_efetiva'] = $dataVerif;
-                    $grupos[$chave]['data_validade']            = $dataVal;
-                    $grupos[$chave]['ultimo_resultado']         = $resultado ?: $grupos[$chave]['ultimo_resultado'];
+                    $grupos[$chave]['data_validade']  = $dataVal;
+                    $grupos[$chave]['ultimo_resultado'] = $resultado ?: $grupos[$chave]['ultimo_resultado'];
                 }
             }
 
             if ($faixa !== '' || $inmetro !== '' || $serie !== '') {
                 $grupos[$chave]['_faixas'][] = [
-                    'numero_faixa'    => $faixa  ?: null,
-                    'numero_inmetro'  => $inmetro ?: null,
-                    'numero_serie'    => $serie   ?: null,
-                    'sentido'         => $sentido ?: null,
+                    'numero_faixa'       => $faixa    ?: null,
+                    'numero_inmetro'     => $inmetro  ?: null,
+                    'numero_serie'       => $serie    ?: null,
+                    'sentido'            => $sentido  ?: null,
                     'velocidade_nominal' => $velocidade ?: null,
                 ];
-                if ($serie !== '') {
-                    $grupos[$chave]['_series'][] = $serie;
-                }
             }
         }
 
-        $batches = array_chunk(array_values($grupos), self::BATCH_SIZE);
-        foreach ($batches as $batch) {
+        foreach (array_chunk(array_values($grupos), self::BATCH_SIZE) as $batch) {
             foreach ($batch as $g) {
-                $faixas  = $g['_faixas'];
-                $series  = array_unique(array_filter($g['_series']));
-                unset($g['_faixas'], $g['_series']);
+                $faixas = $g['_faixas'];
+                $series = array_unique(array_filter(array_column($faixas, 'numero_serie')));
+                unset($g['_faixas']);
 
                 $g['faixas_json'] = json_encode($faixas, JSON_UNESCAPED_UNICODE);
                 $g['row_hash']    = hash('sha256', $g['faixas_json'] . $g['local_verificacao']);
@@ -240,14 +240,9 @@ final class ImportRadarMultiAbaCommand extends Command
                 $stats[$result]++;
 
                 if ($result !== 'sem_mudanca') {
-                    $io->writeln(sprintf(
-                        '  [%s] %s %s — %s (%d faixas)',
-                        strtoupper($result[0]),
-                        $g['sigla_uf'] ?? '??',
-                        $g['municipio'],
-                        $g['local_verificacao'],
-                        count($faixas)
-                    ));
+                    $io->writeln(sprintf('  [%s] %s %s — %s (%d faixas)',
+                        strtoupper($result[0]), $g['sigla_uf'] ?? '??',
+                        $g['municipio'], $g['local_verificacao'], count($faixas)));
                 }
             }
         }
@@ -256,77 +251,85 @@ final class ImportRadarMultiAbaCommand extends Command
     }
 
     // ════════════════════════════════════════════════════════════
-    // Aba 2 — Verificações
-    // Atualiza datas/resultado em registros já existentes.
-    // Colunas: Município | Data Verificação | Data Validade | Resultado | Local
+    // ABA 2 — Expandida (TSV RBMLQ completo)
+    // SiglaUf | Estado | Municipio | LocalVerificacao |
+    // DataUltimaVerificacao | DataValidade | UltimoResultado | TipoMedidor |
+    // Faixas.0.NumeroFaixa | Faixas.0.NumeroInmetro | Faixas.0.NumeroSerie |
+    // Faixas.0.Sentido | Faixas.0.VelocidadeNominal | Faixas.1.* ... |
+    // Historico.0.NumeroCertificado | Historico.0.DataLaudo | ... |
+    // Proprietario.Nome | Proprietario.Municipio | Proprietario.Estado
     // ════════════════════════════════════════════════════════════
 
-    private function processVerificacoes(array $rows, string $uf, bool $dryRun, SymfonyStyle $io): array
+    private function processAbaExpandida(array $rows, string $ufParam, bool $dryRun, SymfonyStyle $io): array
     {
         $stats      = ['inseridos' => 0, 'atualizados' => 0, 'sem_mudanca' => 0, 'erros' => 0];
         $importedAt = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
         foreach ($rows as $row) {
-            $municipio = $this->normalizeStr($row['municipio']  ?? $row['município'] ?? '');
-            $local     = $this->normalizeStr($row['local']      ?? '');
-            $tipo      = $this->normalizeStr($row['tipo']       ?? $row['tipo_medidor'] ?? '');
-            $dataVerif = $this->parseDate($row['dataverificacao'] ?? $row['data verificação'] ?? '');
-            $dataVal   = $this->parseDate($row['datavalidade']    ?? $row['data validade']    ?? '');
-            $resultado = $this->normalizeStr($row['resultado']  ?? '');
+            // UF: prioriza coluna da planilha, fallback no parâmetro
+            $siglaUf   = $this->str($row['siglauf']  ?? $row['uf'] ?? $ufParam);
+            $estado    = $this->str($row['estado']   ?? '');
+            $municipio = $this->str($row['municipio'] ?? '');
+            $local     = $this->str($row['localverificacao'] ?? $row['local'] ?? '');
+            $dataVerif = $this->parseDate($row['dataultimaverificacao'] ?? $row['dataverificacao'] ?? '');
+            $dataVal   = $this->parseDate($row['datavalidade'] ?? '');
+            $resultado = $this->str($row['ultimoresultado'] ?? $row['resultado'] ?? '');
+            $tipo      = $this->str($row['tipomedidor'] ?? $row['tipo'] ?? '');
 
-            if ($local === '') {
+            // Proprietario
+            $propNome      = trim($row['proprietarionome']      ?? '');
+            $propMunicipio = trim($row['proprietariomunicipio'] ?? '');
+            $propEstado    = trim($row['proprietarioestado']    ?? '');
+
+            if ($local === '' || $municipio === '') {
                 continue;
             }
 
-            $hash = $this->identityHash($uf, $local, $tipo);
+            // Extrai faixas dinâmicas: Faixas.0.*, Faixas.1.*, ...
+            $faixas = $this->extrairFaixasExpandidas($row);
 
-            $existing = $this->db->fetchAssociative(
-                'SELECT id, data_ultima_verificacao, data_validade, ultimo_resultado FROM radar_medidor WHERE identity_hash = ? LIMIT 1',
-                [$hash]
-            );
+            // Extrai histórico dinâmico: Historico.0.*, Historico.1.*, ...
+            $historico = $this->extrairHistoricoExpandido($row);
 
-            if (!$existing) {
-                // Insere como registro novo mínimo
-                $g = [
-                    'sigla_uf'                 => $uf ?: null,
-                    'municipio'                => $municipio,
-                    'local_verificacao'        => $local,
-                    'tipo_medidor'             => $tipo ?: null,
-                    'data_ultima_verificacao'  => $dataVerif,
-                    'data_verificacao_efetiva' => $dataVerif,
-                    'data_validade'            => $dataVal,
-                    'ultimo_resultado'         => $resultado ?: null,
-                    'identity_hash'            => $hash,
-                    'faixas_json'              => '[]',
-                    'row_hash'                 => hash('sha256', $hash . $dataVal),
-                    'imported_at'              => $importedAt,
-                    'updated_at'               => $importedAt,
-                ];
-                if (!$dryRun) {
-                    $this->db->insert('radar_medidor', $g);
+            $chave   = $this->identityHash($siglaUf, $local, $tipo);
+            $series  = array_unique(array_filter(array_column($faixas, 'numero_serie')));
+
+            $data = [
+                'sigla_uf'                  => $siglaUf  ?: null,
+                'uf'                        => $estado    ?: null,
+                'municipio'                 => $municipio,
+                'local_verificacao'         => $local,
+                'tipo_medidor'              => $tipo      ?: null,
+                'data_ultima_verificacao'   => $dataVerif,
+                'data_verificacao_efetiva'  => $dataVerif,
+                'data_validade'             => $dataVal,
+                'ultimo_resultado'          => $resultado ?: null,
+                'nome_empresa'              => $propNome      ?: null,
+                'identity_hash'             => $chave,
+                'faixas_json'               => json_encode($faixas, JSON_UNESCAPED_UNICODE),
+                'raw_data'                  => json_encode($row,    JSON_UNESCAPED_UNICODE),
+                'imported_at'               => $importedAt,
+                'updated_at'                => $importedAt,
+            ];
+            $data['row_hash'] = hash('sha256', $data['faixas_json'] . $local);
+
+            $result = $this->upsertRadar($data, $series, $dryRun);
+            $stats[$result]++;
+
+            // Salva histórico se inseriu ou atualizou
+            if ($result !== 'sem_mudanca' && !$dryRun && count($historico) > 0) {
+                $radarId = (int) $this->db->fetchOne(
+                    'SELECT id FROM radar_medidor WHERE identity_hash = ? LIMIT 1', [$chave]
+                );
+                if ($radarId > 0) {
+                    $this->salvarHistorico($radarId, $historico, $importedAt);
                 }
-                $stats['inseridos']++;
-                $io->writeln("  [I] {$uf} {$municipio} — {$local}");
-                continue;
             }
 
-            // Atualiza apenas se data mais recente
-            $dataAtualIso = $this->toIso($existing['data_ultima_verificacao']);
-
-            if ($dataVerif && $dataVerif > ($dataAtualIso ?? '')) {
-                if (!$dryRun) {
-                    $this->db->update('radar_medidor', [
-                        'data_ultima_verificacao'  => $dataVerif,
-                        'data_verificacao_efetiva' => $dataVerif,
-                        'data_validade'            => $dataVal,
-                        'ultimo_resultado'         => $resultado ?: $existing['ultimo_resultado'],
-                        'updated_at'               => $importedAt,
-                    ], ['id' => $existing['id']]);
-                }
-                $stats['atualizados']++;
-                $io->writeln("  [U] {$uf} {$municipio} — {$local} (nova data: {$dataVerif})");
-            } else {
-                $stats['sem_mudanca']++;
+            if ($result !== 'sem_mudanca') {
+                $io->writeln(sprintf('  [%s] %s %s — %s (%d faixas, %d hist.)',
+                    strtoupper($result[0]), $siglaUf, $municipio, $local,
+                    count($faixas), count($historico)));
             }
         }
 
@@ -334,53 +337,50 @@ final class ImportRadarMultiAbaCommand extends Command
     }
 
     // ════════════════════════════════════════════════════════════
-    // Aba 3 — Links Waze
-    // Colunas esperadas: Local | Link  (ou Serie | Link, Inmetro | Link)
+    // ABA 3 — Links Waze
+    // Colunas: LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE |
+    //          USUÁRIO | VERIFICADO | ALTERADO | AÇÃO
     // ════════════════════════════════════════════════════════════
 
-    private function processLinks(array $rows, string $uf, bool $dryRun, SymfonyStyle $io): array
+    private function processAbaLinks(array $rows, bool $dryRun, SymfonyStyle $io): array
     {
         $stats = ['links' => 0, 'erros' => 0];
         $agora = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
         foreach ($rows as $row) {
-            $link    = trim($row['link'] ?? $row['linkwaze'] ?? $row['link_waze'] ?? $row['waze'] ?? '');
-            $local   = $this->normalizeStr($row['local'] ?? $row['localverificacao'] ?? '');
-            $serie   = trim($row['série']  ?? $row['serie']  ?? $row['numeroserie']  ?? '');
-            $inmetro = trim($row['inmetro'] ?? $row['numeroinmetro'] ?? '');
-            $tipo    = $this->normalizeStr($row['tipo'] ?? '');
+            // Coluna LINK (normalizeKey transforma "Nº DE SÉRIE" em "ndeserie" ou similar)
+            $link    = trim($row['link']    ?? $row['linkwaze'] ?? $row['link_waze'] ?? '');
+            // "Nº DE SÉRIE" vira "ndeserie" após normalizeKey
+            $serie   = trim($row['ndeserie'] ?? $row['serie']  ?? $row['numeroserie'] ?? '');
+            $cidade  = $this->str($row['cidade']   ?? '');
+            $novo    = trim($row['novo']    ?? ''); // URL alternativa se preenchida
+            $acao    = $this->str($row['acao']     ?? '');
+
+            // Se tiver coluna NOVO preenchida, é o link válido
+            if ($novo !== '' && filter_var($novo, FILTER_VALIDATE_URL)) {
+                $link = $novo;
+            }
 
             if ($link === '') {
                 continue;
             }
-
-            // Valida URL mínima
             if (!filter_var($link, FILTER_VALIDATE_URL)) {
-                $io->writeln("  [!] URL inválida ignorada: {$link}");
+                $io->writeln("  [!] URL inválida: {$link}");
                 $stats['erros']++;
                 continue;
             }
 
-            // Extrai hazard ID se for link Waze
             preg_match('/permanentHazards=(\d+)/i', $link, $m);
             $hazardId = isset($m[1]) ? (int) $m[1] : null;
 
-            // Lookup: 1º por série, 2º por inmetro, 3º por local+tipo
+            // Lookup por série (prioritário) depois por cidade+local
             $radarId = null;
-
             if ($serie !== '') {
                 $radarId = $this->lookupBySerie($serie);
             }
-            if ($radarId === null && $inmetro !== '') {
-                $radarId = $this->lookupByInmetro($inmetro);
-            }
-            if ($radarId === null && $local !== '') {
-                $hash    = $this->identityHash($uf, $local, $tipo);
-                $radarId = $this->lookupByHash($hash);
-            }
 
             if ($radarId === null) {
-                $io->writeln("  [!] Radar não encontrado para link: {$link} (local={$local}, serie={$serie})");
+                $io->writeln("  [!] Radar não encontrado — serie={$serie} cidade={$cidade} link={$link}");
                 $stats['erros']++;
                 continue;
             }
@@ -389,26 +389,124 @@ final class ImportRadarMultiAbaCommand extends Command
                 $this->saveWazeLink($radarId, $link, $hazardId, $agora);
             }
 
+            $io->writeln("  [L] radar_id={$radarId} serie={$serie} hazard={$hazardId} acao={$acao}");
             $stats['links']++;
-            $io->writeln("  [L] radar_id={$radarId} → {$link}");
         }
 
         return $stats;
     }
 
     // ════════════════════════════════════════════════════════════
-    // Upsert principal com merge tri-nível
+    // Extrai faixas dinâmicas da linha expandida
+    // Lida com Faixas.0.*, Faixas.1.*, Faixas.2.*, ...
+    // ════════════════════════════════════════════════════════════
+
+    private function extrairFaixasExpandidas(array $row): array
+    {
+        $faixas = [];
+        $i = 0;
+        while (true) {
+            // Chaves normalizadas pelo parseCSV: "faixas0numerofaixa", "faixas0numeroinmetro" etc.
+            $pfx = 'faixas' . $i;
+            $numFaixa  = trim($row[$pfx . 'numerofaixa']    ?? '');
+            $inmetro   = trim($row[$pfx . 'numeroinmetro']  ?? '');
+            $serie     = trim($row[$pfx . 'numeroserie']    ?? '');
+            $sentido   = trim($row[$pfx . 'sentido']        ?? '');
+            $velocidade = trim($row[$pfx . 'velocidadenominal'] ?? '');
+
+            if ($numFaixa === '' && $inmetro === '' && $serie === '') {
+                break;
+            }
+
+            $faixas[] = [
+                'numero_faixa'       => $numFaixa   ?: null,
+                'numero_inmetro'     => $inmetro    ?: null,
+                'numero_serie'       => $serie      ?: null,
+                'sentido'            => $sentido    ? mb_strtoupper($sentido) : null,
+                'velocidade_nominal' => $velocidade ?: null,
+            ];
+            $i++;
+        }
+        return $faixas;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Extrai histórico dinâmico da linha expandida
+    // Historico.0.*, Historico.1.*, ...
+    // ════════════════════════════════════════════════════════════
+
+    private function extrairHistoricoExpandido(array $row): array
+    {
+        $historico = [];
+        $i = 0;
+        while (true) {
+            $pfx  = 'historico' . $i;
+            $cert = trim($row[$pfx . 'numerocertificado'] ?? '');
+            $ensaio = trim($row[$pfx . 'numeroensaio']    ?? '');
+            $ano    = trim($row[$pfx . 'ano']             ?? '');
+            $laudo  = $this->parseDate($row[$pfx . 'datalaudo']   ?? '');
+            $valHist = $this->parseDate($row[$pfx . 'datavalidade'] ?? '');
+            $tipo   = trim($row[$pfx . 'tiposervico']    ?? '');
+            $res    = trim($row[$pfx . 'resultado']      ?? '');
+
+            if ($cert === '' && $laudo === null) {
+                break;
+            }
+
+            $historico[] = [
+                'numero_certificado' => $cert    ?: null,
+                'numero_ensaio'      => $ensaio  ?: null,
+                'ano'                => $ano     ?: null,
+                'data_laudo'         => $laudo,
+                'data_validade'      => $valHist,
+                'tipo_servico'       => $tipo    ?: null,
+                'resultado'          => $res     ?: null,
+            ];
+            $i++;
+        }
+        return $historico;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Salva histórico em radar_historico (ignora duplicatas por cert+laudo)
+    // ════════════════════════════════════════════════════════════
+
+    private function salvarHistorico(int $radarId, array $historico, string $agora): void
+    {
+        foreach ($historico as $h) {
+            $exists = $this->db->fetchOne(
+                'SELECT id FROM radar_historico
+                  WHERE radar_medidor_id = ?
+                    AND (numero_certificado = ? OR data_laudo = ?)
+                  LIMIT 1',
+                [$radarId, $h['numero_certificado'], $h['data_laudo']]
+            );
+            if ($exists) {
+                continue;
+            }
+            $this->db->insert('radar_historico', array_merge($h, [
+                'radar_medidor_id' => $radarId,
+                'imported_at'      => $agora,
+            ]));
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Upsert com merge tri-nível
+    // Nível 1: numero_serie via JSON_SEARCH
+    // Nível 2: identity_hash
+    // Nível 3: INSERT
     // ════════════════════════════════════════════════════════════
 
     private function upsertRadar(array $data, array $series, bool $dryRun): string
     {
         $agora = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
-        // Nível 1: busca por qualquer número de série das faixas
+        // Nível 1 — busca por série
         $existing = null;
         foreach ($series as $serie) {
             $existing = $this->db->fetchAssociative(
-                "SELECT id, data_ultima_verificacao, faixas_json, identity_hash, row_hash
+                "SELECT id, data_ultima_verificacao, faixas_json, row_hash
                  FROM radar_medidor
                  WHERE JSON_SEARCH(faixas_json, 'one', ?) IS NOT NULL LIMIT 1",
                 [$serie]
@@ -418,54 +516,55 @@ final class ImportRadarMultiAbaCommand extends Command
             }
         }
 
-        // Nível 2: busca por identity_hash (local+tipo)
+        // Nível 2 — busca por identity_hash
         if (!$existing) {
             $existing = $this->db->fetchAssociative(
-                'SELECT id, data_ultima_verificacao, faixas_json, identity_hash, row_hash
+                'SELECT id, data_ultima_verificacao, faixas_json, row_hash
                  FROM radar_medidor WHERE identity_hash = ? LIMIT 1',
                 [$data['identity_hash']]
             );
         }
 
-        // Nível 3: INSERT
+        // Nível 3 — INSERT
         if (!$existing) {
             if (!$dryRun) {
-                $this->db->insert('radar_medidor', array_diff_key($data, ['_faixas' => 0, '_series' => 0]));
+                $insert = $data;
+                unset($insert['_faixas']);
+                $this->db->insert('radar_medidor', $insert);
             }
             return 'inseridos';
         }
 
-        // Compara row_hash — se igual, nada mudou
+        // Mesmo row_hash = sem mudança
         if ($existing['row_hash'] === $data['row_hash']) {
             return 'sem_mudanca';
         }
 
-        // UPDATE — mescla faixas existentes com novas
-        $faixasExistentes = json_decode((string) $existing['faixas_json'], true) ?? [];
-        $faixasNovas      = json_decode((string) $data['faixas_json'],     true) ?? [];
-        $faixasMerged     = $this->mergeFaixas($faixasExistentes, $faixasNovas);
+        // UPDATE — mescla faixas
+        $faixasExist  = json_decode((string) $existing['faixas_json'], true) ?? [];
+        $faixasNovas  = json_decode((string) $data['faixas_json'],     true) ?? [];
+        $faixasMerged = $this->mergeFaixas($faixasExist, $faixasNovas);
 
         $dataExistIso = $this->toIso($existing['data_ultima_verificacao']);
-        $dataNova     = $data['data_ultima_verificacao'];
 
         $update = [
-            'faixas_json'  => json_encode($faixasMerged, JSON_UNESCAPED_UNICODE),
-            'row_hash'     => $data['row_hash'],
-            'updated_at'   => $agora,
+            'faixas_json' => json_encode($faixasMerged, JSON_UNESCAPED_UNICODE),
+            'row_hash'    => $data['row_hash'],
+            'updated_at'  => $agora,
         ];
 
-        // Atualiza datas apenas se mais recentes
-        if ($dataNova && $dataNova > ($dataExistIso ?? '')) {
-            $update['data_ultima_verificacao']  = $dataNova;
-            $update['data_verificacao_efetiva'] = $dataNova;
+        // Atualiza datas só se mais recente
+        if ($data['data_ultima_verificacao'] && $data['data_ultima_verificacao'] > ($dataExistIso ?? '')) {
+            $update['data_ultima_verificacao']  = $data['data_ultima_verificacao'];
+            $update['data_verificacao_efetiva'] = $data['data_ultima_verificacao'];
             $update['data_validade']            = $data['data_validade'];
             $update['ultimo_resultado']         = $data['ultimo_resultado'];
         }
 
-        // Preenche campos vazios no banco com dados da planilha
-        $row = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$existing['id']]);
-        foreach (['sigla_uf', 'municipio', 'tipo_medidor', 'local_verificacao'] as $col) {
-            if (empty($row[$col]) && !empty($data[$col])) {
+        // Complementa campos vazios no banco
+        $rowAtual = $this->db->fetchAssociative('SELECT * FROM radar_medidor WHERE id = ?', [$existing['id']]);
+        foreach (['sigla_uf', 'uf', 'municipio', 'tipo_medidor', 'local_verificacao', 'nome_empresa'] as $col) {
+            if (!empty($data[$col]) && empty($rowAtual[$col])) {
                 $update[$col] = $data[$col];
             }
         }
@@ -478,34 +577,33 @@ final class ImportRadarMultiAbaCommand extends Command
     }
 
     // ════════════════════════════════════════════════════════════
-    // Merge de faixas: une por numero_serie; se não tiver, por numero_faixa
+    // Merge de faixas por numero_serie (fallback: numero_faixa)
     // ════════════════════════════════════════════════════════════
 
     private function mergeFaixas(array $existentes, array $novas): array
     {
-        $indexados = [];
+        $idx = [];
         foreach ($existentes as $f) {
             $key = $f['numero_serie'] ?? ('faixa_' . ($f['numero_faixa'] ?? uniqid()));
-            $indexados[$key] = $f;
+            $idx[$key] = $f;
         }
         foreach ($novas as $f) {
             $key = $f['numero_serie'] ?? ('faixa_' . ($f['numero_faixa'] ?? uniqid()));
-            if (isset($indexados[$key])) {
-                // Preserva dado existente, complementa vazio
+            if (isset($idx[$key])) {
                 foreach ($f as $k => $v) {
-                    if (($v !== null && $v !== '') && (empty($indexados[$key][$k]))) {
-                        $indexados[$key][$k] = $v;
+                    if (($v !== null && $v !== '') && empty($idx[$key][$k])) {
+                        $idx[$key][$k] = $v;
                     }
                 }
             } else {
-                $indexados[$key] = $f;
+                $idx[$key] = $f;
             }
         }
-        return array_values($indexados);
+        return array_values($idx);
     }
 
     // ════════════════════════════════════════════════════════════
-    // Salvar link Waze (insert ou update)
+    // Salvar link Waze (insert ou update com log)
     // ════════════════════════════════════════════════════════════
 
     private function saveWazeLink(int $radarId, string $link, ?int $hazardId, string $agora): void
@@ -517,7 +615,7 @@ final class ImportRadarMultiAbaCommand extends Command
 
         if ($existing) {
             if ($existing['waze_link'] === $link) {
-                return; // já está atualizado
+                return;
             }
             $this->db->insert('radar_waze_link_log', [
                 'radar_waze_link_id' => $existing['id'],
@@ -541,7 +639,10 @@ final class ImportRadarMultiAbaCommand extends Command
             ]);
         }
 
-        $this->db->update('radar_medidor', ['link_waze' => $link, 'updated_at' => $agora], ['id' => $radarId]);
+        $this->db->update('radar_medidor', [
+            'link_waze'  => $link,
+            'updated_at' => $agora,
+        ], ['id' => $radarId]);
     }
 
     // ════════════════════════════════════════════════════════════
@@ -551,17 +652,9 @@ final class ImportRadarMultiAbaCommand extends Command
     private function lookupBySerie(string $serie): ?int
     {
         $row = $this->db->fetchAssociative(
-            "SELECT id FROM radar_medidor WHERE JSON_SEARCH(faixas_json, 'one', ?) IS NOT NULL LIMIT 1",
+            "SELECT id FROM radar_medidor
+             WHERE JSON_SEARCH(faixas_json, 'one', ?) IS NOT NULL LIMIT 1",
             [$serie]
-        );
-        return $row ? (int) $row['id'] : null;
-    }
-
-    private function lookupByInmetro(string $inmetro): ?int
-    {
-        $row = $this->db->fetchAssociative(
-            "SELECT id FROM radar_medidor WHERE JSON_SEARCH(faixas_json, 'one', ?) IS NOT NULL LIMIT 1",
-            [$inmetro]
         );
         return $row ? (int) $row['id'] : null;
     }
@@ -576,7 +669,7 @@ final class ImportRadarMultiAbaCommand extends Command
     }
 
     // ════════════════════════════════════════════════════════════
-    // Download CSV do Google Sheets
+    // Download CSV
     // ════════════════════════════════════════════════════════════
 
     private function downloadCsv(string $url, SymfonyStyle $io): ?array
@@ -589,7 +682,7 @@ final class ImportRadarMultiAbaCommand extends Command
 
         $fp = fopen($tmpPath, 'wb');
         if ($fp === false) {
-            $io->error("Não foi possível abrir para escrita: {$tmpPath}");
+            $io->error("Falha ao abrir para escrita: {$tmpPath}");
             return null;
         }
 
@@ -618,13 +711,14 @@ final class ImportRadarMultiAbaCommand extends Command
         $rows = $this->parseCsv($tmpPath);
         @unlink($tmpPath);
 
-        $io->writeln(sprintf('  Baixadas %d linhas de %s', count($rows), $url));
+        $io->writeln(sprintf('  %d linhas baixadas de %s', count($rows), $url));
         return $rows;
     }
 
     // ════════════════════════════════════════════════════════════
-    // Parse CSV com detecção automática de separador
-    // Retorna array de arrays associativos com chaves normalizadas
+    // Parse CSV/TSV com detecção automática de separador
+    // Retorna array de arrays assoc com chaves normalizadas
+    // (sem acentos, sem espaços, lowercase, sem pontos → "faixas0numerofaixa")
     // ════════════════════════════════════════════════════════════
 
     private function parseCsv(string $path): array
@@ -634,10 +728,10 @@ final class ImportRadarMultiAbaCommand extends Command
             return [];
         }
 
-        // Detecta separador
         $firstLine = fgets($fh);
         rewind($fh);
-        $sep = (substr_count($firstLine, "\t") > substr_count($firstLine, ',')) ? "\t" : ',';
+        $sep = (substr_count((string) $firstLine, "\t") > substr_count((string) $firstLine, ','))
+            ? "\t" : ',';
 
         $headers = null;
         $rows    = [];
@@ -650,10 +744,8 @@ final class ImportRadarMultiAbaCommand extends Command
                 $headers = array_map(fn($h) => $this->normalizeKey($h), $cols);
                 continue;
             }
-            // Alinha colunas
             $cols = array_pad($cols, count($headers), '');
             $row  = array_combine($headers, array_slice($cols, 0, count($headers)));
-            // Pula linhas completamente vazias
             if (implode('', $row) === '') {
                 continue;
             }
@@ -668,26 +760,44 @@ final class ImportRadarMultiAbaCommand extends Command
     // Helpers
     // ════════════════════════════════════════════════════════════
 
-    /** Normaliza chave de cabeçalho: lowercase, sem acentos, sem espaços */
+    /**
+     * Normaliza chave de cabeçalho:
+     * remove acentos, espaços, pontos, º, caracteres especiais → lowercase alfanumérico
+     * "Faixas.0.NumeroFaixa" → "faixas0numerofaixa"
+     * "Nº DE SÉRIE"         → "ndeserie"
+     * "DataUltimaVerificacao" → "dataultimaverificacao"
+     */
     private function normalizeKey(string $s): string
     {
         $s = mb_strtolower(trim($s));
         $s = strtr($s, [
-            'á'=>'a','à'=>'a','ã'=>'a','â'=>'a','é'=>'e','ê'=>'e','í'=>'i','ó'=>'o','õ'=>'o','ô'=>'o','ú'=>'u','ü'=>'u','ç'=>'c',
-            'Á'=>'a','À'=>'a','Ã'=>'a','Â'=>'a','É'=>'e','Ê'=>'e','Í'=>'i','Ó'=>'o','Õ'=>'o','Ô'=>'o','Ú'=>'u','Ü'=>'u','Ç'=>'c',
+            'á'=>'a','à'=>'a','ã'=>'a','â'=>'a',
+            'é'=>'e','ê'=>'e',
+            'í'=>'i','ï'=>'i',
+            'ó'=>'o','õ'=>'o','ô'=>'o',
+            'ú'=>'u','ü'=>'u','ù'=>'u',
+            'ç'=>'c','ñ'=>'n',
+            'Á'=>'a','À'=>'a','Ã'=>'a','Â'=>'a',
+            'É'=>'e','Ê'=>'e',
+            'Í'=>'i',
+            'Ó'=>'o','Õ'=>'o','Ô'=>'o',
+            'Ú'=>'u','Ü'=>'u',
+            'Ç'=>'c','Ñ'=>'n',
+            'º'=>'', 'ª'=>'', '°'=>'',
         ]);
+        // Remove tudo que não seja letra ou dígito (ponto, espaço, hífen, etc.)
         return preg_replace('/[^a-z0-9]/', '', $s) ?? $s;
     }
 
-    /** Normaliza valor de string: trim + uppercase */
-    private function normalizeStr(string $s): string
+    /** Trim + uppercase */
+    private function str(string $s): string
     {
         return mb_strtoupper(trim($s));
     }
 
     /**
      * Converte data BR (dd/mm/yyyy) ou ISO (yyyy-mm-dd) para ISO.
-     * Retorna null se inválida.
+     * Retorna null se vazia ou inválida.
      */
     private function parseDate(string $s): ?string
     {
@@ -695,18 +805,16 @@ final class ImportRadarMultiAbaCommand extends Command
         if ($s === '') {
             return null;
         }
-        // Formato BR dd/mm/yyyy
         if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})$#', $s, $m)) {
-            return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+            return sprintf('%04d-%02d-%02d', (int)$m[3], (int)$m[2], (int)$m[1]);
         }
-        // Já em ISO
         if (preg_match('/^\d{4}-\d{2}-\d{2}/', $s)) {
             return substr($s, 0, 10);
         }
         return null;
     }
 
-    /** Converte data do banco (qualquer formato) para ISO yyyy-mm-dd */
+    /** Data do banco para ISO */
     private function toIso(?string $s): ?string
     {
         if ($s === null || $s === '') {
@@ -715,12 +823,19 @@ final class ImportRadarMultiAbaCommand extends Command
         return $this->parseDate($s) ?? substr($s, 0, 10);
     }
 
-    /** SHA-256 do triplete UF|LOCAL_NORMALIZADO|TIPO — idêntico ao ImportRadarGoogleSheetsHandler */
+    /** SHA-256(UF|LOCAL_UPPER|TIPO_UPPER) — idêntico ao ImportRadarGoogleSheetsHandler */
     private function identityHash(string $uf, string $local, string $tipo): string
     {
         $local = mb_strtoupper(trim(preg_replace('/\s+/', ' ', $local) ?? $local));
         $tipo  = mb_strtoupper(trim($tipo));
         $uf    = mb_strtoupper(trim($uf));
         return hash('sha256', "{$uf}|{$local}|{$tipo}");
+    }
+
+    private function somaStats(array &$totais, array $r): void
+    {
+        foreach (['inseridos', 'atualizados', 'sem_mudanca', 'erros'] as $k) {
+            $totais[$k] += $r[$k] ?? 0;
+        }
     }
 }

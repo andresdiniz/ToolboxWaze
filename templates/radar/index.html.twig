@@ -246,7 +246,7 @@
     </div>
 
     <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0 align-middle">
+        <table class="table table-hover table-sm mb-0 align-middle" id="radarTable">
             <thead>
                 <tr>
                     <th class="ps-2" style="width:36px">
@@ -258,8 +258,12 @@
                     <th>Local / Logradouro</th>
                     <th>Tipo</th>
                     <th>Situação</th>
-                    <th>Ú. Verificação</th>
-                    <th>Validade</th>
+                    <th data-sortable="6" style="cursor:pointer;user-select:none;white-space:nowrap">
+                        Ú. Verificação <span class="sort-icon ms-1 text-muted">↕</span>
+                    </th>
+                    <th data-sortable="7" style="cursor:pointer;user-select:none;white-space:nowrap">
+                        Validade <span class="sort-icon ms-1 text-muted">↕</span>
+                    </th>
                     <th>Empresa</th>
                     <th></th>
                 </tr>
@@ -279,6 +283,16 @@
                     {% set dveIso = dveParts[2] ~ '-' ~ dveParts[1] ~ '-' ~ dveParts[0] %}
                 {% endif %}
                 {% set isRecente = dveIso != '' and dveIso >= ha30dias and dveIso <= hoje %}
+
+                {# ISO para Ú. Verificação: prefere data_ultima_verificacao convertida, depois dveIso #}
+                {% set uvRaw = row.data_ultima_verificacao ?? '' %}
+                {% set uvIso = '' %}
+                {% if uvRaw matches '#^[0-9]{2}/[0-9]{2}/[0-9]{4}$#' %}
+                    {% set uvParts = uvRaw|split('/') %}
+                    {% set uvIso = uvParts[2] ~ '-' ~ uvParts[1] ~ '-' ~ uvParts[0] %}
+                {% elseif dveIso != '' %}
+                    {% set uvIso = dveIso %}
+                {% endif %}
 
                 <tr class="radar-row" data-id="{{ row.id }}" data-label="#{{ row.id }} {{ row.sigla_uf }} – {{ row.municipio }}">
                     <td class="ps-2">
@@ -304,7 +318,7 @@
                             <span class="text-muted small">{{ row.situacao ?? '—' }}</span>
                         {% endif %}
                     </td>
-                    <td class="text-nowrap">
+                    <td class="text-nowrap" data-sort="{{ uvIso }}">
                         <span class="text-muted small">{{ dataVerifExibir ?? '—' }}</span>
                         {% if row.data_ultima_verificacao is empty and row.data_verificacao_efetiva is not empty %}
                             <span class="badge bg-secondary ms-1" style="font-size:.65rem" title="Calculado: validade − 1 ano">calc.</span>
@@ -313,7 +327,7 @@
                             <span class="badge bg-info text-dark ms-1" style="font-size:.65rem">Recente</span>
                         {% endif %}
                     </td>
-                    <td class="text-nowrap">
+                    <td class="text-nowrap" data-sort="{{ dvIso }}">
                         {% if row.data_validade and dvIso %}
                             {% if dvIso < hoje %}
                                 <span class="text-danger small"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ row.data_validade }}</span>
@@ -396,6 +410,54 @@
 
 <script>
 (function () {
+    // ── Ordenação client-side por Ú. Verificação e Validade ──────────────
+    const table = document.getElementById('radarTable');
+    const tbody = table?.querySelector('tbody');
+
+    table?.querySelectorAll('th[data-sortable]').forEach(th => {
+        const colIndex = parseInt(th.dataset.sortable, 10);
+        let dir = null; // null → ASC → DESC → null...
+
+        const icon = th.querySelector('.sort-icon');
+
+        th.addEventListener('click', () => {
+            // Reseta todos os outros cabeçalhos sortáveis
+            table.querySelectorAll('th[data-sortable]').forEach(other => {
+                if (other !== th) {
+                    other.querySelector('.sort-icon').textContent = '↕';
+                    other.querySelector('.sort-icon').classList.add('text-muted');
+                    delete other.dataset.dir;
+                }
+            });
+
+            dir = (dir === null || dir === 'desc') ? 'asc' : 'desc';
+            th.dataset.dir = dir;
+            icon.textContent = dir === 'asc' ? '↑' : '↓';
+            icon.classList.remove('text-muted');
+
+            const rows = Array.from(tbody.querySelectorAll('tr.radar-row'));
+
+            rows.sort((a, b) => {
+                const tdA = a.querySelectorAll('td')[colIndex];
+                const tdB = b.querySelectorAll('td')[colIndex];
+                const valA = (tdA?.dataset.sort ?? '').trim();
+                const valB = (tdB?.dataset.sort ?? '').trim();
+
+                // Linhas sem data vão sempre pro final
+                if (!valA && !valB) return 0;
+                if (!valA) return 1;
+                if (!valB) return -1;
+
+                return dir === 'asc'
+                    ? valA.localeCompare(valB)
+                    : valB.localeCompare(valA);
+            });
+
+            rows.forEach(r => tbody.appendChild(r));
+        });
+    });
+
+    // ── Mesclagem ─────────────────────────────────────────────────────────
     const mergeUrl  = '{{ path('radar_merge_index') }}';
     const bar       = document.getElementById('mergeBar');
     const countEl   = document.getElementById('mergeCount');

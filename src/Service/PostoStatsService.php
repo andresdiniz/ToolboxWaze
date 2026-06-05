@@ -12,6 +12,43 @@ final class PostoStatsService
         private readonly Connection $db,
     ) {}
 
+    /**
+     * Retorna cobertura de link Waze por UF.
+     * Cada item: ['uf' => 'SP', 'total' => 100, 'com_waze' => 40, 'pct' => 40.0]
+     */
+    public function getCoberturaPorUf(?array $allowedUfs = null): array
+    {
+        [$where, $params] = $this->ufWhere($allowedUfs, 'f');
+        $wc = $where ? "WHERE $where" : '';
+
+        $rows = $this->db->fetchAllAssociative(
+            "SELECT
+                 f.uf,
+                 COUNT(DISTINCT f.cnpj)        AS total,
+                 COUNT(DISTINCT pwl.posto_id)  AS com_waze
+             FROM fuel_reseller_raw f
+             LEFT JOIN posto_waze_link pwl ON pwl.posto_id = f.id
+             $wc
+             GROUP BY f.uf
+             ORDER BY f.uf",
+            $params
+        );
+
+        return array_map(static function (array $r): array {
+            $total   = (int) $r['total'];
+            $comWaze = (int) $r['com_waze'];
+            $pct     = $total > 0 ? round($comWaze / $total * 100, 1) : 0.0;
+
+            return [
+                'uf'       => $r['uf'],
+                'total'    => $total,
+                'com_waze' => $comWaze,
+                'sem_waze' => $total - $comWaze,
+                'pct'      => $pct,
+            ];
+        }, $rows);
+    }
+
     public function getKpis(?array $allowedUfs = null): array
     {
         [$where, $params] = $this->ufWhere($allowedUfs, 'f');

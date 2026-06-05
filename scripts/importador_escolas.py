@@ -4,6 +4,7 @@ import threading
 import csv
 import os
 import time
+import webbrowser
 from datetime import datetime
 
 try:
@@ -86,20 +87,20 @@ class SchoolImportApp(tk.Tk):
         # Botoes
         ctrl = tk.Frame(self, bg=BG, pady=8, padx=12)
         ctrl.pack(fill="x")
-        self._btn_start = tk.Button(ctrl, text="Iniciar", command=self._start,
+        self._btn_start = tk.Button(ctrl, text="\u25b6 Iniciar", command=self._start,
             bg=SUCCESS, fg="white", relief="flat",
             font=("Segoe UI", 9, "bold"), padx=14, pady=5, cursor="hand2")
         self._btn_start.pack(side="left", padx=(0, 6))
-        self._btn_stop = tk.Button(ctrl, text="Parar", command=self._stop,
+        self._btn_stop = tk.Button(ctrl, text="\u25a0 Parar", command=self._stop,
             bg=ERROR, fg="white", relief="flat",
             font=("Segoe UI", 9, "bold"), padx=14, pady=5,
             cursor="hand2", state="disabled")
         self._btn_stop.pack(side="left", padx=(0, 6))
-        tk.Button(ctrl, text="Exportar", command=self._export,
+        tk.Button(ctrl, text="\U0001f4be Exportar", command=self._export,
             bg=SURFACE, fg=TEXT, relief="flat",
             font=("Segoe UI", 9), padx=14, pady=5,
             cursor="hand2").pack(side="left", padx=(0, 6))
-        tk.Button(ctrl, text="Limpar", command=self._clear,
+        tk.Button(ctrl, text="\U0001f5d1 Limpar", command=self._clear,
             bg=SURFACE, fg=TEXT_MUTED, relief="flat",
             font=("Segoe UI", 9), padx=14, pady=5,
             cursor="hand2").pack(side="left")
@@ -146,13 +147,25 @@ class SchoolImportApp(tk.Tk):
         # Tabela
         tf = tk.Frame(paned, bg=SURFACE, bd=0)
         paned.add(tf, minsize=120)
-        tk.Label(tf, text="Registros por Escola", font=("Segoe UI", 9, "bold"),
-                 bg=SURFACE, fg=TEXT_MUTED, pady=4).pack(anchor="w", padx=8)
-        cols = ("Escola", "Acao Realizada", "Status", "Horario")
+
+        # Header da tabela com dica de Google Maps
+        th = tk.Frame(tf, bg=SURFACE)
+        th.pack(fill="x")
+        tk.Label(th, text="Registros por Escola",
+                 font=("Segoe UI", 9, "bold"),
+                 bg=SURFACE, fg=TEXT_MUTED, pady=4).pack(side="left", padx=8)
+        tk.Label(th, text="\U0001f4cd Duplo clique na linha para abrir no Google Maps",
+                 font=("Segoe UI", 8), bg=SURFACE, fg=ACCENT2).pack(side="left", padx=4)
+
+        # Colunas visiveis + lat/lon ocultas
+        cols_visible = ("Escola", "Acao Realizada", "Status", "Horario")
+        cols_all     = cols_visible + ("_lat", "_lon")
+
         sy = tk.Scrollbar(tf)
         sy.pack(side="right", fill="y")
         sx = tk.Scrollbar(tf, orient="horizontal")
         sx.pack(side="bottom", fill="x")
+
         sty.configure("D.Treeview",
                       background=SURFACE2, foreground=TEXT,
                       fieldbackground=SURFACE2, borderwidth=0, rowheight=22)
@@ -162,16 +175,46 @@ class SchoolImportApp(tk.Tk):
         sty.map("D.Treeview",
                 background=[("selected", ACCENT)],
                 foreground=[("selected", "white")])
-        self._tree = ttk.Treeview(tf, columns=cols, show="headings",
+
+        self._tree = ttk.Treeview(tf, columns=cols_all, show="headings",
                                   style="D.Treeview",
                                   yscrollcommand=sy.set,
-                                  xscrollcommand=sx.set)
-        for col, w in zip(cols, [290, 220, 120, 110]):
+                                  xscrollcommand=sx.set,
+                                  cursor="hand2")
+
+        for col, w in zip(cols_visible, [290, 220, 120, 110]):
             self._tree.heading(col, text=col)
             self._tree.column(col, width=w, anchor="w")
+
+        # Oculta colunas lat/lon
+        for hidden in ("_lat", "_lon"):
+            self._tree.heading(hidden, text="")
+            self._tree.column(hidden, width=0, minwidth=0, stretch=False)
+
         self._tree.pack(fill="both", expand=True)
         sy.config(command=self._tree.yview)
         sx.config(command=self._tree.xview)
+
+        # Bind duplo clique -> Google Maps
+        self._tree.bind("<Double-1>", self._on_row_click)
+
+    # ── Clique na linha -> Google Maps ───────────────────────────────────────
+    def _on_row_click(self, event):
+        item = self._tree.focus()
+        if not item:
+            return
+        values = self._tree.item(item, "values")
+        # values: (Escola, Acao, Status, Horario, _lat, _lon)
+        if len(values) < 6:
+            return
+        lat, lon = str(values[4]).strip(), str(values[5]).strip()
+        escola   = values[0]
+        if lat and lon and lat != "" and lon != "":
+            url = f"https://www.google.com/maps?q={lat},{lon}"
+            self._log(f"\U0001f4cd Abrindo Google Maps para: {escola}", ACCENT2)
+            webbrowser.open(url)
+        else:
+            self._log(f"Linha sem coordenadas: {escola}", WARNING)
 
     # ── Log / Tabela ─────────────────────────────────────────────────────────
     def _log(self, msg: str, color: str = TEXT):
@@ -183,12 +226,15 @@ class SchoolImportApp(tk.Tk):
         self._log_box.see("end")
         self._log_box.configure(state="disabled")
 
-    def _add_record(self, escola, acao, status):
-        ts = datetime.now().strftime("%H:%M:%S")
+    def _add_record(self, escola, acao, status, lat="", lon=""):
+        ts  = datetime.now().strftime("%H:%M:%S")
         self._records.append({"escola": escola, "acao": acao,
-                               "status": status, "ts": ts})
+                               "status": status, "ts": ts,
+                               "lat": lat, "lon": lon})
         tag = "success" if status == "OK" else ("error" if status == "ERRO" else "")
-        self._tree.insert("", "end", values=(escola, acao, status, ts), tags=(tag,))
+        self._tree.insert("", "end",
+                          values=(escola, acao, status, ts, lat, lon),
+                          tags=(tag,))
         self._tree.tag_configure("success", foreground=SUCCESS)
         self._tree.tag_configure("error",   foreground=ERROR)
         self._tree.yview_moveto(1)
@@ -258,21 +304,23 @@ class SchoolImportApp(tk.Tk):
 
             nome   = row.get("NO_ENTIDADE") or row.get("nome") or f"Escola #{i}"
             status = str(row.get("TP_SITUACAO_FUNCIONAMENTO") or row.get("situacao") or "1")
-            lat    = row.get("NU_LATITUDE")  or row.get("lat")  or ""
-            lon    = row.get("NU_LONGITUDE") or row.get("lon")  or ""
+            lat    = str(row.get("NU_LATITUDE")  or row.get("lat")  or "").strip()
+            lon    = str(row.get("NU_LONGITUDE") or row.get("lon")  or "").strip()
             uf     = row.get("SG_UF")        or row.get("uf")   or ""
             mun    = row.get("NO_MUNICIPIO") or row.get("municipio") or ""
 
             if lat and lon:
                 acao, st = f"Coords presentes ({lat}, {lon})", "OK"
-                self.after(0, self._log, f"OK  {nome} — {lat}, {lon}", SUCCESS)
+                self.after(0, self._log, f"OK  {nome} \u2014 {lat}, {lon}", SUCCESS)
+                rec_lat, rec_lon = lat, lon
             elif status != "1":
                 acao, st = f"Ignorada (situacao={status})", "IGNORADA"
-                self.after(0, self._log, f"--  {nome} — ignorada", TEXT_MUTED)
+                self.after(0, self._log, f"--  {nome} \u2014 ignorada", TEXT_MUTED)
+                rec_lat, rec_lon = "", ""
             else:
-                acao, st = self._geocode(geo, nome, mun, uf)
+                acao, st, rec_lat, rec_lon = self._geocode(geo, nome, mun, uf)
 
-            self.after(0, self._add_record, nome, acao, st)
+            self.after(0, self._add_record, nome, acao, st, rec_lat, rec_lon)
             pct = (i / total) * 100
             self.after(0, self._set_progress, pct,
                        f"{i} / {total}  ({pct:.1f}%)")
@@ -287,24 +335,26 @@ class SchoolImportApp(tk.Tk):
 
     # ── Geocodificacao ────────────────────────────────────────────────────────
     def _geocode(self, geo, nome, mun, uf):
+        """Retorna (acao, status, lat, lon)."""
         if not HAS_GEOPY or geo is None:
-            return "geopy nao instalado", "SKIP"
+            return "geopy nao instalado", "SKIP", "", ""
         try:
             time.sleep(1.1)
             loc = geo.geocode(f"{nome}, {mun}, {uf}, Brasil", timeout=10)
             if loc:
+                lat_s = f"{loc.latitude:.5f}"
+                lon_s = f"{loc.longitude:.5f}"
                 self.after(0, self._log,
-                           f"GEO {nome} -> {loc.latitude:.5f}, {loc.longitude:.5f}",
-                           SUCCESS)
-                return f"Geocodificada: {loc.latitude:.5f},{loc.longitude:.5f}", "OK"
-            self.after(0, self._log, f"AVISO {nome} — sem resultado", WARNING)
-            return "Sem resultado", "SEM COORDS"
+                           f"GEO {nome} -> {lat_s}, {lon_s}", SUCCESS)
+                return f"Geocodificada: {lat_s},{lon_s}", "OK", lat_s, lon_s
+            self.after(0, self._log, f"AVISO {nome} \u2014 sem resultado", WARNING)
+            return "Sem resultado", "SEM COORDS", "", ""
         except GeocoderTimedOut:
             self.after(0, self._log, f"TIMEOUT {nome}", WARNING)
-            return "Timeout", "TIMEOUT"
+            return "Timeout", "TIMEOUT", "", ""
         except Exception as e:
             self.after(0, self._log, f"ERRO {nome}: {e}", ERROR)
-            return f"Erro: {e}", "ERRO"
+            return f"Erro: {e}", "ERRO", "", ""
 
     # ── Leitura CSV ───────────────────────────────────────────────────────────
     def _read_csv(self, path):
@@ -328,12 +378,12 @@ class SchoolImportApp(tk.Tk):
         try:
             if path.endswith(".xlsx") and HAS_PANDAS:
                 df = pd.DataFrame(self._records)
-                df.columns = ["Escola", "Acao Realizada", "Status", "Horario"]
+                df.columns = ["Escola", "Acao Realizada", "Status", "Horario", "Lat", "Lon"]
                 df.to_excel(path, index=False)
             else:
                 with open(path, "w", newline="", encoding="utf-8") as f:
                     w = csv.DictWriter(f,
-                        fieldnames=["escola", "acao", "status", "ts"])
+                        fieldnames=["escola", "acao", "status", "ts", "lat", "lon"])
                     w.writeheader()
                     w.writerows(self._records)
             self._log(f"Exportado: {os.path.basename(path)}", SUCCESS)

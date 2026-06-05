@@ -1,4 +1,3 @@
-
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
@@ -26,63 +25,126 @@ FONT_TITLE = ("Segoe UI", 13, "bold")
 FONT_MONO  = ("Consolas", 9)
 
 # Colunas candidatas para ID da escola (ordem de prioridade)
-ID_COLS = ["CO_ENTIDADE", "CO_ESCOLA", "ID_ESCOLA", "CO_INEP", "ID"]
+# Cobre tanto o CSV do MEC (Código INEP) quanto outros formatos
+ID_COLS = [
+    "Código INEP",   # CSV padrão MEC (Análise Detalhada)
+    "CO_ENTIDADE",   # Microdados MEC
+    "CO_ESCOLA",
+    "ID_ESCOLA",
+    "CO_INEP",
+    "codigo_inep",
+    "CODIGO_INEP",
+    "ID",
+]
+
+# Colunas candidatas para nome da escola
+NOME_COLS = [
+    "Escola",        # CSV padrão MEC
+    "NO_ENTIDADE",   # Microdados MEC
+    "NOME_ESCOLA",
+    "nome_escola",
+    "NM_ESCOLA",
+]
+
+# Colunas candidatas para município
+MUNICIPIO_COLS = [
+    "Município",     # CSV padrão MEC
+    "NO_MUNICIPIO",
+    "MUNICIPIO",
+]
+
+# Colunas candidatas para UF
+UF_COLS = [
+    "UF",            # CSV padrão MEC
+    "SG_UF",
+    "sg_uf",
+]
+
+# Colunas candidatas para latitude e longitude
+LAT_COLS = ["Latitude",  "NU_LATITUDE",  "lat", "latitude"]
+LON_COLS = ["Longitude", "NU_LONGITUDE", "lon", "longitude"]
 
 
-def extrair_id(row: dict) -> str:
-    """Retorna o primeiro ID encontrado nas colunas candidatas, ou '—'."""
-    for col in ID_COLS:
-        val = str(row.get(col, "")).strip()
+def _primeira_col(row_dict: dict, candidatas: list, fallback: str = "") -> str:
+    """Retorna o valor da primeira coluna encontrada no dicionário."""
+    for col in candidatas:
+        val = str(row_dict.get(col, "")).strip()
         if val and val.lower() not in ("nan", "none", ""):
             return val
-    return "—"
+    return fallback
+
+
+def extrair_id(row_dict: dict) -> str:
+    return _primeira_col(row_dict, ID_COLS, fallback="—")
+
+
+def extrair_nome(row_dict: dict, idx: int) -> str:
+    return _primeira_col(row_dict, NOME_COLS, fallback=f"Escola #{idx}")
+
+
+def extrair_municipio(row_dict: dict) -> str:
+    return _primeira_col(row_dict, MUNICIPIO_COLS)
+
+
+def extrair_uf(row_dict: dict) -> str:
+    return _primeira_col(row_dict, UF_COLS)
+
+
+def extrair_coords(row_dict: dict):
+    """Retorna (lat, lon) como float se válidos, ou (None, None)."""
+    try:
+        lat = float(_primeira_col(row_dict, LAT_COLS, "").replace(",", "."))
+        lon = float(_primeira_col(row_dict, LON_COLS, "").replace(",", "."))
+        if lat and lon:
+            return lat, lon
+    except (ValueError, TypeError):
+        pass
+    return None, None
 
 
 # ─── Geocodificador com estratégia em camadas ────────────────────────────────
 class GeocoderCamadas:
     def __init__(self):
         self.geo = Nominatim(user_agent="escola_geocoder_br/1.0", timeout=8)
-        self._delay = 1.1  # respeita rate-limit Nominatim
+        self._delay = 1.1
 
     def _tentar(self, query: str):
         try:
             time.sleep(self._delay)
             loc = self.geo.geocode(query, country_codes="br", language="pt")
-            return (loc.latitude, loc.longitude, query) if loc else None
-        except GeocoderTimedOut:
-            return None
-        except GeocoderServiceError:
+            return (loc.latitude, loc.longitude) if loc else None
+        except (GeocoderTimedOut, GeocoderServiceError):
             return None
 
-    def geocodificar(self, row: dict):
-        """
-        Estratégia em 3 camadas:
-          1. Endereço completo + município + UF
-          2. Nome da escola + município + UF
-          3. Centroide do município
-        """
-        municipio = str(row.get("NO_MUNICIPIO", "")).strip()
-        uf        = str(row.get("SG_UF", "")).strip()
-        nome      = str(row.get("NO_ENTIDADE", "")).strip()
-        logr      = str(row.get("DS_ENDERECO", "")).strip()
-        numero    = str(row.get("NU_ENDERECO", "")).strip()
-        bairro    = str(row.get("NO_BAIRRO",   "")).strip()
+    def geocodificar(self, row_dict: dict):
+        municipio = extrair_municipio(row_dict)
+        uf        = extrair_uf(row_dict)
+        nome      = _primeira_col(row_dict, NOME_COLS, "")
+
+        # Campos de endereço (microdados MEC)
+        logr   = str(row_dict.get("DS_ENDERECO", "")).strip()
+        numero = str(row_dict.get("NU_ENDERECO", "")).strip()
+        bairro = str(row_dict.get("NO_BAIRRO",   "")).strip()
 
         # Camada 1 — endereço completo
-        partes = [p for p in [logr, numero, bairro, municipio, uf, "Brasil"] if p and p != "nan"]
-        res = self._tentar(", ".join(partes))
-        if res:
-            return {"lat": res[0], "lon": res[1], "estrategia": "endereco_completo", "status": "ok"}
+        partes = [p for p in [logr, numero, bairro, municipio, uf, "Brasil"]
+                  if p and p.lower() not in ("nan", "none", "")]
+        if partes:
+            res = self._tentar(", ".join(partes))
+            if res:
+                return {"lat": res[0], "lon": res[1], "estrategia": "endereco_completo", "status": "ok"}
 
         # Camada 2 — nome da escola + município + UF
-        res = self._tentar(f"{nome}, {municipio}, {uf}, Brasil")
-        if res:
-            return {"lat": res[0], "lon": res[1], "estrategia": "nome_escola", "status": "ok"}
+        if nome and municipio:
+            res = self._tentar(f"{nome}, {municipio}, {uf}, Brasil")
+            if res:
+                return {"lat": res[0], "lon": res[1], "estrategia": "nome_escola", "status": "ok"}
 
         # Camada 3 — centroide do município
-        res = self._tentar(f"{municipio}, {uf}, Brasil")
-        if res:
-            return {"lat": res[0], "lon": res[1], "estrategia": "centroide_municipio", "status": "parcial"}
+        if municipio:
+            res = self._tentar(f"{municipio}, {uf}, Brasil")
+            if res:
+                return {"lat": res[0], "lon": res[1], "estrategia": "centroide_municipio", "status": "parcial"}
 
         return {"lat": None, "lon": None, "estrategia": "—", "status": "sem_coords"}
 
@@ -112,7 +174,6 @@ class App(tk.Tk):
         tk.Label(self, text="Estratégia em camadas: endereço completo → nome+município → centroide",
                  bg=BG, fg=MUTED, font=FONT_BODY).pack(pady=(0, 10))
 
-        # Barra de arquivo
         ff = tk.Frame(self, bg=SURFACE, padx=10, pady=8)
         ff.pack(fill="x", padx=16, pady=(0, 8))
         tk.Label(ff, text="Arquivo CSV:", bg=SURFACE, fg=TEXT, font=FONT_BOLD).pack(side="left")
@@ -122,7 +183,6 @@ class App(tk.Tk):
         self._btn_browse = self._btn(ff, "📂 Abrir CSV", self._browse, ACCENT)
         self._btn_browse.pack(side="right")
 
-        # Progresso
         pf = tk.Frame(self, bg=BG)
         pf.pack(fill="x", padx=16, pady=(0, 6))
         self._prog_label = tk.Label(pf, text="Aguardando...", bg=BG, fg=MUTED, font=FONT_BODY)
@@ -136,7 +196,6 @@ class App(tk.Tk):
                                           orient="horizontal", mode="determinate")
         self._progress.pack(fill="x", pady=(2, 0))
 
-        # Botões
         bf = tk.Frame(self, bg=BG)
         bf.pack(fill="x", padx=16, pady=(0, 8))
         self._btn_start  = self._btn(bf, "▶  Iniciar",  self._start,  SUCCESS)
@@ -146,11 +205,9 @@ class App(tk.Tk):
         for b in [self._btn_start, self._btn_stop, self._btn_export, self._btn_clear]:
             b.pack(side="left", padx=4)
 
-        # Painel divisível
         paned = tk.PanedWindow(self, orient="vertical", bg=SURFACE2, sashwidth=5, sashrelief="flat")
         paned.pack(fill="both", expand=True, padx=16, pady=(0, 14))
 
-        # Log
         lf = tk.Frame(paned, bg=SURFACE)
         tk.Label(lf, text=" Log de Execução", bg=SURFACE2, fg=ACCENT,
                  font=FONT_BOLD, anchor="w").pack(fill="x")
@@ -167,7 +224,6 @@ class App(tk.Tk):
             self._log_text.tag_config(tag, foreground=fg)
         paned.add(lf, minsize=140)
 
-        # Tabela
         tf = tk.Frame(paned, bg=SURFACE)
         tk.Label(tf, text=" Resultados", bg=SURFACE2, fg=ACCENT,
                  font=FONT_BOLD, anchor="w").pack(fill="x")
@@ -179,8 +235,8 @@ class App(tk.Tk):
                          foreground=ACCENT, font=FONT_BOLD)
         style.map("Treeview", background=[("selected", ACCENT)],
                    foreground=[("selected", WHITE)])
-        widths = {"ID INEP": 90, "Escola": 250, "Município": 120, "UF": 40,
-                  "Estratégia": 155, "Lat": 100, "Lon": 100, "Status": 90}
+        widths  = {"ID INEP": 100, "Escola": 250, "Município": 120, "UF": 40,
+                   "Estratégia": 155, "Lat": 100, "Lon": 100, "Status": 90}
         anchors = {"ID INEP": "center", "Escola": "w", "Município": "w",
                    "UF": "center", "Estratégia": "w",
                    "Lat": "center", "Lon": "center", "Status": "center"}
@@ -206,11 +262,10 @@ class App(tk.Tk):
 
     # ── Log ─────────────────────────────────────────────────────────────────
     def _log(self, msg: str, kind: str = "info"):
-        ts = datetime.now().strftime("%H:%M:%S")
+        ts   = datetime.now().strftime("%H:%M:%S")
         icon = {"ok":"✔","warn":"⚠","error":"✖","info":"ℹ","accent":"►","muted":"·","id":"#"}.get(kind,"·")
-        line = f"[{ts}] {icon}  {msg}\n"
         self._log_text.configure(state="normal")
-        self._log_text.insert("end", line, kind)
+        self._log_text.insert("end", f"[{ts}] {icon}  {msg}\n", kind)
         self._log_text.see("end")
         self._log_text.configure(state="disabled")
 
@@ -218,20 +273,19 @@ class App(tk.Tk):
         """Log padronizado com ID INEP destacado em roxo claro."""
         ts   = datetime.now().strftime("%H:%M:%S")
         icon = {"ok":"✔","warn":"⚠","error":"✖","accent":"►"}.get(kind,"·")
-        linha = (
-            f"[{ts}] {icon}  [{idx:>5}/{total}] "
-            f"ID {escola_id:<8}  {nome[:45]:<45}  {detalhe}\n"
-        )
+        id_tag = f"ID {escola_id}"
+        linha  = f"[{ts}] {icon}  [{idx:>5}/{total}] {id_tag:<12}  {nome[:45]:<45}  {detalhe}\n"
         self._log_text.configure(state="normal")
+        insert_pos = self._log_text.index("end")
         self._log_text.insert("end", linha, kind)
-        # Destaca "ID XXXXXXXX" em roxo claro
-        full_text = self._log_text.get("end - 2l", "end - 1l")
-        start_idx = full_text.find(f"ID {escola_id}")
-        if start_idx != -1:
-            line_start = self._log_text.index("end - 2l")
-            tag_start  = f"{line_start} + {start_idx} chars"
-            tag_end    = f"{line_start} + {start_idx + len('ID ') + len(escola_id)} chars"
-            self._log_text.tag_add("id", tag_start, tag_end)
+        # Destaca o ID INEP em roxo claro
+        full = self._log_text.get(f"{insert_pos} linestart", f"{insert_pos} lineend")
+        start = full.find(id_tag)
+        if start != -1:
+            base = self._log_text.index(f"{insert_pos} linestart")
+            self._log_text.tag_add("id",
+                                   f"{base} + {start} chars",
+                                   f"{base} + {start + len(id_tag)} chars")
         self._log_text.see("end")
         self._log_text.configure(state="disabled")
 
@@ -262,18 +316,33 @@ class App(tk.Tk):
         self._log("Interrupção solicitada — aguardando escola atual...", "warn")
 
     def _run(self, path: str):
-        try:
-            df = pd.read_csv(path, sep=";", encoding="latin-1", low_memory=False, dtype=str)
-            df.columns = [c.strip() for c in df.columns]
-        except Exception as e:
-            self._log(f"Erro ao ler CSV: {e}", "error")
+        # Tenta UTF-8 com BOM (padrão MEC) e cai em latin-1 se falhar
+        for enc in ("utf-8-sig", "latin-1"):
+            try:
+                df = pd.read_csv(path, sep=",", encoding=enc, low_memory=False, dtype=str)
+                if len(df.columns) < 2:
+                    df = pd.read_csv(path, sep=";", encoding=enc, low_memory=False, dtype=str)
+                df.columns = [c.strip() for c in df.columns]
+                break
+            except Exception:
+                continue
+        else:
+            self._log("Erro ao ler CSV — verifique o separador e a codificação.", "error")
             self._finish()
             return
 
         total = len(df)
-        self._log(f"CSV carregado — {total} registros | colunas: {list(df.columns[:6])}...", "info")
-        self._progress["maximum"] = total
+        cols_detectadas = list(df.columns[:8])
+        self._log(f"CSV carregado — {total} registros | colunas detectadas: {cols_detectadas}", "info")
 
+        # Informa qual coluna de ID foi encontrada
+        col_id_encontrada = next((c for c in ID_COLS if c in df.columns), None)
+        if col_id_encontrada:
+            self._log(f"Coluna de ID INEP detectada: '{col_id_encontrada}'", "ok")
+        else:
+            self._log("⚠ Nenhuma coluna de ID INEP encontrada — usando índice de linha como fallback", "warn")
+
+        self._progress["maximum"] = total
         resultados = []
         stats = {"ok": 0, "parcial": 0, "sem_coords": 0, "ignorado": 0}
 
@@ -283,33 +352,29 @@ class App(tk.Tk):
                 break
 
             row_dict  = row.to_dict()
-            escola_id = extrair_id(row_dict)
-            nome      = str(row.get("NO_ENTIDADE", f"Escola #{i}")).strip()
-            municipio = str(row.get("NO_MUNICIPIO", "")).strip()
-            uf        = str(row.get("SG_UF", "")).strip()
-            situacao  = str(row.get("TP_SITUACAO_FUNCIONAMENTO", "1")).strip()
+            escola_id = extrair_id(row_dict) if col_id_encontrada else f"linha-{i}"
+            nome      = extrair_nome(row_dict, i)
+            municipio = extrair_municipio(row_dict)
+            uf        = extrair_uf(row_dict)
+            situacao  = str(row_dict.get("TP_SITUACAO_FUNCIONAMENTO", "1")).strip()
 
             self.after(0, self._update_prog, i, total, int(i / total * 100), escola_id, nome)
 
             # Já tem coordenadas salvas?
-            try:
-                lat = float(str(row.get("NU_LATITUDE",  "")).replace(",", "."))
-                lon = float(str(row.get("NU_LONGITUDE", "")).replace(",", "."))
-                if lat and lon:
-                    res = {"lat": lat, "lon": lon, "estrategia": "coords_existentes", "status": "ok"}
-                    stats["ok"] += 1
-                    self._log_escola(i, total, escola_id, nome, "ok",
-                                     f"coords existentes → {lat:.5f}, {lon:.5f}")
-                    self._add_row(escola_id, nome, municipio, uf, res)
-                    resultados.append({**row_dict, **res})
-                    if i % 50 == 0:
-                        self._log_resumo(i, total, stats)
-                    continue
-            except (ValueError, TypeError):
-                pass
+            lat, lon = extrair_coords(row_dict)
+            if lat and lon:
+                res = {"lat": lat, "lon": lon, "estrategia": "coords_existentes", "status": "ok"}
+                stats["ok"] += 1
+                self._log_escola(i, total, escola_id, nome, "ok",
+                                 f"coords existentes → {lat:.5f}, {lon:.5f}")
+                self._add_row(escola_id, nome, municipio, uf, res)
+                resultados.append({**row_dict, **res})
+                if i % 50 == 0:
+                    self._log_resumo(i, total, stats)
+                continue
 
             # Paralisada / extinta — ignora geocodificação
-            if situacao != "1":
+            if situacao not in ("1", ""):
                 res = {"lat": None, "lon": None, "estrategia": "—", "status": "ignorado"}
                 stats["ignorado"] += 1
                 self._log_escola(i, total, escola_id, nome, "muted",

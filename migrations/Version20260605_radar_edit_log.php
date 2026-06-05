@@ -20,10 +20,10 @@ final class Version20260605_radar_edit_log extends AbstractMigration
             CREATE TABLE IF NOT EXISTS radar_edit_log (
                 id               BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
                 radar_medidor_id BIGINT(20) UNSIGNED NOT NULL,
-                campo_alterado   VARCHAR(100)        NOT NULL,
+                campo            VARCHAR(100)        NOT NULL,
                 valor_anterior   TEXT                NULL,
                 valor_novo       TEXT                NULL,
-                editado_por      INT                 NULL,
+                editado_por      VARCHAR(255)        NULL,
                 editado_em       DATETIME            NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 INDEX idx_rel_radar   (radar_medidor_id),

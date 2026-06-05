@@ -1,0 +1,19 @@
+{#
+  Template base para TODOS os erros HTTP não mapeados.
+  Usado como fallback quando não existe error{STATUS}.html.twig específico.
+#}
+{% extends 'bundles/TwigBundle/Exception/_error_layout.html.twig' %}
+
+{% block error_code %}{{ status_code }}{% endblock %}
+{% block error_title %}Algo deu errado{% endblock %}
+{% block error_icon %}
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="err-svg">
+  <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2" opacity=".15"/>
+  <path d="M32 18v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="32" cy="42" r="2.5" fill="currentColor"/>
+</svg>
+{% endblock %}
+{% block error_message %}
+  Ocorreu um erro inesperado (HTTP {{ status_code }}).
+  Nossa equipe já foi notificada — tente novamente em alguns instantes.
+{% endblock %}

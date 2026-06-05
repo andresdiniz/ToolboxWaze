@@ -1,0 +1,17 @@
+{% extends 'bundles/TwigBundle/Exception/_error_layout.html.twig' %}
+
+{% block error_code %}400{% endblock %}
+{% block error_title %}Requisição inválida{% endblock %}
+{% block error_icon %}
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="err-svg">
+  <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2" opacity=".15"/>
+  <path d="M20 44 L44 20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".4"/>
+  <path d="M20 20 L44 44" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".4"/>
+  <rect x="22" y="28" width="20" height="8" rx="3" stroke="currentColor" stroke-width="2"/>
+  <path d="M28 32h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>
+{% endblock %}
+{% block error_message %}
+  Os dados enviados não são válidos ou estão malformados.
+  Verifique os campos e tente novamente.
+{% endblock %}

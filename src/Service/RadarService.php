@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Entity\User;
 use Doctrine\DBAL\Connection;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Encapsula toda a lógica de negócio, queries SQL e regras de validação
@@ -21,7 +22,7 @@ final class RadarService
     public function __construct(
         private readonly Connection       $db,
         private readonly PaginatorService $paginator,
-        string $projectDir
+        #[Autowire('%kernel.project_dir%')] string $projectDir
     ) {
         $this->camposEditaveis = require $projectDir . '/config/radar_campos.php';
     }
@@ -166,7 +167,6 @@ final class RadarService
             $params[] = '%' . $filters['serie'] . '%';
         }
 
-        // #2 — datas agora passadas como parâmetros, não interpoladas na string SQL
         match ($filters['validade']) {
             'valido'     => (function () use (&$where, &$params, $viso, $hoje) {
                 $where[]  = "$viso >= ?";
@@ -206,7 +206,6 @@ final class RadarService
 
     /**
      * Retorna estatísticas globais (usado quando não há filtros ativos).
-     * #2 — datas parametrizadas.
      */
     public function getStats(): array|false
     {
@@ -233,19 +232,14 @@ final class RadarService
     /**
      * Persiste as alterações de campos editáveis e grava o log de auditoria.
      *
-     * @param  int    $id
-     * @param  array  $postData    Dados brutos do POST (Request::request->all())
-     * @param  array  $estadosMap  ['UF' => 'Nome do estado']
-     * @param  User   $user
      * @return int Número de campos efetivamente alterados
      */
     public function saveEdit(int $id, array $postData, array $estadosMap, User $user): int
     {
-        $radar = $this->findOrFail($id);
-        $agora = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $radar     = $this->findOrFail($id);
+        $agora     = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
         $userEmail = $user->getUserIdentifier();
 
-        // Se a UF mudou, força o nome oficial ignorando o que vier no POST
         $novaSigla = isset($postData['sigla_uf']) ? trim((string) $postData['sigla_uf']) : null;
         if ($novaSigla !== null && isset($estadosMap[$novaSigla])) {
             $postData['uf'] = $estadosMap[$novaSigla];
@@ -282,13 +276,11 @@ final class RadarService
             $this->db->update('radar_medidor', $alteracoes, ['id' => $id]);
         }
 
-        // Retorna contagem de campos reais alterados (descontando os metadados)
         return count($alteracoes) > 0 ? count($alteracoes) - 2 : 0;
     }
 
     /**
-     * Valida e persiste o link Waze. Lança \InvalidArgumentException com a
-     * lista de erros se a validação falhar.
+     * Valida e persiste o link Waze.
      *
      * @throws \InvalidArgumentException
      */

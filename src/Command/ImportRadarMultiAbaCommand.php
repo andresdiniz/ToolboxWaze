@@ -27,7 +27,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * As opções --url-* têm prioridade sobre --spreadsheet-id + --gid-*.
  *
- * --dry-run  Simula sem gravar no banco.
+ * --user-id   ID do usuário responsável pela importação (obrigatório ao usar --url-links).
+ * --dry-run   Simula sem gravar no banco.
  *
  * Estrutura real das tabelas:
  *   radar_medidor  — um registro por local (logradouro + municipio + tipo_medidor)
@@ -59,6 +60,7 @@ final class ImportRadarMultiAbaCommand extends Command
             ->addOption('gid-expandida',  null, InputOption::VALUE_OPTIONAL, 'GID da aba expandida')
             ->addOption('gid-links',      null, InputOption::VALUE_OPTIONAL, 'GID da aba de links')
             ->addOption('uf', 'u', InputOption::VALUE_OPTIONAL, 'Sigla UF (ex: AC). Obrigatório para abas sem coluna SiglaUf.', '')
+            ->addOption('user-id', null, InputOption::VALUE_OPTIONAL, 'ID do usuário responsável pela importação (obrigatório ao importar links Waze)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Simula sem gravar no banco')
         ;
     }
@@ -68,6 +70,10 @@ final class ImportRadarMultiAbaCommand extends Command
         $io     = new SymfonyStyle($input, $output);
         $uf     = strtoupper(trim((string) $input->getOption('uf')));
         $dryRun = (bool) $input->getOption('dry-run');
+
+        // Resolve user ID para inserted_by
+        $userId = $input->getOption('user-id');
+        $userId = ($userId !== null && $userId !== '') ? (int) $userId : null;
 
         if ($dryRun) {
             $io->warning('MODO DRY-RUN — nenhuma alteração será gravada.');
@@ -80,6 +86,22 @@ final class ImportRadarMultiAbaCommand extends Command
         if ($urlMedidores === null && $urlExpandida === null && $urlLinks === null) {
             $io->error('Informe pelo menos uma URL (--url-medidores, --url-expandida, --url-links) ou --spreadsheet-id com --gid-*.');
             return Command::FAILURE;
+        }
+
+        // Valida --user-id quando vai importar links
+        if ($urlLinks !== null && $userId === null && !$dryRun) {
+            $io->error('A aba de links Waze requer --user-id=<ID> (FK inserted_by em radar_waze_link não pode ser nulo).');
+            $io->note('Exemplo: --user-id=1');
+            return Command::FAILURE;
+        }
+
+        // Verifica se o user existe no banco
+        if ($userId !== null && !$dryRun) {
+            $userExists = $this->db->fetchOne('SELECT id FROM user WHERE id = ? LIMIT 1', [$userId]);
+            if (!$userExists) {
+                $io->error(sprintf('Usuário com ID %d não encontrado na tabela user.', $userId));
+                return Command::FAILURE;
+            }
         }
 
         $totais = ['inseridos' => 0, 'atualizados' => 0, 'sem_mudanca' => 0, 'links' => 0, 'erros' => 0];
@@ -107,7 +129,7 @@ final class ImportRadarMultiAbaCommand extends Command
             $io->writeln("  URL: {$urlLinks}");
             $rows = $this->downloadCsv($urlLinks, $io);
             if ($rows !== null) {
-                $r = $this->processAbaLinks($rows, $dryRun, $io);
+                $r = $this->processAbaLinks($rows, $dryRun, $userId, $io);
                 $totais['links'] += $r['links'];
                 $totais['erros'] += $r['erros'];
             }
@@ -305,7 +327,7 @@ final class ImportRadarMultiAbaCommand extends Command
     // LINK | Nº DE SÉRIE | NOVO | EXPIRADO | CIDADE | USUÁRIO | VERIFICADO | ALTERADO | AÇÃO
     // ============================================================
 
-    private function processAbaLinks(array $rows, bool $dryRun, SymfonyStyle $io): array
+    private function processAbaLinks(array $rows, bool $dryRun, ?int $userId, SymfonyStyle $io): array
     {
         $stats = ['links' => 0, 'erros' => 0];
         $agora = new \DateTimeImmutable();
@@ -345,7 +367,7 @@ final class ImportRadarMultiAbaCommand extends Command
             }
 
             if (!$dryRun) {
-                $this->saveWazeLink($radarId, $link, $hazardId, $agora);
+                $this->saveWazeLink($radarId, $link, $hazardId, $agora, $userId);
             }
 
             $io->writeln("  [L] radar_id={$radarId} serie={$serie} hazard={$hazardId} acao={$acao}");
@@ -392,10 +414,6 @@ final class ImportRadarMultiAbaCommand extends Command
                 $insert = array_diff_key($data, ['_faixas' => true]);
                 $insert['imported_at'] = $agora;
                 $insert['updated_at']  = $agora;
-                // raw_data é JSON string — converte para array para o Doctrine DBAL
-                if (isset($insert['raw_data']) && is_string($insert['raw_data'])) {
-                    $insert['raw_data'] = $insert['raw_data'];
-                }
                 $this->db->insert('radar_medidor', $insert);
                 $radarId = (int) $this->db->lastInsertId();
                 $this->upsertFaixas($radarId, $faixas);
@@ -600,7 +618,7 @@ final class ImportRadarMultiAbaCommand extends Command
     // Salvar link Waze
     // ============================================================
 
-    private function saveWazeLink(int $radarId, string $link, ?int $hazardId, \DateTimeImmutable $agora): void
+    private function saveWazeLink(int $radarId, string $link, ?int $hazardId, \DateTimeImmutable $agora, ?int $userId): void
     {
         $agoraStr = $agora->format('Y-m-d H:i:s');
 
@@ -616,12 +634,13 @@ final class ImportRadarMultiAbaCommand extends Command
                 'campo_alterado'     => 'waze_link',
                 'valor_anterior'     => $existing['waze_link'],
                 'valor_novo'         => $link,
-                'changed_by'         => null,
+                'changed_by'         => $userId,
                 'changed_at'         => $agoraStr,
             ]);
             $this->db->update('radar_waze_link', [
                 'waze_link'           => $link,
                 'permanent_hazard_id' => $hazardId,
+                'updated_by'          => $userId,
                 'updated_at'          => $agoraStr,
             ], ['radar_medidor_id' => $radarId]);
         } else {
@@ -629,6 +648,7 @@ final class ImportRadarMultiAbaCommand extends Command
                 'radar_medidor_id'    => $radarId,
                 'waze_link'           => $link,
                 'permanent_hazard_id' => $hazardId,
+                'inserted_by'         => $userId,
                 'inserted_at'         => $agoraStr,
             ]);
         }

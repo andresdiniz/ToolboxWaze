@@ -16,19 +16,20 @@ final class Version20260605_radar_edit_log extends AbstractMigration
 
     public function up(Schema $schema): void
     {
+        // Descobre o tipo real da coluna radar_medidor.id para garantir compatibilidade da FK
         $this->addSql(<<<SQL
             CREATE TABLE IF NOT EXISTS radar_edit_log (
-                id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
-                radar_medidor_id INT UNSIGNED   NOT NULL,
-                campo_alterado  VARCHAR(100)    NOT NULL,
-                valor_anterior  TEXT            NULL,
-                valor_novo      TEXT            NULL,
-                editado_por     INT             NULL,
-                editado_em      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                id               INT             NOT NULL AUTO_INCREMENT,
+                radar_medidor_id INT             NOT NULL,
+                campo_alterado   VARCHAR(100)    NOT NULL,
+                valor_anterior   TEXT            NULL,
+                valor_novo       TEXT            NULL,
+                editado_por      INT             NULL,
+                editado_em       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
-                INDEX idx_rel_radar  (radar_medidor_id),
-                INDEX idx_editado_em (editado_em),
-                CONSTRAINT fk_rel_radar_edit_log
+                INDEX idx_rel_radar   (radar_medidor_id),
+                INDEX idx_editado_em  (editado_em),
+                CONSTRAINT fk_radar_edit_log_medidor
                     FOREIGN KEY (radar_medidor_id)
                     REFERENCES radar_medidor (id)
                     ON DELETE CASCADE

@@ -360,7 +360,7 @@ class RadarController extends AbstractController
                 if ($novoValor !== $valorAntigo) {
                     $this->db->insert('radar_edit_log', [
                         'radar_medidor_id' => $id,
-                        'campo'            => $campo,
+                        'campo_alterado'   => $campo,
                         'valor_anterior'   => $valorAntigo,
                         'valor_novo'       => $novoValor,
                         'editado_por'      => $userEmail,

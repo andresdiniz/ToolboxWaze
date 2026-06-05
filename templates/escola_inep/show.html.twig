@@ -139,14 +139,47 @@
       <div class="card mt-3">
         <div class="card-header fw-semibold">📜 Histórico de Links</div>
         <div class="card-body p-0">
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Campo</th><th>Antes</th><th>Depois</th><th>Editor</th><th>Data</th></tr></thead>
+          <table class="table table-sm mb-0 align-middle">
+            <thead>
+              <tr>
+                <th class="ps-3">Campo</th>
+                <th>Antes</th>
+                <th>Depois</th>
+                <th>Editor</th>
+                <th>Data</th>
+              </tr>
+            </thead>
             <tbody>
               {% for log in linkLogs %}
               <tr>
-                <td><small>{{ log.campo }}</small></td>
-                <td><small class="text-muted">{{ log.valorAnterior|default('—')|slice(0,40) }}</small></td>
-                <td><small>{{ log.valorNovo|default('—')|slice(0,40) }}</small></td>
+                <td class="ps-3"><small>{{ log.campo }}</small></td>
+
+                {# Coluna «Antes» — clicável no GMaps se tiver lat/lon #}
+                <td>
+                  {% if log.valorAnterior %}
+                    <small
+                      class="waze-link-cell text-muted"
+                      data-url="{{ log.valorAnterior|e('html_attr') }}"
+                      title="{{ log.valorAnterior }}"
+                    >{{ log.valorAnterior|slice(0,35) }}{% if log.valorAnterior|length > 35 %}…{% endif %}</small>
+                  {% else %}
+                    <small class="text-muted">—</small>
+                  {% endif %}
+                </td>
+
+                {# Coluna «Depois» — clicável no GMaps se tiver lat/lon #}
+                <td>
+                  {% if log.valorNovo %}
+                    <small
+                      class="waze-link-cell"
+                      data-url="{{ log.valorNovo|e('html_attr') }}"
+                      title="{{ log.valorNovo }}"
+                    >{{ log.valorNovo|slice(0,35) }}{% if log.valorNovo|length > 35 %}…{% endif %}</small>
+                  {% else %}
+                    <small class="text-muted">—</small>
+                  {% endif %}
+                </td>
+
                 <td><small>{{ log.alteradoPor.name }}</small></td>
                 <td><small data-utc="{{ log.alteradoEm|date('Y-m-d H:i:s') }}">{{ log.alteradoEm|date('d/m/Y') }}</small></td>
               </tr>
@@ -253,6 +286,39 @@
 <script>
 (function () {
 
+  // ── Converte células do histórico de links em âncoras para o Google Maps ──
+  // Tenta extrair lat/lon do parâmetro ?lat=&lon= presente nos links do Waze Editor.
+  // Se encontrar, transforma o elemento <small> em <a> clicável para o GMaps.
+  function extractLatLon(url) {
+    if (!url) return null;
+    try {
+      var u = new URL(url);
+      var wLat = parseFloat(u.searchParams.get('lat'));
+      var wLon = parseFloat(u.searchParams.get('lon'));
+      if (!isNaN(wLat) && !isNaN(wLon)) return { lat: wLat, lon: wLon };
+    } catch (e) {}
+    var mLat = url.match(/[?&]lat=(-?[\d.]+)/);
+    var mLon = url.match(/[?&]lon=(-?[\d.]+)/);
+    if (mLat && mLon) return { lat: parseFloat(mLat[1]), lon: parseFloat(mLon[1]) };
+    return null;
+  }
+
+  document.querySelectorAll('.waze-link-cell').forEach(function (el) {
+    var url    = el.dataset.url;
+    var coords = extractLatLon(url);
+    if (!coords) return;
+
+    var gmapsUrl = 'https://www.google.com/maps?q=' + coords.lat + ',' + coords.lon;
+    var anchor   = document.createElement('a');
+    anchor.href        = gmapsUrl;
+    anchor.target      = '_blank';
+    anchor.rel         = 'noopener noreferrer';
+    anchor.className   = el.className;
+    anchor.title       = el.title;
+    anchor.innerHTML   = '📍 ' + el.innerHTML;
+    el.replaceWith(anchor);
+  });
+
   // ── Link coordenadas: WME no desktop, geo: no mobile ──
   var coordLink = document.getElementById('coords-link');
   if (coordLink) {
@@ -275,7 +341,7 @@
 
   var lat2 = null, lon2 = null, fonte = '';
 
-  function extractLatLon(url) {
+  function extractLatLon2(url) {
     if (!url) return null;
     try {
       var u = new URL(url);
@@ -289,7 +355,6 @@
     return null;
   }
 
-  // 1. Coordenadas diretas INEP
   var dLat = parseFloat(el.dataset.lat);
   var dLon = parseFloat(el.dataset.lon);
   if (el.dataset.lat !== '' && el.dataset.lon !== '' && !isNaN(dLat) && !isNaN(dLon)) {
@@ -297,27 +362,22 @@
     fonte = 'Coordenadas INEP';
   }
 
-  // 2. Extrai lat/lon do link do Place
   if (lat2 === null) {
-    var coords = extractLatLon(el.dataset.place);
+    var coords = extractLatLon2(el.dataset.place);
     if (coords) { lat2 = coords.lat; lon2 = coords.lon; fonte = 'Extraído do link Place'; }
   }
 
-  // 3. Fallback: link do Permanent Hazard
   if (lat2 === null) {
-    var coords2 = extractLatLon(el.dataset.waze);
+    var coords2 = extractLatLon2(el.dataset.waze);
     if (coords2) { lat2 = coords2.lat; lon2 = coords2.lon; fonte = 'Extraído do link Waze'; }
   }
 
   if (lat2 === null || lon2 === null) return;
 
-  // Exibe o card ANTES de inicializar o Leaflet para que o elemento tenha
-  // dimensões reais no momento da inicialização.
   var cardMapa = document.getElementById('card-mapa');
   cardMapa.style.display = '';
   document.getElementById('mapa-fonte').textContent = fonte;
 
-  // Pequeno delay garante que o browser terminou o reflow após display:block
   setTimeout(function () {
     var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat2, lon2], 17);
 
@@ -326,7 +386,6 @@
       maxZoom: 19
     }).addTo(map);
 
-    // Corrige tiles em branco causados por render antes do reflow completo
     map.invalidateSize();
 
     var icon = L.divIcon({

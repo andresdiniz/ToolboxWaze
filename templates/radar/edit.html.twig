@@ -35,6 +35,15 @@
     {% endfor %}
 {% endfor %}
 
+{# Mapa UF -> nome do estado para auto-fill via JS #}
+<script>
+const ESTADOS_MAP = {
+{% for s in estados %}
+    "{{ s.uf }}": "{{ s.name }}",
+{% endfor %}
+};
+</script>
+
 <div class="row g-4">
 
     {# ── Formulário de edição ── #}
@@ -53,17 +62,26 @@
                         <i class="bi bi-geo-alt me-1"></i>Localização
                     </h6>
                     <div class="row g-3 mb-4">
-                        <div class="col-sm-2">
+                        <div class="col-sm-3">
                             <label class="form-label detail-label">UF</label>
-                            <input type="text" name="sigla_uf" class="form-control form-control-sm text-uppercase"
-                                   value="{{ radar.sigla_uf }}" maxlength="2">
+                            <select name="sigla_uf" id="sigla_uf" class="form-select form-select-sm text-uppercase"
+                                    onchange="syncEstado(this.value)">
+                                <option value="">-- UF --</option>
+                                {% for s in estados %}
+                                    <option value="{{ s.uf }}" {% if radar.sigla_uf == s.uf %}selected{% endif %}>
+                                        {{ s.uf }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label detail-label">Estado (nome)</label>
+                            <input type="text" name="uf" id="estado_nome" class="form-control form-control-sm"
+                                   value="{{ estadoNome }}" readonly
+                                   style="background:var(--color-surface-offset);cursor:default"
+                                   title="Preenchido automaticamente pela UF">
                         </div>
                         <div class="col-sm-4">
-                            <label class="form-label detail-label">Estado (nome)</label>
-                            <input type="text" name="uf" class="form-control form-control-sm"
-                                   value="{{ radar.uf }}">
-                        </div>
-                        <div class="col-sm-6">
                             <label class="form-label detail-label">Município</label>
                             <input type="text" name="municipio" class="form-control form-control-sm"
                                    value="{{ radar.municipio }}">
@@ -270,4 +288,12 @@
     </div>
 
 </div>
+
+<script>
+function syncEstado(uf) {
+    const nome = ESTADOS_MAP[uf] || '';
+    document.getElementById('estado_nome').value = nome;
+}
+</script>
+
 {% endblock %}

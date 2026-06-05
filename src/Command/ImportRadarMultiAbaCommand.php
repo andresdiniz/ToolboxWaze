@@ -378,15 +378,20 @@ final class ImportRadarMultiAbaCommand extends Command
     }
 
     // ============================================================
-    // Upsert: busca por série (radar_faixa) → identity_hash → INSERT
-    // Faixas gravadas em radar_faixa (tabela separada)
+    // Upsert: busca por série → identity_hash → UF+município+logradouro → INSERT
+    //
+    // Ordem de lookup (do mais preciso ao mais genérico):
+    //   1. número de série nas faixas (radar_faixa)
+    //   2. identity_hash (sha256 de UF|logradouro_normalizado|tipo)
+    //   3. UF + município + logradouro exato (UPPER/TRIM) — evita duplicatas
+    //      geradas por variações de texto entre importações
     // ============================================================
 
     private function upsertRadar(array $data, array $faixas, bool $dryRun, \DateTimeImmutable $importedAt): string
     {
         $agora = $importedAt->format('Y-m-d H:i:s');
 
-        // Busca por número de série nas faixas
+        // 1. Busca por número de série nas faixas
         $existing = null;
         $series = array_unique(array_filter(array_column($faixas, 'numero_serie')));
         foreach ($series as $serie) {
@@ -400,12 +405,31 @@ final class ImportRadarMultiAbaCommand extends Command
             if ($row) { $existing = $row; break; }
         }
 
-        // Fallback: busca por identity_hash
+        // 2. Fallback: busca por identity_hash
         if (!$existing) {
             $existing = $this->db->fetchAssociative(
                 'SELECT id, data_ultima_verificacao, row_hash
                  FROM radar_medidor WHERE identity_hash = ? LIMIT 1',
                 [$data['identity_hash']]
+            );
+        }
+
+        // 3. Fallback: busca por UF + município + logradouro normalizado
+        //    Previne duplicatas quando o texto vem com acentuação, espaços
+        //    ou capitalização diferente entre importações distintas.
+        if (!$existing) {
+            $existing = $this->db->fetchAssociative(
+                'SELECT id, data_ultima_verificacao, row_hash
+                 FROM radar_medidor
+                 WHERE sigla_uf = ?
+                   AND UPPER(TRIM(municipio))  = ?
+                   AND UPPER(TRIM(logradouro)) = ?
+                 LIMIT 1',
+                [
+                    strtoupper(trim($data['sigla_uf'] ?? '')),
+                    strtoupper(trim($data['municipio'])),
+                    strtoupper(trim($data['logradouro'])),
+                ]
             );
         }
 
@@ -769,6 +793,31 @@ final class ImportRadarMultiAbaCommand extends Command
         return preg_replace('/[^a-z0-9]/', '', $s) ?? $s;
     }
 
+    /**
+     * Normalização robusta para o identityHash:
+     * - UPPERCASE
+     * - Remove acentos
+     * - Substitui pontuação/caracteres especiais por espaço
+     * - Colapsa múltiplos espaços em um único
+     */
+    private function normalizeForHash(string $s): string
+    {
+        $s = mb_strtoupper(trim($s));
+        $s = strtr($s, [
+            'Á'=>'A','À'=>'A','Ã'=>'A','Â'=>'A',
+            'É'=>'E','Ê'=>'E','È'=>'E',
+            'Í'=>'I','Ï'=>'I','Ì'=>'I',
+            'Ó'=>'O','Õ'=>'O','Ô'=>'O','Ò'=>'O',
+            'Ú'=>'U','Ü'=>'U','Ù'=>'U',
+            'Ç'=>'C','Ñ'=>'N',
+        ]);
+        // Substitui qualquer caractere não-alfanumérico por espaço
+        $s = preg_replace('/[^\w\s]/u', ' ', $s) ?? $s;
+        // Colapsa espaços múltiplos
+        $s = preg_replace('/\s+/', ' ', $s) ?? $s;
+        return trim($s);
+    }
+
     private function str(string $s): string
     {
         return mb_strtoupper(trim($s));
@@ -793,10 +842,15 @@ final class ImportRadarMultiAbaCommand extends Command
         return $this->parseDate($s) ?? substr($s, 0, 10);
     }
 
+    /**
+     * Hash de identidade do radar.
+     * Usa normalizeForHash() para resistir a variações de texto
+     * (acentos, pontuação, espaços extras) entre importações distintas.
+     */
     private function identityHash(string $uf, string $local, string $tipo): string
     {
-        $local = mb_strtoupper(trim(preg_replace('/\s+/', ' ', $local) ?? $local));
-        $tipo  = mb_strtoupper(trim($tipo));
+        $local = $this->normalizeForHash($local);
+        $tipo  = $this->normalizeForHash($tipo);
         $uf    = mb_strtoupper(trim($uf));
         return hash('sha256', "{$uf}|{$local}|{$tipo}");
     }

@@ -220,7 +220,7 @@ final class RadarService
                     SUM($viso < ?) AS vencidos,
                     SUM($viso >= ? AND $viso <= ?) AS vencendo,
                     COUNT(DISTINCT sigla_uf) AS estados
-             FROM radar_medidor WHERE merged_into_id IS NULL",
+             FROM radar_medidor r WHERE r.merged_into_id IS NULL",
             [$hoje, $hoje, $em30]
         ) ?: null;
     }

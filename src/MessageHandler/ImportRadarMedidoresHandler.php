@@ -18,6 +18,10 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  *     em cada linha individualmente — RAM constante ~2-3MB independente
  *     do tamanho do arquivo (SP tem 17MB / ~5k registros).
  *   - INSERT: positional params (?), lotes de 30 linhas (540 params/query).
+ *
+ * identity_hash: SHA-256 de UF|MUNICIPIO|LOCAL|TIPO|SERIE_FAIXA_0
+ *   — inclui município, local, tipo e o nº de série da primeira faixa para
+ *     eliminar colisões em estados grandes como MG e SP.
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
@@ -206,7 +210,7 @@ final class ImportRadarMedidoresHandler
             'faixas_json'                => $faixasJson,
             'historico_json'             => $historicoJson,
             'row_hash'                   => hash('sha256', $rawJson),
-            'identity_hash'              => $this->buildIdentityHash($item, $siglaUf),
+            'identity_hash'              => $this->buildIdentityHash($item, $siglaUf, $faixas),
             'raw_data'                   => $rawJson,
             'imported_at'                => $importedAt,
             'updated_at'                 => $importedAt,
@@ -253,10 +257,13 @@ final class ImportRadarMedidoresHandler
         $this->connection->beginTransaction();
 
         try {
-            if ($toInsert !== []) {
-                $this->insertBatch($toInsert);
-                $this->countInserted += count($toInsert);
+            // INSERT: usa INSERT INTO (sem IGNORE) + trata violação de unique key
+            // para conseguir o ID real via lastInsertId()
+            foreach ($toInsert as &$row) {
+                $row['_db_id'] = $this->insertOne($row);
             }
+            unset($row);
+            $this->countInserted += count($toInsert);
 
             foreach ($toUpdate as $row) {
                 $this->updateRadar($row);
@@ -265,14 +272,12 @@ final class ImportRadarMedidoresHandler
 
             $changed = array_merge($toInsert, $toUpdate);
             foreach ($changed as $row) {
-                $radarId = $row['_db_id'] ?? $this->findIdByRowHash($row['row_hash']);
-
-                if ($radarId === null) {
+                if (($row['_db_id'] ?? null) === null) {
                     continue;
                 }
 
-                $this->syncFaixas($radarId, $row['_faixas']);
-                $this->syncHistorico($radarId, $row['_historico']);
+                $this->syncFaixas((int) $row['_db_id'], $row['_faixas']);
+                $this->syncHistorico((int) $row['_db_id'], $row['_historico']);
             }
 
             $this->connection->commit();
@@ -325,29 +330,25 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // INSERT IGNORE em lote
+    // INSERT individual (retorna ID real)
     // -------------------------------------------------------------------------
 
-    private function insertBatch(array $rows): void
+    private function insertOne(array $row): int
     {
-        $cols      = self::RADAR_INSERT_COLS;
-        $rowHolder = '(' . implode(',', array_fill(0, count($cols), '?')) . ')';
-        $params    = [];
-
-        foreach ($rows as $row) {
-            foreach ($cols as $col) {
-                $params[] = $row[$col] ?? null;
-            }
-        }
+        $cols   = self::RADAR_INSERT_COLS;
+        $holder = '(' . implode(',', array_fill(0, count($cols), '?')) . ')';
+        $params = array_map(fn(string $c) => $row[$c] ?? null, $cols);
 
         $this->connection->executeStatement(
             sprintf(
-                'INSERT IGNORE INTO radar_medidor (%s) VALUES %s',
+                'INSERT INTO radar_medidor (%s) VALUES %s',
                 implode(',', $cols),
-                implode(',', array_fill(0, count($rows), $rowHolder))
+                $holder
             ),
             $params
         );
+
+        return (int) $this->connection->lastInsertId();
     }
 
     // -------------------------------------------------------------------------
@@ -433,22 +434,29 @@ final class ImportRadarMedidoresHandler
     // Helpers
     // -------------------------------------------------------------------------
 
-    private function findIdByRowHash(string $rowHash): ?int
+    /**
+     * identity_hash: SHA-256 de UF|MUNICIPIO|LOCAL|TIPO|SERIE_FAIXA_0
+     *
+     * Inclui município para diferenciar locais homônimos em estados distintos.
+     * Inclui o nº de série da primeira faixa — é o campo mais único da API RBMLQ
+     * e elimina colisões em MG/SP onde há radares no mesmo local com mesmo tipo.
+     *
+     * Se não houver faixas, usa o hash do raw_data como fallback de unicidade.
+     */
+    private function buildIdentityHash(array $item, string $uf, array $faixas): string
     {
-        $result = $this->connection->fetchOne(
-            'SELECT id FROM radar_medidor WHERE row_hash = ?',
-            [$rowHash]
-        );
+        // Nº de série da primeira faixa (mais único disponível na API)
+        $serie0 = '';
+        if (!empty($faixas[0]) && \is_array($faixas[0])) {
+            $serie0 = strtoupper(trim((string) ($faixas[0]['NumeroSerie'] ?? '')));
+        }
 
-        return $result !== false ? (int) $result : null;
-    }
-
-    private function buildIdentityHash(array $item, string $uf): string
-    {
         return hash('sha256', implode('|', [
             strtoupper($uf),
+            strtoupper(trim((string) ($item['Municipio']        ?? ''))),
             strtoupper(trim((string) ($item['LocalVerificacao'] ?? ''))),
-            strtoupper(trim((string) ($item['TipoMedidor']     ?? ''))),
+            strtoupper(trim((string) ($item['TipoMedidor']      ?? ''))),
+            $serie0,
         ]));
     }
 
@@ -462,12 +470,10 @@ final class ImportRadarMedidoresHandler
      */
     private function resolveDataVerificacao(?string $dataVerif, ?string $dataValid): ?string
     {
-        // Caso 1: verificação preenchida
         if ($dataVerif !== null && $dataVerif !== '') {
             return $dataVerif;
         }
 
-        // Caso 2: calcula a partir da validade
         if ($dataValid !== null && $dataValid !== '') {
             $dt = \DateTimeImmutable::createFromFormat('d/m/Y', $dataValid);
 
@@ -476,7 +482,6 @@ final class ImportRadarMedidoresHandler
             }
         }
 
-        // Caso 3: sem dados
         return null;
     }
 

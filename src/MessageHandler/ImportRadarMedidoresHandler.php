@@ -12,14 +12,11 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
  * Importa medidores RBMLQ de um estado com diff incremental.
  *
  * Suporta 3 formatos de resposta da API RBMLQ:
- *   1. Um objeto JSON por linha dentro de um array  → parse linha-por-linha (RAM ~2MB)
- *   2. Pretty-printed (linhas com espaços antes de {) → ltrim() antes de testar
- *   3. Array JSON compacto numa linha só → fallback json_decode do arquivo inteiro
+ *   1. Um objeto JSON por linha dentro de um array  (parse linha-por-linha)
+ *   2. Pretty-printed com espaços antes de {       (ltrim antes de testar)
+ *   3. Array JSON compacto numa linha só            (fallback json_decode)
  *
- * Em caso de total=0 após parse, salva o raw em var/log/rbmlq_{UF}_{date}.json
- * para facilitar debug.
- *
- * identity_hash: SHA-256 de UF|MUNICIPIO|LOCAL|TIPO|SERIE_FAIXA_0
+ * identity_hash: SHA-256 de UF|MUNICIPIO|LOGRADOURO|TIPO|SERIE_FAIXA_0
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
@@ -27,22 +24,42 @@ final class ImportRadarMedidoresHandler
     private const BATCH_SIZE   = 30;
     private const CURL_TIMEOUT = 600;
 
+    /**
+     * Colunas reais da tabela radar_medidor usadas no INSERT.
+     * Mapeadas a partir da entity RadarMedidor.
+     */
     private const RADAR_INSERT_COLS = [
-        'sigla_uf', 'estado', 'municipio', 'local_verificacao',
-        'data_ultima_verificacao', 'data_validade', 'data_verificacao_efetiva',
-        'ultimo_resultado', 'tipo_medidor',
-        'proprietario_nome', 'proprietario_municipio', 'proprietario_estado',
-        'faixas_json', 'historico_json',
-        'row_hash', 'identity_hash', 'raw_data', 'imported_at', 'updated_at',
+        'uf',
+        'sigla_uf',
+        'municipio',
+        'logradouro',
+        'tipo_medidor',
+        'situacao',
+        'nome_empresa',
+        'data_ultima_verificacao',
+        'data_validade',
+        'data_verificacao_efetiva',
+        'row_hash',
+        'identity_hash',
+        'raw_data',
+        'imported_at',
+        'updated_at',
     ];
 
     private const RADAR_UPDATE_COLS = [
-        'sigla_uf', 'estado', 'municipio', 'local_verificacao',
-        'data_ultima_verificacao', 'data_validade', 'data_verificacao_efetiva',
-        'ultimo_resultado', 'tipo_medidor',
-        'proprietario_nome', 'proprietario_municipio', 'proprietario_estado',
-        'faixas_json', 'historico_json',
-        'identity_hash', 'raw_data', 'updated_at',
+        'uf',
+        'sigla_uf',
+        'municipio',
+        'logradouro',
+        'tipo_medidor',
+        'situacao',
+        'nome_empresa',
+        'data_ultima_verificacao',
+        'data_validade',
+        'data_verificacao_efetiva',
+        'identity_hash',
+        'raw_data',
+        'updated_at',
     ];
 
     private int $countInserted = 0;
@@ -62,12 +79,11 @@ final class ImportRadarMedidoresHandler
         $this->countUpdated  = 0;
         $this->countSkipped  = 0;
 
-        $tmpFile = $this->downloadToTempFile($message->getUrl(), $uf);
+        $tmpFile = $this->downloadToTempFile($message->getUrl());
 
         try {
             $parsed = $this->processFile($tmpFile, $uf, $importedAt);
 
-            // Se não parseou nada, salva raw para debug e tenta fallback
             if ($parsed === 0) {
                 $this->saveDebugCopy($tmpFile, $uf);
                 $parsed = $this->processFileFallback($tmpFile, $uf, $importedAt);
@@ -91,10 +107,10 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Download via cURL → arquivo temporário em disco
+    // Download cURL → arquivo temporário
     // -------------------------------------------------------------------------
 
-    private function downloadToTempFile(string $url, string $uf = ''): string
+    private function downloadToTempFile(string $url): string
     {
         $tmpPath = tempnam(sys_get_temp_dir(), 'rbmlq_');
 
@@ -135,9 +151,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Estratégia 1: parse linha-por-linha (RAM constante ~2-3MB)
-    // Aceita formato compacto "{...}" e pretty-print "  {" (com espaços)
-    // Retorna quantidade de itens processados
+    // Estrategia 1: linha-por-linha com ltrim() (pretty-print + compacto)
     // -------------------------------------------------------------------------
 
     private function processFile(string $path, string $uf, string $importedAt): int
@@ -158,14 +172,13 @@ final class ImportRadarMedidoresHandler
                 break;
             }
 
-            // ltrim() aceita pretty-print com espaços/tabs antes de {
             $line = rtrim(ltrim($line), ',');
 
             if ($line === '' || $line === '[' || $line === ']') {
                 continue;
             }
 
-            if ($line[0] !== '{') {
+            if (($line[0] ?? '') !== '{') {
                 continue;
             }
 
@@ -195,8 +208,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Estratégia 2 (fallback): lê o arquivo inteiro e faz json_decode do array
-    // Usado quando o JSON é um array compacto numa linha única ou formato híbrido
+    // Estrategia 2 (fallback): json_decode do arquivo inteiro
     // -------------------------------------------------------------------------
 
     private function processFileFallback(string $path, string $uf, string $importedAt): int
@@ -213,11 +225,10 @@ final class ImportRadarMedidoresHandler
             return 0;
         }
 
-        // Suporta tanto array direto [...] quanto objeto raiz {"data": [...]}
+        // Array direto [...] ou objeto raiz com array dentro
         if (isset($data[0])) {
             $items = $data;
         } else {
-            // Tenta encontrar o primeiro valor que seja um array de objetos
             $items = null;
             foreach ($data as $v) {
                 if (is_array($v) && isset($v[0]) && is_array($v[0])) {
@@ -258,7 +269,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Salva cópia do raw JSON para debug quando total=0
+    // Salva cópia raw para debug
     // -------------------------------------------------------------------------
 
     private function saveDebugCopy(string $tmpPath, string $uf): void
@@ -276,7 +287,14 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Mapeamento item → linha BD
+    // Mapeamento item JSON RBMLQ -> colunas reais da tabela radar_medidor
+    //
+    // Campos RBMLQ conhecidos:
+    //   SiglaUf, Estado, Municipio, LocalVerificacao, TipoMedidor,
+    //   UltimoResultado, DataUltimaVerificacao, DataValidade,
+    //   Proprietario { Nome, Municipio, Estado, Cnpj }
+    //   Faixas[]     { NumeroFaixa, NumeroInmetro, NumeroSerie, Sentido, VelocidadeNominal }
+    //   Historico[]  { NumeroCertificado, NumeroEnsaio, Ano, DataLaudo, DataValidade, TipoServico, Resultado }
     // -------------------------------------------------------------------------
 
     private function mapItem(array $item, string $uf, string $importedAt): array
@@ -285,34 +303,30 @@ final class ImportRadarMedidoresHandler
         $faixas    = \is_array($item['Faixas']       ?? null) ? $item['Faixas']       : [];
         $historico = \is_array($item['Historico']    ?? null) ? $item['Historico']    : [];
 
-        $rawJson       = json_encode($item,      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $faixasJson    = json_encode($faixas,    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $historicoJson = json_encode($historico, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $siglaUf       = strtoupper($this->str($item['SiglaUf'] ?? null) ?? $uf);
+        $rawJson  = json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $siglaUf  = strtoupper($this->str($item['SiglaUf'] ?? null) ?? $uf);
 
-        $dataVerif  = $this->str($item['DataUltimaVerificacao'] ?? null);
-        $dataValid  = $this->str($item['DataValidade']          ?? null);
+        $dataVerif = $this->str($item['DataUltimaVerificacao'] ?? null);
+        $dataValid = $this->str($item['DataValidade']          ?? null);
 
         return [
+            // Colunas da tabela real
+            'uf'                         => $siglaUf,
             'sigla_uf'                   => $siglaUf,
-            'estado'                     => $this->str($item['Estado']           ?? null),
             'municipio'                  => $this->str($item['Municipio']        ?? null),
-            'local_verificacao'          => $this->str($item['LocalVerificacao'] ?? null),
+            'logradouro'                 => $this->str($item['LocalVerificacao'] ?? null),
+            'tipo_medidor'               => $this->str($item['TipoMedidor']      ?? null),
+            'situacao'                   => $this->str($item['UltimoResultado']  ?? null),
+            'nome_empresa'               => $this->str($prop['Nome']             ?? null),
             'data_ultima_verificacao'    => $dataVerif,
             'data_validade'              => $dataValid,
             'data_verificacao_efetiva'   => $this->resolveDataVerificacao($dataVerif, $dataValid),
-            'ultimo_resultado'           => $this->str($item['UltimoResultado']  ?? null),
-            'tipo_medidor'               => $this->str($item['TipoMedidor']      ?? null),
-            'proprietario_nome'          => $this->str($prop['Nome']             ?? null),
-            'proprietario_municipio'     => $this->str($prop['Municipio']        ?? null),
-            'proprietario_estado'        => $this->str($prop['Estado']           ?? null),
-            'faixas_json'                => $faixasJson,
-            'historico_json'             => $historicoJson,
             'row_hash'                   => hash('sha256', $rawJson),
             'identity_hash'              => $this->buildIdentityHash($item, $siglaUf, $faixas),
             'raw_data'                   => $rawJson,
             'imported_at'                => $importedAt,
             'updated_at'                 => $importedAt,
+            // Internos (não vão ao BD direto)
             '_faixas'                    => $faixas,
             '_historico'                 => $historico,
         ];
@@ -427,7 +441,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // INSERT individual (retorna ID real)
+    // INSERT individual
     // -------------------------------------------------------------------------
 
     private function insertOne(array $row): int
@@ -466,7 +480,7 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Sync faixas e histórico
+    // Sync faixas
     // -------------------------------------------------------------------------
 
     private function syncFaixas(int $radarId, array $faixas): void
@@ -496,6 +510,10 @@ final class ImportRadarMedidoresHandler
             );
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Sync histórico
+    // -------------------------------------------------------------------------
 
     private function syncHistorico(int $radarId, array $historico): void
     {

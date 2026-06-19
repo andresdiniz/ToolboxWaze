@@ -11,17 +11,15 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 /**
  * Importa medidores RBMLQ de um estado com diff incremental.
  *
- * Estratégia de memória:
- *   - Download: cURL → arquivo temporário em disco (zero RAM extra).
- *   - Parse: lê o arquivo linha por linha. Como a API do RBMLQ gera um
- *     objeto JSON por linha dentro de um array, basta fazer json_decode
- *     em cada linha individualmente — RAM constante ~2-3MB independente
- *     do tamanho do arquivo (SP tem 17MB / ~5k registros).
- *   - INSERT: positional params (?), lotes de 30 linhas (540 params/query).
+ * Suporta 3 formatos de resposta da API RBMLQ:
+ *   1. Um objeto JSON por linha dentro de um array  → parse linha-por-linha (RAM ~2MB)
+ *   2. Pretty-printed (linhas com espaços antes de {) → ltrim() antes de testar
+ *   3. Array JSON compacto numa linha só → fallback json_decode do arquivo inteiro
+ *
+ * Em caso de total=0 após parse, salva o raw em var/log/rbmlq_{UF}_{date}.json
+ * para facilitar debug.
  *
  * identity_hash: SHA-256 de UF|MUNICIPIO|LOCAL|TIPO|SERIE_FAIXA_0
- *   — inclui município, local, tipo e o nº de série da primeira faixa para
- *     eliminar colisões em estados grandes como MG e SP.
  */
 #[AsMessageHandler]
 final class ImportRadarMedidoresHandler
@@ -64,10 +62,23 @@ final class ImportRadarMedidoresHandler
         $this->countUpdated  = 0;
         $this->countSkipped  = 0;
 
-        $tmpFile = $this->downloadToTempFile($message->getUrl());
+        $tmpFile = $this->downloadToTempFile($message->getUrl(), $uf);
 
         try {
-            $this->processFile($tmpFile, $uf, $importedAt);
+            $parsed = $this->processFile($tmpFile, $uf, $importedAt);
+
+            // Se não parseou nada, salva raw para debug e tenta fallback
+            if ($parsed === 0) {
+                $this->saveDebugCopy($tmpFile, $uf);
+                $parsed = $this->processFileFallback($tmpFile, $uf, $importedAt);
+            }
+
+            if ($parsed === 0) {
+                echo sprintf(
+                    "  [%s] AVISO: nenhum item parseado. Verifique var/log/rbmlq_%s_*.json\n",
+                    $uf, $uf
+                );
+            }
         } finally {
             @unlink($tmpFile);
         }
@@ -83,7 +94,7 @@ final class ImportRadarMedidoresHandler
     // Download via cURL → arquivo temporário em disco
     // -------------------------------------------------------------------------
 
-    private function downloadToTempFile(string $url): string
+    private function downloadToTempFile(string $url, string $uf = ''): string
     {
         $tmpPath = tempnam(sys_get_temp_dir(), 'rbmlq_');
 
@@ -124,10 +135,12 @@ final class ImportRadarMedidoresHandler
     }
 
     // -------------------------------------------------------------------------
-    // Parse linha-por-linha — RAM constante ~2-3MB
+    // Estratégia 1: parse linha-por-linha (RAM constante ~2-3MB)
+    // Aceita formato compacto "{...}" e pretty-print "  {" (com espaços)
+    // Retorna quantidade de itens processados
     // -------------------------------------------------------------------------
 
-    private function processFile(string $path, string $uf, string $importedAt): void
+    private function processFile(string $path, string $uf, string $importedAt): int
     {
         $fh = fopen($path, 'rb');
 
@@ -135,7 +148,8 @@ final class ImportRadarMedidoresHandler
             throw new \RuntimeException("Não foi possível abrir: {$path}");
         }
 
-        $batch = [];
+        $batch  = [];
+        $parsed = 0;
 
         while (!feof($fh)) {
             $line = fgets($fh);
@@ -144,7 +158,8 @@ final class ImportRadarMedidoresHandler
                 break;
             }
 
-            $line = rtrim(trim($line), ',');
+            // ltrim() aceita pretty-print com espaços/tabs antes de {
+            $line = rtrim(ltrim($line), ',');
 
             if ($line === '' || $line === '[' || $line === ']') {
                 continue;
@@ -160,6 +175,7 @@ final class ImportRadarMedidoresHandler
                 continue;
             }
 
+            $parsed++;
             $batch[] = $this->mapItem($item, $uf, $importedAt);
             unset($item);
 
@@ -174,6 +190,89 @@ final class ImportRadarMedidoresHandler
         if ($batch !== []) {
             $this->processBatch($batch);
         }
+
+        return $parsed;
+    }
+
+    // -------------------------------------------------------------------------
+    // Estratégia 2 (fallback): lê o arquivo inteiro e faz json_decode do array
+    // Usado quando o JSON é um array compacto numa linha única ou formato híbrido
+    // -------------------------------------------------------------------------
+
+    private function processFileFallback(string $path, string $uf, string $importedAt): int
+    {
+        $content = file_get_contents($path);
+
+        if ($content === false || trim($content) === '') {
+            return 0;
+        }
+
+        $data = json_decode($content, true);
+
+        if (!is_array($data)) {
+            return 0;
+        }
+
+        // Suporta tanto array direto [...] quanto objeto raiz {"data": [...]}
+        if (isset($data[0])) {
+            $items = $data;
+        } else {
+            // Tenta encontrar o primeiro valor que seja um array de objetos
+            $items = null;
+            foreach ($data as $v) {
+                if (is_array($v) && isset($v[0]) && is_array($v[0])) {
+                    $items = $v;
+                    break;
+                }
+            }
+            if ($items === null) {
+                return 0;
+            }
+        }
+
+        $batch  = [];
+        $parsed = 0;
+
+        foreach ($items as $item) {
+            if (!is_array($item) || $item === []) {
+                continue;
+            }
+
+            $parsed++;
+            $batch[] = $this->mapItem($item, $uf, $importedAt);
+            unset($item);
+
+            if (count($batch) >= self::BATCH_SIZE) {
+                $this->processBatch($batch);
+                $batch = [];
+            }
+        }
+
+        if ($batch !== []) {
+            $this->processBatch($batch);
+        }
+
+        unset($data, $items, $content);
+
+        return $parsed;
+    }
+
+    // -------------------------------------------------------------------------
+    // Salva cópia do raw JSON para debug quando total=0
+    // -------------------------------------------------------------------------
+
+    private function saveDebugCopy(string $tmpPath, string $uf): void
+    {
+        $logDir = dirname(__DIR__, 2) . '/var/log';
+
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+
+        $dest = sprintf('%s/rbmlq_%s_%s.json', $logDir, $uf, date('Ymd_His'));
+        @copy($tmpPath, $dest);
+
+        echo sprintf("  [%s] Raw JSON salvo em: %s\n", $uf, $dest);
     }
 
     // -------------------------------------------------------------------------
@@ -257,8 +356,6 @@ final class ImportRadarMedidoresHandler
         $this->connection->beginTransaction();
 
         try {
-            // INSERT: usa INSERT INTO (sem IGNORE) + trata violação de unique key
-            // para conseguir o ID real via lastInsertId()
             foreach ($toInsert as &$row) {
                 $row['_db_id'] = $this->insertOne($row);
             }
@@ -434,18 +531,8 @@ final class ImportRadarMedidoresHandler
     // Helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * identity_hash: SHA-256 de UF|MUNICIPIO|LOCAL|TIPO|SERIE_FAIXA_0
-     *
-     * Inclui município para diferenciar locais homônimos em estados distintos.
-     * Inclui o nº de série da primeira faixa — é o campo mais único da API RBMLQ
-     * e elimina colisões em MG/SP onde há radares no mesmo local com mesmo tipo.
-     *
-     * Se não houver faixas, usa o hash do raw_data como fallback de unicidade.
-     */
     private function buildIdentityHash(array $item, string $uf, array $faixas): string
     {
-        // Nº de série da primeira faixa (mais único disponível na API)
         $serie0 = '';
         if (!empty($faixas[0]) && \is_array($faixas[0])) {
             $serie0 = strtoupper(trim((string) ($faixas[0]['NumeroSerie'] ?? '')));
@@ -460,14 +547,6 @@ final class ImportRadarMedidoresHandler
         ]));
     }
 
-    /**
-     * Calcula a data de verificação efetiva (dd/mm/aaaa).
-     *
-     * Regra:
-     *   1. Se $dataVerif não é vazia → retorna ela.
-     *   2. Se $dataValid não é vazia → retorna dataValid - 1 ano.
-     *   3. Ambas nulas/vazias → retorna null.
-     */
     private function resolveDataVerificacao(?string $dataVerif, ?string $dataValid): ?string
     {
         if ($dataVerif !== null && $dataVerif !== '') {

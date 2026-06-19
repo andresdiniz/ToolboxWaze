@@ -29,27 +29,6 @@ class BrazilianStateRepository extends ServiceEntityRepository
     }
 
     /**
-     * Retorna mapa UF => URL para estados com link_base_radares preenchido.
-     *
-     * @return array<string, string>  ['MG' => 'https://...', ...]
-     */
-    public function findLinkMapRadares(): array
-    {
-        $rows = $this->createQueryBuilder('s')
-            ->select('s.uf', 's.linkBaseRadares')
-            ->where('s.linkBaseRadares IS NOT NULL')
-            ->orderBy('s.uf', 'ASC')
-            ->getQuery()
-            ->getResult();
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[$row['uf']] = $row['linkBaseRadares'];
-        }
-        return $map;
-    }
-
-    /**
      * Retorna mapa UF => URL para estados com link_referencia_radares preenchido.
      * Usado na Etapa 2 do app:import-radares para importar links Waze.
      *

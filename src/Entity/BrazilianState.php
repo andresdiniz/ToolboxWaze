@@ -8,13 +8,13 @@ use App\Repository\BrazilianStateRepository;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Tabela de estados brasileiros com sigla, nome e link de importação RBMLQ.
+ * Tabela de estados brasileiros com sigla, nome e links de importação.
  *
- * O campo link_base_radares armazena a URL completa de download CSV por estado.
- * O campo link_referencia_radares armazena a URL da aba REFERENCIA.UF da mesma
- * planilha (usada para importar o link Waze cruzando pelo Nº de Série).
+ * O campo link_referencia_radares armazena a URL da aba REFERENCIA.UF
+ * (planilha Google Sheets) usada para importar os links Waze cruzando
+ * pelo Nº de Série na Etapa 2 do app:import-radares.
  *
- * Quando nulos, o ImportRadarCommand usa os GIDs hardcoded como fallback.
+ * Quando NULL, a etapa 2 é pulada para este estado.
  */
 #[ORM\Entity(repositoryClass: BrazilianStateRepository::class)]
 #[ORM\Table(name: 'brazilian_state')]
@@ -39,18 +39,7 @@ class BrazilianState
     private string $region;
 
     /**
-     * URL completa de download CSV dos radares RBMLQ para este estado.
-     *
-     * Exemplos:
-     *   Google Sheets: https://docs.google.com/spreadsheets/d/e/.../pub?output=csv&gid=750233625
-     *
-     * Quando NULL, usa o BASE_URL padrão com o gid do UF_GID_MAP (fallback).
-     */
-    #[ORM\Column(type: 'string', length: 500, nullable: true)]
-    private ?string $linkBaseRadares = null;
-
-    /**
-     * URL completa da aba REFERENCIA.UF da planilha Google Sheets.
+     * URL completa da aba REFERENCIA.UF (Google Sheets CSV).
      *
      * Usada na Etapa 2 do app:import-radares para importar os links Waze.
      * Cruzamento: REFERENCIA.Nº DE SÉRIE = radar_faixa.numero_serie
@@ -76,18 +65,11 @@ class BrazilianState
     public function getName(): string   { return $this->name; }
     public function getRegion(): string { return $this->region; }
 
-    public function getLinkBaseRadares(): ?string        { return $this->linkBaseRadares; }
-    public function getLinkReferenciaRadares(): ?string  { return $this->linkReferenciaRadares; }
+    public function getLinkReferenciaRadares(): ?string { return $this->linkReferenciaRadares; }
 
-    public function setUf(string $uf): static     { $this->uf = strtoupper($uf); return $this; }
-    public function setName(string $n): static    { $this->name = $n; return $this; }
-    public function setRegion(string $r): static  { $this->region = $r; return $this; }
-
-    public function setLinkBaseRadares(?string $url): static
-    {
-        $this->linkBaseRadares = ($url !== '' && $url !== null) ? $url : null;
-        return $this;
-    }
+    public function setUf(string $uf): static    { $this->uf = strtoupper($uf); return $this; }
+    public function setName(string $n): static   { $this->name = $n; return $this; }
+    public function setRegion(string $r): static { $this->region = $r; return $this; }
 
     public function setLinkReferenciaRadares(?string $url): static
     {

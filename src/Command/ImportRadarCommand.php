@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
-use App\Message\ImportRadarGoogleSheetsMessage;
 use App\Message\ImportRadarMedidoresMessage;
-use App\MessageHandler\ImportRadarGoogleSheetsHandler;
 use App\MessageHandler\ImportRadarMedidoresHandler;
 use App\Repository\BrazilianStateRepository;
 use Doctrine\DBAL\Connection;
@@ -18,62 +16,37 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Command UNIFICADO de importação de radares.
+ * Importa radares em duas etapas:
  *
- * ════════════════════════════════════════════════════════════
- * ETAPA 1 — Importa dados técnicos (medidores RBMLQ)
- * ════════════════════════════════════════════════════════════
- *   Fonte: Google Sheets CSV/TSV (padrão) ou RBMLQ/INMETRO API.
- *   URL por estado: prioridade 1 = banco (brazilian_state.link_base_radares)
- *                   prioridade 2 = UF_GID_MAP hardcoded (fallback)
+ * ETAPA 1 — Medidores RBMLQ/INMETRO via JSON
+ *   URL: https://servicos.rbmlq.gov.br/dados-abertos/{UF}/medidores.json
  *
- * ════════════════════════════════════════════════════════════
- * ETAPA 2 — Importa links Waze (aba REFERENCIA.UF)
- * ════════════════════════════════════════════════════════════
- *   Fonte: banco (brazilian_state.link_referencia_radares)
- *   Cruza: REFERENCIA.Nº DE SÉRIE = radar_faixa.numero_serie
+ * ETAPA 2 — Links Waze via planilha Referencia.UF (CSV)
+ *   Cruza: REFERENCIA."Nº DE SÉRIE" = radar_faixa.numero_serie
  *   Grava: radar_medidor.link_waze
  *
- *   Colunas esperadas na aba REFERENCIA.UF:
- *     LINK: | Nº DE SÉRIE: | NOVO: | EXPIRADO: | CIDADE: | USUÁRIO: | VERIFICADO: | ALTERADO: | AÇÃO:
+ *   Colunas esperadas: LINK: | Nº DE SÉRIE: | NOVO: | EXPIRADO: | CIDADE: | USUÁRIO: | VERIFICADO: | ALTERADO: | AÇÃO:
  *
- *   Aliases aceitos para LINK (após normalização):
- *     link, linkwaze
+ * BACKFILL — preenche data_verificacao_efetiva = NULL ao final.
  *
- *   Aliases aceitos para Nº DE SÉRIE (após normalização):
- *     ndeserie, nodeserie, serie, noserie
- *
- *   As primeiras linhas podem conter metadados (ex: totais, percentuais).
- *   O cabeçalho real é detectado automaticamente: primeira linha que
- *   contenha AMBAS as colunas (link E série) simultaneamente.
- *
- * ════════════════════════════════════════════════════════════
- * BACKFILL AUTOMÁTICO
- * ════════════════════════════════════════════════════════════
- *   Preenche data_verificacao_efetiva = NULL ao final.
- *
- * ════════════════════════════════════════════════════════════
- * USO
- * ════════════════════════════════════════════════════════════
- *   php bin/console app:import-radares                    # todos os estados
- *   php bin/console app:import-radares --uf=SP            # só SP
+ * USO:
+ *   php bin/console app:import-radares               # todos os estados
+ *   php bin/console app:import-radares --uf=MG       # só MG
  *   php bin/console app:import-radares --uf=SP --uf=RJ
- *   php bin/console app:import-radares --skip-waze        # pula etapa 2
- *   php bin/console app:import-radares --source=rbmlq     # usa API INMETRO
+ *   php bin/console app:import-radares --skip-waze   # pula etapa 2
  */
 #[AsCommand(
     name: 'app:import-radares',
-    description: 'Importa radares (medidores + links Waze) para todos os estados',
+    description: 'Importa radares: JSON RBMLQ (etapa 1) + links Waze Referencia.UF (etapa 2)',
 )]
 final class ImportRadarCommand extends Command
 {
     private const CURL_TIMEOUT = 120;
 
     public function __construct(
-        private readonly ImportRadarMedidoresHandler    $rbmlqHandler,
-        private readonly ImportRadarGoogleSheetsHandler $sheetsHandler,
-        private readonly BrazilianStateRepository       $stateRepository,
-        private readonly Connection                     $connection,
+        private readonly ImportRadarMedidoresHandler $rbmlqHandler,
+        private readonly BrazilianStateRepository    $stateRepository,
+        private readonly Connection                  $connection,
     ) {
         parent::__construct();
     }
@@ -87,12 +60,6 @@ final class ImportRadarCommand extends Command
                 'Filtra por UF(s). Ex: --uf=SP --uf=RJ', []
             )
             ->addOption(
-                'source', null,
-                InputOption::VALUE_REQUIRED,
-                'Fonte dos medidores: "sheets" (padrão) ou "rbmlq"',
-                'sheets'
-            )
-            ->addOption(
                 'skip-waze', null,
                 InputOption::VALUE_NONE,
                 'Pula a importação de links Waze (etapa 2)'
@@ -101,14 +68,12 @@ final class ImportRadarCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io        = new SymfonyStyle($input, $output);
-        $source    = strtolower((string) $input->getOption('source'));
-        $useSheets = $source !== 'rbmlq';
-        $skipWaze  = (bool) $input->getOption('skip-waze');
+        $io       = new SymfonyStyle($input, $output);
+        $skipWaze = (bool) $input->getOption('skip-waze');
 
-        $io->title('Importação Radares — Unificada');
+        $io->title('Importação Radares — JSON RBMLQ');
 
-        // ── Resolve lista de UFs ────────────────────────────────────────
+        // ── Resolve lista de UFs ──────────────────────────────────────────
         $requestedUfs = array_map('strtoupper', $input->getOption('uf'));
 
         if ($requestedUfs !== []) {
@@ -121,23 +86,18 @@ final class ImportRadarCommand extends Command
             }
         }
 
-        // ── Links do banco ────────────────────────────────────────────
-        $linkMapRadares    = $useSheets ? $this->stateRepository->findLinkMapRadares() : [];
-        $linkMapReferencia = $skipWaze  ? [] : $this->stateRepository->findLinkMapReferencia();
+        $linkMapReferencia = $skipWaze ? [] : $this->stateRepository->findLinkMapReferencia();
 
-        $fonte = $useSheets ? 'Google Sheets CSV/TSV' : 'RBMLQ/INMETRO API';
         $io->note([
-            'Fonte           : ' . $fonte,
-            'Estados         : ' . implode(', ', $ufs),
-            'Links radares   : ' . count($linkMapRadares) . ' estado(s) com URL personalizada',
-            'Links referencia: ' . count($linkMapReferencia) . ' estado(s) com URL de referência',
-            'Etapa Waze      : ' . ($skipWaze ? 'PULADA (--skip-waze)' : 'ATIVA'),
+            'Fonte      : RBMLQ/INMETRO JSON',
+            'Estados    : ' . implode(', ', $ufs),
+            'Etapa Waze : ' . ($skipWaze ? 'PULADA (--skip-waze)' : 'ATIVA (' . count($linkMapReferencia) . ' estado(s) com URL)'),
         ]);
 
         // ════════════════════════════════════════════════════════════
-        // ETAPA 1 — Importa medidores
+        // ETAPA 1 — Importa medidores via JSON RBMLQ
         // ════════════════════════════════════════════════════════════
-        $io->section('Etapa 1 — Importando medidores RBMLQ');
+        $io->section('Etapa 1 — Importando medidores RBMLQ (JSON)');
 
         $total  = count($ufs);
         $ok     = 0;
@@ -147,12 +107,7 @@ final class ImportRadarCommand extends Command
 
         foreach ($ufs as $uf) {
             try {
-                if ($useSheets) {
-                    $customUrl = $linkMapRadares[$uf] ?? null;
-                    ($this->sheetsHandler)(new ImportRadarGoogleSheetsMessage($uf, $customUrl));
-                } else {
-                    ($this->rbmlqHandler)(new ImportRadarMedidoresMessage($uf));
-                }
+                ($this->rbmlqHandler)(new ImportRadarMedidoresMessage($uf));
                 $ok++;
             } catch (\Throwable $e) {
                 $errors[$uf] = $e->getMessage();
@@ -170,13 +125,13 @@ final class ImportRadarCommand extends Command
             }
         }
 
-        $io->success(sprintf('%d/%d estado(s) importados via %s.', $ok, $total, $fonte));
+        $io->success(sprintf('%d/%d estado(s) importados via JSON RBMLQ.', $ok, $total));
 
         // ════════════════════════════════════════════════════════════
-        // ETAPA 2 — Importa links Waze da aba REFERENCIA.UF
+        // ETAPA 2 — Links Waze via Referencia.UF (CSV)
         // ════════════════════════════════════════════════════════════
         if (!$skipWaze) {
-            $io->section('Etapa 2 — Importando links Waze (aba REFERENCIA.UF)');
+            $io->section('Etapa 2 — Importando links Waze (Referencia.UF)');
 
             $wazeOk     = 0;
             $wazeErrors = [];
@@ -187,9 +142,8 @@ final class ImportRadarCommand extends Command
 
                 if ($referenciaUrl === null) {
                     $io->text(sprintf(
-                        '  <comment>[%s]</comment> link_referencia_radares não configurado — pulando.' .
-                        ' (Configure em: EasyAdmin → Estado → "%s")',
-                        $uf, $uf
+                        '  <comment>[%s]</comment> link_referencia_radares não configurado — pulando.',
+                        $uf
                     ));
                     $wazeSkip++;
                     continue;
@@ -198,7 +152,7 @@ final class ImportRadarCommand extends Command
                 try {
                     [$updated, $matched, $notMatched] = $this->importLinksWaze($uf, $referenciaUrl);
                     $io->text(sprintf(
-                        '  <info>[%s]</info> %d link(s) salvos | %d match(es) | %d série(s) sem match no banco.',
+                        '  <info>[%s]</info> %d link(s) salvos | %d match(es) | %d série(s) sem match.',
                         $uf, $updated, $matched, $notMatched
                     ));
                     $wazeOk++;
@@ -261,8 +215,7 @@ final class ImportRadarCommand extends Command
     }
 
     // ════════════════════════════════════════════════════════════
-    // Importa links Waze da aba REFERENCIA.UF
-    // Retorna [updated, matched, notMatched]
+    // Etapa 2 — helpers internos
     // ════════════════════════════════════════════════════════════
 
     private function importLinksWaze(string $uf, string $url): array
@@ -290,22 +243,7 @@ final class ImportRadarCommand extends Command
             rewind($fh);
         }
 
-        // ── Detecta o cabeçalho real ──────────────────────────────────
-        //
-        // Formato real da planilha REFERENCIA.UF:
-        //   Linha 1: ALAGOAS,,,,,,,,
-        //   Linha 2: ATIVO:,73,CADASTRADO:,69,,,,,
-        //   Linha 3: PORCENTAGEM:,"111,6883117",DELETAR:,43,,,,,
-        //   Linha 4: REPROVADO:,0,LINK INVÁLIDO:,0,,,,,
-        //   Linha 5: LINK:,Nº DE SÉRIE:,NOVO:,...  ← cabeçalho real
-        //
-        // REGRA: só aceita linha com AMBAS as colunas (AND).
-        // Aliases após normalizeKey():
-        //   LINK      → link, linkwaze
-        //   Nº DE SÉRIE → ndeserie, nodeserie, serie, noserie
-        //
-        // Nota: 'Nº DE SÉRIE:' via iconv TRANSLIT vira 'nodeserie'
-        //       'N° DE SÉRIE:' (grau) vira 'ndeserie'
+        // Detecta o cabeçalho real (primeira linha com AMBAS as colunas LINK e Nº DE SÉRIE)
         $header         = null;
         $colLink        = false;
         $colSerie       = false;
@@ -328,17 +266,16 @@ final class ImportRadarCommand extends Command
             $normalized     = array_map(fn($h) => $this->normalizeKey((string) $h), $rawRow);
             $lastNormalized = $normalized;
 
-            // Busca coluna LINK
             $lk = array_search('link',     $normalized, true);
-            if ($lk === false) { $lk = array_search('linkwaze', $normalized, true); }
+            if ($lk === false) {
+                $lk = array_search('linkwaze', $normalized, true);
+            }
 
-            // Busca coluna Nº DE SÉRIE (todos os aliases possíveis)
             $ls = array_search('ndeserie',  $normalized, true);
             if ($ls === false) { $ls = array_search('nodeserie', $normalized, true); }
             if ($ls === false) { $ls = array_search('serie',     $normalized, true); }
             if ($ls === false) { $ls = array_search('noserie',   $normalized, true); }
 
-            // Só aceita quando AMBAS estão presentes
             if ($lk !== false && $ls !== false) {
                 $header   = $normalized;
                 $colLink  = $lk;
@@ -350,15 +287,13 @@ final class ImportRadarCommand extends Command
         if ($header === null || $colLink === false || $colSerie === false) {
             fclose($fh);
             throw new \RuntimeException(
-                "Colunas LINK e Nº DE SÉRIE não encontradas juntas na aba REFERENCIA.{$uf} " .
+                "Colunas LINK e Nº DE SÉRIE não encontradas juntas na Referencia.{$uf} " .
                 "(verificadas {$attempts} linha(s)). " .
                 "Última linha normalizada: [" . implode(', ', $lastNormalized) . "]"
             );
         }
 
-        // ── Lê todos os pares série → link ───────────────────────────────
-        // Cada série pode aparecer em múltiplas linhas (faixas distintas
-        // do mesmo medidor). Guardamos só o primeiro link não-vazio.
+        // Coleta pares série → link (guarda só o primeiro link por série)
         $linkMap = [];
 
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
@@ -373,7 +308,6 @@ final class ImportRadarCommand extends Command
                 continue;
             }
 
-            // Guarda apenas o primeiro link por série
             $linkMap[$serie] ??= $link;
         }
 
@@ -383,7 +317,7 @@ final class ImportRadarCommand extends Command
             return [0, 0, 0];
         }
 
-        // ── Faz o match com radar_faixa → radar_medidor e grava link_waze ──
+        // Match com radar_faixa → radar_medidor e grava link_waze
         $updated    = 0;
         $matched    = 0;
         $notMatched = 0;

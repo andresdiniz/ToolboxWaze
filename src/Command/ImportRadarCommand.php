@@ -130,12 +130,13 @@ final class ImportRadarCommand extends Command
         // ════════════════════════════════════════════════════════════
         // ETAPA 2 — Links Waze via Referencia.UF (CSV)
         // ════════════════════════════════════════════════════════════
+        $wazeErrors = [];
+
         if (!$skipWaze) {
             $io->section('Etapa 2 — Importando links Waze (Referencia.UF)');
 
-            $wazeOk     = 0;
-            $wazeErrors = [];
-            $wazeSkip   = 0;
+            $wazeOk   = 0;
+            $wazeSkip = 0;
 
             foreach ($ufs as $uf) {
                 $referenciaUrl = $linkMapReferencia[$uf] ?? null;
@@ -211,7 +212,32 @@ final class ImportRadarCommand extends Command
             $io->text('<info>✔ Nenhum registro pendente de backfill.</info>');
         }
 
-        return ($errors === []) ? Command::SUCCESS : Command::FAILURE;
+        // ════════════════════════════════════════════════════════════
+        // RESULTADO FINAL — log detalhado antes de qualquer FAILURE
+        // ════════════════════════════════════════════════════════════
+        $allErrors = array_merge(
+            array_map(fn($msg) => '[Etapa 1 - JSON RBMLQ] ' . $msg, $errors),
+            array_map(fn($msg) => '[Etapa 2 - Links Waze] ' . $msg, $wazeErrors),
+        );
+
+        if ($allErrors !== []) {
+            $io->section('Resumo dos erros (exit code 1)');
+            $io->error([
+                sprintf(
+                    'O command finalizou com %d erro(s). Detalhes abaixo:',
+                    count($allErrors)
+                ),
+                ...array_map(
+                    fn(string $uf, string $msg) => sprintf('  • %s → %s', $uf, $msg),
+                    array_keys($allErrors),
+                    array_values($allErrors),
+                ),
+            ]);
+
+            return Command::FAILURE;
+        }
+
+        return Command::SUCCESS;
     }
 
     // ════════════════════════════════════════════════════════════

@@ -6,7 +6,12 @@ doctrine:
         # either here or in the DATABASE_URL env var (see .env file)
         #server_version: '16'
 
-        profiling_collect_backtrace: '%kernel.debug%'
+        # Desativado fixo: com true o Doctrine guarda backtrace de CADA query
+        # em memória (BacktraceDebugDataHolder). Em imports grandes (>10k rows)
+        # isso esgota a RAM mesmo com memory_limit=2G.
+        # Para depurar queries SQL use o Symfony Profiler manualmente.
+        profiling_collect_backtrace: false
+
         use_savepoints: true
     orm:
         auto_generate_proxy_classes: true

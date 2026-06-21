@@ -1,173 +1,198 @@
 {% extends 'base.html.twig' %}
+{% block title %}Monitoramento Frontend{% endblock %}
 
-{% block title %}Monitoramento — ToolboxWaze{% endblock %}
+{% block stylesheets %}
+<style>
+.metric-card { background: var(--bs-body-bg, #fff); border: 1px solid var(--bs-border-color, #dee2e6); border-radius: .6rem; padding: 1.2rem 1.4rem; }
+.metric-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+.metric-label { font-size: .75rem; color: var(--bs-secondary-color, #6c757d); text-transform: uppercase; letter-spacing: .05em; margin-top: .25rem; }
+.vital-good   { color: #198754; }
+.vital-warn   { color: #fd7e14; }
+.vital-bad    { color: #dc3545; }
+.event-badge  { font-size: .68rem; padding: .18em .5em; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+.badge-error  { background: rgba(220,53,69,.15);  color: #dc3545; }
+.badge-warn   { background: rgba(253,126,20,.15); color: #fd7e14; }
+.badge-info   { background: rgba(13,110,253,.15); color: #0d6efd; }
+.badge-perf   { background: rgba(25,135,84,.15);  color: #198754; }
+.tw-log-row td { font-size: .8rem; vertical-align: middle; }
+.tw-log-row:hover td { background: var(--bs-tertiary-bg, #f5f5f5); }
+.vitals-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .75rem; }
+.chart-wrap   { position: relative; height: 260px; }
+</style>
+{% endblock %}
 
 {% block body %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h4 fw-bold mb-0">
-        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" class="me-2" style="vertical-align:-.2em">
-            <path d="M0 0h1v15h15v1H0zm14.817 3.113a.5.5 0 0 1 .07.704l-4.5 5.5a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61 4.15-5.073a.5.5 0 0 1 .704-.07"/>
-        </svg>
-        Monitoramento
-    </h1>
-    <div class="d-flex gap-2">
-        {% for d in [1, 7, 30] %}
-            <a href="?days={{ d }}{% if filterType %}&type={{ filterType }}{% endif %}"
-               class="btn btn-sm {{ period == d ? 'btn-primary' : 'btn-outline-secondary' }}">{{ d }}d</a>
-        {% endfor %}
-    </div>
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="h3 mb-0">📡 Monitoramento Frontend</h1>
+    <small class="text-muted">Erros, performance e comportamento do usuário</small>
+  </div>
+  <form method="get" class="d-flex gap-2 align-items-center">
+    <select name="days" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      {% for d in [1, 3, 7, 14, 30] %}
+        <option value="{{ d }}" {% if d == period %}selected{% endif %}>Últimos {{ d }} dias</option>
+      {% endfor %}
+    </select>
+    <select name="type" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      <option value="">Todos os tipos</option>
+      {% for t, c in byType %}
+        <option value="{{ t }}" {% if t == filterType %}selected{% endif %}>{{ t }} ({{ c }})</option>
+      {% endfor %}
+    </select>
+  </form>
 </div>
 
-{# ── Web Vitals ────────────────────────────────────────────────── #}
+{# ── Web Vitals ────────────────────────────────────────────────────────── #}
+<h5 class="mb-3">⚡ Web Vitals (média — últimos {{ period }}d)</h5>
+<div class="vitals-grid mb-4">
+  {% set vitalsConfig = {
+    'lcp':  { label: 'LCP',  unit: 'ms', good: 2500, poor: 4000 },
+    'fcp':  { label: 'FCP',  unit: 'ms', good: 1800, poor: 3000 },
+    'ttfb': { label: 'TTFB', unit: 'ms', good: 800,  poor: 1800 },
+    'inp':  { label: 'INP',  unit: 'ms', good: 200,  poor: 500  },
+    'cls':  { label: 'CLS',  unit: '',   good: 0.1,  poor: 0.25 },
+  } %}
+  {% for key, cfg in vitalsConfig %}
+    {% set val = vitalsAvg[key] ?? null %}
+    {% if val is not null %}
+      {% if val <= cfg.good %} {% set ratingClass = 'vital-good' %}
+      {% elseif val <= cfg.poor %} {% set ratingClass = 'vital-warn' %}
+      {% else %} {% set ratingClass = 'vital-bad' %}
+      {% endif %}
+    {% else %}
+      {% set ratingClass = 'text-muted' %}
+    {% endif %}
+    <div class="metric-card">
+      <div class="metric-value {{ ratingClass }}">
+        {% if val is not null %}{{ val }}{% else %}—{% endif %}{{ cfg.unit }}
+      </div>
+      <div class="metric-label">{{ cfg.label }}</div>
+    </div>
+  {% endfor %}
+  <div class="metric-card">
+    <div class="metric-value">{{ events|length }}</div>
+    <div class="metric-label">Eventos total</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value text-danger">{{ errors|length }}</div>
+    <div class="metric-label">Erros JS / AJAX</div>
+  </div>
+</div>
+
+{# ── Distribuição por tipo ─────────────────────────────────────────────── #}
+{% if byType %}
 <div class="row g-3 mb-4">
-    {% set vitals_def = [
-        { key: 'lcp',   label: 'LCP',   unit: 'ms', good: 2500, bad: 4000,  fmt: 'ms' },
-        { key: 'fid',   label: 'FID',   unit: 'ms', good: 100,  bad: 300,   fmt: 'ms' },
-        { key: 'cls',   label: 'CLS',   unit: '',   good: 0.1,  bad: 0.25,  fmt: 'num' },
-        { key: 'ttfb',  label: 'TTFB',  unit: 'ms', good: 800,  bad: 1800,  fmt: 'ms' },
-        { key: 'inp',   label: 'INP',   unit: 'ms', good: 200,  bad: 500,   fmt: 'ms' },
-    ] %}
-    {% for v in vitals_def %}
-        {% set val = vitalsAvg[v.key] %}
-        {% if val is not null %}
-            {% if val <= v.good %}{% set badge = 'success' %}{% elseif val <= v.bad %}{% set badge = 'warning' %}{% else %}{% set badge = 'danger' %}{% endif %}
-        {% else %}{% set badge = 'secondary' %}{% endif %}
-        <div class="col-6 col-md-4 col-lg-2">
-            <div class="card border-0 shadow-sm h-100 text-center p-3">
-                <div class="text-muted small mb-1">{{ v.label }}</div>
-                <div class="fs-4 fw-bold text-{{ badge }}">
-                    {% if val is not null %}
-                        {% if v.fmt == 'ms' %}{{ val|number_format(0, ',', '.') }}ms{% else %}{{ val }}{% endif %}
-                    {% else %}—{% endif %}
-                </div>
-                <div class="badge bg-{{ badge }}-subtle text-{{ badge }} mt-1" style="font-size:.65rem">
-                    {% if val is null %}Sem dados
-                    {% elseif val <= v.good %}Bom
-                    {% elseif val <= v.bad %}Melhora
-                    {% else %}Crítico{% endif %}
-                </div>
-            </div>
-        </div>
-    {% endfor %}
-</div>
-
-<div class="row g-3">
-    {# ── Por tipo ────────────────────────────────────────────── #}
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent border-0 fw-semibold">Eventos por tipo</div>
-            <div class="card-body p-0">
-                <table class="table table-sm table-hover mb-0">
-                    <tbody>
-                    {% for t, cnt in byType %}
-                        <tr>
-                            <td>
-                                <a href="?days={{ period }}&type={{ t }}" class="text-decoration-none">
-                                    <span class="badge rounded-pill
-                                        {% if 'error' in t or t == 'unhandled_rejection' %}bg-danger
-                                        {% elseif 'slow' in t %}bg-warning text-dark
-                                        {% elseif t == 'web_vitals' %}bg-primary
-                                        {% else %}bg-secondary{% endif %}
-                                        me-1" style="font-size:.65rem">{{ t }}</span>
-                                </a>
-                            </td>
-                            <td class="text-end fw-bold">{{ cnt }}</td>
-                        </tr>
-                    {% else %}
-                        <tr><td colspan="2" class="text-muted text-center py-3">Sem dados</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+  <div class="col-lg-5">
+    <div class="metric-card h-100">
+      <h6 class="mb-3">Eventos por tipo</h6>
+      <div class="chart-wrap"><canvas id="chartByType"></canvas></div>
     </div>
-
-    {# ── Top páginas ─────────────────────────────────────────── #}
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent border-0 fw-semibold">Top páginas</div>
-            <div class="card-body p-0">
-                <table class="table table-sm table-hover mb-0">
-                    <tbody>
-                    {% for pg, cnt in topPages %}
-                        <tr>
-                            <td class="text-truncate" style="max-width:220px" title="{{ pg }}">{{ pg }}</td>
-                            <td class="text-end fw-bold">{{ cnt }}</td>
-                        </tr>
-                    {% else %}
-                        <tr><td colspan="2" class="text-muted text-center py-3">Sem dados</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    {# ── Erros recentes ──────────────────────────────────────── #}
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent border-0 fw-semibold text-danger">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="me-1"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg>
-                Erros recentes ({{ errors|length }})
-            </div>
-            <div class="card-body p-0" style="max-height:320px;overflow-y:auto">
-                {% for ev in errors|slice(0,20) %}
-                    {% set d = ev.data|json_decode ?? {} %}
-                    <div class="px-3 py-2 border-bottom" style="font-size:.78rem">
-                        <div class="fw-semibold text-danger">{{ ev.type }}</div>
-                        <div class="text-truncate text-muted" title="{{ d.message ?? d.reason ?? d.url ?? '' }}">{{ d.message ?? d.reason ?? d.url ?? '—' }}</div>
-                        <div class="text-muted">{{ ev.page }} <span class="ms-2">{{ ev.created_at }}</span></div>
-                    </div>
-                {% else %}
-                    <div class="text-muted text-center py-4">Nenhum erro no período 🎉</div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-</div>
-
-{# ── Tabela de eventos recentes ──────────────────────────────── #}
-<div class="card border-0 shadow-sm mt-4">
-    <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
-        <span class="fw-semibold">Eventos recentes {% if filterType %}<span class="badge bg-primary ms-1">{{ filterType }}</span>{% endif %}</span>
-        {% if filterType %}<a href="?days={{ period }}" class="btn btn-sm btn-outline-secondary">Limpar filtro</a>{% endif %}
-    </div>
-    <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Tipo</th><th>Página</th><th>Sessão</th><th>Usuário</th><th>IP</th><th>Quando</th><th>Detalhes</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for ev in events|slice(0,100) %}
-                <tr>
-                    <td>
-                        <span class="badge rounded-pill
-                            {% if 'error' in ev.type or ev.type == 'unhandled_rejection' %}bg-danger
-                            {% elseif 'slow' in ev.type %}bg-warning text-dark
-                            {% elseif ev.type == 'web_vitals' %}bg-primary
-                            {% elseif ev.type == 'click' %}bg-info text-dark
-                            {% else %}bg-secondary{% endif %}" style="font-size:.65rem">{{ ev.type }}</span>
-                    </td>
-                    <td class="text-truncate" style="max-width:160px" title="{{ ev.page }}">{{ ev.page }}</td>
-                    <td class="text-muted" style="font-size:.72rem">{{ ev.session_id|slice(0,8) }}…</td>
-                    <td>{{ ev.user_id ?? '—' }}</td>
-                    <td style="font-size:.72rem">{{ ev.ip }}</td>
-                    <td style="font-size:.75rem" data-utc="{{ ev.created_at }}">{{ ev.created_at }}</td>
-                    <td>
-                        <button class="btn btn-sm btn-link p-0" style="font-size:.72rem"
-                                onclick="this.closest('tr').querySelector('.detail-row').classList.toggle('d-none')">ver</button>
-                    </td>
-                </tr>
-                <tr class="detail-row d-none">
-                    <td colspan="7"><pre class="mb-0" style="font-size:.72rem;white-space:pre-wrap">{{ ev.data }}</pre></td>
-                </tr>
-            {% else %}
-                <tr><td colspan="7" class="text-muted text-center py-4">Nenhum evento no período.</td></tr>
+  </div>
+  <div class="col-lg-7">
+    <div class="metric-card h-100">
+      <h6 class="mb-3">Top páginas com eventos</h6>
+      {% if topPages %}
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Página</th><th class="text-end">Eventos</th></tr></thead>
+          <tbody>
+            {% for pg, cnt in topPages %}
+            <tr>
+              <td class="text-truncate" style="max-width:320px" title="{{ pg }}">{{ pg ?: '(raiz)' }}</td>
+              <td class="text-end fw-semibold">{{ cnt }}</td>
+            </tr>
             {% endfor %}
-            </tbody>
+          </tbody>
         </table>
+      {% else %}
+        <p class="text-muted small">Sem dados.</p>
+      {% endif %}
     </div>
+  </div>
 </div>
+{% endif %}
+
+{# ── Últimos erros ─────────────────────────────────────────────────────── #}
+{% if errors %}
+<h5 class="mb-3">🔴 Últimos erros (JS + AJAX)</h5>
+<div class="metric-card mb-4">
+  <table class="table table-sm table-hover mb-0">
+    <thead><tr><th>Tipo</th><th>Página</th><th>Mensagem</th><th>Usuário</th><th>Data</th></tr></thead>
+    <tbody>
+      {% for e in errors|slice(0, 50) %}
+        {% set d = e.data|json_decode %}
+        <tr class="tw-log-row">
+          <td><span class="event-badge badge-error">{{ e.type }}</span></td>
+          <td class="text-truncate" style="max-width:200px" title="{{ e.page }}">{{ e.page }}</td>
+          <td class="text-truncate" style="max-width:300px" title="{{ d.message ?? '' }}">{{ d.message ?? d.error ?? '—' }}</td>
+          <td>{{ e.user_id ? '#'~e.user_id : 'guest' }}</td>
+          <td><span data-utc="{{ e.created_at }}">{{ e.created_at }}</span></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# ── Log completo ──────────────────────────────────────────────────────── #}
+<h5 class="mb-3">📋 Log de eventos</h5>
+<div class="metric-card">
+  <table class="table table-sm table-hover mb-0" id="eventsTable">
+    <thead><tr><th>Tipo</th><th>Página</th><th>Sessão</th><th>Usuário</th><th>Data</th></tr></thead>
+    <tbody>
+      {% for e in events %}
+        {% set badgeClass = 'badge-info' %}
+        {% if e.type in ['js_error','unhandled_rejection','ajax_error','web_vital_critical'] %}
+          {% set badgeClass = 'badge-error' %}
+        {% elseif e.type in ['ajax_slow','rage_click','form_validation_error'] %}
+          {% set badgeClass = 'badge-warn' %}
+        {% elseif e.type in ['page_performance','web_vitals'] %}
+          {% set badgeClass = 'badge-perf' %}
+        {% endif %}
+        <tr class="tw-log-row" data-bs-toggle="collapse" data-bs-target="#detail-{{ loop.index }}" style="cursor:pointer">
+          <td><span class="event-badge {{ badgeClass }}">{{ e.type }}</span></td>
+          <td class="text-truncate" style="max-width:220px" title="{{ e.page }}">{{ e.page }}</td>
+          <td class="font-monospace" style="font-size:.7rem">{{ e.session_id|slice(0,10) }}…</td>
+          <td>{{ e.user_id ? '#'~e.user_id : '—' }}</td>
+          <td><span data-utc="{{ e.created_at }}">{{ e.created_at }}</span></td>
+        </tr>
+        <tr class="collapse" id="detail-{{ loop.index }}">
+          <td colspan="5">
+            <pre class="mb-0 p-2" style="font-size:.72rem;white-space:pre-wrap;background:var(--bs-tertiary-bg,#f5f5f5);border-radius:.4rem">{{ e.data|json_encode(constant('JSON_PRETTY_PRINT')|bitor(constant('JSON_UNESCAPED_UNICODE')))|replace({'\\u':''}) }}</pre>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">Nenhum evento no período.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  var byType = {{ byType|json_encode|raw }};
+  var labels = Object.keys(byType);
+  var values = Object.values(byType);
+  if (!labels.length) return;
+
+  var colorMap = {
+    js_error: '#dc3545', unhandled_rejection: '#c0392b', ajax_error: '#e74c3c',
+    ajax_slow: '#fd7e14', rage_click: '#f39c12', form_validation_error: '#e67e22',
+    page_performance: '#198754', web_vitals: '#20c997', web_vital_critical: '#ff6b6b',
+    resource_error: '#6f42c1', outbound_click: '#0d6efd', session_end: '#6c757d',
+  };
+  var colors = labels.map(function(l){ return colorMap[l] || '#adb5bd'; });
+
+  new Chart(document.getElementById('chartByType'), {
+    type: 'doughnut',
+    data: { labels: labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 1 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } } }
+    }
+  });
+}());
+</script>
 {% endblock %}

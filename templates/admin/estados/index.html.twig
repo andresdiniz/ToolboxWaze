@@ -29,7 +29,6 @@
                         <th style="width:60px">UF</th>
                         <th>Estado</th>
                         <th>Região</th>
-                        <th>Link Base (aba UF)</th>
                         <th>Link Referência (aba REFERENCIA.UF)</th>
                         <th class="text-center" style="width:180px">Ações</th>
                     </tr>
@@ -43,22 +42,7 @@
                         <td>{{ state.name }}</td>
                         <td><span class="badge bg-secondary">{{ state.region }}</span></td>
 
-                        {# Link Base #}
-                        <td class="small">
-                            {% if state.linkBaseRadares %}
-                                <a href="{{ state.linkBaseRadares }}" target="_blank" rel="noopener"
-                                   class="text-success text-break" title="{{ state.linkBaseRadares }}">
-                                    <i class="fas fa-check-circle me-1"></i>
-                                    {{ state.linkBaseRadares|length > 50 ? state.linkBaseRadares|slice(0,50) ~ '…' : state.linkBaseRadares }}
-                                </a>
-                            {% else %}
-                                <span class="text-muted fst-italic">
-                                    <i class="fas fa-minus-circle me-1"></i> não configurado
-                                </span>
-                            {% endif %}
-                        </td>
-
-                        {# Link Referência #}
+                        {# Link Referência (planilha REFERENCIA.UF — único link mantido) #}
                         <td class="small">
                             {% if state.linkReferenciaRadares %}
                                 <a href="{{ state.linkReferenciaRadares }}" target="_blank" rel="noopener"

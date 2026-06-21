@@ -119,7 +119,8 @@
     <thead><tr><th>Tipo</th><th>Página</th><th>Mensagem</th><th>Usuário</th><th>Data</th></tr></thead>
     <tbody>
       {% for e in errors|slice(0, 50) %}
-        {% set d = e.data|json_decode %}
+        {# dataDecoded é fornecido pelo controller como array já decodificado #}
+        {% set d = e.dataDecoded ?? {} %}
         <tr class="tw-log-row">
           <td><span class="event-badge badge-error">{{ e.type }}</span></td>
           <td class="text-truncate" style="max-width:200px" title="{{ e.page }}">{{ e.page }}</td>

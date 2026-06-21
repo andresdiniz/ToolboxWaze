@@ -31,7 +31,7 @@
                             {% for r in radares %}
                                 <option value="{{ r.id }}"
                                     {{ r.id == radarId ? 'selected' : '' }}>
-                                    {{ r.municipio }}/{{ r.sigla_uf }} — {{ r.local_verificacao }}
+                                    {{ r.municipio }}/{{ r.sigla_uf }} — {{ r.logradouro }}
                                 </option>
                             {% endfor %}
                         </select>

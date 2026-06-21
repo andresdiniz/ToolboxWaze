@@ -6,18 +6,56 @@
     <meta name="theme-color" content="#01696f">
     <title>{% block title %}ToolboxWaze{% endblock %}</title>
 
+    {# Skip link — acessibilidade: primeiro elemento focalizável #}
+    <a href="#main-content" class="tw-skip-link">Ir ao conteúdo principal</a>
+
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
           crossorigin="anonymous">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=optional" rel="stylesheet">
 
     {{ importmap('app') }}
     {% block stylesheets %}{% endblock %}
 
     <style>
+    /* ── Tokens próprios ────────────────────────────────────── */
+    :root {
+        --tw-surface:        #ffffff;
+        --tw-surface-hover:  #f5f5f5;
+        --tw-border:         rgba(0,0,0,.12);
+        --tw-text:           #212529;
+        --tw-text-muted:     #6c757d;
+        --tw-shadow-dropdown: 0 8px 24px rgba(0,0,0,.14);
+    }
+    [data-theme="dark"] {
+        --tw-surface:        #1e1e1e;
+        --tw-surface-hover:  #2a2a2a;
+        --tw-border:         rgba(255,255,255,.12);
+        --tw-text:           #e3e3e3;
+        --tw-text-muted:     #9e9e9e;
+        --tw-shadow-dropdown: 0 8px 24px rgba(0,0,0,.45);
+    }
+
+    /* ── Skip link ─────────────────────────────────────────── */
+    .tw-skip-link {
+        position: absolute;
+        left: -9999px;
+        top: .5rem;
+        z-index: 9999;
+        padding: .4rem .9rem;
+        background: var(--tw-surface);
+        color: var(--tw-text);
+        border: 1px solid var(--tw-border);
+        border-radius: .4rem;
+        font-size: .875rem;
+        text-decoration: none;
+    }
+    .tw-skip-link:focus { left: 1rem; }
+
+    /* ── Animações de alerta ───────────────────────────────── */
     @keyframes twSlideIn {
         from { opacity: 0; transform: translateY(-8px); }
         to   { opacity: 1; transform: translateY(0); }
@@ -32,11 +70,14 @@
     .alert-animated.tw-hiding {
         animation: twFadeOut 300ms ease forwards;
     }
-
-    /* ── Busca global ─────────────────────────────────────── */
-    .navbar-search-wrap {
-        position: relative;
+    @media (prefers-reduced-motion: reduce) {
+        .alert-animated,
+        .alert-animated.tw-hiding,
+        .reveal { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
     }
+
+    /* ── Busca global ──────────────────────────────────────── */
+    .navbar-search-wrap { position: relative; }
     .navbar-search-input {
         background: transparent;
         border: 1px solid rgba(255,255,255,.22);
@@ -44,12 +85,12 @@
         color: inherit;
         font-size: .82rem;
         padding: .3rem .85rem .3rem 2rem;
-        width: 200px;
+        width: min(200px, 20vw);
         transition: width .25s ease, border-color .2s;
         outline: none;
     }
     .navbar-search-input:focus {
-        width: 280px;
+        width: min(280px, 28vw);
         border-color: rgba(255,255,255,.5);
         background: rgba(255,255,255,.08);
     }
@@ -68,10 +109,10 @@
         left: 0;
         right: 0;
         min-width: 320px;
-        background: var(--bs-body-bg, #fff);
-        border: 1px solid var(--bs-border-color, #dee2e6);
+        background: var(--tw-surface);
+        border: 1px solid var(--tw-border);
         border-radius: .5rem;
-        box-shadow: 0 8px 24px rgba(0,0,0,.14);
+        box-shadow: var(--tw-shadow-dropdown);
         z-index: 1055;
         display: none;
         max-height: 360px;
@@ -84,13 +125,13 @@
         gap: .5rem;
         padding: .5rem .85rem;
         font-size: .82rem;
-        color: var(--bs-body-color);
+        color: var(--tw-text);
         text-decoration: none;
         transition: background .15s;
-        border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+        border-bottom: 1px solid var(--tw-border);
     }
     .search-item:last-child { border-bottom: none; }
-    .search-item:hover, .search-item:focus { background: var(--bs-tertiary-bg, #f5f5f5); outline: none; }
+    .search-item:hover, .search-item:focus { background: var(--tw-surface-hover); outline: none; }
     .search-item-label { flex: 1; line-height: 1.3; }
     .search-item-type {
         font-size: .7rem;
@@ -105,19 +146,30 @@
     .search-empty {
         padding: .75rem 1rem;
         font-size: .82rem;
-        color: var(--bs-secondary-color, #6c757d);
+        color: var(--tw-text-muted);
         text-align: center;
     }
     .search-footer {
         display: block;
         padding: .45rem 1rem;
         font-size: .75rem;
-        color: var(--bs-secondary-color, #6c757d);
+        color: var(--tw-text-muted);
         text-align: center;
-        border-top: 1px solid var(--bs-border-color, #dee2e6);
+        border-top: 1px solid var(--tw-border);
         text-decoration: none;
     }
-    .search-footer:hover { background: var(--bs-tertiary-bg, #f5f5f5); color: var(--bs-body-color); }
+    .search-footer:hover { background: var(--tw-surface-hover); color: var(--tw-text); }
+
+    /* ── Botão lupa mobile ──────────────────────────────────── */
+    .tw-search-mobile-btn {
+        background: none;
+        border: none;
+        color: inherit;
+        padding: .25rem .4rem;
+        opacity: .8;
+        cursor: pointer;
+    }
+    .tw-search-mobile-btn:hover { opacity: 1; }
     </style>
 
     {# ── Google Tag Manager — inicialização do dataLayer ──────────────────── #}
@@ -141,9 +193,11 @@
     <!-- End Google Tag Manager -->
     {% endif %}
 
+    {# Tema inicial sem flash — com try/catch para Safari privado #}
     <script>
     (function(){
-        var t = localStorage.getItem('twTheme');
+        var t;
+        try { t = localStorage.getItem('twTheme'); } catch(e){}
         if (!t) t = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', t);
     }());
@@ -158,6 +212,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 {% endif %}
 
+<header role="banner">
 <nav class="navbar navbar-expand-lg mb-4">
     <div class="container-xl">
         <a class="navbar-brand" href="{{ path('app_dashboard') }}">
@@ -182,6 +237,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                 </svg>
             </button>
+
+            {# Botão lupa mobile — abre offcanvas de busca #}
+            {% if app.user %}
+            <button class="tw-search-mobile-btn d-lg-none" type="button"
+                    data-bs-toggle="offcanvas" data-bs-target="#searchOffcanvas"
+                    aria-label="Buscar" title="Buscar">
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>
+                </svg>
+            </button>
+            {% endif %}
 
             <button class="navbar-toggler bg-transparent border-0" type="button"
                     data-bs-toggle="collapse" data-bs-target="#nav"
@@ -308,7 +374,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 {% endif %}
             </ul>
 
-            {# ── Busca global ─────────────────────────────────────── #}
+            {# ── Busca global desktop ─────────────────────────────── #}
             {% if app.user %}
             <div class="navbar-search-wrap d-none d-lg-block me-2">
                 <svg class="navbar-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -317,7 +383,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <input type="text" id="globalSearch" class="navbar-search-input"
                        placeholder="Buscar radares, postos…"
                        autocomplete="off" aria-label="Busca global">
-                <div class="search-dropdown" id="searchDropdown"></div>
+                <div class="search-dropdown" id="searchDropdown" role="listbox" aria-label="Resultados da busca"></div>
             </div>
             {% endif %}
 
@@ -370,15 +436,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
+                            {# GTM via data-gtm-event — sem onclick inline #}
                             <a class="dropdown-item" href="{{ path('export_radares_csv') }}"
-                               onclick="window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'export_csv',export_tipo:'radares'});">
+                               data-gtm-event="export_csv" data-gtm-tipo="radares">
                                 <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
                                 Exportar Radares CSV
                             </a>
                         </li>
                         <li>
                             <a class="dropdown-item" href="{{ path('export_postos_csv') }}"
-                               onclick="window.dataLayer=window.dataLayer||[];window.dataLayer.push({event:'export_csv',export_tipo:'postos'});">
+                               data-gtm-event="export_csv" data-gtm-tipo="postos">
                                 <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
                                 Exportar Postos CSV
                             </a>
@@ -397,8 +464,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </div>
     </div>
 </nav>
+</header>
 
-<div class="container-xl pb-5">
+{# ── Offcanvas busca mobile ──────────────────────────────── #}
+{% if app.user %}
+<div class="offcanvas offcanvas-top" tabindex="-1" id="searchOffcanvas" aria-labelledby="searchOffcanvasLabel" style="height:auto;max-height:80vh">
+    <div class="offcanvas-header pb-0">
+        <h5 class="offcanvas-title" id="searchOffcanvasLabel" style="font-size:.9rem">Buscar</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+    </div>
+    <div class="offcanvas-body pt-2">
+        <div class="input-group mb-2">
+            <span class="input-group-text">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>
+                </svg>
+            </span>
+            <input type="text" id="globalSearchMobile" class="form-control"
+                   placeholder="Buscar radares, postos…" autocomplete="off" aria-label="Busca global mobile">
+        </div>
+        <div id="searchDropdownMobile" role="listbox" aria-label="Resultados"></div>
+    </div>
+</div>
+{% endif %}
+
+<main id="main-content" class="container-xl pb-5">
     {% for label, messages in app.flashes(['success','warning','danger','info','error']) %}
         {% for msg in messages %}
             <div class="alert alert-{{ label == 'error' ? 'danger' : label }} alert-dismissible alert-animated py-2 mb-3" role="alert">
@@ -408,12 +498,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         {% endfor %}
     {% endfor %}
     {% block body %}{% endblock %}
-</div>
+</main>
 
 {% block javascripts %}{% endblock %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
+        crossorigin="anonymous" defer></script>
 
 <script>
 (function () {
@@ -429,6 +519,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if (isNaN(d.getTime())) return;
     var hasTime = /T|\d{2}:\d{2}/.test(el.getAttribute('data-utc'));
     el.setAttribute('title', 'UTC: ' + el.getAttribute('data-utc'));
+    el.setAttribute('datetime', el.getAttribute('data-utc'));
     el.textContent = hasTime ? fmtDateTime.format(d) : fmtDate.format(d);
   });
 }());
@@ -513,18 +604,28 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </script>
 
 <script>
+/* countUp com requestAnimationFrame + easeOutQuart */
 (function(){
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function easeOutQuart(t){ return 1 - Math.pow(1 - t, 4); }
+
   function countUp(el) {
     var target = parseFloat(el.textContent.replace(/[^0-9.]/g,''));
     if (isNaN(target) || target === 0) return;
-    var start = 0, duration = 1000, step = 16;
-    var increment = target / (duration / step);
-    var timer = setInterval(function(){
-      start += increment;
-      if (start >= target) { start = target; clearInterval(timer); }
-      el.textContent = Math.round(start).toLocaleString('pt-BR');
-    }, step);
+    if (reducedMotion) { el.textContent = Math.round(target).toLocaleString('pt-BR'); return; }
+    var duration = Math.min(1200, Math.max(600, target / 50));
+    var startTime = null;
+    function step(ts) {
+      if (!startTime) startTime = ts;
+      var elapsed = ts - startTime;
+      var progress = Math.min(elapsed / duration, 1);
+      el.textContent = Math.round(easeOutQuart(progress) * target).toLocaleString('pt-BR');
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
+
   var io2 = new IntersectionObserver(function(entries){
     entries.forEach(function(e){
       if (e.isIntersecting) { countUp(e.target); io2.unobserve(e.target); }
@@ -535,116 +636,153 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </script>
 
 <script>
+/* Busca global — desktop + mobile, com AbortController anti-race */
 (function(){
-  var input    = document.getElementById('globalSearch');
-  var dropdown = document.getElementById('searchDropdown');
-  if (!input || !dropdown) return;
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  var timer = null;
-  var lastQ = '';
+  function buildSearch(inputEl, dropdownEl) {
+    if (!inputEl || !dropdownEl) return;
+    var timer = null;
+    var lastQ = '';
+    var controller = null;
 
-  function badgeClass(tipo) {
-    if (tipo === 'radar')  return 'radar';
-    if (tipo === 'escola') return 'escola';
-    return 'posto';
-  }
-  function typeLabel(tipo) {
-    if (tipo === 'radar')  return 'Radar';
-    if (tipo === 'escola') return 'Escola';
-    return 'Posto';
-  }
+    function badgeClass(tipo) { return tipo === 'radar' ? 'radar' : (tipo === 'escola' ? 'escola' : 'posto'); }
+    function typeLabel(tipo)  { return tipo === 'radar' ? 'Radar' : (tipo === 'escola' ? 'Escola' : 'Posto'); }
 
-  function trackEvent(event, data) {
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push(Object.assign({ event: event }, data));
-  }
-
-  function render(items, q) {
-    dropdown.innerHTML = '';
-    if (!items.length) {
-      dropdown.innerHTML = '<div class="search-empty">Nenhum resultado encontrado.</div>';
-    } else {
-      items.forEach(function(r) {
-        var a = document.createElement('a');
-        a.className = 'search-item';
-        a.href = r.url;
-        a.setAttribute('tabindex', '0');
-        a.innerHTML =
-          '<span class="search-item-type ' + badgeClass(r.tipo) + '">' + typeLabel(r.tipo) + '</span>' +
-          '<span class="search-item-label">' + escHtml(r.label) + '</span>' +
-          (r.badge ? '<small class="text-muted">' + escHtml(r.badge) + '</small>' : '');
-        a.addEventListener('click', function() {
-          trackEvent('busca_click', { search_term: lastQ, item_tipo: r.tipo, item_label: r.label });
-        });
-        dropdown.appendChild(a);
-      });
+    function trackEvent(ev, data) {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push(Object.assign({ event: ev }, data));
     }
-    // rodapé com link para página completa de busca
-    var footer = document.createElement('a');
-    footer.className = 'search-footer';
-    footer.href = '/busca?q=' + encodeURIComponent(q);
-    footer.textContent = 'Ver todos os resultados para "' + q + '" →';
-    dropdown.appendChild(footer);
-    dropdown.classList.add('show');
-  }
 
-  function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, function(c) {
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    function render(items, q) {
+      while (dropdownEl.firstChild) dropdownEl.removeChild(dropdownEl.firstChild);
+
+      if (!items.length) {
+        var empty = document.createElement('div');
+        empty.className = 'search-empty';
+        empty.textContent = 'Nenhum resultado encontrado.';
+        dropdownEl.appendChild(empty);
+      } else {
+        items.forEach(function(r) {
+          var a = document.createElement('a');
+          a.className = 'search-item';
+          a.href = r.url;
+          a.setAttribute('tabindex', '0');
+          a.setAttribute('role', 'option');
+
+          var badge = document.createElement('span');
+          badge.className = 'search-item-type ' + badgeClass(r.tipo);
+          badge.textContent = typeLabel(r.tipo);
+
+          var label = document.createElement('span');
+          label.className = 'search-item-label';
+          label.textContent = r.label;
+
+          a.appendChild(badge);
+          a.appendChild(label);
+
+          if (r.badge) {
+            var sm = document.createElement('small');
+            sm.className = 'text-muted';
+            sm.textContent = r.badge;
+            a.appendChild(sm);
+          }
+
+          a.addEventListener('click', function() {
+            trackEvent('busca_click', { search_term: lastQ, item_tipo: r.tipo, item_label: r.label });
+          });
+          dropdownEl.appendChild(a);
+        });
+      }
+
+      var footer = document.createElement('a');
+      footer.className = 'search-footer';
+      footer.href = '/busca?q=' + encodeURIComponent(q);
+      footer.textContent = 'Ver todos os resultados para "' + q + '" \u2192';
+      dropdownEl.appendChild(footer);
+      dropdownEl.classList.add('show');
+    }
+
+    function search(q) {
+      if (controller) { try { controller.abort(); } catch(e){} }
+      controller = new AbortController();
+      fetch('/busca/ac?q=' + encodeURIComponent(q), { signal: controller.signal })
+        .then(function(r){ return r.json(); })
+        .then(function(items) {
+          render(items, q);
+          trackEvent('busca_global', {
+            search_term: q,
+            results_count: items.length,
+            result_tipos: items.map(function(i){ return i.tipo; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(',')
+          });
+        })
+        .catch(function(err){ if (err.name !== 'AbortError') dropdownEl.classList.remove('show'); });
+    }
+
+    inputEl.addEventListener('input', function() {
+      var q = this.value.trim();
+      clearTimeout(timer);
+      if (q.length < 2) { dropdownEl.classList.remove('show'); return; }
+      if (q === lastQ) return;
+      lastQ = q;
+      timer = setTimeout(function(){ search(q); }, 280);
+    });
+
+    inputEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { dropdownEl.classList.remove('show'); inputEl.blur(); return; }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var q = inputEl.value.trim();
+        if (q.length >= 2) { window.location.href = '/busca?q=' + encodeURIComponent(q); }
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        var items = dropdownEl.querySelectorAll('.search-item');
+        if (items.length) items[0].focus();
+      }
+    });
+
+    dropdownEl.addEventListener('keydown', function(e) {
+      var items = Array.from(dropdownEl.querySelectorAll('.search-item, .search-footer'));
+      var idx   = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); idx > 0 ? items[idx - 1].focus() : inputEl.focus(); }
+      if (e.key === 'Escape')    { dropdownEl.classList.remove('show'); inputEl.focus(); }
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) {
+        dropdownEl.classList.remove('show');
+      }
     });
   }
 
-  function search(q) {
-    fetch('/busca/ac?q=' + encodeURIComponent(q))
-      .then(function(r){ return r.json(); })
-      .then(function(items) {
-        render(items, q);
-        trackEvent('busca_global', { search_term: q, results_count: items.length,
-          result_tipos: [...new Set(items.map(function(i){ return i.tipo; }))].join(',') });
-      })
-      .catch(function(){ dropdown.classList.remove('show'); });
-  }
+  buildSearch(
+    document.getElementById('globalSearch'),
+    document.getElementById('searchDropdown')
+  );
+  buildSearch(
+    document.getElementById('globalSearchMobile'),
+    document.getElementById('searchDropdownMobile')
+  );
+}());
+</script>
 
-  input.addEventListener('input', function() {
-    var q = this.value.trim();
-    clearTimeout(timer);
-    if (q.length < 2) { dropdown.classList.remove('show'); return; }
-    if (q === lastQ) return;
-    lastQ = q;
-    timer = setTimeout(function(){ search(q); }, 280);
-  });
-
-  input.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { dropdown.classList.remove('show'); input.blur(); return; }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      var q = input.value.trim();
-      if (q.length >= 2) { window.location.href = '/busca?q=' + encodeURIComponent(q); }
-      return;
-    }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      var items = dropdown.querySelectorAll('.search-item');
-      if (items.length) items[0].focus();
-    }
-  });
-
-  dropdown.addEventListener('keydown', function(e) {
-    var items = Array.from(dropdown.querySelectorAll('.search-item, .search-footer'));
-    var idx   = items.indexOf(document.activeElement);
-    if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); idx > 0 ? items[idx - 1].focus() : input.focus(); }
-    if (e.key === 'Escape')    { dropdown.classList.remove('show'); input.focus(); }
-    if (e.key === 'Enter' && document.activeElement === items[items.length - 1]) {
-      // Enter no footer navega para página de busca
-      document.activeElement.click();
-    }
-  });
-
+<script>
+/* GTM: listener delegado para data-gtm-event — substitui onclick inline */
+(function(){
   document.addEventListener('click', function(e) {
-    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-      dropdown.classList.remove('show');
-    }
+    var el = e.target.closest('[data-gtm-event]');
+    if (!el) return;
+    var payload = { event: el.getAttribute('data-gtm-event') };
+    Array.from(el.attributes).forEach(function(attr) {
+      if (attr.name.startsWith('data-gtm-') && attr.name !== 'data-gtm-event') {
+        payload[attr.name.replace('data-gtm-', '')] = attr.value;
+      }
+    });
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push(payload);
   });
 }());
 </script>

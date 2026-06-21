@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\Query\Expr\Orx;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -46,26 +47,31 @@ class UserRepository extends ServiceEntityRepository
      */
     public function findApprovedComAcessoUf(string $uf): array
     {
-        // json_encode("SP") → "SP"  (com aspas, para bater exato dentro do JSON array)
-        $ufJson = json_encode($uf);
+        $ufJson = json_encode($uf); // ex: '"SP"' — com aspas, para bater exato no JSON array
 
-        return $this->createQueryBuilder('u')
+        $qb   = $this->createQueryBuilder('u');
+        $expr = $qb->expr();
+
+        return $qb
             ->where('u.status = :status')
             ->andWhere(
-                // ADMINs: acesso irrestrito, independente de permissão configurada
-                'u.roles LIKE :admin
+                $expr->orX(
+                    // ADMINs: acesso irrestrito
+                    'u.roles LIKE :admin',
 
-                 OR (
-                     -- Usuários com PERM_RADARES ou GLOBAL_CHAMP...
-                     (u.permissions LIKE :perm OR u.roles LIKE :globalChamp)
-                     AND (
-                         -- ...que tenham acesso total (global_champ ou allowedUfs null)
-                         u.roles LIKE :globalChamp
-                         OR u.allowedUfs IS NULL
-                         -- ...ou cujo allowedUfs contenha a UF específica
-                         OR u.allowedUfs LIKE :uf
-                     )
-                 )'
+                    // Usuários com PERM_RADARES ou GLOBAL_CHAMP com acesso à UF
+                    $expr->andX(
+                        $expr->orX(
+                            'u.permissions LIKE :perm',
+                            'u.roles LIKE :globalChamp'
+                        ),
+                        $expr->orX(
+                            'u.roles LIKE :globalChamp',
+                            'u.allowedUfs IS NULL',
+                            'u.allowedUfs LIKE :uf'
+                        )
+                    )
+                )
             )
             ->setParameter('status',      User::STATUS_APPROVED)
             ->setParameter('admin',       '%ROLE_ADMIN%')

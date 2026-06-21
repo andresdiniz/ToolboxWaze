@@ -25,3 +25,4 @@ framework:
             Symfony\Component\Notifier\Message\SmsMessage: async
             App\Message\ImportFuelResellersMessage: async
             App\Message\EnviarEmailConta: async
+            App\Message\EnviarEmailRadarRecente: async

@@ -5,25 +5,22 @@ declare(strict_types=1);
 namespace App\Message;
 
 /**
- * Mensagem Messenger para notificação assíncrona de radares recentes por UF.
+ * Mensagem assíncrona: notifica um usuário sobre novos radares inseridos em uma UF.
  *
- * Disparada ao final do ImportRadarCommand sempre que houver inserções
- * novas em uma determinada UF. O processamento (envio do e-mail) é feito
- * de forma assíncrona pelo EnviarEmailRadarRecenteHandler, garantindo que
- * o processo de importação não seja bloqueado pelo volume de usuários.
- *
- * @see EnviarEmailRadarRecenteHandler
+ * @param string   $siglaUf         Sigla do estado (ex: "SP")
+ * @param int      $userId          ID do usuário destinatário
+ * @param int      $quantidadeNovos Quantidade de novos radares inseridos
+ * @param int[]    $radarIds        IDs exatos dos novos radares (opcional).
+ *                                  Quando informado, o handler exibe links individuais.
+ *                                  Quando vazio, lista os recentes da UF via query.
  */
-final class EnviarEmailRadarRecente
+final readonly class EnviarEmailRadarRecente
 {
     public function __construct(
-        /** Sigla da UF onde os radares foram inseridos (ex: "SP") */
         public readonly string $siglaUf,
-
-        /** ID do User que deve receber o aviso */
-        public readonly int $userId,
-
-        /** Quantidade de novos radares inseridos nesta UF no import atual */
-        public readonly int $quantidadeNovos,
+        public readonly int    $userId,
+        public readonly int    $quantidadeNovos,
+        /** @var int[] */
+        public readonly array  $radarIds = [],
     ) {}
 }

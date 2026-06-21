@@ -60,7 +60,7 @@ final class RadarWazeLinkCrudController extends AbstractController
         $params = [];
 
         if ($search !== '') {
-            $where  = 'WHERE (rm.municipio LIKE ? OR rm.local_verificacao LIKE ? OR wl.waze_link LIKE ? OR wl.permanent_hazard_id = ?)';
+            $where  = 'WHERE (rm.municipio LIKE ? OR rm.logradouro LIKE ? OR wl.waze_link LIKE ? OR wl.permanent_hazard_id = ?)';
             $params = ["%$search%", "%$search%", "%$search%", is_numeric($search) ? (int) $search : -1];
         }
 
@@ -74,7 +74,7 @@ final class RadarWazeLinkCrudController extends AbstractController
         $rows = $this->db->fetchAllAssociative(
             "SELECT wl.id, wl.waze_link, wl.permanent_hazard_id, wl.inserted_at, wl.updated_at,
                     wl.observacao,
-                    rm.municipio, rm.sigla_uf, rm.local_verificacao,
+                    rm.municipio, rm.sigla_uf, rm.logradouro,
                     ui.email AS inserted_by_email,
                     uu.email AS updated_by_email
              FROM radar_waze_link wl
@@ -153,11 +153,11 @@ final class RadarWazeLinkCrudController extends AbstractController
 
         // Para o select de radar: busca os que ainda não têm link
         $radares = $this->db->fetchAllAssociative(
-            'SELECT rm.id, rm.municipio, rm.sigla_uf, rm.local_verificacao
+            'SELECT rm.id, rm.municipio, rm.sigla_uf, rm.logradouro
              FROM radar_medidor rm
              LEFT JOIN radar_waze_link wl ON wl.radar_medidor_id = rm.id
              WHERE wl.id IS NULL
-             ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao
+             ORDER BY rm.sigla_uf, rm.municipio, rm.logradouro
              LIMIT 500'
         );
 
@@ -237,7 +237,7 @@ final class RadarWazeLinkCrudController extends AbstractController
             'radarLabel' => sprintf('%s/%s — %s',
                 $link->getRadarMedidor()->getMunicipio(),
                 $link->getRadarMedidor()->getSiglaUf(),
-                $link->getRadarMedidor()->getLocalVerificacao()
+                $link->getRadarMedidor()->getLogradouro()
             ),
             'wazeLink'   => $wazeLink,
             'observacao' => $observacao,

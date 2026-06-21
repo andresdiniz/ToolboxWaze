@@ -1,0 +1,198 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ form.nome }}{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width:760px">
+
+  {% if preview %}
+    <div class="alert alert-info"><i class="bi bi-eye me-2"></i>Modo preview — envios não são gravados.</div>
+  {% endif %}
+
+  <h1 class="h3 mb-1">{{ form.nome }}</h1>
+  {% if form.descricao %}<p class="text-muted mb-4">{{ form.descricao }}</p>{% endif %}
+
+  {% if sucesso %}
+    <div class="alert alert-success">
+      <i class="bi bi-check-circle me-2"></i>
+      {{ (form.configuracoes.success_message ?? 'Obrigado pelo envio!') }}
+    </div>
+  {% endif %}
+
+  {% if not sucesso %}
+  <form method="post" enctype="multipart/form-data" novalidate>
+    <div class="row g-3">
+    {% for campo in campos %}
+      {% set tipo  = campo.tipo %}
+      {% set chave = campo.chave %}
+      {% set opcoes = campo.opcoes ?? {} %}
+      {% set col   = opcoes.col ?? 12 %}
+      {% set erro  = erros[chave] ?? null %}
+
+      {# ── Layout-only ── #}
+      {% if tipo == 'divider' %}
+        <div class="col-12"><hr></div>
+      {% elseif tipo == 'heading' %}
+        <div class="col-12">
+          <h{{ opcoes.nivel ?? 2 }}>{{ campo.label }}</h{{ opcoes.nivel ?? 2 }}>
+        </div>
+      {% elseif tipo == 'html' %}
+        <div class="col-12">{{ opcoes.content|raw }}</div>
+      {% elseif tipo == 'hidden' %}
+        <input type="hidden" name="{{ chave }}" value="{{ campo.valorPadrao }}">
+
+      {# ── Campos normais ── #}
+      {% else %}
+      <div class="col-md-{{ col }} campo-wrapper" id="wrapper-{{ chave }}"
+           {% if opcoes.condicional is defined and opcoes.condicional %}
+           data-cond-campo="{{ opcoes.condicional.campo }}"
+           data-cond-op="{{ opcoes.condicional.operador }}"
+           data-cond-valor="{{ opcoes.condicional.valor }}"
+           style="display:none"
+           {% endif %}>
+
+        {% if tipo != 'checkbox' and tipo != 'toggle' and tipo != 'radio' %}
+          <label for="{{ chave }}" class="form-label">
+            {{ campo.label }}
+            {% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}
+          </label>
+        {% endif %}
+
+        {# -- text/email/url/number/date/datetime/time -- #}
+        {% if tipo in ['text','email','url','number','date','time'] %}
+          <input type="{{ tipo }}" id="{{ chave }}" name="{{ chave }}"
+            class="form-control{{ erro ? ' is-invalid' : '' }}"
+            placeholder="{{ campo.placeholder }}"
+            value="{{ campo.valorPadrao }}"
+            {{ campo.obrigatorio ? 'required' : '' }}
+            {% if opcoes.min is defined %}min="{{ opcoes.min }}"{% endif %}
+            {% if opcoes.max is defined %}max="{{ opcoes.max }}"{% endif %}
+            {% if opcoes.step is defined %}step="{{ opcoes.step }}"{% endif %}
+            {% if opcoes.mask is defined %}data-mask="{{ opcoes.mask }}"{% endif %}
+          >
+
+        {% elseif tipo == 'datetime' %}
+          <input type="datetime-local" id="{{ chave }}" name="{{ chave }}"
+            class="form-control{{ erro ? ' is-invalid' : '' }}"
+            {{ campo.obrigatorio ? 'required' : '' }}>
+
+        {% elseif tipo == 'textarea' %}
+          <textarea id="{{ chave }}" name="{{ chave }}"
+            class="form-control{{ erro ? ' is-invalid' : '' }}"
+            rows="4" placeholder="{{ campo.placeholder }}"
+            {{ campo.obrigatorio ? 'required' : '' }}>{{ campo.valorPadrao }}</textarea>
+
+        {% elseif tipo == 'select' %}
+          <select id="{{ chave }}" name="{{ chave }}"
+            class="form-select{{ erro ? ' is-invalid' : '' }}"
+            {{ campo.obrigatorio ? 'required' : '' }}>
+            <option value="">-- Selecione --</option>
+            {% for opt in (opcoes.opcoes ?? []) %}
+              <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+
+        {% elseif tipo == 'select_multiple' %}
+          <select id="{{ chave }}" name="{{ chave }}[]"
+            class="form-select{{ erro ? ' is-invalid' : '' }}" multiple
+            {{ campo.obrigatorio ? 'required' : '' }}>
+            {% for opt in (opcoes.opcoes ?? []) %}
+              <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+
+        {% elseif tipo == 'radio' %}
+          <label class="form-label">{{ campo.label }}{% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}</label>
+          {% for opt in (opcoes.opcoes ?? []) %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="{{ chave }}" id="{{ chave }}_{{ loop.index }}" value="{{ opt }}" {{ campo.obrigatorio ? 'required' : '' }}>
+            <label class="form-check-label" for="{{ chave }}_{{ loop.index }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+
+        {% elseif tipo == 'checkbox' %}
+          <label class="form-label d-block">{{ campo.label }}{% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}</label>
+          {% for opt in (opcoes.opcoes ?? []) %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="{{ chave }}[]" id="{{ chave }}_{{ loop.index }}" value="{{ opt }}">
+            <label class="form-check-label" for="{{ chave }}_{{ loop.index }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+
+        {% elseif tipo == 'toggle' %}
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch"
+              name="{{ chave }}" id="{{ chave }}" value="1">
+            <label class="form-check-label" for="{{ chave }}">{{ campo.label }}</label>
+          </div>
+
+        {% elseif tipo in ['file','image'] %}
+          <input type="file" id="{{ chave }}" name="{{ chave }}"
+            class="form-control{{ erro ? ' is-invalid' : '' }}"
+            {% if opcoes.accept is defined %}accept="{{ opcoes.accept }}"{% endif %}
+            {% if opcoes.multiple is defined and opcoes.multiple %}multiple{% endif %}
+            {{ campo.obrigatorio ? 'required' : '' }}>
+        {% endif %}
+
+        {% if campo.ajuda and tipo not in ['radio','checkbox'] %}
+          <div class="form-text">{{ campo.ajuda }}</div>
+        {% endif %}
+
+        {% if erro %}
+          <div class="invalid-feedback d-block">{{ erro }}</div>
+        {% endif %}
+
+      </div>
+      {% endif %}
+    {% endfor %}
+    </div>{# /row #}
+
+    <div class="mt-4">
+      {% if not preview %}
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-send me-1"></i> Enviar
+        </button>
+      {% else %}
+        <button type="button" class="btn btn-secondary" disabled>Enviar (preview)</button>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block javascripts %}{{ parent() }}
+<script>
+// ── Lógica condicional ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const wrappers = document.querySelectorAll('[data-cond-campo]');
+  if (!wrappers.length) return;
+
+  function avaliar() {
+    wrappers.forEach(w => {
+      const campo  = w.dataset.condCampo;
+      const op     = w.dataset.condOp;
+      const valor  = w.dataset.condValor;
+      const el     = document.getElementById(campo) ||
+                     document.querySelector(`[name="${campo}"]`) ||
+                     document.querySelector(`[name="${campo}[]"]`);
+      if (!el) return;
+      let atual = el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value;
+      const ok = op === '='        ? atual == valor
+               : op === '!='       ? atual != valor
+               : op === '>'        ? parseFloat(atual) > parseFloat(valor)
+               : op === '<'        ? parseFloat(atual) < parseFloat(valor)
+               : op === 'contains' ? atual.includes(valor)
+               : true;
+      w.style.display = ok ? '' : 'none';
+      // Desativa campos ocultos para não bloquear submit
+      w.querySelectorAll('input,select,textarea').forEach(i => i.disabled = !ok);
+    });
+  }
+
+  avaliar();
+  document.querySelectorAll('input,select,textarea').forEach(el => {
+    el.addEventListener('change', avaliar);
+    el.addEventListener('input', avaliar);
+  });
+});
+</script>
+{% endblock %}

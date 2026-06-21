@@ -1,0 +1,91 @@
+{% extends 'admin4/base.html.twig' %}
+
+{% block title %}Form Builder{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <h2 class="mb-0"><i class="bi bi-ui-checks me-2"></i>Form Builder</h2>
+    <a href="{{ path('admin4_form_builder_novo') }}" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-1"></i> Novo Formulário
+    </a>
+  </div>
+
+  {% for type, msgs in app.flashes %}
+    {% for msg in msgs %}
+      <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show" role="alert">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  {% if forms is empty %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-ui-checks display-3 d-block mb-3"></i>
+      Nenhum formulário criado ainda.
+    </div>
+  {% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>Nome</th>
+          <th>Slug / URL pública</th>
+          <th>Campos</th>
+          <th>Status</th>
+          <th>Criado em</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in forms %}
+        <tr>
+          <td class="text-muted small">{{ f.id }}</td>
+          <td>
+            <strong>{{ f.nome }}</strong>
+            {% if f.descricao %}<br><small class="text-muted">{{ f.descricao }}</small>{% endif %}
+          </td>
+          <td>
+            <a href="{{ path('form_publico', {slug: f.slug}) }}" target="_blank" class="text-decoration-none">
+              /forms/{{ f.slug }} <i class="bi bi-box-arrow-up-right small"></i>
+            </a>
+          </td>
+          <td><span class="badge bg-secondary">{{ f.campos|length }}</span></td>
+          <td>
+            {% if f.ativo %}
+              <span class="badge bg-success">Ativo</span>
+            {% else %}
+              <span class="badge bg-danger">Inativo</span>
+            {% endif %}
+          </td>
+          <td class="small">{{ f.criadoEm|date('d/m/Y H:i') }}</td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm">
+              <a href="{{ path('admin4_form_builder_preview', {id: f.id}) }}" class="btn btn-outline-secondary" title="Preview" target="_blank">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="{{ path('admin4_form_builder_editar', {id: f.id}) }}" class="btn btn-outline-primary" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{{ path('admin4_form_builder_respostas', {id: f.id}) }}" class="btn btn-outline-info" title="Respostas">
+                <i class="bi bi-inbox"></i>
+              </a>
+              <a href="{{ path('admin4_form_builder_exportar_csv', {id: f.id}) }}" class="btn btn-outline-success" title="Exportar CSV">
+                <i class="bi bi-download"></i>
+              </a>
+              <form method="post" action="{{ path('admin4_form_builder_excluir', {id: f.id}) }}" onsubmit="return confirm('Excluir formulário e todas as respostas?')" style="display:inline">
+                <button class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

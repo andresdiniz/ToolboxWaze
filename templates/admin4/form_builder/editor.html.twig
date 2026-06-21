@@ -1,0 +1,434 @@
+{% extends 'admin4/base.html.twig' %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+<style>
+.campo-card { background:#f8f9fa; border:1px solid #dee2e6; border-radius:.5rem; }
+.campo-card .drag-handle { cursor:grab; color:#adb5bd; }
+.campo-card:hover { border-color:#86b7fe; }
+.tipo-badge { font-size:.7rem; }
+#canvas-empty { border:2px dashed #dee2e6; border-radius:.5rem; min-height:160px; display:flex; align-items:center; justify-content:center; color:#adb5bd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <h2 class="mb-0"><i class="bi bi-ui-checks me-2"></i>{{ titulo }}</h2>
+    <a href="{{ path('admin4_form_builder_index') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i> Voltar
+    </a>
+  </div>
+
+  {% for type, msgs in app.flashes %}
+    {% for msg in msgs %}
+      <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show">
+        {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  <form id="form-editor" method="post">
+    <input type="hidden" name="campos_json" id="campos_json">
+
+    <div class="row g-4">
+
+      {# ── Coluna esquerda: configurações gerais ── #}
+      <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="card-header fw-semibold"><i class="bi bi-gear me-2"></i>Configurações</div>
+          <div class="card-body">
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nome do Formulário <span class="text-danger">*</span></label>
+              <input type="text" name="nome" class="form-control" required value="{{ form ? form.nome : '' }}">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Descrição</label>
+              <textarea name="descricao" class="form-control" rows="2">{{ form ? form.descricao : '' }}</textarea>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Mensagem de sucesso</label>
+              <textarea name="success_message" class="form-control" rows="2">{{ form ? (form.configuracoes.success_message ?? 'Obrigado pelo envio!') : 'Obrigado pelo envio!' }}</textarea>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Redirecionar após envio (URL)</label>
+              <input type="url" name="redirect_url" class="form-control" placeholder="https://..." value="{{ form ? (form.configuracoes.redirect_url ?? '') : '' }}">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">E-mail de notificação</label>
+              <input type="email" name="email_notificacao" class="form-control" value="{{ form ? (form.configuracoes.email_notificacao ?? '') : '' }}">
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col">
+                <label class="form-label">Visível para</label>
+                <select name="mostrar_para" class="form-select form-select-sm">
+                  {% set mp = form ? (form.configuracoes.mostrar_para ?? 'todos') : 'todos' %}
+                  <option value="todos" {{ mp == 'todos' ? 'selected' }}>Todos</option>
+                  <option value="logado" {{ mp == 'logado' ? 'selected' }}>Somente logados</option>
+                  <option value="visitante" {{ mp == 'visitante' ? 'selected' }}>Somente visitantes</option>
+                </select>
+              </div>
+              <div class="col">
+                <label class="form-label">Limite de envios</label>
+                <input type="number" name="limite_envios" class="form-control form-control-sm" min="0" value="{{ form ? (form.configuracoes.limite_envios ?? 0) : 0 }}" placeholder="0 = ilimitado">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Expira em</label>
+              <input type="datetime-local" name="expira_em" class="form-control form-control-sm" value="{{ form ? (form.configuracoes.expira_em ?? '') : '' }}">
+            </div>
+
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="ativo" id="ck-ativo" {{ (form is null or form.ativo) ? 'checked' }}>
+              <label class="form-check-label" for="ck-ativo">Formulário ativo</label>
+            </div>
+
+            <hr>
+
+            {# ── Painel de tipos de campo ── #}
+            <p class="fw-semibold small mb-2">Adicionar campo</p>
+            <div class="d-flex flex-wrap gap-1">
+              {% set tipos = [
+                {tipo:'text',label:'Texto',icon:'bi-input-cursor-text'},
+                {tipo:'textarea',label:'Área',icon:'bi-textarea-t'},
+                {tipo:'number',label:'Número',icon:'bi-123'},
+                {tipo:'email',label:'E-mail',icon:'bi-envelope'},
+                {tipo:'url',label:'URL',icon:'bi-link'},
+                {tipo:'date',label:'Data',icon:'bi-calendar'},
+                {tipo:'datetime',label:'Data/hora',icon:'bi-calendar-event'},
+                {tipo:'time',label:'Hora',icon:'bi-clock'},
+                {tipo:'select',label:'Select',icon:'bi-menu-button'},
+                {tipo:'select_multiple',label:'Multi-select',icon:'bi-menu-button-wide'},
+                {tipo:'radio',label:'Radio',icon:'bi-record-circle'},
+                {tipo:'checkbox',label:'Checkbox',icon:'bi-check2-square'},
+                {tipo:'toggle',label:'Toggle',icon:'bi-toggle-on'},
+                {tipo:'file',label:'Arquivo',icon:'bi-paperclip'},
+                {tipo:'image',label:'Imagem',icon:'bi-image'},
+                {tipo:'hidden',label:'Oculto',icon:'bi-eye-slash'},
+                {tipo:'html',label:'HTML',icon:'bi-code'},
+                {tipo:'divider',label:'Divisor',icon:'bi-dash-lg'},
+                {tipo:'heading',label:'Título',icon:'bi-type-h2'},
+              ] %}
+              {% for t in tipos %}
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="adicionarCampo('{{ t.tipo }}')" title="{{ t.label }}">
+                <i class="bi {{ t.icon }}"></i> <span class="d-none d-xl-inline">{{ t.label }}</span>
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── Coluna direita: canvas de campos ── #}
+      <div class="col-lg-8">
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-layout-wtf me-2"></i>Campos do Formulário</span>
+            <small class="text-muted" id="campos-count">0 campo(s)</small>
+          </div>
+          <div class="card-body p-3">
+            <div id="canvas-empty" class="mb-3"><span>Clique em um tipo de campo para adicionar</span></div>
+            <div id="campos-canvas" class="d-flex flex-column gap-2"></div>
+          </div>
+          <div class="card-footer d-flex justify-content-end gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-floppy me-1"></i> Salvar formulário
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>{# /row #}
+  </form>
+</div>
+
+{# ── Modal de edição de campo ── #}
+<div class="modal fade" id="modal-campo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Configurar Campo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modal-campo-body"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarCampoModal()">Aplicar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+// ── Estado ──────────────────────────────────────────────────────────────────
+let campos = {{ campos|map(c => {
+  'id': c.id,
+  'chave': c.chave,
+  'label': c.label,
+  'tipo': c.tipo,
+  'ordem': c.ordem,
+  'obrigatorio': c.obrigatorio,
+  'placeholder': c.placeholder,
+  'ajuda': c.ajuda,
+  'valor_padrao': c.valorPadrao,
+  'opcoes': c.opcoes
+})|json_encode(constant('JSON_UNESCAPED_UNICODE'))|raw }};
+
+let modalIndex = null;
+
+// ── Inicialização ────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  campos.forEach((_, i) => renderCampo(i));
+  atualizarCanvas();
+
+  // Sortable drag-and-drop
+  if (typeof Sortable !== 'undefined') {
+    Sortable.create(document.getElementById('campos-canvas'), {
+      handle: '.drag-handle',
+      animation: 150,
+      onEnd: (evt) => {
+        const el = campos.splice(evt.oldIndex, 1)[0];
+        campos.splice(evt.newIndex, 0, el);
+        campos.forEach((c, i) => c.ordem = i);
+      }
+    });
+  }
+
+  document.getElementById('form-editor').addEventListener('submit', (e) => {
+    document.getElementById('campos_json').value = JSON.stringify(campos);
+  });
+});
+
+// ── Adicionar campo ──────────────────────────────────────────────────────────
+function adicionarCampo(tipo) {
+  const i = campos.length;
+  const chave = tipo + '_' + Date.now();
+  const labels = {
+    text:'Texto',textarea:'Área de texto',number:'Número',email:'E-mail',url:'URL',
+    date:'Data',datetime:'Data e hora',time:'Hora',select:'Seleção',
+    select_multiple:'Seleção múltipla',radio:'Opção única',checkbox:'Caixas de seleção',
+    toggle:'Liga/Desliga',file:'Arquivo',image:'Imagem',hidden:'Campo oculto',
+    html:'Bloco HTML',divider:'Divisor',heading:'Título'
+  };
+  campos.push({ chave, label: labels[tipo] || tipo, tipo, ordem: i, obrigatorio: false,
+    placeholder: null, ajuda: null, valor_padrao: null, opcoes: null });
+  renderCampo(i);
+  atualizarCanvas();
+  abrirModal(i);
+}
+
+// ── Renderizar card do campo ─────────────────────────────────────────────────
+function renderCampo(i) {
+  const canvas = document.getElementById('campos-canvas');
+  let card = document.getElementById('campo-card-' + i);
+  if (!card) { card = document.createElement('div'); card.id = 'campo-card-' + i; canvas.appendChild(card); }
+  const c = campos[i];
+  const obrig = c.obrigatorio ? '<span class="text-danger ms-1">*</span>' : '';
+  card.className = 'campo-card p-3';
+  card.innerHTML = `
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-grip-vertical drag-handle fs-5"></i>
+      <div class="flex-grow-1">
+        <strong>${c.label}</strong>${obrig}
+        <span class="badge bg-secondary tipo-badge ms-2">${c.tipo}</span>
+        <small class="text-muted ms-1">(${c.chave})</small>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModal(${i})">
+        <i class="bi bi-pencil"></i>
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-danger" onclick="removerCampo(${i})">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+  `;
+}
+
+function removerCampo(i) {
+  campos.splice(i, 1);
+  document.getElementById('campos-canvas').innerHTML = '';
+  campos.forEach((c, idx) => { c.ordem = idx; renderCampo(idx); });
+  atualizarCanvas();
+}
+
+function atualizarCanvas() {
+  document.getElementById('canvas-empty').style.display = campos.length ? 'none' : 'flex';
+  document.getElementById('campos-count').textContent = campos.length + ' campo(s)';
+}
+
+// ── Modal de configuração de campo ──────────────────────────────────────────
+function abrirModal(i) {
+  modalIndex = i;
+  const c = campos[i];
+  const comOpcoes = ['select','select_multiple','radio','checkbox'].includes(c.tipo);
+  const comLayout = ['html','divider','heading'].includes(c.tipo);
+  const opcoes = c.opcoes || {};
+  const listaOpcoes = (opcoes.opcoes || []).join('\n');
+
+  document.getElementById('modal-campo-body').innerHTML = `
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Label</label>
+        <input type="text" class="form-control" id="mc-label" value="${escHtml(c.label)}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Chave (id)</label>
+        <input type="text" class="form-control" id="mc-chave" value="${escHtml(c.chave)}">
+        <small class="text-muted">Sem espaços, sem acentos.</small>
+      </div>
+      ${!comLayout ? `
+      <div class="col-md-6">
+        <label class="form-label">Placeholder</label>
+        <input type="text" class="form-control" id="mc-placeholder" value="${escHtml(c.placeholder||'')}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Valor padrão</label>
+        <input type="text" class="form-control" id="mc-valor-padrao" value="${escHtml(c.valor_padrao||'')}">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Texto de ajuda</label>
+        <input type="text" class="form-control" id="mc-ajuda" value="${escHtml(c.ajuda||'')}">
+      </div>
+      <div class="col-md-3">
+        <div class="form-check form-switch mt-4">
+          <input class="form-check-input" type="checkbox" id="mc-obrigatorio" ${c.obrigatorio?'checked':''}>
+          <label class="form-check-label" for="mc-obrigatorio">Obrigatório</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Colunas (1-12)</label>
+        <input type="number" class="form-control" id="mc-col" min="1" max="12" value="${opcoes.col||12}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Classe CSS extra</label>
+        <input type="text" class="form-control" id="mc-css" value="${escHtml(opcoes.css_class||'')}">
+      </div>` : ''}
+      ${comOpcoes ? `
+      <div class="col-12">
+        <label class="form-label fw-semibold">Opções (uma por linha)</label>
+        <textarea class="form-control" id="mc-opcoes" rows="5">${escHtml(listaOpcoes)}</textarea>
+      </div>` : ''}
+      ${c.tipo === 'html' ? `
+      <div class="col-12">
+        <label class="form-label fw-semibold">Conteúdo HTML</label>
+        <textarea class="form-control font-monospace" id="mc-content" rows="6">${escHtml(opcoes.content||'')}</textarea>
+      </div>` : ''}
+      ${c.tipo === 'heading' ? `
+      <div class="col-md-4">
+        <label class="form-label">Nível (1-6)</label>
+        <input type="number" class="form-control" id="mc-nivel" min="1" max="6" value="${opcoes.nivel||2}">
+      </div>` : ''}
+      ${c.tipo === 'number' ? `
+      <div class="col-md-4"><label class="form-label">Mínimo</label><input type="number" class="form-control" id="mc-min" value="${opcoes.min??''}"></div>
+      <div class="col-md-4"><label class="form-label">Máximo</label><input type="number" class="form-control" id="mc-max" value="${opcoes.max??''}"></div>
+      <div class="col-md-4"><label class="form-label">Passo</label><input type="number" class="form-control" id="mc-step" value="${opcoes.step??''}"></div>` : ''}
+      ${c.tipo === 'text' ? `
+      <div class="col-md-6">
+        <label class="form-label">Máscara</label>
+        <select class="form-select" id="mc-mask">
+          <option value="" ${!opcoes.mask?'selected':''}>Nenhuma</option>
+          <option value="cpf" ${opcoes.mask==='cpf'?'selected':''}>CPF</option>
+          <option value="cnpj" ${opcoes.mask==='cnpj'?'selected':''}>CNPJ</option>
+          <option value="telefone" ${opcoes.mask==='telefone'?'selected':''}>Telefone</option>
+          <option value="cep" ${opcoes.mask==='cep'?'selected':''}>CEP</option>
+          <option value="custom" ${opcoes.mask&&!['cpf','cnpj','telefone','cep'].includes(opcoes.mask)?'selected':''}>Personalizada</option>
+        </select>
+      </div>` : ''}
+      ${!comLayout ? `
+      <div class="col-12">
+        <label class="form-label">Validação (regex)</label>
+        <input type="text" class="form-control font-monospace" id="mc-validacao" placeholder="/^[A-Za-z]+$/" value="${escHtml(opcoes.validacao||'')}">
+      </div>
+      <hr class="my-2">
+      <div class="col-12">
+        <p class="fw-semibold mb-2 small">Exibição condicional</p>
+        <div class="row g-2">
+          <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="mc-cond-campo" placeholder="chave do campo" value="${escHtml(opcoes.condicional?.campo||'')}"></div>
+          <div class="col-md-3">
+            <select class="form-select form-select-sm" id="mc-cond-op">
+              ${['=','!=','>','<','contains'].map(op => `<option value="${op}" ${(opcoes.condicional?.operador||'=')===op?'selected':''}>${op}</option>`).join('')}
+            </select>
+          </div>
+          <div class="col-md-5"><input type="text" class="form-control form-control-sm" id="mc-cond-valor" placeholder="valor esperado" value="${escHtml(opcoes.condicional?.valor||'')}"></div>
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+  new bootstrap.Modal(document.getElementById('modal-campo')).show();
+}
+
+function salvarCampoModal() {
+  const i = modalIndex;
+  const c = campos[i];
+  const get = (id) => document.getElementById(id);
+  const val = (id) => get(id)?.value ?? null;
+
+  c.label     = val('mc-label') || c.label;
+  c.chave     = (val('mc-chave')||c.chave).replace(/\s+/g,'_').toLowerCase();
+  c.placeholder  = val('mc-placeholder')  || null;
+  c.valor_padrao = val('mc-valor-padrao') || null;
+  c.ajuda        = val('mc-ajuda')        || null;
+  c.obrigatorio  = get('mc-obrigatorio')?.checked ?? false;
+
+  const extras = {};
+  const col = parseInt(val('mc-col'));
+  if (col && col < 12) extras.col = col;
+  const css = val('mc-css'); if (css) extras.css_class = css;
+  const validacao = val('mc-validacao'); if (validacao) extras.validacao = validacao;
+  const mask = val('mc-mask'); if (mask && mask !== 'custom') extras.mask = mask;
+
+  // Número min/max/step
+  const min = val('mc-min'); if (min !== null && min !== '') extras.min = parseFloat(min);
+  const max = val('mc-max'); if (max !== null && max !== '') extras.max = parseFloat(max);
+  const step = val('mc-step'); if (step !== null && step !== '') extras.step = parseFloat(step);
+
+  // Opções
+  const opcoesEl = get('mc-opcoes');
+  if (opcoesEl) {
+    extras.opcoes = opcoesEl.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  }
+
+  // HTML content
+  const contentEl = get('mc-content');
+  if (contentEl) extras.content = contentEl.value;
+
+  // Heading nivel
+  const nivel = parseInt(val('mc-nivel'));
+  if (nivel) extras.nivel = nivel;
+
+  // Condicional
+  const condCampo = val('mc-cond-campo');
+  if (condCampo) {
+    extras.condicional = {
+      campo: condCampo,
+      operador: val('mc-cond-op') || '=',
+      valor: val('mc-cond-valor') || '',
+    };
+  }
+
+  c.opcoes = Object.keys(extras).length ? extras : null;
+
+  bootstrap.Modal.getInstance(document.getElementById('modal-campo')).hide();
+  document.getElementById('campos-canvas').innerHTML = '';
+  campos.forEach((_, idx) => renderCampo(idx));
+  atualizarCanvas();
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

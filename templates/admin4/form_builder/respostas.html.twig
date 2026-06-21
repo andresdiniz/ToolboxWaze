@@ -1,0 +1,108 @@
+{% extends 'admin4/base.html.twig' %}
+{% block title %}Respostas: {{ form.nome }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <h2 class="mb-0">Respostas: <span class="text-primary">{{ form.nome }}</span></h2>
+    <div class="d-flex gap-2">
+      <a href="{{ path('admin4_form_builder_exportar_csv', {id: form.id}) }}" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-download me-1"></i> Exportar CSV
+      </a>
+      <a href="{{ path('admin4_form_builder_editar', {id: form.id}) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i> Voltar
+      </a>
+    </div>
+  </div>
+
+  {% if respostas is empty %}
+    <div class="text-center py-5 text-muted"><i class="bi bi-inbox display-4 d-block mb-3"></i> Nenhuma resposta recebida ainda.</div>
+  {% else %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>Data</th>
+          <th>Usuário / IP</th>
+          <th>Status</th>
+          {% for campo in form.campos %}
+            {% if campo.tipo not in ['html','divider','heading','hidden'] %}
+            <th>{{ campo.label }}</th>
+            {% endif %}
+          {% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in respostas %}
+        <tr>
+          <td class="text-muted small">{{ r.id }}</td>
+          <td class="small">{{ r.criadoEm|date('d/m/Y H:i') }}</td>
+          <td class="small">
+            {{ r.usuario ? r.usuario.email : (r.ip ?? '-') }}
+          </td>
+          <td>
+            <span class="badge bg-{{ r.status == 'aprovado' ? 'success' : (r.status == 'rejeitado' ? 'danger' : (r.status == 'arquivado' ? 'secondary' : 'warning text-dark')) }}">
+              {{ r.status }}
+            </span>
+          </td>
+          {% for campo in form.campos %}
+            {% if campo.tipo not in ['html','divider','heading','hidden'] %}
+            <td class="small">
+              {% set v = r.dados[campo.chave] ?? '' %}
+              {% if v is iterable %}{{ v|join(', ') }}{% else %}{{ v }}{% endif %}
+            </td>
+            {% endif %}
+          {% endfor %}
+          <td>
+            <button class="btn btn-xs btn-outline-secondary" onclick="abrirNota({{ r.id }}, '{{ r.status }}', {{ r.notaAdmin ? ('"' ~ r.notaAdmin|e('js') ~ '"') : 'null' }})">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="modal-nota" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Status / Nota</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <select class="form-select mb-3" id="nota-status">
+          <option value="pendente">Pendente</option>
+          <option value="aprovado">Aprovado</option>
+          <option value="rejeitado">Rejeitado</option>
+          <option value="arquivado">Arquivado</option>
+        </select>
+        <textarea class="form-control" id="nota-texto" rows="4" placeholder="Nota interna (opcional)"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarNota()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block javascripts %}{{ parent() }}
+<script>
+let _notaId = null;
+function abrirNota(id, status, nota) {
+  _notaId = id;
+  document.getElementById('nota-status').value = status;
+  document.getElementById('nota-texto').value = nota || '';
+  new bootstrap.Modal(document.getElementById('modal-nota')).show();
+}
+async function salvarNota() {
+  const body = new FormData();
+  body.append('status', document.getElementById('nota-status').value);
+  body.append('nota', document.getElementById('nota-texto').value);
+  await fetch(`/admin4/form-builder/resposta/${_notaId}/status`, {method:'POST', body});
+  location.reload();
+}
+</script>
+{% endblock %}

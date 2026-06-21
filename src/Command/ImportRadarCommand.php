@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Message\EnviarEmailRadarRecente;
 use App\Message\ImportRadarMedidoresMessage;
 use App\MessageHandler\ImportRadarMedidoresHandler;
 use App\Repository\BrazilianStateRepository;
+use App\Repository\UserRepository;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -14,6 +16,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Importa radares em três etapas:
@@ -38,6 +41,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   2. identity_hash SHA-256 de UF|local_normalizado|tipo_medidor
  *   3. UF + UPPER(municipio) + UPPER(logradouro)
  *
+ * NOTIFICAÇÃO POR E-MAIL (assíncrona via Messenger):
+ *   Ao final do execute(), se houver inserções novas e não for dry-run,
+ *   dispara EnviarEmailRadarRecente para a fila do Messenger — um por usuário
+ *   por UF. O consumer processa os envios de forma independente, sem bloquear
+ *   o comando de importação.
+ *
  * USO:
  *   php bin/console app:import-radares                        # todos os estados (RBMLQ)
  *   php bin/console app:import-radares --uf=MG                # só MG
@@ -46,6 +55,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   php bin/console app:import-radares --skip-rbmlq           # pula RBMLQ, só links Waze
  *   php bin/console app:import-radares --skip-waze            # pula links Waze
  *   php bin/console app:import-radares --dry-run              # simula sem gravar
+ *   php bin/console app:import-radares --skip-notify          # importa sem notificar usuários
  */
 #[AsCommand(
     name: 'app:import-radares',
@@ -55,10 +65,15 @@ final class ImportRadarCommand extends Command
 {
     private const CURL_TIMEOUT = 120;
 
+    /** @var array<string, int> Acumula contagem de inserções novas por UF nesta execução */
+    private array $novosPorUf = [];
+
     public function __construct(
         private readonly ImportRadarMedidoresHandler $rbmlqHandler,
         private readonly BrazilianStateRepository    $stateRepository,
         private readonly Connection                  $connection,
+        private readonly MessageBusInterface         $bus,
+        private readonly UserRepository              $userRepo,
     ) {
         parent::__construct();
     }
@@ -95,17 +110,26 @@ final class ImportRadarCommand extends Command
                 'dry-run', null,
                 InputOption::VALUE_NONE,
                 'Simula sem gravar nada no banco'
+            )
+            ->addOption(
+                'skip-notify', null,
+                InputOption::VALUE_NONE,
+                'Importa sem enfileirar notificações de e-mail para os usuários'
             );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io        = new SymfonyStyle($input, $output);
-        $skipRbmlq = (bool) $input->getOption('skip-rbmlq');
-        $skipWaze  = (bool) $input->getOption('skip-waze');
-        $dryRun    = (bool) $input->getOption('dry-run');
-        $jsonFile  = $input->getOption('file');
-        $jsonUrl   = $input->getOption('url');
+        $io          = new SymfonyStyle($input, $output);
+        $skipRbmlq   = (bool) $input->getOption('skip-rbmlq');
+        $skipWaze    = (bool) $input->getOption('skip-waze');
+        $dryRun      = (bool) $input->getOption('dry-run');
+        $skipNotify  = (bool) $input->getOption('skip-notify');
+        $jsonFile    = $input->getOption('file');
+        $jsonUrl     = $input->getOption('url');
+
+        // Reset do acumulador a cada execução
+        $this->novosPorUf = [];
 
         $io->title('Importação Radares — JSON' . ($dryRun ? ' [DRY-RUN]' : ''));
 
@@ -134,6 +158,7 @@ final class ImportRadarCommand extends Command
             'JSON URL   : ' . ($jsonUrl   ?? '—'),
             'RBMLQ      : ' . ($skipRbmlq ? 'PULADO (--skip-rbmlq)' : 'ATIVO'),
             'Etapa Waze : ' . ($skipWaze  ? 'PULADA (--skip-waze)' : 'ATIVA (' . count($linkMapReferencia) . ' estado(s) com URL)'),
+            'Notificar  : ' . ($skipNotify || $dryRun ? 'NÃO' : 'SIM (via Messenger)'),
         ]);
 
         $allErrors = [];
@@ -281,6 +306,40 @@ final class ImportRadarCommand extends Command
             } else {
                 $io->text('<info>✔ Nenhum registro pendente de backfill.</info>');
             }
+        }
+
+        // ════════════════════════════════════════════════════════════
+        // NOTIFICAÇÃO ASSÍNCRONA — dispatch para a fila do Messenger
+        // ════════════════════════════════════════════════════════════
+        if (!$dryRun && !$skipNotify && $this->novosPorUf !== []) {
+            $io->section('Enfileirando notificações de e-mail...');
+
+            $totalDispatched = 0;
+
+            foreach ($this->novosPorUf as $uf => $qtd) {
+                $usuarios = $this->userRepo->findApprovedComAcessoUf($uf);
+
+                foreach ($usuarios as $usuario) {
+                    $this->bus->dispatch(new EnviarEmailRadarRecente(
+                        siglaUf:         $uf,
+                        userId:          $usuario->getId(),
+                        quantidadeNovos: $qtd,
+                    ));
+                    $totalDispatched++;
+                }
+
+                $io->text(sprintf(
+                    '  <info>[%s]</info> %d novo(s) radar(es) → %d e-mail(s) enfileirado(s).',
+                    $uf, $qtd, count($usuarios)
+                ));
+            }
+
+            $io->success(sprintf(
+                '%d notificação(ões) enfileirada(s) — serão enviadas pelo Messenger consumer.',
+                $totalDispatched
+            ));
+        } elseif (!$dryRun && !$skipNotify) {
+            $io->text('<info>✔ Nenhum radar novo inserido — notificações não necessárias.</info>');
         }
 
         // ════════════════════════════════════════════════════════════
@@ -499,6 +558,11 @@ final class ImportRadarCommand extends Command
             }
 
             $inserted++;
+
+            // ── Acumula para notificação assíncrona ───────────────────
+            if ($siglaUf !== '') {
+                $this->novosPorUf[$siglaUf] = ($this->novosPorUf[$siglaUf] ?? 0) + 1;
+            }
         }
 
         return [$inserted, $updated, $skipped];

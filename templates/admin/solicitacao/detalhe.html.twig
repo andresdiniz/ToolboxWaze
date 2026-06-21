@@ -1,0 +1,195 @@
+{% extends 'base.html.twig' %}
+{% block title %}Solicitação #{{ sol.id }}{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width: 860px">
+
+    {# ── Cabeçalho ── #}
+    <div class="d-flex align-items-center gap-2 mb-4">
+        <a href="javascript:history.back()" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h1 class="h5 mb-0 fw-bold">
+            Solicitação <span class="text-muted">#{{ sol.id }}</span>
+            — {{ sol.tipoLabel }}
+        </h1>
+        <span class="badge bg-{{ sol.statusCor }} ms-auto fs-6">{{ sol.statusLabel }}</span>
+    </div>
+
+    <div class="row g-4">
+
+        {# ── Coluna principal ── #}
+        <div class="col-lg-8">
+
+            {# Dados do solicitante #}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header fw-semibold"><i class="fas fa-user me-2"></i>Solicitante</div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Nome</dt>
+                        <dd class="col-sm-8">{{ sol.solicitanteNome }}</dd>
+                        <dt class="col-sm-4">Usuário Waze</dt>
+                        <dd class="col-sm-8">{{ sol.solicitanteUsuario }}</dd>
+                        <dt class="col-sm-4">E-mail</dt>
+                        <dd class="col-sm-8">{{ sol.solicitanteEmail }}</dd>
+                        {% if sol.estado %}
+                        <dt class="col-sm-4">Estado</dt>
+                        <dd class="col-sm-8">{{ sol.estado }}</dd>
+                        {% endif %}
+                        <dt class="col-sm-4">Criada em</dt>
+                        <dd class="col-sm-8">{{ sol.criadaEm|date('d/m/Y H:i') }}</dd>
+                    </dl>
+                </div>
+            </div>
+
+            {# Dados da solicitação (dinâmicos ou legados) #}
+            {% if camposExibicao %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header fw-semibold">
+                    <i class="fas fa-list-alt me-2"></i>
+                    Dados da solicitação
+                    {% if sol.dinamico %}
+                        <span class="badge bg-info ms-2 fw-normal">Formulário dinâmico</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        {% for campo in camposExibicao %}
+                            <dt class="col-sm-4">{{ campo.label }}</dt>
+                            <dd class="col-sm-8">
+                                {% if campo.tipo == 'url' %}
+                                    <a href="{{ campo.valor }}" target="_blank" rel="noopener"
+                                       class="text-break">{{ campo.valor }} <i class="fas fa-external-link-alt fa-xs"></i></a>
+                                {% else %}
+                                    {{ campo.valor }}
+                                {% endif %}
+                            </dd>
+                        {% endfor %}
+                    </dl>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Histórico / comentários #}
+            <div class="card shadow-sm">
+                <div class="card-header fw-semibold"><i class="fas fa-history me-2"></i>Histórico</div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="historico-lista">
+                        {% for h in sol.historicos %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <span>
+                                    <strong>{{ h.autor ? h.autor.email : 'Sistema' }}</strong>
+                                    <span class="badge bg-secondary ms-1">{{ h.acao }}</span>
+                                </span>
+                                <small class="text-muted">{{ h.criadoEm|date('d/m/Y H:i') }}</small>
+                            </div>
+                            <div class="mt-1">{{ h.descricao }}</div>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item text-muted">Nenhum histórico ainda.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <div class="input-group">
+                        <input type="text" id="comentario-input" class="form-control"
+                               placeholder="Adicionar comentário…">
+                        <button class="btn btn-outline-primary" id="btn-comentar">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        {# ── Coluna lateral (ações) ── #}
+        <div class="col-lg-4">
+
+            <div class="card shadow-sm sticky-top" style="top: 1rem">
+                <div class="card-header fw-semibold"><i class="fas fa-cog me-2"></i>Ações</div>
+                <div class="card-body">
+
+                    <label class="form-label fw-semibold">Alterar status</label>
+                    <select id="status-select" class="form-select mb-2">
+                        {% for val, label in statusOpcoes %}
+                            <option value="{{ val }}" {{ sol.status == val ? 'selected' : '' }}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+
+                    <label class="form-label fw-semibold mt-2">Nota (opcional)</label>
+                    <textarea id="nota-input" class="form-control mb-3" rows="2"
+                              placeholder="Justificativa ou observação…">{{ sol.notaResolucao }}</textarea>
+
+                    <button class="btn btn-primary w-100" id="btn-salvar-status">
+                        <i class="fas fa-save me-1"></i> Salvar status
+                    </button>
+
+                    {% if sol.resolvidaPor %}
+                    <div class="mt-3 text-muted small">
+                        Resolvida por <strong>{{ sol.resolvidaPor.email }}</strong>
+                        em {{ sol.resolvidaEm|date('d/m/Y H:i') }}
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    const solId = {{ sol.id }};
+    const baseUrl = '/admin/solicitacoes/' + solId;
+
+    // ── Salvar status
+    document.getElementById('btn-salvar-status').addEventListener('click', async () => {
+        const status = document.getElementById('status-select').value;
+        const nota   = document.getElementById('nota-input').value;
+        const res    = await fetch(baseUrl + '/status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({status, nota}),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            const badge = document.querySelector('.badge.ms-auto');
+            badge.textContent = data.statusLabel;
+            badge.className = 'badge ms-auto fs-6 bg-' + data.statusCor;
+        } else {
+            alert(data.msg ?? 'Erro ao salvar.');
+        }
+    });
+
+    // ── Comentar
+    document.getElementById('btn-comentar').addEventListener('click', async () => {
+        const input = document.getElementById('comentario-input');
+        const texto = input.value.trim();
+        if (!texto) return;
+        const res  = await fetch(baseUrl + '/comentar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({texto}),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            const li = document.createElement('li');
+            li.className = 'list-group-item';
+            li.innerHTML = `<div class="d-flex justify-content-between">
+                <span><strong>${data.autor}</strong> <span class="badge bg-secondary ms-1">comentario</span></span>
+                <small class="text-muted">${data.data}</small></div>
+                <div class="mt-1">${data.texto}</div>`;
+            document.getElementById('historico-lista').appendChild(li);
+            input.value = '';
+        }
+    });
+})();
+</script>
+
+{% endblock %}

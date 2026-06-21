@@ -1,0 +1,172 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ formDef.nome }}{% endblock %}
+
+{% block body %}
+<div class="container py-4" style="max-width: 680px">
+
+    <div class="mb-4">
+        <h1 class="h4 fw-bold mb-1">
+            <i class="fas fa-paper-plane me-2 text-primary"></i>{{ formDef.nome }}
+        </h1>
+        {% if formDef.descricao %}
+            <p class="text-muted mb-0">{{ formDef.descricao }}</p>
+        {% endif %}
+    </div>
+
+    {% for type, msgs in app.flashes %}
+        {% for msg in msgs %}
+            <div class="alert alert-{{ type == 'success' ? 'success' : 'danger' }} alert-dismissible fade show">
+                {{ msg }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" novalidate>
+
+                {% for campo in campos %}
+                    {% set chave = campo.chave %}
+                    {% set val   = valores[chave] ?? campo.valorPadrao ?? '' %}
+                    {% set err   = errors[chave] is defined %}
+                    {% set extras = campo.opcoes ?? {} %}
+
+                    <div class="mb-3">
+
+                        {# ── TITULO / SEPARADOR ── #}
+                        {% if campo.tipo == 'titulo' %}
+                            <h5 class="fw-bold mt-2 mb-0">{{ campo.label }}</h5>
+                            {% if campo.ajuda %}<p class="text-muted small">{{ campo.ajuda }}</p>{% endif %}
+
+                        {# ── CONTEUDO HTML ── #}
+                        {% elseif campo.tipo == 'html' %}
+                            <div class="alert alert-light border">{{ extras.content|raw }}</div>
+
+                        {# ── TEXT / EMAIL / URL / NUMBER / DATE ── #}
+                        {% elseif campo.tipo in ['text','email','url','number','date','tel'] %}
+                            <label class="form-label fw-semibold">
+                                {{ campo.label }}
+                                {% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <input type="{{ campo.tipo }}"
+                                   name="campos[{{ chave }}]"
+                                   value="{{ val }}"
+                                   class="form-control{{ err ? ' is-invalid' : '' }}"
+                                   placeholder="{{ campo.placeholder ?? '' }}"
+                                   {{ campo.obrigatorio ? 'required' : '' }}>
+                            {% if campo.ajuda %}<div class="form-text">{{ campo.ajuda }}</div>{% endif %}
+                            {% if err %}<div class="invalid-feedback">{{ errors[chave] }}</div>{% endif %}
+
+                        {# ── TEXTAREA ── #}
+                        {% elseif campo.tipo == 'textarea' %}
+                            <label class="form-label fw-semibold">
+                                {{ campo.label }}
+                                {% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <textarea name="campos[{{ chave }}]"
+                                      class="form-control{{ err ? ' is-invalid' : '' }}"
+                                      rows="{{ extras.rows ?? 4 }}"
+                                      placeholder="{{ campo.placeholder ?? '' }}"
+                                      {{ campo.obrigatorio ? 'required' : '' }}>{{ val }}</textarea>
+                            {% if campo.ajuda %}<div class="form-text">{{ campo.ajuda }}</div>{% endif %}
+                            {% if err %}<div class="invalid-feedback">{{ errors[chave] }}</div>{% endif %}
+
+                        {# ── SELECT ── #}
+                        {% elseif campo.tipo == 'select' %}
+                            <label class="form-label fw-semibold">
+                                {{ campo.label }}
+                                {% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <select name="campos[{{ chave }}]"
+                                    class="form-select{{ err ? ' is-invalid' : '' }}"
+                                    {{ campo.obrigatorio ? 'required' : '' }}>
+                                <option value="">Selecione…</option>
+                                {% for opcao in (extras.opcoes ?? []) %}
+                                    <option value="{{ opcao.valor ?? opcao }}"
+                                        {{ val == (opcao.valor ?? opcao) ? 'selected' : '' }}>
+                                        {{ opcao.label ?? opcao }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if campo.ajuda %}<div class="form-text">{{ campo.ajuda }}</div>{% endif %}
+                            {% if err %}<div class="invalid-feedback">{{ errors[chave] }}</div>{% endif %}
+
+                        {# ── RADIO ── #}
+                        {% elseif campo.tipo == 'radio' %}
+                            <label class="form-label fw-semibold d-block">
+                                {{ campo.label }}
+                                {% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {% for opcao in (extras.opcoes ?? []) %}
+                                {% set opcaoVal = opcao.valor ?? opcao %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio"
+                                           name="campos[{{ chave }}]"
+                                           id="{{ chave }}_{{ loop.index }}"
+                                           value="{{ opcaoVal }}"
+                                           {{ val == opcaoVal ? 'checked' : '' }}
+                                           {{ campo.obrigatorio and loop.first ? 'required' : '' }}>
+                                    <label class="form-check-label" for="{{ chave }}_{{ loop.index }}">
+                                        {{ opcao.label ?? opcao }}
+                                    </label>
+                                </div>
+                            {% endfor %}
+                            {% if err %}<div class="text-danger small mt-1">{{ errors[chave] }}</div>{% endif %}
+
+                        {# ── CHECKBOX (múltiplo) ── #}
+                        {% elseif campo.tipo == 'checkbox' %}
+                            <label class="form-label fw-semibold d-block">
+                                {{ campo.label }}
+                                {% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {% set valArr = val is iterable ? val : (val ? [val] : []) %}
+                            {% for opcao in (extras.opcoes ?? []) %}
+                                {% set opcaoVal = opcao.valor ?? opcao %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="campos[{{ chave }}][]"
+                                           id="{{ chave }}_{{ loop.index }}"
+                                           value="{{ opcaoVal }}"
+                                           {{ opcaoVal in valArr ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="{{ chave }}_{{ loop.index }}">
+                                        {{ opcao.label ?? opcao }}
+                                    </label>
+                                </div>
+                            {% endfor %}
+                            {% if err %}<div class="text-danger small mt-1">{{ errors[chave] }}</div>{% endif %}
+
+                        {# ── CHECKBOX ÚNICO (boolean) ── #}
+                        {% elseif campo.tipo == 'toggle' %}
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox"
+                                       name="campos[{{ chave }}]"
+                                       id="{{ chave }}"
+                                       value="1"
+                                       {{ val ? 'checked' : '' }}>
+                                <label class="form-check-label fw-semibold" for="{{ chave }}">
+                                    {{ campo.label }}
+                                    {% if campo.obrigatorio %}<span class="text-danger">*</span>{% endif %}
+                                </label>
+                            </div>
+                            {% if campo.ajuda %}<div class="form-text">{{ campo.ajuda }}</div>{% endif %}
+
+                        {% endif %}
+
+                    </div>
+                {% endfor %}
+
+                <div class="d-flex gap-2 pt-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane me-1"></i> Enviar solicitação
+                    </button>
+                    <a href="{{ path('solicitar_index') }}" class="btn btn-outline-secondary">Cancelar</a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

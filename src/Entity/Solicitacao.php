@@ -12,6 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\HasLifecycleCallbacks]
 class Solicitacao
 {
+    // ── Tipos legados (mantidos para compatibilidade com dados existentes) ────
     public const TIPO_IMAGEM_SATELITE       = 'imagem_satelite';
     public const TIPO_GERENTE_AREA          = 'gerente_area';
     public const TIPO_GERENTE_ESTADO_PAIS   = 'gerente_estado_pais';
@@ -20,6 +21,7 @@ class Solicitacao
     public const TIPO_BANDEIRA_POSTO        = 'bandeira_posto';
     public const TIPO_ID_SEGMENTO           = 'id_segmento';
 
+    /** @deprecated Use FormBuilder slug como tipo para novos forms */
     public const TIPOS = [
         self::TIPO_IMAGEM_SATELITE     => 'Imagem de Satélite',
         self::TIPO_GERENTE_AREA        => 'Gerente de Área',
@@ -31,13 +33,13 @@ class Solicitacao
     ];
 
     // Status completos do fluxo
-    public const STATUS_PENDENTE      = 'pendente';      // Recém criada, aguardando triagem
-    public const STATUS_EM_ANALISE    = 'em_analise';    // Responsável está analisando
-    public const STATUS_EM_ANDAMENTO  = 'em_andamento';  // Em execução
-    public const STATUS_AGUARDANDO    = 'aguardando';    // Aguardando retorno do solicitante
-    public const STATUS_RESOLVIDA     = 'resolvida';     // Concluída com sucesso
-    public const STATUS_NEGADA        = 'negada';        // Negada com justificativa
-    public const STATUS_CANCELADA     = 'cancelada';     // Cancelada pelo solicitante
+    public const STATUS_PENDENTE      = 'pendente';
+    public const STATUS_EM_ANALISE    = 'em_analise';
+    public const STATUS_EM_ANDAMENTO  = 'em_andamento';
+    public const STATUS_AGUARDANDO    = 'aguardando';
+    public const STATUS_RESOLVIDA     = 'resolvida';
+    public const STATUS_NEGADA        = 'negada';
+    public const STATUS_CANCELADA     = 'cancelada';
 
     public const STATUS_LABELS = [
         self::STATUS_PENDENTE     => 'Pendente',
@@ -59,7 +61,6 @@ class Solicitacao
         self::STATUS_CANCELADA    => 'dark',
     ];
 
-    /** Status que encerram o fluxo */
     public const STATUS_FINAIS = [
         self::STATUS_RESOLVIDA,
         self::STATUS_NEGADA,
@@ -71,8 +72,20 @@ class Solicitacao
     #[ORM\Column]
     private ?int $id = null;
 
+    /**
+     * Para solicitações legadas: um dos TIPOS hardcoded.
+     * Para novos forms dinâmicos: o slug do FormBuilder (ex: 'mudanca-nivel').
+     */
     #[ORM\Column(length: 64)]
     private string $tipo;
+
+    /**
+     * FK para FormBuilder — preenchida apenas em solicitações criadas via form dinâmico.
+     * Null para solicitações legadas.
+     */
+    #[ORM\ManyToOne(targetEntity: FormBuilder::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?FormBuilder $formulario = null;
 
     #[ORM\Column(length: 32)]
     private string $status = self::STATUS_PENDENTE;
@@ -89,8 +102,13 @@ class Solicitacao
     #[ORM\Column(length: 2, nullable: true)]
     private ?string $estado = null;
 
+    /** Dados legados (campos fixos do tipo) */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $dados = null;
+
+    /** Respostas dos campos dinâmicos do FormBuilder */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $dadosDinamicos = null;
 
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $arquivos = null;
@@ -140,16 +158,52 @@ class Solicitacao
 
     public function getId(): ?int { return $this->id; }
 
+    // ── tipo ─────────────────────────────────────────────────────────────────
+
     public function getTipo(): string { return $this->tipo; }
+
+    /**
+     * Aceita tanto tipos legados (array TIPOS) quanto slugs de FormBuilder.
+     */
     public function setTipo(string $tipo): static
     {
-        if (!array_key_exists($tipo, self::TIPOS)) {
-            throw new \InvalidArgumentException("Tipo inválido: $tipo");
-        }
         $this->tipo = $tipo;
         return $this;
     }
-    public function getTipoLabel(): string { return self::TIPOS[$this->tipo] ?? $this->tipo; }
+
+    public function getTipoLabel(): string
+    {
+        // Tipo legado
+        if (isset(self::TIPOS[$this->tipo])) {
+            return self::TIPOS[$this->tipo];
+        }
+        // Form dinâmico: usa nome do FormBuilder se disponível
+        if ($this->formulario !== null) {
+            return $this->formulario->getNome();
+        }
+        return $this->tipo;
+    }
+
+    public function isDinamico(): bool
+    {
+        return $this->formulario !== null;
+    }
+
+    // ── formulario ───────────────────────────────────────────────────────────
+
+    public function getFormulario(): ?FormBuilder { return $this->formulario; }
+    public function setFormulario(?FormBuilder $f): static { $this->formulario = $f; return $this; }
+
+    // ── dadosDinamicos ───────────────────────────────────────────────────────
+
+    public function getDadosDinamicos(): ?array { return $this->dadosDinamicos; }
+    public function setDadosDinamicos(?array $v): static { $this->dadosDinamicos = $v; return $this; }
+    public function getDadoDinamico(string $key, mixed $default = null): mixed
+    {
+        return $this->dadosDinamicos[$key] ?? $default;
+    }
+
+    // ── status ───────────────────────────────────────────────────────────────
 
     public function getStatus(): string { return $this->status; }
     public function setStatus(string $status): static { $this->status = $status; return $this; }
@@ -157,6 +211,8 @@ class Solicitacao
     public function getStatusCor(): string { return self::STATUS_CORES[$this->status] ?? 'secondary'; }
     public function isPendente(): bool { return $this->status === self::STATUS_PENDENTE; }
     public function isFinal(): bool { return in_array($this->status, self::STATUS_FINAIS, true); }
+
+    // ── solicitante ──────────────────────────────────────────────────────────
 
     public function getSolicitanteNome(): string { return $this->solicitanteNome; }
     public function setSolicitanteNome(string $v): static { $this->solicitanteNome = $v; return $this; }
@@ -166,6 +222,8 @@ class Solicitacao
 
     public function getSolicitanteEmail(): string { return $this->solicitanteEmail; }
     public function setSolicitanteEmail(string $v): static { $this->solicitanteEmail = $v; return $this; }
+
+    // ── outros ───────────────────────────────────────────────────────────────
 
     public function getEstado(): ?string { return $this->estado; }
     public function setEstado(?string $v): static { $this->estado = $v; return $this; }

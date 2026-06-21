@@ -16,28 +16,40 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Importa radares em duas etapas:
+ * Importa radares em três etapas:
  *
- * ETAPA 1 — Medidores RBMLQ/INMETRO via JSON
+ * ETAPA 1 — Medidores RBMLQ/INMETRO via JSON (padrão)
  *   URL: https://servicos.rbmlq.gov.br/dados-abertos/{UF}/medidores.json
+ *   Pode ser pulada com --skip-rbmlq
  *
- * ETAPA 2 — Links Waze via planilha Referencia.UF (CSV)
+ * ETAPA 1B — JSON local/externo com dados de radares (opcional)
+ *   --file=/path/to/radares.json  ou  --url=https://exemplo.com/radares.json
+ *   Campos aceitos: link_waze, municipio, logradouro, tipo_medidor, numero_serie,
+ *                   faixas[], data_validade, data_ultima_verificacao,
+ *                   cnpj_responsavel, sigla_uf
+ *
+ * ETAPA 2 — Links Waze via planilha Referencia.UF (CSV) — ÚNICA planilha mantida
  *   Cruza: REFERENCIA."Nº DE SÉRIE" = radar_faixa.numero_serie
  *   Grava: radar_medidor.link_waze
+ *   Colunas: LINK: | Nº DE SÉRIE: | NOVO: | EXPIRADO: | CIDADE: | USUÁRIO: | VERIFICADO: | ALTERADO: | AÇÃO:
  *
- *   Colunas esperadas: LINK: | Nº DE SÉRIE: | NOVO: | EXPIRADO: | CIDADE: | USUÁRIO: | VERIFICADO: | ALTERADO: | AÇÃO:
- *
- * BACKFILL — preenche data_verificacao_efetiva = NULL ao final.
+ * DEDUPLICAÇÃO (3 camadas):
+ *   1. numero_serie em radar_faixa (mais precisa)
+ *   2. identity_hash SHA-256 de UF|local_normalizado|tipo_medidor
+ *   3. UF + UPPER(municipio) + UPPER(logradouro)
  *
  * USO:
- *   php bin/console app:import-radares               # todos os estados
- *   php bin/console app:import-radares --uf=MG       # só MG
- *   php bin/console app:import-radares --uf=SP --uf=RJ
- *   php bin/console app:import-radares --skip-waze   # pula etapa 2
+ *   php bin/console app:import-radares                        # todos os estados (RBMLQ)
+ *   php bin/console app:import-radares --uf=MG                # só MG
+ *   php bin/console app:import-radares --file=radares.json    # JSON local
+ *   php bin/console app:import-radares --url=https://...      # JSON remoto
+ *   php bin/console app:import-radares --skip-rbmlq           # pula RBMLQ, só links Waze
+ *   php bin/console app:import-radares --skip-waze            # pula links Waze
+ *   php bin/console app:import-radares --dry-run              # simula sem gravar
  */
 #[AsCommand(
     name: 'app:import-radares',
-    description: 'Importa radares: JSON RBMLQ (etapa 1) + links Waze Referencia.UF (etapa 2)',
+    description: 'Importa radares: JSON RBMLQ/local (etapa 1) + links Waze Referencia.UF (etapa 2)',
 )]
 final class ImportRadarCommand extends Command
 {
@@ -60,18 +72,46 @@ final class ImportRadarCommand extends Command
                 'Filtra por UF(s). Ex: --uf=SP --uf=RJ', []
             )
             ->addOption(
+                'file', null,
+                InputOption::VALUE_REQUIRED,
+                'Caminho para arquivo JSON local de radares'
+            )
+            ->addOption(
+                'url', null,
+                InputOption::VALUE_REQUIRED,
+                'URL de JSON remoto de radares (baixa e importa)'
+            )
+            ->addOption(
+                'skip-rbmlq', null,
+                InputOption::VALUE_NONE,
+                'Pula a importação RBMLQ (etapa 1 padrão)'
+            )
+            ->addOption(
                 'skip-waze', null,
                 InputOption::VALUE_NONE,
-                'Pula a importação de links Waze (etapa 2)'
+                'Pula a importação de links Waze via Referencia.UF (etapa 2)'
+            )
+            ->addOption(
+                'dry-run', null,
+                InputOption::VALUE_NONE,
+                'Simula sem gravar nada no banco'
             );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io       = new SymfonyStyle($input, $output);
-        $skipWaze = (bool) $input->getOption('skip-waze');
+        $io        = new SymfonyStyle($input, $output);
+        $skipRbmlq = (bool) $input->getOption('skip-rbmlq');
+        $skipWaze  = (bool) $input->getOption('skip-waze');
+        $dryRun    = (bool) $input->getOption('dry-run');
+        $jsonFile  = $input->getOption('file');
+        $jsonUrl   = $input->getOption('url');
 
-        $io->title('Importação Radares — JSON RBMLQ');
+        $io->title('Importação Radares — JSON' . ($dryRun ? ' [DRY-RUN]' : ''));
+
+        if ($dryRun) {
+            $io->warning('DRY-RUN ativado — nenhuma alteração será gravada.');
+        }
 
         // ── Resolve lista de UFs ──────────────────────────────────────────
         $requestedUfs = array_map('strtoupper', $input->getOption('uf'));
@@ -89,51 +129,84 @@ final class ImportRadarCommand extends Command
         $linkMapReferencia = $skipWaze ? [] : $this->stateRepository->findLinkMapReferencia();
 
         $io->note([
-            'Fonte      : RBMLQ/INMETRO JSON',
             'Estados    : ' . implode(', ', $ufs),
-            'Etapa Waze : ' . ($skipWaze ? 'PULADA (--skip-waze)' : 'ATIVA (' . count($linkMapReferencia) . ' estado(s) com URL)'),
+            'JSON local : ' . ($jsonFile  ?? '—'),
+            'JSON URL   : ' . ($jsonUrl   ?? '—'),
+            'RBMLQ      : ' . ($skipRbmlq ? 'PULADO (--skip-rbmlq)' : 'ATIVO'),
+            'Etapa Waze : ' . ($skipWaze  ? 'PULADA (--skip-waze)' : 'ATIVA (' . count($linkMapReferencia) . ' estado(s) com URL)'),
         ]);
 
+        $allErrors = [];
+
         // ════════════════════════════════════════════════════════════
-        // ETAPA 1 — Importa medidores via JSON RBMLQ
+        // ETAPA 1A — JSON RBMLQ (padrão, se não pulado)
         // ════════════════════════════════════════════════════════════
-        $io->section('Etapa 1 — Importando medidores RBMLQ (JSON)');
+        if (!$skipRbmlq && $jsonFile === null && $jsonUrl === null) {
+            $io->section('Etapa 1A — Importando medidores RBMLQ (JSON)');
 
-        $total  = count($ufs);
-        $ok     = 0;
-        $errors = [];
+            $total  = count($ufs);
+            $ok     = 0;
+            $errors = [];
 
-        $io->progressStart($total);
+            $io->progressStart($total);
 
-        foreach ($ufs as $uf) {
+            foreach ($ufs as $uf) {
+                try {
+                    if (!$dryRun) {
+                        ($this->rbmlqHandler)(new ImportRadarMedidoresMessage($uf));
+                    }
+                    $ok++;
+                } catch (\Throwable $e) {
+                    $errors[$uf] = $e->getMessage();
+                } finally {
+                    $io->progressAdvance();
+                }
+            }
+
+            $io->progressFinish();
+
+            if ($errors !== []) {
+                foreach ($errors as $uf => $msg) {
+                    $io->text(sprintf('  <comment>%s</comment>: %s', $uf, $msg));
+                    $allErrors["[RBMLQ/{$uf}]"] = $msg;
+                }
+            }
+
+            $io->success(sprintf('%d/%d estado(s) importados via JSON RBMLQ.', $ok, $total));
+        }
+
+        // ════════════════════════════════════════════════════════════
+        // ETAPA 1B — JSON local ou remoto de radares
+        // ════════════════════════════════════════════════════════════
+        if ($jsonFile !== null || $jsonUrl !== null) {
+            $io->section('Etapa 1B — Importando radares via JSON ' . ($jsonFile ? 'local' : 'remoto'));
+
             try {
-                ($this->rbmlqHandler)(new ImportRadarMedidoresMessage($uf));
-                $ok++;
+                $filePath = $jsonFile ?? $this->downloadToTempFile((string) $jsonUrl, 'JSON-remoto');
+                $isTemp   = ($jsonFile === null);
+
+                try {
+                    [$inserted, $updated, $skipped] = $this->importFromJsonFile($filePath, $ufs, $dryRun, $io);
+                    $io->success(sprintf(
+                        'JSON: %d inseridos | %d atualizados | %d pulados (deduplicate).',
+                        $inserted, $updated, $skipped
+                    ));
+                } finally {
+                    if ($isTemp) {
+                        @unlink($filePath);
+                    }
+                }
             } catch (\Throwable $e) {
-                $errors[$uf] = $e->getMessage();
-            } finally {
-                $io->progressAdvance();
+                $allErrors['[JSON]'] = $e->getMessage();
+                $io->error('Erro na etapa JSON: ' . $e->getMessage());
             }
         }
 
-        $io->progressFinish();
-
-        if ($errors !== []) {
-            $io->warning(sprintf('%d estado(s) com erro na etapa 1:', count($errors)));
-            foreach ($errors as $uf => $msg) {
-                $io->text(sprintf('  <comment>%s</comment>: %s', $uf, $msg));
-            }
-        }
-
-        $io->success(sprintf('%d/%d estado(s) importados via JSON RBMLQ.', $ok, $total));
-
         // ════════════════════════════════════════════════════════════
-        // ETAPA 2 — Links Waze via Referencia.UF (CSV)
+        // ETAPA 2 — Links Waze via Referencia.UF (ÚNICA planilha)
         // ════════════════════════════════════════════════════════════
-        $wazeErrors = [];
-
         if (!$skipWaze) {
-            $io->section('Etapa 2 — Importando links Waze (Referencia.UF)');
+            $io->section('Etapa 2 — Links Waze via Referencia.UF (CSV)');
 
             $wazeOk   = 0;
             $wazeSkip = 0;
@@ -151,111 +224,338 @@ final class ImportRadarCommand extends Command
                 }
 
                 try {
-                    [$updated, $matched, $notMatched] = $this->importLinksWaze($uf, $referenciaUrl);
+                    [$cnt, $matched, $notMatched] = $this->importLinksWaze($uf, $referenciaUrl, $dryRun);
                     $io->text(sprintf(
                         '  <info>[%s]</info> %d link(s) salvos | %d match(es) | %d série(s) sem match.',
-                        $uf, $updated, $matched, $notMatched
+                        $uf, $cnt, $matched, $notMatched
                     ));
                     $wazeOk++;
                 } catch (\Throwable $e) {
-                    $wazeErrors[$uf] = $e->getMessage();
+                    $allErrors["[Waze/{$uf}]"] = $e->getMessage();
                     $io->text(sprintf('  <comment>[%s]</comment> Erro: %s', $uf, $e->getMessage()));
                 }
             }
 
-            if ($wazeErrors !== []) {
-                $io->warning(sprintf('%d estado(s) com erro na etapa 2 (links Waze).', count($wazeErrors)));
-            }
-
             $io->text(sprintf(
                 '<info>✔ Etapa 2: %d processado(s), %d pulado(s) sem URL, %d erro(s).</info>',
-                $wazeOk, $wazeSkip, count($wazeErrors)
+                $wazeOk, $wazeSkip, count(array_filter($allErrors, fn($k) => str_starts_with($k, '[Waze/'), ARRAY_FILTER_USE_KEY))
             ));
         }
 
         // ════════════════════════════════════════════════════════════
         // BACKFILL — data_verificacao_efetiva
         // ════════════════════════════════════════════════════════════
-        $io->section('Backfill: calculando data_verificacao_efetiva ausente...');
+        if (!$dryRun) {
+            $io->section('Backfill: calculando data_verificacao_efetiva ausente...');
 
-        $affected1 = (int) $this->connection->executeStatement(
-            "UPDATE radar_medidor
-             SET    data_verificacao_efetiva = data_ultima_verificacao
-             WHERE  data_verificacao_efetiva IS NULL
-               AND  data_ultima_verificacao  IS NOT NULL
-               AND  data_ultima_verificacao  <> ''"
-        );
+            $affected1 = (int) $this->connection->executeStatement(
+                "UPDATE radar_medidor
+                 SET    data_verificacao_efetiva = data_ultima_verificacao
+                 WHERE  data_verificacao_efetiva IS NULL
+                   AND  data_ultima_verificacao  IS NOT NULL
+                   AND  data_ultima_verificacao  <> ''"
+            );
 
-        $affected2 = (int) $this->connection->executeStatement(
-            "UPDATE radar_medidor
-             SET    data_verificacao_efetiva = DATE_FORMAT(
-                        DATE_SUB(
-                            STR_TO_DATE(data_validade, '%d/%m/%Y'),
-                            INTERVAL 1 YEAR
-                        ),
-                        '%d/%m/%Y'
-                    )
-             WHERE  data_verificacao_efetiva IS NULL
-               AND  data_validade IS NOT NULL
-               AND  data_validade <> ''
-               AND  STR_TO_DATE(data_validade, '%d/%m/%Y') IS NOT NULL"
-        );
+            $affected2 = (int) $this->connection->executeStatement(
+                "UPDATE radar_medidor
+                 SET    data_verificacao_efetiva = DATE_FORMAT(
+                            DATE_SUB(
+                                STR_TO_DATE(data_validade, '%d/%m/%Y'),
+                                INTERVAL 1 YEAR
+                            ),
+                            '%d/%m/%Y'
+                        )
+                 WHERE  data_verificacao_efetiva IS NULL
+                   AND  data_validade IS NOT NULL
+                   AND  data_validade <> ''
+                   AND  STR_TO_DATE(data_validade, '%d/%m/%Y') IS NOT NULL"
+            );
 
-        $totalBackfill = $affected1 + $affected2;
+            $totalBackfill = $affected1 + $affected2;
 
-        if ($totalBackfill > 0) {
-            $io->success(sprintf(
-                'Backfill: %d registro(s) atualizados (verificacao=%d  validade-1ano=%d).',
-                $totalBackfill, $affected1, $affected2
-            ));
-        } else {
-            $io->text('<info>✔ Nenhum registro pendente de backfill.</info>');
+            if ($totalBackfill > 0) {
+                $io->success(sprintf(
+                    'Backfill: %d registro(s) atualizados (verificacao=%d  validade-1ano=%d).',
+                    $totalBackfill, $affected1, $affected2
+                ));
+            } else {
+                $io->text('<info>✔ Nenhum registro pendente de backfill.</info>');
+            }
         }
 
         // ════════════════════════════════════════════════════════════
-        // RESULTADO FINAL — log detalhado antes de qualquer FAILURE
+        // RESULTADO FINAL
         // ════════════════════════════════════════════════════════════
-        $allErrors = array_merge(
-            array_map(fn($msg) => '[Etapa 1 - JSON RBMLQ] ' . $msg, $errors),
-            array_map(fn($msg) => '[Etapa 2 - Links Waze] ' . $msg, $wazeErrors),
-        );
-
         if ($allErrors !== []) {
-            $io->section('Resumo dos erros (exit code 1)');
-            $io->error([
-                sprintf(
-                    'O command finalizou com %d erro(s). Detalhes abaixo:',
-                    count($allErrors)
-                ),
-                ...array_map(
-                    fn(string $uf, string $msg) => sprintf('  • %s → %s', $uf, $msg),
-                    array_keys($allErrors),
-                    array_values($allErrors),
-                ),
-            ]);
-
+            $io->section('Resumo dos erros');
+            foreach ($allErrors as $ctx => $msg) {
+                $io->text(sprintf('  <comment>%s</comment> %s', $ctx, $msg));
+            }
+            $io->error(sprintf('%d erro(s) durante a importação.', count($allErrors)));
             return Command::FAILURE;
         }
 
         return Command::SUCCESS;
     }
 
-    // ════════════════════════════════════════════════════════════
-    // Etapa 2 — helpers internos
-    // ════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════
+    // ETAPA 1B — importação de JSON de radares
+    // ════════════════════════════════════════════════════════════════
 
-    private function importLinksWaze(string $uf, string $url): array
+    /**
+     * Importa array de radares de um arquivo JSON.
+     *
+     * Formatos suportados:
+     *   [ { ...radar }, ... ]
+     *   { "radares": [ { ...radar }, ... ] }
+     *   { "radares": [...], "wazeLinks": [...] }
+     *
+     * Campos do objeto radar:
+     *   sigla_uf, municipio, logradouro, tipo_medidor, numero_serie,
+     *   cnpj_responsavel, data_validade, data_ultima_verificacao,
+     *   link_waze, faixas (array de {numero_serie, velocidade, ...})
+     *
+     * Deduplicação (3 camadas):
+     *   1. numero_serie em radar_faixa
+     *   2. identity_hash = sha256(UF|local_normalizado|tipo_medidor)
+     *   3. UF + UPPER(municipio) + UPPER(logradouro)
+     *
+     * @return array{int, int, int} [inserted, updated, skipped]
+     */
+    private function importFromJsonFile(string $path, array $filterUfs, bool $dryRun, SymfonyStyle $io): array
+    {
+        $raw = file_get_contents($path);
+
+        if ($raw === false) {
+            throw new \RuntimeException("Não foi possível ler o arquivo: {$path}");
+        }
+
+        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+
+        // Resolve formato
+        $radares = [];
+        if (isset($decoded['radares']) && is_array($decoded['radares'])) {
+            $radares = $decoded['radares'];
+        } elseif (array_is_list($decoded)) {
+            $radares = $decoded;
+        }
+
+        // WazeLinks separados (formato { radares: [], wazeLinks: [] })
+        $wazeLinks = [];
+        if (isset($decoded['wazeLinks']) && is_array($decoded['wazeLinks'])) {
+            foreach ($decoded['wazeLinks'] as $wl) {
+                $serie = trim((string) ($wl['numero_serie'] ?? $wl['serie'] ?? ''));
+                $link  = trim((string) ($wl['link']  ?? $wl['link_waze'] ?? ''));
+                if ($serie !== '' && $link !== '') {
+                    $wazeLinks[$serie] = $link;
+                }
+            }
+        }
+
+        $inserted = 0;
+        $updated  = 0;
+        $skipped  = 0;
+
+        $filterUfsNorm = array_map('strtoupper', $filterUfs);
+
+        foreach ($radares as $item) {
+            $siglaUf  = strtoupper(trim((string) ($item['sigla_uf'] ?? $item['uf'] ?? '')));
+            $municipio   = trim((string) ($item['municipio']   ?? $item['cidade']    ?? ''));
+            $logradouro  = trim((string) ($item['logradouro']  ?? $item['local']     ?? $item['local_instalacao'] ?? ''));
+            $tipoMedidor = trim((string) ($item['tipo_medidor'] ?? $item['tipo']     ?? ''));
+            $numeroSerie = trim((string) ($item['numero_serie'] ?? $item['serie']    ?? ''));
+            $cnpj        = trim((string) ($item['cnpj_responsavel'] ?? $item['cnpj'] ?? ''));
+            $dataValidade = trim((string) ($item['data_validade'] ?? ''));
+            $dataVerif   = trim((string) ($item['data_ultima_verificacao'] ?? ''));
+            $linkWaze    = trim((string) ($item['link_waze'] ?? $item['link'] ?? ''));
+            $faixas      = is_array($item['faixas'] ?? null) ? $item['faixas'] : [];
+
+            // Filtro de UF
+            if ($filterUfsNorm !== [] && $siglaUf !== '' && !in_array($siglaUf, $filterUfsNorm, true)) {
+                $skipped++;
+                continue;
+            }
+
+            if ($logradouro === '' && $municipio === '') {
+                $skipped++;
+                continue;
+            }
+
+            // ── Deduplicação camada 1: numero_serie ──────────────────
+            if ($numeroSerie !== '') {
+                $existingId = $this->connection->fetchOne(
+                    'SELECT rf.radar_medidor_id
+                     FROM   radar_faixa  rf
+                     JOIN   radar_medidor rm ON rm.id = rf.radar_medidor_id
+                     WHERE  rf.numero_serie = ?'
+                     . ($siglaUf !== '' ? ' AND rm.sigla_uf = ?' : ''),
+                    $siglaUf !== '' ? [$numeroSerie, $siglaUf] : [$numeroSerie]
+                );
+
+                if ($existingId !== false) {
+                    // UPDATE: atualiza campos que vieram no JSON
+                    $updated += $this->updateRadarMedidor((int) $existingId, [
+                        'municipio'                  => $municipio,
+                        'logradouro'                 => $logradouro,
+                        'tipo_medidor'               => $tipoMedidor,
+                        'cnpj_responsavel'           => $cnpj,
+                        'data_validade'              => $dataValidade,
+                        'data_ultima_verificacao'    => $dataVerif,
+                        'link_waze'                  => $linkWaze ?: ($wazeLinks[$numeroSerie] ?? ''),
+                    ], $dryRun);
+                    continue;
+                }
+            }
+
+            // ── Deduplicação camada 2: identity_hash ─────────────────
+            $localNorm   = $this->normalizeKey($logradouro . ' ' . $municipio);
+            $hashInput   = strtoupper($siglaUf) . '|' . $localNorm . '|' . $this->normalizeKey($tipoMedidor);
+            $identHash   = hash('sha256', $hashInput);
+
+            $existingById = $this->connection->fetchOne(
+                'SELECT id FROM radar_medidor WHERE identity_hash = ? LIMIT 1',
+                [$identHash]
+            );
+
+            if ($existingById !== false) {
+                $updated += $this->updateRadarMedidor((int) $existingById, [
+                    'municipio'               => $municipio,
+                    'logradouro'              => $logradouro,
+                    'tipo_medidor'            => $tipoMedidor,
+                    'cnpj_responsavel'        => $cnpj,
+                    'data_validade'           => $dataValidade,
+                    'data_ultima_verificacao' => $dataVerif,
+                    'link_waze'               => $linkWaze ?: ($wazeLinks[$numeroSerie] ?? ''),
+                ], $dryRun);
+                continue;
+            }
+
+            // ── Deduplicação camada 3: UF + municipio + logradouro ───
+            if ($siglaUf !== '' && $municipio !== '' && $logradouro !== '') {
+                $existingByText = $this->connection->fetchOne(
+                    'SELECT id FROM radar_medidor
+                     WHERE sigla_uf = ?
+                       AND UPPER(municipio)  = ?
+                       AND UPPER(logradouro) = ?
+                     LIMIT 1',
+                    [$siglaUf, strtoupper($municipio), strtoupper($logradouro)]
+                );
+
+                if ($existingByText !== false) {
+                    $updated += $this->updateRadarMedidor((int) $existingByText, [
+                        'municipio'               => $municipio,
+                        'logradouro'              => $logradouro,
+                        'tipo_medidor'            => $tipoMedidor,
+                        'cnpj_responsavel'        => $cnpj,
+                        'data_validade'           => $dataValidade,
+                        'data_ultima_verificacao' => $dataVerif,
+                        'link_waze'               => $linkWaze ?: ($wazeLinks[$numeroSerie] ?? ''),
+                    ], $dryRun);
+                    continue;
+                }
+            }
+
+            // ── INSERT novo radar ─────────────────────────────────────
+            if (!$dryRun) {
+                $linkFinal = $linkWaze ?: ($wazeLinks[$numeroSerie] ?? '');
+
+                $this->connection->executeStatement(
+                    'INSERT INTO radar_medidor
+                        (sigla_uf, municipio, logradouro, tipo_medidor, cnpj_responsavel,
+                         data_validade, data_ultima_verificacao, link_waze, identity_hash, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+                    [$siglaUf, $municipio, $logradouro, $tipoMedidor, $cnpj,
+                     $dataValidade, $dataVerif, $linkFinal, $identHash]
+                );
+
+                $newId = (int) $this->connection->lastInsertId();
+
+                // INSERT faixas
+                if ($newId > 0 && $faixas !== []) {
+                    foreach ($faixas as $faixa) {
+                        $faixaSerie = trim((string) ($faixa['numero_serie'] ?? $faixa['serie'] ?? ''));
+                        $velocidade = (int) ($faixa['velocidade'] ?? $faixa['vel'] ?? 0);
+
+                        if ($faixaSerie === '') {
+                            continue;
+                        }
+
+                        $this->connection->executeStatement(
+                            'INSERT IGNORE INTO radar_faixa
+                                (radar_medidor_id, numero_serie, velocidade, created_at, updated_at)
+                             VALUES (?, ?, ?, NOW(), NOW())',
+                            [$newId, $faixaSerie, $velocidade]
+                        );
+                    }
+                } elseif ($newId > 0 && $numeroSerie !== '') {
+                    // Se não há array faixas mas tem numero_serie no objeto raiz
+                    $this->connection->executeStatement(
+                        'INSERT IGNORE INTO radar_faixa
+                            (radar_medidor_id, numero_serie, velocidade, created_at, updated_at)
+                         VALUES (?, ?, 0, NOW(), NOW())',
+                        [$newId, $numeroSerie]
+                    );
+                }
+            }
+
+            $inserted++;
+        }
+
+        return [$inserted, $updated, $skipped];
+    }
+
+    /**
+     * Atualiza campos não-nulos/não-vazios de um radar_medidor existente.
+     * Retorna 1 se houve alteração, 0 se nada mudou.
+     */
+    private function updateRadarMedidor(int $id, array $fields, bool $dryRun): int
+    {
+        $sets   = [];
+        $params = [];
+
+        foreach ($fields as $col => $val) {
+            if ($val !== '') {
+                $sets[]   = "{$col} = ?";
+                $params[] = $val;
+            }
+        }
+
+        if ($sets === [] || $dryRun) {
+            return 0;
+        }
+
+        $sets[]   = 'updated_at = NOW()';
+        $params[] = $id;
+
+        return (int) $this->connection->executeStatement(
+            'UPDATE radar_medidor SET ' . implode(', ', $sets) . ' WHERE id = ?',
+            $params
+        );
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // ETAPA 2 — Links Waze via Referencia.UF (ÚNICA planilha aceita)
+    // ════════════════════════════════════════════════════════════════
+
+    private function importLinksWaze(string $uf, string $url, bool $dryRun): array
     {
         $tmpFile = $this->downloadToTempFile($url, $uf);
 
         try {
-            return $this->processReferenciaSheet($tmpFile, $uf);
+            return $this->processReferenciaSheet($tmpFile, $uf, $dryRun);
         } finally {
             @unlink($tmpFile);
         }
     }
 
-    private function processReferenciaSheet(string $path, string $uf): array
+    /**
+     * Lê a Referencia.UF (CSV) e cruza com radar_faixa.numero_serie.
+     * Campos esperados: LINK: | Nº DE SÉRIE: | CIDADE: | USUÁRIO: | VERIFICADO: | ALTERADO: | AÇÃO:
+     * Campos NOVO: e EXPIRADO: são ignorados (sem coluna correspondente).
+     *
+     * @return array{int, int, int} [updated, matched, notMatched]
+     */
+    private function processReferenciaSheet(string $path, string $uf, bool $dryRun): array
     {
         $fh = fopen($path, 'rb');
 
@@ -269,7 +569,7 @@ final class ImportRadarCommand extends Command
             rewind($fh);
         }
 
-        // Detecta o cabeçalho real (primeira linha com AMBAS as colunas LINK e Nº DE SÉRIE)
+        // Detecta cabeçalho (primeira linha com AMBAS as colunas LINK e Nº DE SÉRIE)
         $header         = null;
         $colLink        = false;
         $colSerie       = false;
@@ -313,7 +613,7 @@ final class ImportRadarCommand extends Command
         if ($header === null || $colLink === false || $colSerie === false) {
             fclose($fh);
             throw new \RuntimeException(
-                "Colunas LINK e Nº DE SÉRIE não encontradas juntas na Referencia.{$uf} " .
+                "Colunas LINK e Nº DE SÉRIE não encontradas na Referencia.{$uf} " .
                 "(verificadas {$attempts} linha(s)). " .
                 "Última linha normalizada: [" . implode(', ', $lastNormalized) . "]"
             );
@@ -365,14 +665,21 @@ final class ImportRadarCommand extends Command
             }
 
             $matched++;
-            $updated += (int) $this->connection->executeStatement(
-                'UPDATE radar_medidor SET link_waze = ? WHERE id = ?',
-                [$linkWaze, (int) $radarId]
-            );
+
+            if (!$dryRun) {
+                $updated += (int) $this->connection->executeStatement(
+                    'UPDATE radar_medidor SET link_waze = ?, updated_at = NOW() WHERE id = ?',
+                    [$linkWaze, (int) $radarId]
+                );
+            }
         }
 
         return [$updated, $matched, $notMatched];
     }
+
+    // ════════════════════════════════════════════════════════════════
+    // Helpers
+    // ════════════════════════════════════════════════════════════════
 
     private function downloadToTempFile(string $url, string $context = ''): string
     {

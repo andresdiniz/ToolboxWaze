@@ -1,46 +1,57 @@
 /**
  * Fix: Bootstrap Dropdowns + Hotwired Turbo Drive
  *
- * O Turbo interceptá cliques antes do Bootstrap processar o dropdown toggle.
- * Este módulo força a reinicialização dos dropdowns após cada navegação Turbo
- * e garante que os dropdowns do navbar funcionem corretamente.
+ * Problema 1: Após navegação Turbo, Bootstrap perde as instâncias de Dropdown.
+ * Problema 2: Quando já está na página admin, dispose() destruía a instância
+ *             antes do clique completar, impedindo a abertura do dropdown.
+ *
+ * Solução: usar sempre o bootstrap do CDN (window.bootstrap) como fonte da
+ * verdade, e só criar instâncias novas para elementos que ainda não têm uma.
  */
 
-function initDropdowns() {
-    // Fecha todos os dropdowns abertos antes de reinicializar
-    document.querySelectorAll('.dropdown-menu.show').forEach(function (menu) {
-        menu.classList.remove('show');
-    });
-    document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(function (el) {
-        el.setAttribute('aria-expanded', 'false');
-        el.classList.remove('show');
-    });
+(function () {
+    'use strict';
 
-    // Reinicializa instâncias Bootstrap Dropdown
-    if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+    function getBootstrap() {
+        // Usa sempre o bootstrap do CDN carregado no <head> — fonte única da verdade
+        return window.bootstrap || (typeof bootstrap !== 'undefined' ? bootstrap : null);
+    }
+
+    function initDropdowns() {
+        var bs = getBootstrap();
+        if (!bs || !bs.Dropdown) return;
+
         document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(function (el) {
-            // Descarta instância anterior para evitar listeners duplicados
-            var existing = bootstrap.Dropdown.getInstance(el);
-            if (existing) existing.dispose();
-            new bootstrap.Dropdown(el);
+            // Só cria instância se ainda não existir — não destroi as que funcionam
+            if (!bs.Dropdown.getInstance(el)) {
+                new bs.Dropdown(el);
+            }
         });
     }
-}
 
-// Inicializa no carregamento normal
-document.addEventListener('DOMContentLoaded', initDropdowns);
+    function closeAllDropdowns() {
+        var bs = getBootstrap();
+        document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(function (el) {
+            if (bs && bs.Dropdown) {
+                var instance = bs.Dropdown.getInstance(el);
+                if (instance) instance.hide();
+            }
+            el.setAttribute('aria-expanded', 'false');
+            el.classList.remove('show');
+        });
+        document.querySelectorAll('.dropdown-menu.show').forEach(function (menu) {
+            menu.classList.remove('show');
+        });
+    }
 
-// Reinicializa após cada navegação Turbo
-document.addEventListener('turbo:render', initDropdowns);
-document.addEventListener('turbo:load', initDropdowns);
+    // Inicializa no carregamento normal da página
+    document.addEventListener('DOMContentLoaded', initDropdowns);
 
-// Fecha dropdown ao clicar num item (Turbo navega sem reload)
-document.addEventListener('turbo:click', function () {
-    document.querySelectorAll('.dropdown-menu.show').forEach(function (menu) {
-        menu.classList.remove('show');
-    });
-    document.querySelectorAll('[data-bs-toggle="dropdown"].show').forEach(function (el) {
-        el.classList.remove('show');
-        el.setAttribute('aria-expanded', 'false');
-    });
-});
+    // Reinicializa após cada navegação Turbo (página nova no cache)
+    document.addEventListener('turbo:render', initDropdowns);
+    document.addEventListener('turbo:load', initDropdowns);
+
+    // Fecha dropdowns ao iniciar navegação Turbo
+    document.addEventListener('turbo:click', closeAllDropdowns);
+    document.addEventListener('turbo:before-visit', closeAllDropdowns);
+}());

@@ -91,40 +91,63 @@ class RadarMedidorRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Busca radares recentes via DBAL nativo (STR_TO_DATE é MySQL, não suportado no DQL).
+     *
+     * @return RadarMedidor[]
+     */
     public function findRecentes(?string $uf = null, int $days = 30): array
     {
-        $qb = $this->createQueryBuilder('r')
-            ->where(
-                'STR_TO_DATE(r.dataVerificacaoEfetiva, \'%d/%m/%Y\') '
-                . 'BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL :days DAY) AND CURRENT_DATE()'
-            )
-            ->setParameter('days', $days)
-            ->orderBy('STR_TO_DATE(r.dataVerificacaoEfetiva, \'%d/%m/%Y\')', 'DESC');
+        $dve    = $this->dateConv('data_verificacao_efetiva');
+        $ha30   = (new \DateTimeImmutable("-{$days} days"))->format('Y-m-d');
+        $hoje   = (new \DateTimeImmutable())->format('Y-m-d');
+
+        $sql    = "SELECT id FROM radar_medidor
+                   WHERE data_verificacao_efetiva IS NOT NULL
+                     AND $dve BETWEEN ? AND ?";
+        $params = [$ha30, $hoje];
 
         if ($uf !== null && $uf !== '') {
-            $qb->andWhere('r.siglaUf = :uf')
-               ->setParameter('uf', strtoupper($uf));
+            $sql     .= ' AND sigla_uf = ?';
+            $params[] = strtoupper($uf);
         }
 
-        return $qb->getQuery()->getResult();
+        $sql .= " ORDER BY $dve DESC";
+
+        $ids = array_column($this->db->fetchAllAssociative($sql, $params), 'id');
+
+        if ($ids === []) {
+            return [];
+        }
+
+        // Carrega as entidades ORM pelos IDs obtidos
+        return $this->createQueryBuilder('r')
+            ->where('r.id IN (:ids)')
+            ->setParameter('ids', $ids)
+            ->getQuery()
+            ->getResult();
     }
 
+    /**
+     * Conta radares recentes via DBAL nativo.
+     */
     public function countRecentes(?string $uf = null, int $days = 30): int
     {
-        $qb = $this->createQueryBuilder('r')
-            ->select('COUNT(r.id)')
-            ->where(
-                'STR_TO_DATE(r.dataVerificacaoEfetiva, \'%d/%m/%Y\') '
-                . 'BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL :days DAY) AND CURRENT_DATE()'
-            )
-            ->setParameter('days', $days);
+        $dve    = $this->dateConv('data_verificacao_efetiva');
+        $ha30   = (new \DateTimeImmutable("-{$days} days"))->format('Y-m-d');
+        $hoje   = (new \DateTimeImmutable())->format('Y-m-d');
+
+        $sql    = "SELECT COUNT(*) FROM radar_medidor
+                   WHERE data_verificacao_efetiva IS NOT NULL
+                     AND $dve BETWEEN ? AND ?";
+        $params = [$ha30, $hoje];
 
         if ($uf !== null && $uf !== '') {
-            $qb->andWhere('r.siglaUf = :uf')
-               ->setParameter('uf', strtoupper($uf));
+            $sql     .= ' AND sigla_uf = ?';
+            $params[] = strtoupper($uf);
         }
 
-        return (int) $qb->getQuery()->getSingleScalarResult();
+        return (int) $this->db->fetchOne($sql, $params);
     }
 
     // =========================================================================

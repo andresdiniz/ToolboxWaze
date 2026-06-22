@@ -44,8 +44,8 @@ use Symfony\Component\Messenger\MessageBusInterface;
  * NOTIFICAÇÃO POR E-MAIL (assíncrona via Messenger):
  *   Ao final do execute(), se houver inserções novas e não for dry-run,
  *   dispara EnviarEmailRadarRecente para a fila do Messenger — um por usuário
- *   por UF. O consumer processa os envios de forma independente, sem bloquear
- *   o comando de importação.
+ *   por UF, com os IDs exatos dos radares inseridos. O consumer processa os
+ *   envios de forma independente, sem bloquear o comando de importação.
  *
  * USO:
  *   php bin/console app:import-radares                        # todos os estados (RBMLQ)
@@ -65,7 +65,11 @@ final class ImportRadarCommand extends Command
 {
     private const CURL_TIMEOUT = 120;
 
-    /** @var array<string, int> Acumula contagem de inserções novas por UF nesta execução */
+    /**
+     * Acumula IDs dos radares novos por UF nesta execução.
+     *
+     * @var array<string, int[]>
+     */
     private array $novosPorUf = [];
 
     public function __construct(
@@ -316,21 +320,22 @@ final class ImportRadarCommand extends Command
 
             $totalDispatched = 0;
 
-            foreach ($this->novosPorUf as $uf => $qtd) {
+            foreach ($this->novosPorUf as $uf => $ids) {
                 $usuarios = $this->userRepo->findApprovedComAcessoUf($uf);
 
                 foreach ($usuarios as $usuario) {
                     $this->bus->dispatch(new EnviarEmailRadarRecente(
                         siglaUf:         $uf,
                         userId:          $usuario->getId(),
-                        quantidadeNovos: $qtd,
+                        quantidadeNovos: count($ids),
+                        radarIds:        $ids,
                     ));
                     $totalDispatched++;
                 }
 
                 $io->text(sprintf(
                     '  <info>[%s]</info> %d novo(s) radar(es) → %d e-mail(s) enfileirado(s).',
-                    $uf, $qtd, count($usuarios)
+                    $uf, count($ids), count($usuarios)
                 ));
             }
 
@@ -418,7 +423,7 @@ final class ImportRadarCommand extends Command
         $filterUfsNorm = array_map('strtoupper', $filterUfs);
 
         foreach ($radares as $item) {
-            $siglaUf  = strtoupper(trim((string) ($item['sigla_uf'] ?? $item['uf'] ?? '')));
+            $siglaUf     = strtoupper(trim((string) ($item['sigla_uf'] ?? $item['uf'] ?? '')));
             $municipio   = trim((string) ($item['municipio']   ?? $item['cidade']    ?? ''));
             $logradouro  = trim((string) ($item['logradouro']  ?? $item['local']     ?? $item['local_instalacao'] ?? ''));
             $tipoMedidor = trim((string) ($item['tipo_medidor'] ?? $item['tipo']     ?? ''));
@@ -452,7 +457,6 @@ final class ImportRadarCommand extends Command
                 );
 
                 if ($existingId !== false) {
-                    // UPDATE: atualiza campos que vieram no JSON
                     $updated += $this->updateRadarMedidor((int) $existingId, [
                         'municipio'                  => $municipio,
                         'logradouro'                 => $logradouro,
@@ -555,14 +559,14 @@ final class ImportRadarCommand extends Command
                         [$newId, $numeroSerie]
                     );
                 }
+
+                // ── Acumula ID para notificação assíncrona ────────────
+                if ($siglaUf !== '' && $newId > 0) {
+                    $this->novosPorUf[$siglaUf][] = $newId;
+                }
             }
 
             $inserted++;
-
-            // ── Acumula para notificação assíncrona ───────────────────
-            if ($siglaUf !== '') {
-                $this->novosPorUf[$siglaUf] = ($this->novosPorUf[$siglaUf] ?? 0) + 1;
-            }
         }
 
         return [$inserted, $updated, $skipped];

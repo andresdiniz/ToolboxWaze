@@ -33,3 +33,7 @@ services:
             $emailQueueLogger: '@monolog.logger.email_queue'
             $mailerFrom:       '%env(MAILER_FROM)%'
             $appBaseUrl:       '%env(APP_BASE_URL)%'
+
+    App\MessageHandler\NotificarRadaresRecentesHandler:
+        arguments:
+            $emailFrom: '%env(MAILER_FROM)%'

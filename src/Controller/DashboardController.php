@@ -76,9 +76,12 @@ final class DashboardController extends AbstractController
      * Emite um evento SSE a cada 15 segundos com as contagens mais recentes
      * de radares pendentes, solicitações abertas e erros JS do dia.
      * O cliente desconecta quando fechar/recarregar a página.
+     *
+     * Rota: GET /dashboard/stream
+     * No JS: new EventSource('/dashboard/stream')
      */
     #[Route('/stream', name: '_stream')]
-    public function stream(): StreamedResponse
+    public function sseStream(): StreamedResponse
     {
         $this->denyAccessUnlessGranted('ROLE_USER');
 
@@ -108,19 +111,16 @@ final class DashboardController extends AbstractController
 
             while ($iteration < $maxIterations && !connection_aborted()) {
                 try {
-                    // Radares com validade vencida
                     $radaresVencidos = (int) $db->fetchOne(
                         "SELECT COUNT(*) FROM radar_medidor
                          WHERE STR_TO_DATE(data_validade, '%d/%m/%Y') < CURDATE() $ufWhere",
                         $ufParams
                     );
 
-                    // Solicitações abertas
                     $solicAbertasVal = $isAdmin
                         ? (int) $db->fetchOne("SELECT COUNT(*) FROM solicitacao WHERE status = 'aberta'")
                         : 0;
 
-                    // Erros JS do dia (monitoring)
                     $errosJs = (int) $db->fetchOne(
                         "SELECT COUNT(*) FROM monitoring_event
                          WHERE type IN ('js_error','unhandled_rejection','ajax_error')
@@ -146,7 +146,6 @@ final class DashboardController extends AbstractController
                 sleep(15);
             }
 
-            // Sinaliza encerramento
             echo 'event: close' . PHP_EOL;
             echo 'data: {}' . PHP_EOL . PHP_EOL;
             ob_flush();
@@ -155,7 +154,7 @@ final class DashboardController extends AbstractController
 
         $response->headers->set('Content-Type', 'text/event-stream');
         $response->headers->set('Cache-Control', 'no-cache');
-        $response->headers->set('X-Accel-Buffering', 'no'); // nginx
+        $response->headers->set('X-Accel-Buffering', 'no');
 
         return $response;
     }

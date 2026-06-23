@@ -23,7 +23,7 @@ class RadarFaixa
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true])]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: RadarMedidor::class)]
+    #[ORM\ManyToOne(targetEntity: RadarMedidor::class, inversedBy: 'faixas')]
     #[ORM\JoinColumn(name: 'radar_medidor_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private RadarMedidor $radarMedidor;
 

@@ -21,7 +21,6 @@ final class Version20260621_FormBuilderSolicitacao extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // Verifica se as colunas já existem antes de adicionar
         $this->addSql(<<<'SQL'
             ALTER TABLE solicitacoes
                 ADD COLUMN IF NOT EXISTS formulario_id INT DEFAULT NULL,
@@ -29,9 +28,13 @@ final class Version20260621_FormBuilderSolicitacao extends AbstractMigration
             SQL
         );
 
+        // IF NOT EXISTS não é suportado em ADD CONSTRAINT no MariaDB;
+        // usamos DROP + ADD para garantir idempotência
+        $this->addSql('ALTER TABLE solicitacoes DROP FOREIGN KEY IF EXISTS FK_solicitacoes_form_builder');
+
         $this->addSql(<<<'SQL'
             ALTER TABLE solicitacoes
-                ADD CONSTRAINT IF NOT EXISTS FK_solicitacoes_form_builder
+                ADD CONSTRAINT FK_solicitacoes_form_builder
                 FOREIGN KEY (formulario_id)
                 REFERENCES form_builder(id)
                 ON DELETE SET NULL

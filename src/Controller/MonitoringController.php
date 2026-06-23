@@ -19,9 +19,6 @@ class MonitoringController extends AbstractController
 
     /**
      * Recebe eventos de monitoramento do frontend.
-     * Aceita dois formatos enviados pelo tw-monitor.js:
-     *   - Batch:  { batch: [{type, page, data, session_id, ts}, ...], session_id, page }
-     *   - Single: { type, page, data, session_id }
      */
     #[Route('/collect', name: 'collect', methods: ['POST'])]
     public function collect(Request $request): JsonResponse
@@ -35,11 +32,8 @@ class MonitoringController extends AbstractController
         $ua = substr($request->headers->get('User-Agent', ''), 0, 512);
         $userId = $this->getUser()?->getId();
 
-        // Normaliza para array de eventos
         if (isset($payload['batch']) && is_array($payload['batch'])) {
-            // Formato batch do tw-monitor.js
-            $events = $payload['batch'];
-            // session_id e page podem vir na raiz do batch
+            $events      = $payload['batch'];
             $rootSession = $payload['session_id'] ?? null;
             $rootPage    = substr($payload['page'] ?? $request->headers->get('Referer', ''), 0, 512);
             foreach ($events as &$ev) {
@@ -48,7 +42,6 @@ class MonitoringController extends AbstractController
             }
             unset($ev);
         } else {
-            // Formato single (legado / fallback)
             $events = [$payload];
         }
 
@@ -58,7 +51,6 @@ class MonitoringController extends AbstractController
             $page    = substr((string)($ev['page']    ?? $request->headers->get('Referer', '')), 0, 512);
             $session = substr((string)($ev['session_id'] ?? ''), 0, 64);
             $data    = json_encode($ev['data'] ?? []);
-            // ts vem em ms (Date.now()) do JS — converte para datetime
             $ts = isset($ev['ts']) && is_numeric($ev['ts'])
                 ? (new \DateTimeImmutable())->setTimestamp((int)($ev['ts'] / 1000))->format('Y-m-d H:i:s')
                 : (new \DateTimeImmutable())->format('Y-m-d H:i:s');
@@ -79,7 +71,6 @@ class MonitoringController extends AbstractController
                 $this->logger->warning('monitoring_collect db error: ' . $e->getMessage());
             }
 
-            // Loga erros críticos no Symfony logger
             if (in_array($type, ['js_error', 'unhandled_rejection', 'ajax_error'], true)) {
                 $this->logger->error('[monitoring] ' . $type, [
                     'page'    => $page,
@@ -101,14 +92,17 @@ class MonitoringController extends AbstractController
 
     /**
      * Dashboard de monitoramento — apenas admin.
+     * #7 – Adicionada paginação por cursor via parâmetro `offset`.
      */
     #[Route('/dashboard', name: 'dashboard')]
     public function dashboard(Request $request): \Symfony\Component\HttpFoundation\Response
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
-        $period = $request->query->getInt('days', 7);
-        $type   = $request->query->get('type', '');
+        $period  = $request->query->getInt('days', 7);
+        $type    = $request->query->get('type', '');
+        $perPage = 100;
+        $offset  = $request->query->getInt('offset', 0);
 
         try {
             $qb = $this->db->createQueryBuilder()
@@ -117,7 +111,8 @@ class MonitoringController extends AbstractController
                 ->where('created_at >= :since')
                 ->setParameter('since', (new \DateTimeImmutable("-{$period} days"))->format('Y-m-d H:i:s'))
                 ->orderBy('created_at', 'DESC')
-                ->setMaxResults(500);
+                ->setMaxResults($perPage)
+                ->setFirstResult($offset);
 
             if ($type) {
                 $qb->andWhere('type = :type')->setParameter('type', $type);
@@ -125,33 +120,36 @@ class MonitoringController extends AbstractController
 
             $events = $qb->fetchAllAssociative();
 
-            // Agregações
+            // Total para paginação
+            $totalQb = $this->db->createQueryBuilder()
+                ->select('COUNT(*)')
+                ->from('monitoring_event')
+                ->where('created_at >= :since')
+                ->setParameter('since', (new \DateTimeImmutable("-{$period} days"))->format('Y-m-d H:i:s'));
+            if ($type) {
+                $totalQb->andWhere('type = :type')->setParameter('type', $type);
+            }
+            $total = (int) $totalQb->fetchOne();
+
             $byType = array_count_values(array_column($events, 'type'));
             $byPage = array_count_values(array_column($events, 'page'));
             arsort($byType);
             arsort($byPage);
             $topPages = array_slice($byPage, 0, 10, true);
 
-            // Médias de Web Vitals
-            // tw-monitor.js envia vitals individuais em `page_performance` (batch)
-            // e críticos em `web_vital_critical` (single). Agrega ambos.
             $vitals = ['lcp' => [], 'fcp' => [], 'cls' => [], 'ttfb' => [], 'inp' => []];
             foreach ($events as $ev) {
                 if (!in_array($ev['type'], ['web_vitals', 'page_performance', 'web_vital_critical'], true)) {
                     continue;
                 }
                 $d = json_decode($ev['data'], true) ?? [];
-
                 if ($ev['type'] === 'web_vital_critical') {
-                    // { name: 'LCP', value: 4200, rating: 'poor' }
                     $name = strtolower($d['name'] ?? '');
                     if (isset($vitals[$name]) && is_numeric($d['value'] ?? null)) {
                         $vitals[$name][] = (float)$d['value'];
                     }
                     continue;
                 }
-
-                // web_vitals (legado) ou page_performance (batch atual)
                 foreach ($vitals as $k => &$arr) {
                     if (isset($d[$k]) && is_numeric($d[$k])) {
                         $arr[] = (float)$d[$k];
@@ -165,17 +163,13 @@ class MonitoringController extends AbstractController
                 $vitalsAvg[$k] = count($arr) ? round(array_sum($arr) / count($arr), 1) : null;
             }
 
-            // Contagem de erros JS/AJAX
-            $errors = array_filter(
-                $events,
-                fn($e) => in_array($e['type'], ['js_error', 'unhandled_rejection', 'ajax_error'])
-            );
+            $errors     = array_filter($events, fn($e) => in_array($e['type'], ['js_error', 'unhandled_rejection', 'ajax_error']));
             $errorCount = count($errors);
 
         } catch (\Throwable) {
             $events = $errors = [];
             $byType = $topPages = $vitalsAvg = [];
-            $errorCount = 0;
+            $errorCount = $total = 0;
         }
 
         return $this->render('monitoring/dashboard.html.twig', [
@@ -187,6 +181,11 @@ class MonitoringController extends AbstractController
             'errorCount' => $errorCount,
             'period'     => $period,
             'filterType' => $type,
+            'perPage'    => $perPage,
+            'offset'     => $offset,
+            'total'      => $total ?? 0,
+            'prevOffset' => max(0, $offset - $perPage),
+            'nextOffset' => ($offset + $perPage < ($total ?? 0)) ? $offset + $perPage : null,
         ]);
     }
 }

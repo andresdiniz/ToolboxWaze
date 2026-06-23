@@ -52,13 +52,8 @@ final class ExportController extends AbstractController
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  RADARES  (NOVO)
+    //  RADARES – CSV
     // ─────────────────────────────────────────────────────────────────────
-
-    /**
-     * Exporta radares com os mesmos filtros da listagem.
-     * Inclui todas as faixas de cada radar em colunas extras.
-     */
     #[Route('/radares.csv', name: 'radares_csv')]
     public function radaresCsv(Request $req): Response
     {
@@ -68,42 +63,14 @@ final class ExportController extends AbstractController
         $user       = $this->getUser();
         $allowedUfs = $user?->getUfsForQuery();
 
-        $uf        = strtoupper(trim((string) $req->query->get('uf', '')));
-        $municipio = trim((string) $req->query->get('municipio', ''));
-        $resultado = trim((string) $req->query->get('resultado', ''));
-        $tipo      = trim((string) $req->query->get('tipo', ''));
-        $validade  = trim((string) $req->query->get('validade', ''));
-        $serie     = trim((string) $req->query->get('serie', ''));
-        $semWaze   = $req->query->getBoolean('sem_waze');
+        [$uf, $municipio, $resultado, $tipo, $validade, $serie, $semWaze] = $this->extractRadarFilters($req);
 
         [$where, $params] = $this->buildRadarWhere(
             $uf, $municipio, $resultado, $tipo, $validade, $serie, $semWaze, $allowedUfs
         );
 
-        $baseFrom    = $serie !== '' ? 'LEFT JOIN radar_faixa rf ON rf.radar_medidor_id = rm.id' : '';
-        $whereClause = $where ? "WHERE $where" : '';
+        $rows = $this->fetchRadarRows($where, $params, $serie);
 
-        $rows = $this->db->fetchAllAssociative(
-            "SELECT DISTINCT
-                    rm.id, rm.sigla_uf, rm.estado, rm.municipio,
-                    rm.local_verificacao,
-                    rm.tipo_medidor,
-                    rm.ultimo_resultado,
-                    rm.data_ultima_verificacao,
-                    rm.data_verificacao_efetiva,
-                    rm.data_validade,
-                    rm.proprietario_nome,
-                    CASE WHEN rwl.id IS NOT NULL THEN 'Sim' ELSE 'Não' END AS tem_waze,
-                    rwl.waze_link
-             FROM radar_medidor rm
-             $baseFrom
-             LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
-             $whereClause
-             ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao",
-            $params
-        );
-
-        // ── Cabeçalho ──────────────────────────────────────────────────
         $headers = [
             'ID', 'UF', 'Estado', 'Município', 'Local',
             'Tipo Medidor', 'Resultado', 'Última Verificação',
@@ -116,19 +83,11 @@ final class ExportController extends AbstractController
 
         foreach ($rows as $r) {
             $lines[] = implode(';', array_map([$this, 'csvCell'], [
-                $r['id'],
-                $r['sigla_uf'],
-                $r['estado'],
-                $r['municipio'],
-                $r['local_verificacao'],
-                $r['tipo_medidor'],
-                $r['ultimo_resultado'],
-                $r['data_ultima_verificacao'],
-                $r['data_verificacao_efetiva'],
-                $r['data_validade'],
-                $r['proprietario_nome'],
-                $r['tem_waze'],
-                $r['waze_link'] ?? '',
+                $r['id'], $r['sigla_uf'], $r['estado'], $r['municipio'],
+                $r['local_verificacao'], $r['tipo_medidor'], $r['ultimo_resultado'],
+                $r['data_ultima_verificacao'], $r['data_verificacao_efetiva'],
+                $r['data_validade'], $r['proprietario_nome'],
+                $r['tem_waze'], $r['waze_link'] ?? '',
             ]));
         }
 
@@ -143,8 +102,125 @@ final class ExportController extends AbstractController
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    //  RADARES – GeoJSON  (#8)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Exporta radares como GeoJSON para importação direta no Waze Map Editor.
+     * Apenas radares que possuam latitude/longitude são incluídos.
+     */
+    #[Route('/radares.geojson', name: 'radares_geojson')]
+    public function radaresGeoJson(Request $req): Response
+    {
+        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
+
+        /** @var User|null $user */
+        $user       = $this->getUser();
+        $allowedUfs = $user?->getUfsForQuery();
+
+        [$uf, $municipio, $resultado, $tipo, $validade, $serie, $semWaze] = $this->extractRadarFilters($req);
+
+        [$where, $params] = $this->buildRadarWhere(
+            $uf, $municipio, $resultado, $tipo, $validade, $serie, $semWaze, $allowedUfs
+        );
+
+        // Só radares com coordenadas
+        $where[] = 'rm.latitude IS NOT NULL AND rm.longitude IS NOT NULL';
+
+        $baseFrom    = $serie !== '' ? 'LEFT JOIN radar_faixa rf ON rf.radar_medidor_id = rm.id' : '';
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $rows = $this->db->fetchAllAssociative(
+            "SELECT DISTINCT
+                    rm.id, rm.sigla_uf, rm.municipio, rm.local_verificacao,
+                    rm.tipo_medidor, rm.ultimo_resultado, rm.data_validade,
+                    rm.proprietario_nome, rm.latitude, rm.longitude,
+                    CASE WHEN rwl.id IS NOT NULL THEN 1 ELSE 0 END AS tem_waze,
+                    rwl.waze_link
+             FROM radar_medidor rm
+             $baseFrom
+             LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
+             $whereClause
+             ORDER BY rm.sigla_uf, rm.municipio",
+            $params
+        );
+
+        $features = [];
+        foreach ($rows as $r) {
+            $features[] = [
+                'type' => 'Feature',
+                'geometry' => [
+                    'type'        => 'Point',
+                    'coordinates' => [(float) $r['longitude'], (float) $r['latitude']],
+                ],
+                'properties' => [
+                    'id'               => (int) $r['id'],
+                    'uf'               => $r['sigla_uf'],
+                    'municipio'        => $r['municipio'],
+                    'local'            => $r['local_verificacao'],
+                    'tipo_medidor'     => $r['tipo_medidor'],
+                    'resultado'        => $r['ultimo_resultado'],
+                    'data_validade'    => $r['data_validade'],
+                    'proprietario'     => $r['proprietario_nome'],
+                    'tem_waze'         => (bool) $r['tem_waze'],
+                    'waze_link'        => $r['waze_link'] ?? null,
+                ],
+            ];
+        }
+
+        $geojson = json_encode([
+            'type'     => 'FeatureCollection',
+            'features' => $features,
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        $filename = 'radares_' . date('Ymd_His') . '.geojson';
+
+        $response = new Response($geojson);
+        $response->headers->set('Content-Type', 'application/geo+json; charset=UTF-8');
+        $response->headers->set('Content-Disposition', "attachment; filename=\"$filename\"");
+
+        return $response;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     //  Helpers privados
     // ─────────────────────────────────────────────────────────────────────
+
+    /** Extrai e normaliza filtros de radar do Request. */
+    private function extractRadarFilters(Request $req): array
+    {
+        return [
+            strtoupper(trim((string) $req->query->get('uf', ''))),
+            trim((string) $req->query->get('municipio', '')),
+            trim((string) $req->query->get('resultado', '')),
+            trim((string) $req->query->get('tipo', '')),
+            trim((string) $req->query->get('validade', '')),
+            trim((string) $req->query->get('serie', '')),
+            $req->query->getBoolean('sem_waze'),
+        ];
+    }
+
+    private function fetchRadarRows(array $where, array $params, string $serie): array
+    {
+        $baseFrom    = $serie !== '' ? 'LEFT JOIN radar_faixa rf ON rf.radar_medidor_id = rm.id' : '';
+        $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        return $this->db->fetchAllAssociative(
+            "SELECT DISTINCT
+                    rm.id, rm.sigla_uf, rm.estado, rm.municipio,
+                    rm.local_verificacao, rm.tipo_medidor, rm.ultimo_resultado,
+                    rm.data_ultima_verificacao, rm.data_verificacao_efetiva,
+                    rm.data_validade, rm.proprietario_nome,
+                    CASE WHEN rwl.id IS NOT NULL THEN 'Sim' ELSE 'Não' END AS tem_waze,
+                    rwl.waze_link
+             FROM radar_medidor rm
+             $baseFrom
+             LEFT JOIN radar_waze_link rwl ON rwl.radar_medidor_id = rm.id
+             $whereClause
+             ORDER BY rm.sigla_uf, rm.municipio, rm.local_verificacao",
+            $params
+        );
+    }
 
     private function csvCell(mixed $v): string
     {
@@ -183,25 +259,14 @@ final class ExportController extends AbstractController
             }
         }
 
-        if ($uf !== '') {
-            $parts[]  = 'rm.sigla_uf = ?';
-            $params[] = $uf;
-        }
-        if ($municipio !== '') {
-            $parts[]  = 'rm.municipio LIKE ?';
-            $params[] = '%' . $this->escapeLike($municipio) . '%';
-        }
-        if ($resultado !== '') {
-            $parts[]  = 'rm.ultimo_resultado = ?';
-            $params[] = $resultado;
-        }
-        if ($tipo !== '') {
-            $parts[]  = 'rm.tipo_medidor = ?';
-            $params[] = $tipo;
-        }
+        if ($uf !== '') { $parts[] = 'rm.sigla_uf = ?'; $params[] = $uf; }
+        if ($municipio !== '') { $parts[] = 'rm.municipio LIKE ?'; $params[] = '%' . $this->escapeLike($municipio) . '%'; }
+        if ($resultado !== '') { $parts[] = 'rm.ultimo_resultado = ?'; $params[] = $resultado; }
+        if ($tipo !== '') { $parts[] = 'rm.tipo_medidor = ?'; $params[] = $tipo; }
+
         if ($serie !== '') {
-            $esc     = $this->escapeLike($serie);
-            $parts[] = '(rf.numero_serie LIKE ? OR rf.numero_inmetro LIKE ?)';
+            $esc      = $this->escapeLike($serie);
+            $parts[]  = '(rf.numero_serie LIKE ? OR rf.numero_inmetro LIKE ?)';
             $params[] = "%$esc%";
             $params[] = "%$esc%";
         }
@@ -225,6 +290,6 @@ final class ExportController extends AbstractController
             $params[] = $em30;
         }
 
-        return [implode(' AND ', $parts), $params];
+        return [$parts, $params];
     }
 }

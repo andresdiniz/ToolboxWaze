@@ -18,7 +18,10 @@ class MonitoringController extends AbstractController
     ) {}
 
     /**
-     * Recebe eventos de monitoramento do frontend (Web Vitals, erros JS, AJAX, sessão).
+     * Recebe eventos de monitoramento do frontend.
+     * Aceita dois formatos enviados pelo tw-monitor.js:
+     *   - Batch:  { batch: [{type, page, data, session_id, ts}, ...], session_id, page }
+     *   - Single: { type, page, data, session_id }
      */
     #[Route('/collect', name: 'collect', methods: ['POST'])]
     public function collect(Request $request): JsonResponse
@@ -28,47 +31,72 @@ class MonitoringController extends AbstractController
             return new JsonResponse(['ok' => false], 400);
         }
 
-        $userId  = $this->getUser()?->getId();
-        $ip      = $request->getClientIp();
-        $ua      = substr($request->headers->get('User-Agent', ''), 0, 512);
-        $session = $payload['session_id'] ?? null;
-        $page    = substr($payload['page'] ?? $request->headers->get('Referer', ''), 0, 512);
-        $type    = $payload['type'] ?? 'unknown';
-        $data    = json_encode($payload['data'] ?? []);
-        $ts      = new \DateTimeImmutable();
+        $ip = $request->getClientIp();
+        $ua = substr($request->headers->get('User-Agent', ''), 0, 512);
+        $userId = $this->getUser()?->getId();
 
-        // Persiste no banco (tabela criada via migração)
-        try {
-            $this->db->insert('monitoring_event', [
-                'type'       => substr($type, 0, 64),
-                'page'       => $page,
-                'data'       => $data,
-                'session_id' => substr((string)$session, 0, 64),
-                'user_id'    => $userId,
-                'ip'         => $ip,
-                'user_agent' => $ua,
-                'created_at' => $ts->format('Y-m-d H:i:s'),
-            ]);
-        } catch (\Throwable $e) {
-            // Tabela ainda não migrada — só loga
-            $this->logger->warning('monitoring_collect db error: ' . $e->getMessage());
+        // Normaliza para array de eventos
+        if (isset($payload['batch']) && is_array($payload['batch'])) {
+            // Formato batch do tw-monitor.js
+            $events = $payload['batch'];
+            // session_id e page podem vir na raiz do batch
+            $rootSession = $payload['session_id'] ?? null;
+            $rootPage    = substr($payload['page'] ?? $request->headers->get('Referer', ''), 0, 512);
+            foreach ($events as &$ev) {
+                if (empty($ev['session_id'])) $ev['session_id'] = $rootSession;
+                if (empty($ev['page']))       $ev['page']       = $rootPage;
+            }
+            unset($ev);
+        } else {
+            // Formato single (legado / fallback)
+            $events = [$payload];
         }
 
-        // Loga erros JS e Web Vitals críticos no Symfony logger
-        if (in_array($type, ['js_error', 'unhandled_rejection', 'ajax_error'], true)) {
-            $this->logger->error('[monitoring] ' . $type, [
-                'page'    => $page,
-                'user_id' => $userId,
-                'data'    => $payload['data'] ?? [],
-            ]);
-        } elseif ($type === 'web_vitals' && isset($payload['data']['lcp']) && $payload['data']['lcp'] > 4000) {
-            $this->logger->warning('[monitoring] LCP crítico: ' . $payload['data']['lcp'] . 'ms', [
-                'page' => $page,
-                'user_id' => $userId,
-            ]);
+        $inserted = 0;
+        foreach ($events as $ev) {
+            $type    = substr((string)($ev['type'] ?? 'unknown'), 0, 64);
+            $page    = substr((string)($ev['page']    ?? $request->headers->get('Referer', '')), 0, 512);
+            $session = substr((string)($ev['session_id'] ?? ''), 0, 64);
+            $data    = json_encode($ev['data'] ?? []);
+            // ts vem em ms (Date.now()) do JS — converte para datetime
+            $ts = isset($ev['ts']) && is_numeric($ev['ts'])
+                ? (new \DateTimeImmutable())->setTimestamp((int)($ev['ts'] / 1000))->format('Y-m-d H:i:s')
+                : (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+
+            try {
+                $this->db->insert('monitoring_event', [
+                    'type'       => $type,
+                    'page'       => $page,
+                    'data'       => $data,
+                    'session_id' => $session,
+                    'user_id'    => $userId,
+                    'ip'         => $ip,
+                    'user_agent' => $ua,
+                    'created_at' => $ts,
+                ]);
+                $inserted++;
+            } catch (\Throwable $e) {
+                $this->logger->warning('monitoring_collect db error: ' . $e->getMessage());
+            }
+
+            // Loga erros críticos no Symfony logger
+            if (in_array($type, ['js_error', 'unhandled_rejection', 'ajax_error'], true)) {
+                $this->logger->error('[monitoring] ' . $type, [
+                    'page'    => $page,
+                    'user_id' => $userId,
+                    'data'    => $ev['data'] ?? [],
+                ]);
+            } elseif ($type === 'web_vital_critical') {
+                $d = $ev['data'] ?? [];
+                $this->logger->warning('[monitoring] vital crítico: ' . ($d['name'] ?? '?') . ' = ' . ($d['value'] ?? '?'), [
+                    'page'    => $page,
+                    'user_id' => $userId,
+                    'rating'  => $d['rating'] ?? null,
+                ]);
+            }
         }
 
-        return new JsonResponse(['ok' => true]);
+        return new JsonResponse(['ok' => true, 'inserted' => $inserted]);
     }
 
     /**
@@ -98,31 +126,56 @@ class MonitoringController extends AbstractController
             $events = $qb->fetchAllAssociative();
 
             // Agregações
-            $byType   = array_count_values(array_column($events, 'type'));
-            $byPage   = array_count_values(array_column($events, 'page'));
-            arsort($byType); arsort($byPage);
+            $byType = array_count_values(array_column($events, 'type'));
+            $byPage = array_count_values(array_column($events, 'page'));
+            arsort($byType);
+            arsort($byPage);
             $topPages = array_slice($byPage, 0, 10, true);
 
             // Médias de Web Vitals
-            $vitals = ['lcp' => [], 'fid' => [], 'cls' => [], 'ttfb' => [], 'inp' => []];
+            // tw-monitor.js envia vitals individuais em `page_performance` (batch)
+            // e críticos em `web_vital_critical` (single). Agrega ambos.
+            $vitals = ['lcp' => [], 'fcp' => [], 'cls' => [], 'ttfb' => [], 'inp' => []];
             foreach ($events as $ev) {
-                if ($ev['type'] !== 'web_vitals') continue;
-                $d = json_decode($ev['data'], true);
-                foreach ($vitals as $k => &$arr) {
-                    if (isset($d[$k]) && is_numeric($d[$k])) $arr[] = (float)$d[$k];
+                if (!in_array($ev['type'], ['web_vitals', 'page_performance', 'web_vital_critical'], true)) {
+                    continue;
                 }
+                $d = json_decode($ev['data'], true) ?? [];
+
+                if ($ev['type'] === 'web_vital_critical') {
+                    // { name: 'LCP', value: 4200, rating: 'poor' }
+                    $name = strtolower($d['name'] ?? '');
+                    if (isset($vitals[$name]) && is_numeric($d['value'] ?? null)) {
+                        $vitals[$name][] = (float)$d['value'];
+                    }
+                    continue;
+                }
+
+                // web_vitals (legado) ou page_performance (batch atual)
+                foreach ($vitals as $k => &$arr) {
+                    if (isset($d[$k]) && is_numeric($d[$k])) {
+                        $arr[] = (float)$d[$k];
+                    }
+                }
+                unset($arr);
             }
+
             $vitalsAvg = [];
             foreach ($vitals as $k => $arr) {
                 $vitalsAvg[$k] = count($arr) ? round(array_sum($arr) / count($arr), 1) : null;
             }
 
-            // Erros distintos (mensagem + página)
-            $errors = array_filter($events, fn($e) => in_array($e['type'], ['js_error','unhandled_rejection','ajax_error']));
+            // Contagem de erros JS/AJAX
+            $errors = array_filter(
+                $events,
+                fn($e) => in_array($e['type'], ['js_error', 'unhandled_rejection', 'ajax_error'])
+            );
+            $errorCount = count($errors);
 
         } catch (\Throwable) {
             $events = $errors = [];
             $byType = $topPages = $vitalsAvg = [];
+            $errorCount = 0;
         }
 
         return $this->render('monitoring/dashboard.html.twig', [
@@ -131,6 +184,7 @@ class MonitoringController extends AbstractController
             'topPages'   => $topPages,
             'vitalsAvg'  => $vitalsAvg,
             'errors'     => array_values($errors),
+            'errorCount' => $errorCount,
             'period'     => $period,
             'filterType' => $type,
         ]);

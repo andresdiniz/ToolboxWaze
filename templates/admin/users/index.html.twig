@@ -203,10 +203,11 @@
     {% endif %}
     {% endmacro %}
 
-    {# MACRO: Estados (UFs) #}
+    {# MACRO: Estados (UFs) — FIX: exibe os estados solicitados pelo usuário no cadastro #}
     {% macro ufsBlock(user, allUfs, isPending, prefix) %}
     {% set uid = prefix ~ user.id %}
-    {% set allChecked = isPending ? true : (user.allowedUfs is null) %}
+    {# FIX: não força allChecked=true para pendentes; respeita allowedUfs do cadastro #}
+    {% set allChecked = user.allowedUfs is null %}
     <div class="ufs-section" id="ufs_section_{{ uid }}">
         <div class="ufs-header">
             <div class="section-label" style="margin-bottom:0">Estados com acesso</div>
@@ -221,7 +222,8 @@
         <div class="ufs-grid" id="ufs_grid_{{ uid }}"
              style="{{ allChecked ? 'opacity:.4;pointer-events:none' : '' }}">
             {% for uf in allUfs %}
-            {% set checked = allChecked or (not isPending and uf in (user.allowedUfs ?? [])) %}
+            {# FIX: checked baseado apenas nos allowedUfs salvos, sem distinção isPending #}
+            {% set checked = allChecked or (uf in (user.allowedUfs ?? [])) %}
             <label class="uf-check {{ checked ? 'is-checked' : '' }}">
                 <input type="checkbox" name="allowed_ufs[]" value="{{ uf }}"
                     {{ checked ? 'checked' : '' }}
@@ -234,10 +236,11 @@
     </div>
     {% endmacro %}
 
-    {# MACRO: Tipos de Solicitação #}
+    {# MACRO: Tipos de Solicitação — FIX: pendentes começam sem nenhum tipo marcado #}
     {% macro tiposBlock(user, allTipos, isPending, prefix) %}
     {% set uid = prefix ~ user.id %}
-    {% set allChecked = isPending ? true : (user.solicitacaoTipos is null) %}
+    {# FIX: isPending começa false; aprovados mantêm comportamento original (null = todos) #}
+    {% set allChecked = isPending ? false : (user.solicitacaoTipos is null) %}
     <div class="tipos-section">
         <div class="tipos-header">
             <div class="section-label" style="margin-bottom:0">Tipos de Solicitação que pode tratar</div>
@@ -252,7 +255,8 @@
         <div class="tipos-grid" id="tipos_grid_{{ uid }}"
              style="margin-top:.6rem;{{ allChecked ? 'opacity:.4;pointer-events:none' : '' }}">
             {% for valor, label in allTipos %}
-            {% set checked = allChecked or (not isPending and valor in (user.solicitacaoTipos ?? [])) %}
+            {# FIX: checked baseado apenas nos solicitacaoTipos salvos, sem distinção isPending #}
+            {% set checked = allChecked or (valor in (user.solicitacaoTipos ?? [])) %}
             <label class="tipo-check {{ checked ? 'is-checked' : '' }}">
                 <input type="checkbox" name="solicitacao_tipos[]" value="{{ valor }}"
                     {{ checked ? 'checked' : '' }}
@@ -264,6 +268,9 @@
         <div class="tipos-count" id="tipos_count_{{ uid }}"></div>
     </div>
     {% endmacro %}
+
+    {# Permissões padrão para novos usuários (pendentes/rejeitados) #}
+    {% set defaultPerms = ['escola', 'radar', 'posto'] %}
 
     {# ===== PENDENTES ===== #}
     <div class="tab-panel active" id="tab-pending">
@@ -297,11 +304,13 @@
 
                     {{ _self.rolesBlock(user, user.id, false, false, false) }}
 
+                    {# FIX: escola, radar e posto pré-marcados por padrão #}
                     <div class="section-label">Permissões de Área</div>
                     <div class="perms-grid">
                         {% for key, label in allPerms %}
                         <label class="perm-check">
-                            <input type="checkbox" name="permissions[]" value="{{ key }}">
+                            <input type="checkbox" name="permissions[]" value="{{ key }}"
+                                {{ (key in defaultPerms) ? 'checked' : '' }}>
                             <span>{{ label }}</span>
                         </label>
                         {% endfor %}
@@ -446,11 +455,13 @@
 
                     {{ _self.rolesBlock(user, 're' ~ user.id, false, false, false) }}
 
+                    {# FIX: escola, radar e posto pré-marcados por padrão #}
                     <div class="section-label" style="margin-top:.75rem">Permissões de Área</div>
                     <div class="perms-grid">
                         {% for key, label in allPerms %}
                         <label class="perm-check">
-                            <input type="checkbox" name="permissions[]" value="{{ key }}">
+                            <input type="checkbox" name="permissions[]" value="{{ key }}"
+                                {{ (key in defaultPerms) ? 'checked' : '' }}>
                             <span>{{ label }}</span>
                         </label>
                         {% endfor %}

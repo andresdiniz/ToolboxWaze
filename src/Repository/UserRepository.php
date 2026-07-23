@@ -19,6 +19,15 @@ class UserRepository extends ServiceEntityRepository
         parent::__construct($registry, User::class);
     }
 
+    /**
+     * Busca um usuário pelo e-mail (case-insensitive no MySQL).
+     * Retorna null se não encontrado.
+     */
+    public function findByEmail(string $email): ?User
+    {
+        return $this->findOneBy(['email' => $email]);
+    }
+
     /** Retorna todos os usuários com ROLE_ADMIN */
     public function findAdmins(): array
     {

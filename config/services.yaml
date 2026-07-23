@@ -6,6 +6,10 @@ parameters:
     # Defina GTM_ID no .env.local — nunca commite o ID real no repositório.
     app.gtm_id: '%env(string:default::GTM_ID)%'
 
+    # Endereço de e-mail remetente usado em controllers (ex: AuthController).
+    # Deve corresponder ao MAILER_FROM definido no .env / .env.local
+    app.mail_from: '%env(MAILER_FROM)%'
+
 services:
     _defaults:
         autowire: true

@@ -26,3 +26,14 @@ framework:
             App\Message\ImportFuelResellersMessage: async
             App\Message\EnviarEmailConta: async
             App\Message\EnviarEmailRadarRecente: async
+
+# --- IMPORTANTE: Cron para Messenger Worker em hospedagem compartilhada ---
+# Nunca rode workers paralelos. Use sempre --limit e --time-limit para garantir
+# que a conexão com o banco seja liberada periodicamente.
+#
+# Exemplo de entrada no cron (a cada 1 minuto):
+#   * * * * * php /caminho/bin/console messenger:consume async --limit=20 --memory-limit=64M --time-limit=55 >> /dev/null 2>&1
+#
+# --time-limit=55  → encerra o worker em 55s, liberando conexão antes do próximo cron
+# --limit=20       → processa no máximo 20 mensagens por execução
+# --memory-limit   → previne leak de memória em imports longos

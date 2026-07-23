@@ -2,17 +2,33 @@ doctrine:
     dbal:
         url: '%env(resolve:DATABASE_URL)%'
 
-        # IMPORTANT: You MUST configure your server version,
-        # either here or in the DATABASE_URL env var (see .env file)
-        #server_version: '16'
+        # IMPORTANTE: Configure a versão do servidor para evitar queries extras de detecção.
+        # Prefira declarar direto na DATABASE_URL do .env:
+        #   DATABASE_URL="mysql://user:pass@host/db?serverVersion=8.0&charset=utf8mb4"
+        # Ou descomente abaixo:
+        #server_version: '8.0'
 
         # Desativado fixo: com true o Doctrine guarda backtrace de CADA query
         # em memória (BacktraceDebugDataHolder). Em imports grandes (>10k rows)
         # isso esgota a RAM mesmo com memory_limit=2G.
-        # Para depurar queries SQL use o Symfony Profiler manualmente.
         profiling_collect_backtrace: false
 
         use_savepoints: true
+
+        # --- Proteção contra max_connections em hospedagem compartilhada ---
+        # Nunca reutilizar conexões persistentes entre requests PHP-FPM.
+        # Conexões persistentes acumulam slots no MySQL e causam "Too many connections".
+        persistent: false
+
+        # Desistir de conectar após 5s — libera o worker PHP mais rápido em caso de lentidão do DB.
+        connect_timeout: 5
+
+        # Forçar wait_timeout baixo: MySQL fecha conexões ociosas em 28s.
+        # Evita conexões "zumbis" que ocupam slots sem uso.
+        # PDO::MYSQL_ATTR_INIT_COMMAND = 1002
+        options:
+            1002: "SET SESSION wait_timeout=28, interactive_timeout=28"
+
     orm:
         auto_generate_proxy_classes: true
         enable_lazy_ghost_objects: true

@@ -95,7 +95,6 @@ class AdminUserController extends AbstractController
                 'tipo'    => $tipo,
                 'user_id' => $userId,
                 'error'   => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
             ]);
         }
     }
@@ -120,8 +119,8 @@ class AdminUserController extends AbstractController
 
         $this->dispatchEmail('aprovado', $user->getId());
 
-        $ufsLabel      = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
-        $champLabel    = $user->isGlobalChamp() ? ' | Global Champ' : ($user->isAnyChamp() ? ' | Champ' : '');
+        $ufsLabel   = $user->getAllowedUfs() === null ? 'todos os estados' : implode(', ', $user->getAllowedUfs());
+        $champLabel = $user->isGlobalChamp() ? ' | Global Champ' : ($user->isAnyChamp() ? ' | Champ' : '');
         $this->addFlash('success', "Usuário {$user->getName()} aprovado. Estados: $ufsLabel$champLabel.");
         return $this->redirectToRoute('admin_users_index');
     }
@@ -171,7 +170,6 @@ class AdminUserController extends AbstractController
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
-        // Busca manual para ter mensagem de erro clara (evita 404 genérico do EntityValueResolver)
         $user = $this->userRepo->find($id);
 
         if (!$user) {
@@ -188,23 +186,35 @@ class AdminUserController extends AbstractController
 
         try {
             $this->em->wrapInTransaction(function () use ($user): void {
-                $userId = $user->getId();
+                $conn = $this->em->getConnection();
 
-                // Desvincula comentários de solicitação
+                // 1. Remove da join table ManyToMany solicitacao_responsaveis
+                $conn->executeStatement(
+                    'DELETE FROM solicitacao_responsaveis WHERE user_id = :uid',
+                    ['uid' => $user->getId()]
+                );
+
+                // 2. SolicitacaoHistorico.autor → NULL  (nullable true, sem onDelete no banco)
+                $this->em->createQuery(
+                    'UPDATE App\Entity\SolicitacaoHistorico h SET h.autor = NULL WHERE h.autor = :user'
+                )->setParameter('user', $user)->execute();
+
+                // 3. EscolaInepComentario.autor → DELETE (nullable false, não pode ser NULL)
+                $this->em->createQuery(
+                    'DELETE App\Entity\EscolaInepComentario c WHERE c.autor = :user'
+                )->setParameter('user', $user)->execute();
+
+                // 4. Solicitacao.resolvidaPor → NULL
+                $this->em->createQuery(
+                    'UPDATE App\Entity\Solicitacao s SET s.resolvidaPor = NULL WHERE s.resolvidaPor = :user'
+                )->setParameter('user', $user)->execute();
+
+                // 5. SolicitacaoComentario.autor → NULL
                 $this->em->createQuery(
                     'UPDATE App\Entity\SolicitacaoComentario c SET c.autor = NULL WHERE c.autor = :user'
                 )->setParameter('user', $user)->execute();
 
-                // Desvincula solicitações onde o usuário é responsável
-                $this->em->createQuery(
-                    'UPDATE App\Entity\Solicitacao s SET s.responsavel = NULL WHERE s.responsavel = :user'
-                )->setParameter('user', $user)->execute();
-
-                // Desvincula solicitações criadas pelo usuário (preserva o registro)
-                $this->em->createQuery(
-                    'UPDATE App\Entity\Solicitacao s SET s.criadoPor = NULL WHERE s.criadoPor = :user'
-                )->setParameter('user', $user)->execute();
-
+                // 6. Remove o usuário (Notificacao tem onDelete CASCADE no banco)
                 $this->em->remove($user);
                 $this->em->flush();
             });
@@ -216,7 +226,7 @@ class AdminUserController extends AbstractController
                 'user_id' => $user->getId(),
                 'error'   => $e->getMessage(),
             ]);
-            $this->addFlash('error', "Não foi possível remover $name. Verifique se há registros vinculados e tente novamente.");
+            $this->addFlash('error', "Não foi possível remover $name. Erro: " . $e->getMessage());
         }
 
         return $this->redirectToRoute('admin_users_index');

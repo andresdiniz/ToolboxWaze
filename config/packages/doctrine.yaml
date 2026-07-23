@@ -20,13 +20,16 @@ doctrine:
         # Conexões persistentes acumulam slots no MySQL e causam "Too many connections".
         persistent: false
 
-        # Desistir de conectar após 5s — libera o worker PHP mais rápido em caso de lentidão do DB.
-        connect_timeout: 5
-
-        # Forçar wait_timeout baixo: MySQL fecha conexões ociosas em 28s.
-        # Evita conexões "zumbis" que ocupam slots sem uso.
-        # PDO::MYSQL_ATTR_INIT_COMMAND = 1002
         options:
+            # PDO::ATTR_TIMEOUT = 0 — desistir de conectar após 5s.
+            # Libera o worker PHP mais rápido em caso de lentidão do DB.
+            # NOTA: connect_timeout não é opção direta do doctrine-bundle;
+            # deve ser passado via PDO options para evitar InvalidConfigurationException.
+            0: 5
+
+            # PDO::MYSQL_ATTR_INIT_COMMAND = 1002
+            # Forçar wait_timeout baixo: MySQL fecha conexões ociosas em 28s.
+            # Evita conexões "zumbis" que ocupam slots sem uso.
             1002: "SET SESSION wait_timeout=28, interactive_timeout=28"
 
     orm:

@@ -167,9 +167,17 @@ class AdminUserController extends AbstractController
     }
 
     #[Route('/{id}/delete', name: 'delete', methods: ['POST'])]
-    public function delete(User $user, Request $request): Response
+    public function delete(int $id, Request $request): Response
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
+
+        // Busca manual para ter mensagem de erro clara (evita 404 genérico do EntityValueResolver)
+        $user = $this->userRepo->find($id);
+
+        if (!$user) {
+            $this->addFlash('error', "Usuário #$id não encontrado. Pode ter sido removido anteriormente.");
+            return $this->redirectToRoute('admin_users_index');
+        }
 
         if (!$this->isCsrfTokenValid('user_delete_' . $user->getId(), $request->request->get('_token'))) {
             $this->addFlash('error', 'Token inválido.');
@@ -178,14 +186,39 @@ class AdminUserController extends AbstractController
 
         $name = $user->getName();
 
-        $this->em->createQuery(
-            'UPDATE App\Entity\SolicitacaoComentario c SET c.autor = NULL WHERE c.autor = :user'
-        )->setParameter('user', $user)->execute();
+        try {
+            $this->em->wrapInTransaction(function () use ($user): void {
+                $userId = $user->getId();
 
-        $this->em->remove($user);
-        $this->em->flush();
+                // Desvincula comentários de solicitação
+                $this->em->createQuery(
+                    'UPDATE App\Entity\SolicitacaoComentario c SET c.autor = NULL WHERE c.autor = :user'
+                )->setParameter('user', $user)->execute();
 
-        $this->addFlash('success', "Usuário $name removido.");
+                // Desvincula solicitações onde o usuário é responsável
+                $this->em->createQuery(
+                    'UPDATE App\Entity\Solicitacao s SET s.responsavel = NULL WHERE s.responsavel = :user'
+                )->setParameter('user', $user)->execute();
+
+                // Desvincula solicitações criadas pelo usuário (preserva o registro)
+                $this->em->createQuery(
+                    'UPDATE App\Entity\Solicitacao s SET s.criadoPor = NULL WHERE s.criadoPor = :user'
+                )->setParameter('user', $user)->execute();
+
+                $this->em->remove($user);
+                $this->em->flush();
+            });
+
+            $this->addFlash('success', "Usuário $name removido com sucesso.");
+
+        } catch (\Throwable $e) {
+            $this->emailQueueLogger->error('AdminUserController: falha ao remover usuário', [
+                'user_id' => $user->getId(),
+                'error'   => $e->getMessage(),
+            ]);
+            $this->addFlash('error', "Não foi possível remover $name. Verifique se há registros vinculados e tente novamente.");
+        }
+
         return $this->redirectToRoute('admin_users_index');
     }
 }

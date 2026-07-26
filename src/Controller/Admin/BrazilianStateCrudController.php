@@ -19,6 +19,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 final class BrazilianStateCrudController extends AbstractController
 {
+    /** Intervalo (em segundos) do heartbeat SSE para evitar timeout de proxy */
+    private const HEARTBEAT_INTERVAL = 20;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         #[Autowire('%kernel.project_dir%')]
@@ -94,8 +97,8 @@ final class BrazilianStateCrudController extends AbstractController
         $skipWaze = (bool) $req->query->get('skip_waze', false);
 
         return $this->render('admin/estados/importar_log.html.twig', [
-            'state'     => $state,
-            'skip_waze' => $skipWaze,
+            'state'      => $state,
+            'skip_waze'  => $skipWaze,
             'stream_url' => $this->generateUrl('admin_estados_importar_stream', [
                 'id'        => $id,
                 'skip_waze' => $skipWaze ? '1' : '0',
@@ -113,35 +116,58 @@ final class BrazilianStateCrudController extends AbstractController
         $state = $this->em->find(BrazilianState::class, $id);
 
         if (!$state) {
-            return new StreamedResponse(function () {
+            return new StreamedResponse(static function () {
                 echo "data: [ERRO] Estado não encontrado.\n\n";
                 flush();
             }, 404, ['Content-Type' => 'text/event-stream']);
         }
 
-        $skipWaze  = (bool) $req->query->get('skip_waze', false);
-        $uf        = $state->getUf();
-        $php       = PHP_BINARY;
-        $console   = $this->projectDir . '/bin/console';
+        $skipWaze   = (bool) $req->query->get('skip_waze', false);
+        $uf         = $state->getUf();
+        $php        = PHP_BINARY;
+        $console    = $this->projectDir . '/bin/console';
 
         $cmd = [$php, $console, 'app:import-radares', '--uf=' . $uf, '--env=prod', '--no-interaction'];
         if ($skipWaze) {
             $cmd[] = '--skip-waze';
         }
 
-        $process   = new Process($cmd, $this->projectDir, null, null, 300);
+        // Timeout do processo: 10 min (suficiente para qualquer UF)
+        $process    = new Process($cmd, $this->projectDir, null, null, 600);
         $projectDir = $this->projectDir;
 
         $response = new StreamedResponse(function () use ($process, $uf, $skipWaze) {
-            // Desligar buffers do PHP/Apache
-            if (ob_get_level()) {
+            // ── Sem limite de tempo para esta requisição ──────────────
+            set_time_limit(0);
+            ignore_user_abort(true);
+
+            // ── Limpa qualquer buffer de saída ────────────────────────
+            while (ob_get_level() > 0) {
                 ob_end_clean();
             }
 
-            $send = static function (string $line) {
-                // Escapa quebras dentro da linha para não quebrar o protocolo SSE
+            $heartbeatInterval = self::HEARTBEAT_INTERVAL;
+            $lastHeartbeat     = time();
+
+            /**
+             * Envia uma linha SSE ao cliente.
+             * Quebras internas são normalizadas para não quebrar o protocolo.
+             */
+            $send = static function (string $line, string $event = 'message') {
                 $line = str_replace(["\r\n", "\r", "\n"], ' ', $line);
+                if ($event !== 'message') {
+                    echo 'event: ' . $event . "\n";
+                }
                 echo 'data: ' . $line . "\n\n";
+                flush();
+            };
+
+            /**
+             * Envia um comentário SSE (heartbeat) para manter a conexão viva.
+             * Comentários SSE começam com ':' e são ignorados pelo EventSource.
+             */
+            $heartbeat = static function () {
+                echo ": heartbeat\n\n";
                 flush();
             };
 
@@ -154,24 +180,52 @@ final class BrazilianStateCrudController extends AbstractController
             $process->start();
 
             $buffer = '';
-            foreach ($process as $type => $data) {
-                $buffer .= $data;
-                // Envia linha por linha
+
+            while ($process->isRunning()) {
+                // Lê o que houver disponível (não-bloqueante)
+                $chunk = $process->getIncrementalOutput();
+                $err   = $process->getIncrementalErrorOutput();
+
+                $buffer .= $chunk;
+                if ($err !== '') {
+                    $buffer .= $err;
+                }
+
+                // Envia linha a linha
                 while (($pos = strpos($buffer, "\n")) !== false) {
-                    $line = substr($buffer, 0, $pos);
+                    $line   = substr($buffer, 0, $pos);
                     $buffer = substr($buffer, $pos + 1);
                     if (trim($line) !== '') {
-                        $send($type === Process::ERR ? '⚠️ ' . $line : $line);
+                        $send($line);
                     }
                 }
+
+                // Heartbeat periódico para evitar timeout do proxy
+                if ((time() - $lastHeartbeat) >= $heartbeatInterval) {
+                    $heartbeat();
+                    $lastHeartbeat = time();
+                }
+
+                usleep(100_000); // 100 ms — não desperdiça CPU
             }
 
-            // Envia o que sobrou no buffer
+            // Drena o que sobrou no buffer após o processo terminar
+            $chunk  = $process->getIncrementalOutput();
+            $err    = $process->getIncrementalErrorOutput();
+            $buffer .= $chunk . $err;
+
+            while (($pos = strpos($buffer, "\n")) !== false) {
+                $line   = substr($buffer, 0, $pos);
+                $buffer = substr($buffer, $pos + 1);
+                if (trim($line) !== '') {
+                    $send($line);
+                }
+            }
             if (trim($buffer) !== '') {
                 $send($buffer);
             }
 
-            $exitCode = $process->getExitCode();
+            $exitCode = $process->getExitCode() ?? 1;
 
             if ($exitCode === 0) {
                 $send('✅ Importação concluída com sucesso! (exit 0)');
@@ -179,15 +233,15 @@ final class BrazilianStateCrudController extends AbstractController
                 $send(sprintf('❌ Processo encerrado com código %d.', $exitCode));
             }
 
-            // Sinal de fim para o JS
+            // Sinal de fim para o JS — fecha o EventSource no cliente
             echo "event: done\ndata: {$exitCode}\n\n";
             flush();
         });
 
-        $response->headers->set('Content-Type', 'text/event-stream');
-        $response->headers->set('Cache-Control', 'no-cache');
-        $response->headers->set('X-Accel-Buffering', 'no'); // Nginx
-        $response->headers->set('Connection', 'keep-alive');
+        $response->headers->set('Content-Type',     'text/event-stream');
+        $response->headers->set('Cache-Control',    'no-cache, no-store');
+        $response->headers->set('X-Accel-Buffering','no');   // Nginx: desativa buffering
+        $response->headers->set('Connection',       'keep-alive');
 
         return $response;
     }

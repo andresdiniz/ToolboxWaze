@@ -74,6 +74,12 @@
     const btnRe     = document.getElementById('btn-reimport');
     const streamUrl = {{ stream_url|json_encode|raw }};
 
+    // Número máximo de reconexões automáticas antes de desistir
+    const MAX_RETRIES = 5;
+    let retries  = 0;
+    let finished = false;
+    let es       = null;
+
     terminal.innerHTML = '';
 
     function classify(text) {
@@ -90,7 +96,6 @@
         span.className = 'log-line ' + classify(html);
         span.innerHTML = html
             .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-            // restaura as tags que enviamos intencionalmente
             .replace(/&lt;strong&gt;/g,'<strong>').replace(/&lt;\/strong&gt;/g,'</strong>')
             .replace(/&lt;span class=&quot;badge-skip&quot;&gt;/g,'<span class="badge-skip">')
             .replace(/&lt;\/span&gt;/g,'</span>');
@@ -98,15 +103,8 @@
         terminal.scrollTop = terminal.scrollHeight;
     }
 
-    const es = new EventSource(streamUrl);
-
-    es.onmessage = function (e) {
-        addLine(e.data);
-    };
-
-    es.addEventListener('done', function (e) {
-        es.close();
-        const code = parseInt(e.data, 10);
+    function markDone(code) {
+        finished = true;
         if (code === 0) {
             badge.className = 'badge bg-success';
             badge.innerHTML = '<i class="fas fa-check me-1"></i> Concluído';
@@ -115,15 +113,50 @@
             badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro (exit ' + code + ')';
         }
         doneBar.style.removeProperty('display');
-    });
+    }
 
-    es.onerror = function () {
-        es.close();
-        addLine('❌ Conexão perdida com o servidor.');
-        badge.className = 'badge bg-danger';
-        badge.innerHTML = '<i class="fas fa-times me-1"></i> Desconectado';
-        doneBar.style.removeProperty('display');
-    };
+    function connect() {
+        es = new EventSource(streamUrl);
+
+        es.onmessage = function (e) {
+            // Ignora heartbeat de conteúdo vazio
+            if (e.data && e.data.trim() !== '') {
+                addLine(e.data);
+            }
+        };
+
+        es.addEventListener('done', function (e) {
+            es.close();
+            markDone(parseInt(e.data, 10));
+        });
+
+        es.onerror = function () {
+            es.close();
+
+            // Se já recebeu o evento "done", a desconexão é esperada — ignorar
+            if (finished) return;
+
+            if (retries < MAX_RETRIES) {
+                retries++;
+                // Backoff exponencial: 2s, 4s, 8s, 16s, 32s
+                const delay = Math.pow(2, retries) * 1000;
+                badge.className = 'badge bg-secondary';
+                badge.innerHTML = '<i class="fas fa-sync fa-spin me-1"></i> Reconectando (' + retries + '/' + MAX_RETRIES + ')…';
+                addLine('⚠️ Conexão interrompida — reconectando em ' + (delay / 1000) + 's… (tentativa ' + retries + '/' + MAX_RETRIES + ')');
+                setTimeout(connect, delay);
+            } else {
+                // Esgotou as tentativas
+                addLine('❌ Não foi possível manter a conexão após ' + MAX_RETRIES + ' tentativas.');
+                addLine('ℹ️  O processo pode ainda estar rodando no servidor. Verifique os logs ou aguarde e recarregue a página.');
+                badge.className = 'badge bg-danger';
+                badge.innerHTML = '<i class="fas fa-times me-1"></i> Desconectado';
+                doneBar.style.removeProperty('display');
+            }
+        };
+    }
+
+    // Inicia conexão
+    connect();
 
     btnCopy.addEventListener('click', function () {
         const text = Array.from(terminal.querySelectorAll('.log-line'))

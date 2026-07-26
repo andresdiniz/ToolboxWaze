@@ -71,11 +71,10 @@
     const btnCopy  = document.getElementById('btn-copy');
     const btnRe    = document.getElementById('btn-reimport');
 
-    const startUrl  = {{ start_url|json_encode|raw }};
-    const csrfToken = {{ csrf_token('import_start_' ~ state.id)|json_encode|raw }};
-    const skipWaze  = {{ skip_waze ? 'true' : 'false' }};
+    {# start_url ja tem skip_waze como query param #}
+    const startUrl = {{ start_url|json_encode|raw }};
 
-    const MAX_RETRIES = 5;
+    const MAX_RETRIES = 8;
     let retries  = 0;
     let finished = false;
     let es       = null;
@@ -87,7 +86,7 @@
         if (/\[ok\]|sucesso|concluíd|✅/.test(t))  return 'log-ok';
         if (/\[warning\]|⚠️|deprecated|warning/.test(t)) return 'log-warn';
         if (/\[error\]|❌|exception|fatal|erro/.test(t))  return 'log-err';
-        if (/🚀|🔧|📝|importand|iniciand|\[notice\]/.test(t)) return 'log-info';
+        if (/🚀|🔧|📝|importand|iniciand|background|\[notice\]/.test(t)) return 'log-info';
         return 'log-muted';
     }
 
@@ -132,48 +131,58 @@
             if (finished) return;
             if (retries < MAX_RETRIES) {
                 retries++;
-                const delay = Math.pow(2, retries) * 1000;
+                const delay = Math.min(Math.pow(2, retries) * 1000, 30000);
                 badge.className = 'badge bg-secondary';
                 badge.innerHTML = '<i class="fas fa-sync fa-spin me-1"></i> Reconectando (' + retries + '/' + MAX_RETRIES + ')…';
-                addLine('⚠️ SSE interrompido — reconectando em ' + (delay/1000) + 's (o processo continua rodando no servidor)…');
+                addLine('⚠️ SSE interrompido — processo continua no servidor. Reconectando em ' + (delay/1000) + 's…');
                 setTimeout(() => connectPoll(pollUrl), delay);
             } else {
-                addLine('❌ Conexão SSE perdida após ' + MAX_RETRIES + ' tentativas.');
-                addLine('ℹ️  O processo CONTINUA RODANDO no servidor. Verifique os logs em var/log/ ou aguarde e recarregue.');
-                badge.className = 'badge bg-danger';
-                badge.innerHTML = '<i class="fas fa-times me-1"></i> SSE desconectado';
+                addLine('❌ SSE desconectado após ' + MAX_RETRIES + ' tentativas.');
+                addLine('ℹ️  O processo CONTINUA RODANDO no servidor. Recarregue a página para ver o status ou verifique var/log/');
+                badge.className = 'badge bg-warning text-dark';
+                badge.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> Processo em background';
                 doneBar.style.removeProperty('display');
             }
         };
     }
 
-    // ETAPA 1: POST para /start (retorna token + poll_url)
+    // ETAPA 1: GET /start?skip_waze=0 — inicia background e retorna token
     async function startImport() {
         badge.className = 'badge bg-warning text-dark';
         badge.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Iniciando…';
 
         try {
-            const fd = new FormData();
-            fd.append('_token',    csrfToken);
-            fd.append('skip_waze', skipWaze ? '1' : '0');
+            const res = await fetch(startUrl, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            });
 
-            const res  = await fetch(startUrl, { method: 'POST', body: fd });
-            const data = await res.json();
+            let data;
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                data = await res.json();
+            } else {
+                const text = await res.text();
+                addLine('❌ Resposta inesperada do servidor (HTTP ' + res.status + '):');
+                addLine(text.substring(0, 300));
+                badge.className = 'badge bg-danger';
+                badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro do servidor';
+                doneBar.style.removeProperty('display');
+                return;
+            }
 
             if (!res.ok || data.error) {
-                addLine('❌ Erro ao iniciar: ' + (data.error || res.status));
+                addLine('❌ Erro ao iniciar: ' + JSON.stringify(data));
                 badge.className = 'badge bg-danger';
                 badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro ao iniciar';
                 doneBar.style.removeProperty('display');
                 return;
             }
 
-            addLine('✅ Processo iniciado em background. Token: ' + data.token);
-            // ETAPA 2: conecta no SSE de poll
+            addLine('✅ Processo iniciado. Token: ' + data.token);
             connectPoll(data.poll_url);
 
         } catch (err) {
-            addLine('❌ Falha na requisição de início: ' + err.message);
+            addLine('❌ Falha na requisição: ' + err.message);
             badge.className = 'badge bg-danger';
             badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro';
             doneBar.style.removeProperty('display');

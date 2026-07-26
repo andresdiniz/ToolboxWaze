@@ -19,10 +19,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 final class BrazilianStateCrudController extends AbstractController
 {
-    /** Segundos maximos aguardando o processo (10 minutos) */
-    private const MAX_POLL_SECONDS = 600;
-
-    /** Intervalo do heartbeat SSE em segundos */
+    private const MAX_POLL_SECONDS   = 600;
     private const HEARTBEAT_INTERVAL = 15;
 
     private const PHP_CLI_CANDIDATES = [
@@ -117,82 +114,88 @@ final class BrazilianStateCrudController extends AbstractController
     }
 
     // =========================================================================
-    // START — inicia o processo em background e retorna o token do log
+    // START — inicia processo em background, retorna token JSON
+    // Aceita GET e POST; protegido por ROLE_ADMIN + sessao autenticada.
     // =========================================================================
 
-    #[Route('/{id}/importar/start', name: 'importar_start', requirements: ['id' => '\\d+'], methods: ['POST'])]
+    #[Route('/{id}/importar/start', name: 'importar_start', requirements: ['id' => '\\d+'])]
     public function importarStart(int $id, Request $req): JsonResponse
     {
-        if (!$this->isCsrfTokenValid('import_start_' . $id, $req->request->get('_token'))) {
-            return $this->json(['error' => 'Token CSRF inválido.'], 403);
+        try {
+            $state = $this->em->find(BrazilianState::class, $id);
+            if (!$state) {
+                return $this->json(['error' => 'Estado não encontrado.'], 404);
+            }
+
+            $skipWaze = (bool) ($req->query->get('skip_waze') ?? $req->request->get('skip_waze', '0'));
+            $uf       = $state->getUf();
+            $phpBin   = $this->resolvePHPCli();
+
+            if ($phpBin === null) {
+                return $this->json([
+                    'error'      => 'PHP CLI não localizado no servidor.',
+                    'candidates' => self::PHP_CLI_CANDIDATES,
+                ], 500);
+            }
+
+            $logDir = $this->projectDir . '/var/log';
+            if (!is_dir($logDir)) {
+                @mkdir($logDir, 0755, true);
+            }
+
+            $token    = bin2hex(random_bytes(12));
+            $logFile  = sprintf('%s/import_%s_%s.log', $logDir, $uf, $token);
+            $doneFile = $logFile . '.done';
+            $failFile = $logFile . '.fail';
+
+            $console = $this->projectDir . '/bin/console';
+            $args = [
+                escapeshellarg($phpBin),
+                escapeshellarg($console),
+                'app:import-radares',
+                '--uf=' . escapeshellarg($uf),
+                '--env=prod',
+                '--no-interaction',
+            ];
+            if ($skipWaze) {
+                $args[] = '--skip-waze';
+            }
+            $cmdStr = implode(' ', $args);
+
+            // Script shell: roda o comando, grava sentinela .done ou .fail
+            $shellScript = sprintf(
+                '(%s >> %s 2>&1 && echo "EXIT:0" >> %s && touch %s) || (echo "EXIT:$?" >> %s && touch %s)',
+                $cmdStr,
+                escapeshellarg($logFile),
+                escapeshellarg($logFile),
+                escapeshellarg($doneFile),
+                escapeshellarg($logFile),
+                escapeshellarg($failFile)
+            );
+
+            $bgCmd = sprintf('nohup bash -c %s > /dev/null 2>&1 &', escapeshellarg($shellScript));
+            shell_exec($bgCmd);
+
+            return $this->json([
+                'ok'       => true,
+                'token'    => $token,
+                'uf'       => $uf,
+                'log_file' => basename($logFile),
+                'poll_url' => $this->generateUrl('admin_estados_importar_poll', ['token' => $token]),
+            ]);
+
+        } catch (\Throwable $e) {
+            return $this->json([
+                'error'   => $e->getMessage(),
+                'class'   => get_class($e),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+            ], 500);
         }
-
-        $state = $this->em->find(BrazilianState::class, $id);
-        if (!$state) {
-            return $this->json(['error' => 'Estado não encontrado.'], 404);
-        }
-
-        $skipWaze = (bool) $req->request->get('skip_waze', false);
-        $uf       = $state->getUf();
-        $phpBin   = $this->resolvePHPCli();
-
-        if ($phpBin === null) {
-            return $this->json(['error' => 'PHP CLI não localizado no servidor.'], 500);
-        }
-
-        // Prepara arquivo de log com token unico
-        $logDir = $this->projectDir . '/var/log';
-        if (!is_dir($logDir)) {
-            @mkdir($logDir, 0755, true);
-        }
-
-        $token   = bin2hex(random_bytes(12));
-        $logFile = sprintf('%s/import_%s_%s.log', $logDir, $uf, $token);
-        $doneFile= $logFile . '.done';
-        $failFile= $logFile . '.fail';
-
-        // Monta comando
-        $console = $this->projectDir . '/bin/console';
-        $args = [
-            escapeshellarg($phpBin),
-            escapeshellarg($console),
-            'app:import-radares',
-            '--uf=' . escapeshellarg($uf),
-            '--env=prod',
-            '--no-interaction',
-        ];
-        if ($skipWaze) {
-            $args[] = '--skip-waze';
-        }
-        $cmdStr = implode(' ', $args);
-
-        // Wrapper shell: redireciona output para o log, grava .done ou .fail ao fim
-        $shellScript = sprintf(
-            '(%s >> %s 2>&1 && echo "EXIT:0" >> %s && touch %s) || (echo "EXIT:$?" >> %s && touch %s)',
-            $cmdStr,
-            escapeshellarg($logFile),
-            escapeshellarg($logFile),
-            escapeshellarg($doneFile),
-            escapeshellarg($logFile),
-            escapeshellarg($failFile)
-        );
-
-        // Dispara em background e retorna imediatamente
-        // nohup + redirec stdout/stderr para /dev/null (ja esta no log)
-        // O & no final desacopla o processo do request HTTP
-        $bgCmd = sprintf('nohup bash -c %s > /dev/null 2>&1 &', escapeshellarg($shellScript));
-        shell_exec($bgCmd);
-
-        return $this->json([
-            'token'    => $token,
-            'uf'       => $uf,
-            'log_file' => basename($logFile),
-            'poll_url' => $this->generateUrl('admin_estados_importar_poll', ['token' => $token]),
-        ]);
     }
 
     // =========================================================================
-    // POLL — SSE que le o log e envia linha a linha
+    // POLL — SSE que lê o log e envia linha a linha
     // =========================================================================
 
     #[Route('/importar/poll', name: 'importar_poll')]
@@ -209,9 +212,8 @@ final class BrazilianStateCrudController extends AbstractController
 
         $logDir  = $this->projectDir . '/var/log';
         $logGlob = $logDir . '/import_*_' . $token . '.log';
-        $projectDir = $this->projectDir;
 
-        $response = new StreamedResponse(function () use ($token, $logGlob, $projectDir) {
+        $response = new StreamedResponse(function () use ($logGlob) {
             set_time_limit(0);
             ignore_user_abort(true);
 
@@ -228,10 +230,10 @@ final class BrazilianStateCrudController extends AbstractController
                 flush();
             };
 
-            // Espera o arquivo de log aparecer (processo pode demorar 1-2s para iniciar)
-            $waited   = 0;
-            $logFile  = null;
-            while ($waited < 10) {
+            // Aguarda o arquivo de log aparecer (processo leva ~1-2s para iniciar)
+            $waited  = 0;
+            $logFile = null;
+            while ($waited < 15) {
                 $files = glob($logGlob);
                 if (!empty($files)) {
                     $logFile = $files[0];
@@ -242,7 +244,8 @@ final class BrazilianStateCrudController extends AbstractController
             }
 
             if ($logFile === null) {
-                $send('❌ Arquivo de log não encontrado. O processo pode não ter iniciado.');
+                $send('❌ Arquivo de log não encontrado após 15s. O processo pode não ter iniciado.');
+                $send('ℹ️  Verifique se nohup e bash estão disponíveis no servidor.');
                 echo "event: done\ndata: 1\n\n";
                 flush();
                 return;
@@ -259,14 +262,14 @@ final class BrazilianStateCrudController extends AbstractController
                 return;
             }
 
-            $send('🚀 Processo iniciado em background — lendo log em tempo real…');
+            $send('🚀 Processo iniciado em background — acompanhando log em tempo real…');
+            $send('📝 Log: ' . basename((string) $logFile));
 
             $elapsed       = 0;
             $lastHeartbeat = microtime(true);
             $buffer        = '';
 
             while ($elapsed < self::MAX_POLL_SECONDS) {
-                // Le novas linhas do arquivo de log
                 $chunk = fread($fh, 8192);
                 if ($chunk !== false && $chunk !== '') {
                     $buffer .= $chunk;
@@ -280,16 +283,14 @@ final class BrazilianStateCrudController extends AbstractController
                     }
                 }
 
-                // Heartbeat
                 if ((microtime(true) - $lastHeartbeat) >= self::HEARTBEAT_INTERVAL) {
                     echo ": heartbeat\n\n";
                     flush();
                     $lastHeartbeat = microtime(true);
                 }
 
-                // Verifica se o processo terminou
                 if (file_exists($doneFile)) {
-                    // Drena o restante do log
+                    // Drena restante do log
                     while (!feof($fh)) {
                         $chunk = fread($fh, 8192);
                         if ($chunk !== false && $chunk !== '') { $buffer .= $chunk; }
@@ -319,19 +320,19 @@ final class BrazilianStateCrudController extends AbstractController
                     }
                     if (trim($buffer) !== '') { $send(trim($buffer)); }
                     fclose($fh);
-                    $send('❌ Processo encerrou com erro. Verifique o log acima.');
+                    $send('❌ Processo encerrou com erro.');
                     echo "event: done\ndata: 1\n\n";
                     flush();
                     return;
                 }
 
-                usleep(500_000); // 500ms
+                usleep(500_000);
                 $elapsed += 0.5;
             }
 
             fclose($fh);
-            $send('⏰ Timeout: o processo ultrapassou ' . self::MAX_POLL_SECONDS . 's.');
-            $send('ℹ️  Verifique o log em: var/log/' . basename((string) $logFile));
+            $send('⏰ Timeout: processo ultrapassou ' . self::MAX_POLL_SECONDS . 's.');
+            $send('ℹ️  Verifique var/log/' . basename((string) $logFile));
             echo "event: done\ndata: 1\n\n";
             flush();
         });
@@ -345,7 +346,7 @@ final class BrazilianStateCrudController extends AbstractController
     }
 
     // =========================================================================
-    // Helper: detecta PHP CLI real
+    // Helper: detecta PHP CLI real (exclui cgi/fpm/lsphp)
     // =========================================================================
 
     private function resolvePHPCli(): ?string

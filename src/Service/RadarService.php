@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\User;
-use Doctrine\DBAL\Cache\QueryCacheProfile;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,29 +13,29 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Encapsula toda a lógica de negócio, queries SQL e regras de validação
- * relacionadas a radares, desafogando o RadarController.
+ * relacionadas a radares.
  *
- * Histórico de melhorias de performance:
- *  #P1 — getStats() usa QueryCacheProfile (DBAL result cache)
- *  #P2 — getShowData() usa QueryCacheProfile nas sub-queries estáticas
- *  #P3 — addPublicCacheHeaders() aplica Cache-Control nas páginas públicas
- *  #P4 — getStatsFull() funde Q3+Q5+Q6 em 1 única query
- *  #P5 — findPaginated() usa data_validade_date (coluna gerada) quando
- *         disponível; caso contrário usa STR_TO_DATE() como fallback
+ * Cache: todo o cache usa cache.app (Symfony), nunca executeCacheQuery()
+ * do DBAL, pois este exige result_cache_driver no doctrine.yaml.
+ *
+ * Melhorias de performance:
+ *  #P1 — getStatsFull() cacheia stats globais 5 min via cache.app
+ *  #P2 — getShowData() cacheia sub-queries estáticas 1h via cache.app
+ *  #P3 — addPublicCacheHeaders() aplica Cache-Control em páginas públicas
+ *  #P4 — getStatsFull() funde 3 queries em 1
+ *  #P5 — findPaginated() detecta coluna gerada data_validade_date;
+ *         usa STR_TO_DATE() como fallback automático
  */
 final class RadarService
 {
     private const VALIDADE_ISO_EXPR = "STR_TO_DATE(r.data_validade, '%d/%m/%Y')";
-    private const CACHE_TTL         = 3600;
-    private const STATS_CACHE_TTL   = 300;
+    private const CACHE_TTL         = 3600; // 1 h
+    private const STATS_CACHE_TTL   = 300;  // 5 min
 
     /** @var array<string,string> */
     private array $camposEditaveis;
 
-    /**
-     * Resolvido na primeira chamada a getValidadeExpr().
-     * null = ainda não verificado, string = expressão SQL a usar.
-     */
+    /** Resolvido uma vez por instância — null = não verificado ainda. */
     private ?string $validadeExpr = null;
 
     public function __construct(
@@ -55,15 +54,10 @@ final class RadarService
     // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * #P5 — Retorna a expressão SQL a usar para a data de validade.
-     *
-     * Quando a migration Version20260726_ValidadeDate já foi executada,
-     * usa a coluna gerada `r.data_validade_date` (mais rápida, indexada).
-     * Caso contrário, usa STR_TO_DATE() como fallback — 100% compatível
-     * com o banco antes da migration.
-     *
-     * O resultado é cacheado em memória por requisição (propriedade do objeto)
-     * para evitar repetir a query ao INFORMATION_SCHEMA a cada chamada.
+     * #P5 — Detecta se a coluna gerada data_validade_date já foi criada
+     * pela migration Version20260726_ValidadeDate. Se sim, usa a coluna
+     * indexada (mais rápida); senão, usa STR_TO_DATE() como fallback.
+     * Resultado cacheado na propriedade do objeto (1x por request).
      */
     private function getValidadeExpr(): string
     {
@@ -104,8 +98,8 @@ final class RadarService
     }
 
     /**
-     * Monta todos os dados necessários para renderizar radar/show.html.twig.
-     * #P2 — sub-queries estáticas cacheadas por 1h via QueryCacheProfile.
+     * Monta todos os dados para radar/show.html.twig.
+     * #P2 — sub-queries estáticas cacheadas 1h via cache.app.
      */
     public function getShowData(int $id): array
     {
@@ -123,12 +117,15 @@ final class RadarService
             ) ?: null;
         }
 
-        $absorbedRadares = $this->db->executeCacheQuery(
-            'SELECT id, sigla_uf, municipio, logradouro, merged_at, merged_by
-             FROM radar_medidor WHERE merged_into_id = ? ORDER BY merged_at DESC',
-            [$id], [],
-            new QueryCacheProfile(self::CACHE_TTL, 'absorbed_' . $id)
-        )->fetchAllAssociative();
+        // #P2 — absorbed raramente muda: cache 1h
+        $absorbedRadares = $this->cache->get('absorbed_' . $id, function (ItemInterface $item) use ($id): array {
+            $item->expiresAfter(self::CACHE_TTL);
+            return $this->db->fetchAllAssociative(
+                'SELECT id, sigla_uf, municipio, logradouro, merged_at, merged_by
+                 FROM radar_medidor WHERE merged_into_id = ? ORDER BY merged_at DESC',
+                [$id]
+            );
+        });
 
         $wazeLink = $this->db->fetchAssociative(
             'SELECT wl.*, u1.email AS inserted_by_email, u2.email AS updated_by_email
@@ -148,17 +145,22 @@ final class RadarService
             [$id]
         );
 
-        $historico = $this->db->executeCacheQuery(
-            'SELECT * FROM radar_historico WHERE radar_medidor_id = ? ORDER BY data_laudo DESC LIMIT 10',
-            [$id], [],
-            new QueryCacheProfile(self::CACHE_TTL, 'historico_' . $id)
-        )->fetchAllAssociative();
+        // #P2 — historico e faixas são estáticos por ID: cache 1h
+        $historico = $this->cache->get('historico_' . $id, function (ItemInterface $item) use ($id): array {
+            $item->expiresAfter(self::CACHE_TTL);
+            return $this->db->fetchAllAssociative(
+                'SELECT * FROM radar_historico WHERE radar_medidor_id = ? ORDER BY data_laudo DESC LIMIT 10',
+                [$id]
+            );
+        });
 
-        $faixas = $this->db->executeCacheQuery(
-            'SELECT * FROM radar_faixa WHERE radar_medidor_id = ? ORDER BY numero_faixa',
-            [$id], [],
-            new QueryCacheProfile(self::CACHE_TTL, 'faixas_' . $id)
-        )->fetchAllAssociative();
+        $faixas = $this->cache->get('faixas_' . $id, function (ItemInterface $item) use ($id): array {
+            $item->expiresAfter(self::CACHE_TTL);
+            return $this->db->fetchAllAssociative(
+                'SELECT * FROM radar_faixa WHERE radar_medidor_id = ? ORDER BY numero_faixa',
+                [$id]
+            );
+        });
 
         return [
             'radar'           => $radar,
@@ -178,9 +180,7 @@ final class RadarService
 
     /**
      * Retorna página de radares com filtros aplicados.
-     *
-     * #P5 — usa getValidadeExpr() que detecta automaticamente se a coluna
-     *        gerada data_validade_date está disponível ou usa STR_TO_DATE().
+     * #P5 — usa getValidadeExpr() com fallback automático.
      *
      * @param  array{uf:string,municipio:string,resultado:string,tipo:string,validade:string,serie:string} $filters
      * @return array{rows:list<array>,total:int,pages:int,page:int,offset:int}
@@ -264,8 +264,8 @@ final class RadarService
     }
 
     /**
-     * #P4 — Substitui getStats() + totalMesclados do controller por 1 query.
-     * Cacheado por 5 minutos via QueryCacheProfile.
+     * #P1 / #P4 — Stats globais + total_mesclados em 1 query, cache 5 min.
+     * Usa cache.app (Symfony) — funciona sem configurar result_cache_driver.
      *
      * @return array{total:int,aprovados:int,reprovados:int,vencidos:int,
      *               vencendo:int,estados:int,total_mesclados:int}|null
@@ -276,22 +276,27 @@ final class RadarService
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $vcol = $this->getValidadeExpr();
 
-        $result = $this->db->executeCacheQuery(
-            "SELECT
-                SUM(merged_into_id IS NULL)                               AS total,
-                SUM(merged_into_id IS NULL AND situacao = 'APROVADO')     AS aprovados,
-                SUM(merged_into_id IS NULL AND situacao = 'REPROVADO')    AS reprovados,
-                SUM(merged_into_id IS NULL AND $vcol < ?)                 AS vencidos,
-                SUM(merged_into_id IS NULL AND $vcol >= ? AND $vcol <= ?) AS vencendo,
-                COUNT(DISTINCT IF(merged_into_id IS NULL, sigla_uf, NULL)) AS estados,
-                SUM(merged_into_id IS NOT NULL)                           AS total_mesclados
-             FROM radar_medidor r",
-            [$hoje, $hoje, $em30],
-            [],
-            new QueryCacheProfile(self::STATS_CACHE_TTL, 'radar_stats_full')
-        );
+        // A chave inclui as datas para não retornar dados de ontem
+        $cacheKey = 'radar_stats_full_' . $hoje;
 
-        return $result->fetchAssociative() ?: null;
+        return $this->cache->get($cacheKey, function (ItemInterface $item) use ($hoje, $em30, $vcol): ?array {
+            $item->expiresAfter(self::STATS_CACHE_TTL);
+
+            $row = $this->db->fetchAssociative(
+                "SELECT
+                    SUM(merged_into_id IS NULL)                               AS total,
+                    SUM(merged_into_id IS NULL AND situacao = 'APROVADO')     AS aprovados,
+                    SUM(merged_into_id IS NULL AND situacao = 'REPROVADO')    AS reprovados,
+                    SUM(merged_into_id IS NULL AND $vcol < ?)                 AS vencidos,
+                    SUM(merged_into_id IS NULL AND $vcol >= ? AND $vcol <= ?) AS vencendo,
+                    COUNT(DISTINCT IF(merged_into_id IS NULL, sigla_uf, NULL)) AS estados,
+                    SUM(merged_into_id IS NOT NULL)                           AS total_mesclados
+                 FROM radar_medidor r",
+                [$hoje, $hoje, $em30]
+            );
+
+            return $row ?: null;
+        });
     }
 
     /** @deprecated Use getStatsFull() */
@@ -303,8 +308,8 @@ final class RadarService
     // ── Cache HTTP nas páginas públicas ────────────────────────────────────────
 
     /**
-     * #P3 — Aplica cabeçalhos Cache-Control em páginas públicas.
-     * Não chamar em rotas protegidas por login.
+     * #P3 — Cache-Control para páginas públicas (sem login).
+     * NÃO usar em rotas protegidas pelo Symfony Security.
      */
     public function addPublicCacheHeaders(
         Response $response,
@@ -317,7 +322,7 @@ final class RadarService
         $response->headers->addCacheControlDirective('stale-while-revalidate', 60);
     }
 
-    // ── Cache nas queries de filtros estáticos ───────────────────────────────
+    // ── Cache de filtros estáticos ─────────────────────────────────────────────
 
     public function getUfsParaFiltro(?array $allowedUfs): array
     {

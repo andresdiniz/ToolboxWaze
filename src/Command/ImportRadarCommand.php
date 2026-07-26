@@ -142,7 +142,16 @@ final class ImportRadarCommand extends Command
         }
 
         // ── Resolve lista de UFs ──────────────────────────────────────────
-        $requestedUfs = array_map('strtoupper', $input->getOption('uf'));
+        // getOption('uf') pode retornar string quando o InputDefinition do handler
+        // não herda VALUE_IS_ARRAY (ex: --uf=AC passado como string única).
+        $rawUf = $input->getOption('uf');
+        if (is_array($rawUf)) {
+            $requestedUfs = array_map('strtoupper', $rawUf);
+        } elseif (is_string($rawUf) && $rawUf !== '') {
+            $requestedUfs = [strtoupper($rawUf)];
+        } else {
+            $requestedUfs = [];
+        }
 
         if ($requestedUfs !== []) {
             $ufs = $requestedUfs;

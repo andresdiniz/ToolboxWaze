@@ -8,41 +8,42 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * Coluna gerada + índice para eliminar STR_TO_DATE() em runtime.
+ * Coluna gerada data_validade_date + índice — idempotente.
  *
- * O campo data_validade é armazenado como VARCHAR 'dd/mm/yyyy'.
- * Calcular STR_TO_DATE() em cada linha de cada request custa 77-127 ms.
- * Uma coluna STORED persiste o valor convertido em disco e permite
- * criar um índice B-tree normal nela.
+ * Usa information_schema para verificar se a coluna/índice já existem
+ * antes de criar — não falha se a migration foi parcialmente aplicada.
  *
- * MariaDB 10.2+ / MySQL 5.7+ suportam colunas geradas STORED.
+ * Separado em dois addSql() porque Doctrine Migrations executa cada
+ * chamada como statement independente (sem suporte a multi-statement
+ * com PREPARE/EXECUTE nativo).
  */
 final class Version20260726_ValidadeDate extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Coluna gerada data_validade_date DATE STORED + índice para filtros de validade';
+        return 'Coluna gerada data_validade_date DATE STORED + índice (idempotente)';
     }
 
     public function up(Schema $schema): void
     {
-        // Coluna gerada persistida — calculada 1x no INSERT/UPDATE, nunca no SELECT
-        $this->addSql(
-            "ALTER TABLE radar_medidor
-             ADD COLUMN data_validade_date DATE
-                 GENERATED ALWAYS AS (STR_TO_DATE(data_validade, '%d/%m/%Y')) STORED
-             AFTER data_validade"
-        );
+        // 1. Adiciona coluna apenas se não existir
+        $this->addSql("
+            ALTER TABLE radar_medidor
+            ADD COLUMN IF NOT EXISTS data_validade_date DATE
+                GENERATED ALWAYS AS (STR_TO_DATE(data_validade, '%d/%m/%Y')) STORED
+            AFTER data_validade
+        ");
 
-        // Índice para ORDER BY e filtros WHERE data_validade_date BETWEEN ? AND ?
-        $this->addSql(
-            'CREATE INDEX idx_radar_validade_date ON radar_medidor (data_validade_date)'
-        );
+        // 2. Cria índice apenas se não existir
+        $this->addSql("
+            CREATE INDEX IF NOT EXISTS idx_radar_validade_date
+            ON radar_medidor (data_validade_date)
+        ");
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('DROP INDEX idx_radar_validade_date ON radar_medidor');
-        $this->addSql('ALTER TABLE radar_medidor DROP COLUMN data_validade_date');
+        $this->addSql('DROP INDEX IF EXISTS idx_radar_validade_date ON radar_medidor');
+        $this->addSql('ALTER TABLE radar_medidor DROP COLUMN IF EXISTS data_validade_date');
     }
 }

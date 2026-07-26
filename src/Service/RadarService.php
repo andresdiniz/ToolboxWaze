@@ -23,20 +23,18 @@ use Symfony\Contracts\Cache\ItemInterface;
  *  #P2 — getShowData() cacheia sub-queries estáticas 1h via cache.app
  *  #P3 — addPublicCacheHeaders() aplica Cache-Control em páginas públicas
  *  #P4 — getStatsFull() funde 3 queries em 1
- *  #P5 — findPaginated() detecta coluna gerada data_validade_date;
- *         usa STR_TO_DATE() como fallback automático
+ *  #P5 — getValidadeExpr() cacheada 24h via cache.app (elimina
+ *         information_schema a cada request)
  */
 final class RadarService
 {
     private const VALIDADE_ISO_EXPR = "STR_TO_DATE(r.data_validade, '%d/%m/%Y')";
-    private const CACHE_TTL         = 3600; // 1 h
-    private const STATS_CACHE_TTL   = 300;  // 5 min
+    private const CACHE_TTL         = 3600;      // 1 h
+    private const STATS_CACHE_TTL   = 300;       // 5 min
+    private const SCHEMA_CACHE_TTL  = 86400;     // 24 h
 
     /** @var array<string,string> */
     private array $camposEditaveis;
-
-    /** Resolvido uma vez por instância — null = não verificado ainda. */
-    private ?string $validadeExpr = null;
 
     public function __construct(
         private readonly Connection       $db,
@@ -49,37 +47,34 @@ final class RadarService
         $this->camposEditaveis = require $projectDir . '/config/radar_campos.php';
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────
     // Helpers internos
-    // ──────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────
 
     /**
-     * #P5 — Detecta se a coluna gerada data_validade_date já foi criada
-     * pela migration Version20260726_ValidadeDate. Se sim, usa a coluna
-     * indexada (mais rápida); senão, usa STR_TO_DATE() como fallback.
-     * Resultado cacheado na propriedade do objeto (1x por request).
+     * #P5 — Detecta se a coluna gerada data_validade_date existe.
+     * Resultado cacheado 24h via cache.app — zero overhead nas requests
+     * seguintes à primeira após deploy/cache:clear.
      */
     private function getValidadeExpr(): string
     {
-        if ($this->validadeExpr !== null) {
-            return $this->validadeExpr;
-        }
+        return $this->cache->get('radar_validade_col_exists', function (ItemInterface $item): string {
+            $item->expiresAfter(self::SCHEMA_CACHE_TTL);
 
-        $exists = (bool) $this->db->fetchOne(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME   = 'radar_medidor'
-               AND COLUMN_NAME  = 'data_validade_date'"
-        );
+            $exists = (bool) $this->db->fetchOne(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME   = 'radar_medidor'
+                   AND COLUMN_NAME  = 'data_validade_date'"
+            );
 
-        $this->validadeExpr = $exists ? 'r.data_validade_date' : self::VALIDADE_ISO_EXPR;
-
-        return $this->validadeExpr;
+            return $exists ? 'r.data_validade_date' : self::VALIDADE_ISO_EXPR;
+        });
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────
     // Leitura
-    // ──────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────
 
     public function findOrFail(int $id): array
     {
@@ -117,7 +112,6 @@ final class RadarService
             ) ?: null;
         }
 
-        // #P2 — absorbed raramente muda: cache 1h
         $absorbedRadares = $this->cache->get('absorbed_' . $id, function (ItemInterface $item) use ($id): array {
             $item->expiresAfter(self::CACHE_TTL);
             return $this->db->fetchAllAssociative(
@@ -145,7 +139,6 @@ final class RadarService
             [$id]
         );
 
-        // #P2 — historico e faixas são estáticos por ID: cache 1h
         $historico = $this->cache->get('historico_' . $id, function (ItemInterface $item) use ($id): array {
             $item->expiresAfter(self::CACHE_TTL);
             return $this->db->fetchAllAssociative(
@@ -180,7 +173,7 @@ final class RadarService
 
     /**
      * Retorna página de radares com filtros aplicados.
-     * #P5 — usa getValidadeExpr() com fallback automático.
+     * #P5 — usa getValidadeExpr() cacheada (zero overhead após 1ª request).
      *
      * @param  array{uf:string,municipio:string,resultado:string,tipo:string,validade:string,serie:string} $filters
      * @return array{rows:list<array>,total:int,pages:int,page:int,offset:int}
@@ -265,7 +258,6 @@ final class RadarService
 
     /**
      * #P1 / #P4 — Stats globais + total_mesclados em 1 query, cache 5 min.
-     * Usa cache.app (Symfony) — funciona sem configurar result_cache_driver.
      *
      * @return array{total:int,aprovados:int,reprovados:int,vencidos:int,
      *               vencendo:int,estados:int,total_mesclados:int}|null
@@ -276,7 +268,6 @@ final class RadarService
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $vcol = $this->getValidadeExpr();
 
-        // A chave inclui as datas para não retornar dados de ontem
         $cacheKey = 'radar_stats_full_' . $hoje;
 
         return $this->cache->get($cacheKey, function (ItemInterface $item) use ($hoje, $em30, $vcol): ?array {
@@ -305,11 +296,11 @@ final class RadarService
         return $this->getStatsFull();
     }
 
-    // ── Cache HTTP nas páginas públicas ────────────────────────────────────────
+    // ── Cache HTTP nas páginas públicas ──────────────────────────────────────
 
     /**
      * #P3 — Cache-Control para páginas públicas (sem login).
-     * NÃO usar em rotas protegidas pelo Symfony Security.
+     * NÃO usar em rotas protegidas pelo Symfony Security.
      */
     public function addPublicCacheHeaders(
         Response $response,
@@ -322,7 +313,7 @@ final class RadarService
         $response->headers->addCacheControlDirective('stale-while-revalidate', 60);
     }
 
-    // ── Cache de filtros estáticos ─────────────────────────────────────────────
+    // ── Cache de filtros estáticos ────────────────────────────────────────────
 
     public function getUfsParaFiltro(?array $allowedUfs): array
     {
@@ -376,9 +367,9 @@ final class RadarService
         $this->cache->delete($ufsKey);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────
     // Escrita
-    // ──────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────
 
     public function saveEdit(int $id, array $postData, array $estadosMap, User $user): int
     {

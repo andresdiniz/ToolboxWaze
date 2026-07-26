@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Entity\BrazilianState;
+use App\Message\ImportRadaresMessage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -12,6 +13,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -22,28 +24,9 @@ final class BrazilianStateCrudController extends AbstractController
     private const MAX_POLL_SECONDS   = 600;
     private const HEARTBEAT_INTERVAL = 15;
 
-    private const PHP_CLI_CANDIDATES = [
-        '/opt/alt/php85/usr/bin/php',
-        '/opt/alt/php84/usr/bin/php',
-        '/opt/alt/php83/usr/bin/php',
-        '/opt/alt/php82/usr/bin/php',
-        '/opt/alt/php81/usr/bin/php',
-        '/opt/alt/php80/usr/bin/php',
-        '/usr/local/php83/bin/php',
-        '/usr/local/php82/bin/php',
-        '/usr/local/php81/bin/php',
-        '/usr/bin/php8.5',
-        '/usr/bin/php8.4',
-        '/usr/bin/php8.3',
-        '/usr/bin/php8.2',
-        '/usr/bin/php8.1',
-        '/usr/bin/php8',
-        '/usr/bin/php',
-        '/usr/local/bin/php',
-    ];
-
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly MessageBusInterface    $bus,
         #[Autowire('%kernel.project_dir%')]
         private readonly string $projectDir,
     ) {}
@@ -104,9 +87,9 @@ final class BrazilianStateCrudController extends AbstractController
         $skipWaze = (bool) $req->query->get('skip_waze', false);
 
         return $this->render('admin/estados/importar_log.html.twig', [
-            'state'      => $state,
-            'skip_waze'  => $skipWaze,
-            'start_url'  => $this->generateUrl('admin_estados_importar_start', [
+            'state'     => $state,
+            'skip_waze' => $skipWaze,
+            'start_url' => $this->generateUrl('admin_estados_importar_start', [
                 'id'        => $id,
                 'skip_waze' => $skipWaze ? '1' : '0',
             ]),
@@ -114,8 +97,7 @@ final class BrazilianStateCrudController extends AbstractController
     }
 
     // =========================================================================
-    // START — inicia processo em background, retorna token JSON
-    // Aceita GET e POST; protegido por ROLE_ADMIN + sessao autenticada.
+    // START — despacha mensagem para fila Doctrine, retorna token JSON
     // =========================================================================
 
     #[Route('/{id}/importar/start', name: 'importar_start', requirements: ['id' => '\\d+'])]
@@ -129,52 +111,21 @@ final class BrazilianStateCrudController extends AbstractController
 
             $skipWaze = (bool) ($req->query->get('skip_waze') ?? $req->request->get('skip_waze', '0'));
             $uf       = $state->getUf();
-            $phpBin   = $this->resolvePHPCli();
-
-            if ($phpBin === null) {
-                return $this->json([
-                    'error'      => 'PHP CLI não localizado no servidor.',
-                    'candidates' => self::PHP_CLI_CANDIDATES,
-                ], 500);
-            }
 
             $logDir = $this->projectDir . '/var/log';
             if (!is_dir($logDir)) {
                 @mkdir($logDir, 0755, true);
             }
 
-            $token    = bin2hex(random_bytes(12));
-            $logFile  = sprintf('%s/import_%s_%s.log', $logDir, $uf, $token);
-            $doneFile = $logFile . '.done';
-            $failFile = $logFile . '.fail';
+            $token   = bin2hex(random_bytes(12));
+            $logFile = sprintf('%s/import_%s_%s.log', $logDir, $uf, $token);
 
-            $console = $this->projectDir . '/bin/console';
-            $args = [
-                escapeshellarg($phpBin),
-                escapeshellarg($console),
-                'app:import-radares',
-                '--uf=' . escapeshellarg($uf),
-                '--env=prod',
-                '--no-interaction',
-            ];
-            if ($skipWaze) {
-                $args[] = '--skip-waze';
-            }
-            $cmdStr = implode(' ', $args);
-
-            // Script shell: roda o comando, grava sentinela .done ou .fail
-            $shellScript = sprintf(
-                '(%s >> %s 2>&1 && echo "EXIT:0" >> %s && touch %s) || (echo "EXIT:$?" >> %s && touch %s)',
-                $cmdStr,
-                escapeshellarg($logFile),
-                escapeshellarg($logFile),
-                escapeshellarg($doneFile),
-                escapeshellarg($logFile),
-                escapeshellarg($failFile)
-            );
-
-            $bgCmd = sprintf('nohup bash -c %s > /dev/null 2>&1 &', escapeshellarg($shellScript));
-            shell_exec($bgCmd);
+            $this->bus->dispatch(new ImportRadaresMessage(
+                uf:       $uf,
+                skipWaze: $skipWaze,
+                logFile:  $logFile,
+                token:    $token,
+            ));
 
             return $this->json([
                 'ok'       => true,
@@ -182,14 +133,15 @@ final class BrazilianStateCrudController extends AbstractController
                 'uf'       => $uf,
                 'log_file' => basename($logFile),
                 'poll_url' => $this->generateUrl('admin_estados_importar_poll', ['token' => $token]),
+                'mode'     => 'messenger',
             ]);
 
         } catch (\Throwable $e) {
             return $this->json([
-                'error'   => $e->getMessage(),
-                'class'   => get_class($e),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
+                'error' => $e->getMessage(),
+                'class' => get_class($e),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
             ], 500);
         }
     }
@@ -230,22 +182,26 @@ final class BrazilianStateCrudController extends AbstractController
                 flush();
             };
 
-            // Aguarda o arquivo de log aparecer (processo leva ~1-2s para iniciar)
+            // Aguarda o handler criar o arquivo de log (cron/consumer leva alguns segundos)
             $waited  = 0;
             $logFile = null;
-            while ($waited < 15) {
+            while ($waited < 60) {
                 $files = glob($logGlob);
                 if (!empty($files)) {
                     $logFile = $files[0];
                     break;
                 }
-                sleep(1);
-                $waited++;
+                if ($waited === 0) {
+                    $send('⏳ Aguardando o worker processar a fila… (pode levar até 60s dependendo do cron)');
+                }
+                sleep(2);
+                $waited += 2;
             }
 
             if ($logFile === null) {
-                $send('❌ Arquivo de log não encontrado após 15s. O processo pode não ter iniciado.');
-                $send('ℹ️  Verifique se nohup e bash estão disponíveis no servidor.');
+                $send('❌ Arquivo de log não encontrado após 60s.');
+                $send('ℹ️  Verifique se o cron `messenger:consume async` está configurado na Hostinger.');
+                $send('ℹ️  Comando: php bin/console messenger:consume async --limit=1 --env=prod');
                 echo "event: done\ndata: 1\n\n";
                 flush();
                 return;
@@ -262,7 +218,7 @@ final class BrazilianStateCrudController extends AbstractController
                 return;
             }
 
-            $send('🚀 Processo iniciado em background — acompanhando log em tempo real…');
+            $send('🚀 Mensagem enfileirada — worker processando via Messenger/Doctrine…');
             $send('📝 Log: ' . basename((string) $logFile));
 
             $elapsed       = 0;
@@ -290,7 +246,6 @@ final class BrazilianStateCrudController extends AbstractController
                 }
 
                 if (file_exists($doneFile)) {
-                    // Drena restante do log
                     while (!feof($fh)) {
                         $chunk = fread($fh, 8192);
                         if ($chunk !== false && $chunk !== '') { $buffer .= $chunk; }
@@ -331,7 +286,7 @@ final class BrazilianStateCrudController extends AbstractController
             }
 
             fclose($fh);
-            $send('⏰ Timeout: processo ultrapassou ' . self::MAX_POLL_SECONDS . 's.');
+            $send('⏰ Timeout de poll (' . self::MAX_POLL_SECONDS . 's). Processo pode ainda estar rodando.');
             $send('ℹ️  Verifique var/log/' . basename((string) $logFile));
             echo "event: done\ndata: 1\n\n";
             flush();
@@ -343,35 +298,5 @@ final class BrazilianStateCrudController extends AbstractController
         $response->headers->set('Connection',        'keep-alive');
 
         return $response;
-    }
-
-    // =========================================================================
-    // Helper: detecta PHP CLI real (exclui cgi/fpm/lsphp)
-    // =========================================================================
-
-    private function resolvePHPCli(): ?string
-    {
-        $phpBinary = PHP_BINARY;
-        if (
-            !str_contains($phpBinary, 'cgi')
-            && !str_contains($phpBinary, 'fpm')
-            && !str_contains($phpBinary, 'lsphp')
-            && is_executable($phpBinary)
-        ) {
-            return $phpBinary;
-        }
-
-        foreach (self::PHP_CLI_CANDIDATES as $candidate) {
-            if (is_executable($candidate)) {
-                return $candidate;
-            }
-        }
-
-        $which = trim((string) shell_exec('which php 2>/dev/null'));
-        if ($which !== '' && is_executable($which) && !str_contains($which, 'lsphp')) {
-            return $which;
-        }
-
-        return null;
     }
 }

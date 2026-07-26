@@ -3,37 +3,23 @@ framework:
         failure_transport: failed
 
         transports:
-            # sync:// executa o handler imediatamente, sem fila e sem worker separado.
-            # Necessário para versões antigas do MariaDB (< 10.6) que não suportam SKIP LOCKED.
-            # Para produção com MySQL 8+ / MariaDB 10.6+, troque por:
-            #   async:
-            #     dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-            #     options:
-            #       use_notify: true
-            async: 'sync://'
+            # Fila principal via Doctrine (banco de dados) — compativel com Hostinger shared hosting
+            # Nao requer Redis, RabbitMQ ou proc_open/shell_exec
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    use_notify: false   # desabilita LISTEN/NOTIFY do Postgres; funciona com MySQL
+                    auto_setup: true    # cria tabela messenger_messages automaticamente
+                retry_strategy:
+                    max_retries: 2
+                    delay: 5000
+                    multiplier: 2
 
-            failed: 'doctrine://default?queue_name=failed'
+            failed:
+                dsn: 'doctrine://default?queue_name=failed'
 
-        default_bus: messenger.bus.default
-
-        buses:
-            messenger.bus.default: []
+            sync:
+                dsn: 'sync://'
 
         routing:
-            Symfony\Component\Mailer\Messenger\SendEmailMessage: async
-            Symfony\Component\Notifier\Message\ChatMessage: async
-            Symfony\Component\Notifier\Message\SmsMessage: async
-            App\Message\ImportFuelResellersMessage: async
-            App\Message\EnviarEmailConta: async
-            App\Message\EnviarEmailRadarRecente: async
-
-# --- IMPORTANTE: Cron para Messenger Worker em hospedagem compartilhada ---
-# Nunca rode workers paralelos. Use sempre --limit e --time-limit para garantir
-# que a conexão com o banco seja liberada periodicamente.
-#
-# Exemplo de entrada no cron (a cada 1 minuto):
-#   * * * * * php /caminho/bin/console messenger:consume async --limit=20 --memory-limit=64M --time-limit=55 >> /dev/null 2>&1
-#
-# --time-limit=55  → encerra o worker em 55s, liberando conexão antes do próximo cron
-# --limit=20       → processa no máximo 20 mensagens por execução
-# --memory-limit   → previne leak de memória em imports longos
+            App\Message\ImportRadaresMessage: async

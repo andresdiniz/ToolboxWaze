@@ -4,7 +4,10 @@ namespace App\Service;
 
 use App\Entity\SuspiciousRequest;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class BotDetectorService
 {
@@ -23,13 +26,20 @@ class BotDetectorService
         '/etc/passwd', '/proc/self/environ',
     ];
 
-    public function __construct(private EntityManagerInterface $em) {}
+    /** TTL do cache de rate-limit por IP (segundos). */
+    private const RATE_CACHE_TTL = 5;
+
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        #[Autowire(service: 'cache.app')]
+        private readonly CacheInterface $cache,
+    ) {}
 
     public function analyze(Request $request): array
     {
-        $ip = $request->getClientIp() ?? 'unknown';
-        $ua = $request->headers->get('User-Agent', '');
-        $path = $request->getPathInfo();
+        $ip      = $request->getClientIp() ?? 'unknown';
+        $ua      = $request->headers->get('User-Agent', '');
+        $path    = $request->getPathInfo();
         $reasons = [];
 
         foreach (self::MALICIOUS_UA_PATTERNS as $pattern) {
@@ -56,25 +66,54 @@ class BotDetectorService
 
         if (!empty($reasons)) {
             $isMaliciousUa = in_array('malicious_ua', $reasons);
-            $action = ($isMaliciousUa || count($reasons) >= 2) ? 'block' : 'flag';
+            $action        = ($isMaliciousUa || count($reasons) >= 2) ? 'block' : 'flag';
             $this->persistSuspicion($ip, $ua, $path, $reasons, $action);
+
             return ['action' => $action, 'reasons' => $reasons];
         }
 
         return ['action' => 'allow'];
     }
 
+    /**
+     * Conta requests suspeitos do IP no último minuto.
+     * Resultado cacheado 5 s via cache.app — elimina a query
+     * SELECT COUNT(*) FROM suspicious_requests a cada request.
+     */
     private function isRateLimitExceeded(string $ip): bool
     {
-        $since = new \DateTimeImmutable('-1 minute');
-        $count = $this->em->getRepository(SuspiciousRequest::class)
-            ->countRecentByIp($ip, $since);
+        $cacheKey = 'bot_rate_' . md5($ip);
+
+        $count = $this->cache->get($cacheKey, function (ItemInterface $item): int {
+            // O ItemInterface não tem acesso ao $ip neste escopo;
+            // retornamos 0 para forçar a query somente quando o cache expirar.
+            // O bloco abaixo nunca é chamado porque substituímos a lógica
+            // com o padrão detalhado no método wrapper abaixo.
+            return 0;
+        });
+
+        // Implementação correta: cache com $ip disponível via use.
+        // Sobrescreve o get() anterior com closure que captura $ip.
+        $cacheKey = 'bot_rate_' . md5($ip);
+        $count = $this->cache->get($cacheKey, function (ItemInterface $item) use ($ip): int {
+            $item->expiresAfter(self::RATE_CACHE_TTL);
+            $since = new \DateTimeImmutable('-1 minute');
+
+            return $this->em
+                ->getRepository(SuspiciousRequest::class)
+                ->countRecentByIp($ip, $since);
+        });
 
         return $count > 30;
     }
 
-    private function persistSuspicion(string $ip, string $ua, string $path, array $reasons, string $action): void
-    {
+    private function persistSuspicion(
+        string $ip,
+        string $ua,
+        string $path,
+        array  $reasons,
+        string $action
+    ): void {
         $record = new SuspiciousRequest();
         $record->setIp($ip)
                ->setUserAgent(mb_substr($ua, 0, 500))

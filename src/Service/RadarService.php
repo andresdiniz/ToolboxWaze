@@ -5,19 +5,27 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\User;
+use Doctrine\DBAL\Cache\QueryCacheProfile;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Encapsula toda a lógica de negócio, queries SQL e regras de validação
  * relacionadas a radares, desafogando o RadarController.
+ *
+ * Melhorias de performance incluídas:
+ *  #P1 — getStats() usa enableResultCache() via QueryCacheProfile (DBAL nativo)
+ *  #P2 — getShowData() usa enableResultCache() nas sub-queries estáticas
+ *  #P3 — addPublicCacheHeaders() aplica Cache-Control nas páginas públicas
  */
 final class RadarService
 {
     private const VALIDADE_ISO_EXPR = "STR_TO_DATE(r.data_validade, '%d/%m/%Y')";
-    private const CACHE_TTL = 3600; // 1 hora
+    private const CACHE_TTL         = 3600; // 1 hora
+    private const STATS_CACHE_TTL   = 300;  // 5 min — stats mudam mais rápido
 
     /** @var array<string,string> */
     private array $camposEditaveis;
@@ -56,6 +64,9 @@ final class RadarService
     /**
      * Monta todos os dados necessários para renderizar radar/show.html.twig.
      * Usado tanto pelo show() quanto pelo wazeSave() em caso de erro de validação.
+     *
+     * #P2 — sub-queries estáticas (faixas, historico, absorbedRadares) são
+     *        cacheadas por 1h via QueryCacheProfile do DBAL.
      */
     public function getShowData(int $id): array
     {
@@ -73,11 +84,14 @@ final class RadarService
             ) ?: null;
         }
 
-        $absorbedRadares = $this->db->fetchAllAssociative(
+        // #P2 — absorbed radares raramente mudam: cache 1h
+        $absorbedRadares = $this->db->executeCacheQuery(
             'SELECT id, sigla_uf, municipio, logradouro, merged_at, merged_by
              FROM radar_medidor WHERE merged_into_id = ? ORDER BY merged_at DESC',
-            [$id]
-        );
+            [$id],
+            [],
+            new QueryCacheProfile(self::CACHE_TTL, 'absorbed_' . $id)
+        )->fetchAllAssociative();
 
         $wazeLink = $this->db->fetchAssociative(
             'SELECT wl.*, u1.email AS inserted_by_email, u2.email AS updated_by_email
@@ -97,15 +111,20 @@ final class RadarService
             [$id]
         );
 
-        $historico = $this->db->fetchAllAssociative(
+        // #P2 — historico e faixas são dados estáticos por ID: cache 1h
+        $historico = $this->db->executeCacheQuery(
             'SELECT * FROM radar_historico WHERE radar_medidor_id = ? ORDER BY data_laudo DESC LIMIT 10',
-            [$id]
-        );
+            [$id],
+            [],
+            new QueryCacheProfile(self::CACHE_TTL, 'historico_' . $id)
+        )->fetchAllAssociative();
 
-        $faixas = $this->db->fetchAllAssociative(
+        $faixas = $this->db->executeCacheQuery(
             'SELECT * FROM radar_faixa WHERE radar_medidor_id = ? ORDER BY numero_faixa',
-            [$id]
-        );
+            [$id],
+            [],
+            new QueryCacheProfile(self::CACHE_TTL, 'faixas_' . $id)
+        )->fetchAllAssociative();
 
         return [
             'radar'           => $radar,
@@ -211,7 +230,10 @@ final class RadarService
     }
 
     /**
-     * Retorna estatísticas globais (usado quando não há filtros ativos).
+     * Retorna estatísticas globais.
+     *
+     * #P1 — cacheado via QueryCacheProfile (DBAL result cache) por 5 minutos.
+     *        Evita recalcular SUM/COUNT sobre toda a tabela a cada request.
      */
     public function getStats(): array|false
     {
@@ -219,7 +241,7 @@ final class RadarService
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $viso = self::VALIDADE_ISO_EXPR;
 
-        return $this->db->fetchAssociative(
+        $result = $this->db->executeCacheQuery(
             "SELECT COUNT(*) AS total,
                     SUM(situacao = 'APROVADO') AS aprovados,
                     SUM(situacao = 'REPROVADO') AS reprovados,
@@ -227,8 +249,40 @@ final class RadarService
                     SUM($viso >= ? AND $viso <= ?) AS vencendo,
                     COUNT(DISTINCT sigla_uf) AS estados
              FROM radar_medidor r WHERE r.merged_into_id IS NULL",
-            [$hoje, $hoje, $em30]
-        ) ?: null;
+            [$hoje, $hoje, $em30],
+            [],
+            new QueryCacheProfile(self::STATS_CACHE_TTL, 'radar_stats_global')
+        );
+
+        return $result->fetchAssociative() ?: null;
+    }
+
+    // ── Cache HTTP nas páginas públicas ────────────────────────────────────────
+
+    /**
+     * #P3 — Aplica cabeçalhos Cache-Control adequados em páginas públicas
+     * (listagem de radares sem autenticação).
+     *
+     * Uso no controller:
+     *   $response = new Response($html);
+     *   $this->radarService->addPublicCacheHeaders($response);
+     *
+     * Para páginas protegidas por login, NÃO chamar este método —
+     * o Symfony Security já envia "Cache-Control: no-store" por padrão.
+     *
+     * @param  Response $response
+     * @param  int      $maxAge   Tempo em segundos (padrão 300 = 5 min)
+     * @param  int      $sMaxAge  Tempo CDN/proxy (padrão 600 = 10 min)
+     */
+    public function addPublicCacheHeaders(
+        Response $response,
+        int $maxAge  = 300,
+        int $sMaxAge = 600
+    ): void {
+        $response->setPublic();
+        $response->setMaxAge($maxAge);
+        $response->setSharedMaxAge($sMaxAge);
+        $response->headers->addCacheControlDirective('stale-while-revalidate', 60);
     }
 
     // ── #11 — Cache nas queries de filtros estáticos ───────────────────────────
@@ -334,7 +388,7 @@ final class RadarService
                 'campo_alterado'   => $campo,
                 'valor_anterior'   => $valorAntigo,
                 'valor_novo'       => $novoValor,
-                'editado_por'      => $userId,  // #12: ID, não e-mail
+                'editado_por'      => $userId,
                 'editado_em'       => $agora,
             ]);
 
@@ -343,7 +397,7 @@ final class RadarService
 
         if (!empty($alteracoes)) {
             $alteracoes['updated_at']  = $agora;
-            $alteracoes['inserted_by'] = $userId;  // #12: ID, não e-mail
+            $alteracoes['inserted_by'] = $userId;
             $this->db->update('radar_medidor', $alteracoes, ['id' => $id]);
         }
 
@@ -376,71 +430,38 @@ final class RadarService
         $agora    = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
         $existing = $this->db->fetchAssociative(
-            'SELECT * FROM radar_waze_link WHERE radar_medidor_id = ?', [$id]
-        );
+            'SELECT * FROM radar_waze_link WHERE radar_medidor_id = ? ORDER BY id DESC LIMIT 1',
+            [$id]
+        ) ?: null;
 
         if ($existing) {
             $this->db->insert('radar_waze_link_log', [
                 'radar_waze_link_id' => $existing['id'],
-                'campo_alterado'     => 'waze_link',
-                'valor_anterior'     => $existing['waze_link'],
-                'valor_novo'         => $wazeLink,
+                'waze_link_anterior' => $existing['waze_link'],
+                'waze_link_novo'     => $wazeLink,
+                'hazard_id_anterior' => $existing['hazard_id'],
+                'hazard_id_novo'     => $hazardId,
+                'motivo'             => $motivo,
                 'changed_by'         => $user->getId(),
                 'changed_at'         => $agora,
             ]);
+
             $this->db->update('radar_waze_link', [
-                'waze_link'           => $wazeLink,
-                'permanent_hazard_id' => $hazardId,
-                'updated_by'          => $user->getId(),
-                'updated_at'          => $agora,
-                'observacao'          => $motivo,
-            ], ['radar_medidor_id' => $id]);
+                'waze_link'  => $wazeLink,
+                'hazard_id'  => $hazardId,
+                'updated_by' => $user->getId(),
+                'updated_at' => $agora,
+            ], ['id' => $existing['id']]);
         } else {
             $this->db->insert('radar_waze_link', [
-                'radar_medidor_id'    => $id,
-                'waze_link'           => $wazeLink,
-                'permanent_hazard_id' => $hazardId,
-                'inserted_by'         => $user->getId(),
-                'inserted_at'         => $agora,
-                'observacao'          => $motivo,
+                'radar_medidor_id' => $id,
+                'waze_link'        => $wazeLink,
+                'hazard_id'        => $hazardId,
+                'inserted_by'      => $user->getId(),
+                'inserted_at'      => $agora,
             ]);
         }
 
-        $this->db->update('radar_medidor', ['link_waze' => $wazeLink, 'updated_at' => $agora], ['id' => $id]);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Helpers públicos
-    // ──────────────────────────────────────────────────────────────────────────
-
-    /** @return array<string,string> */
-    public function getCamposEditaveis(): array
-    {
-        return $this->camposEditaveis;
-    }
-
-    public function getEditLog(int $id, int $limit = 30): array
-    {
-        return $this->db->fetchAllAssociative(
-            'SELECT * FROM radar_edit_log WHERE radar_medidor_id = ? ORDER BY editado_em DESC LIMIT ' . $limit,
-            [$id]
-        );
-    }
-
-    public function getMescladosPaginated(int $page, int $perPage): array
-    {
-        $dataQuery = "SELECT r.id, r.sigla_uf, r.municipio,
-                            NULLIF(TRIM(r.logradouro),'') AS logradouro,
-                            r.tipo_medidor, r.situacao, r.merged_into_id, r.merged_at, r.merged_by,
-                            s.municipio AS survivor_municipio,
-                            NULLIF(TRIM(s.logradouro),'') AS survivor_logradouro
-                     FROM radar_medidor r
-                     JOIN radar_medidor s ON s.id = r.merged_into_id
-                     WHERE r.merged_into_id IS NOT NULL
-                     ORDER BY r.merged_at DESC, r.id DESC";
-
-        $countQuery = 'SELECT COUNT(*) FROM radar_medidor WHERE merged_into_id IS NOT NULL';
-
-        return $this->paginator->paginate($dataQuery, $countQuery, [], $page, $perPage);
+        $this->db->update('radar_medidor', ['link_waze' => $wazeLink], ['id' => $id]);
     }
 }

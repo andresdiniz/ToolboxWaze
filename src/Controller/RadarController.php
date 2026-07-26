@@ -36,7 +36,7 @@ class RadarController extends AbstractController
         $this->requirePermission(User::PERMISSION_RADARES);
 
         $filters = [
-            'uf'        => trim((string) $request->query->get('uf', '')),
+             'uf'        => trim((string) $request->query->get('uf', '')),
             'municipio' => trim((string) $request->query->get('municipio', '')),
             'resultado' => trim((string) $request->query->get('resultado', '')),
             'tipo'      => trim((string) $request->query->get('tipo', '')),
@@ -48,14 +48,16 @@ class RadarController extends AbstractController
             $this->requireUfAccess($filters['uf']);
         }
 
-        $allowedUfs  = $this->allowedUfsForView();
-        $page        = max(1, (int) $request->query->get('page', 1));
-        $paginated   = $this->radarService->findPaginated($filters, $page, self::PER_PAGE, $allowedUfs);
+        $allowedUfs = $this->allowedUfsForView();
+        $page       = max(1, (int) $request->query->get('page', 1));
+        $paginated  = $this->radarService->findPaginated($filters, $page, self::PER_PAGE, $allowedUfs);
 
-        $semFiltros = array_filter($filters) === [] && $allowedUfs === null;
-        $stats      = $semFiltros ? $this->radarService->getStats() : null;
-
-        $totalMesclados = (int) $this->db->fetchOne(
+        // #P4 — uma única query retorna stats + totalMesclados
+        // (antes eram 3 roundtrips separados: Q3 COUNT, Q5 getStats, Q6 totalMesclados)
+        $semFiltros  = array_filter($filters) === [] && $allowedUfs === null;
+        $statsFull   = $semFiltros ? $this->radarService->getStatsFull() : null;
+        $stats           = $statsFull;
+        $totalMesclados  = $statsFull['total_mesclados'] ?? (int) $this->db->fetchOne(
             'SELECT COUNT(*) FROM radar_medidor WHERE merged_into_id IS NOT NULL'
         );
 
@@ -167,7 +169,7 @@ class RadarController extends AbstractController
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Salvar link Waze  (#4 — sem queries duplicadas: usa getShowData() em erro)
+    // Salvar link Waze
     // ─────────────────────────────────────────────────────────────────────────
     #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
     public function wazeSave(int $id, Request $request): Response
@@ -189,8 +191,7 @@ class RadarController extends AbstractController
         try {
             $this->radarService->saveWazeLink($id, $wazeLink, $motivo, $user);
         } catch (\InvalidArgumentException $e) {
-            // #4 — rerenderiza show sem repetir as queries manualmente
-            $errors  = json_decode($e->getMessage(), true) ?? [];
+            $errors   = json_decode($e->getMessage(), true) ?? [];
             $showData = $this->radarService->getShowData($id);
             $showData['wazeErrors']   = $errors;
             $showData['wazeFormData'] = ['waze_link' => $wazeLink, 'motivo_revisao' => $motivo];

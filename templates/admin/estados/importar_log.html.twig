@@ -18,7 +18,6 @@
         </h1>
     </div>
 
-    {# Terminal #}
     <div class="card bg-dark border-0 shadow-lg">
         <div class="card-header bg-black d-flex align-items-center justify-content-between py-2 px-3">
             <div class="d-flex gap-2">
@@ -29,7 +28,7 @@
             <span class="text-muted small font-monospace">app:import-radares --uf={{ state.uf }}</span>
             <div class="d-flex gap-2 align-items-center">
                 <span id="status-badge" class="badge bg-warning text-dark">
-                    <i class="fas fa-spinner fa-spin me-1"></i> Executando…
+                    <i class="fas fa-spinner fa-spin me-1"></i> Iniciando…
                 </span>
                 <button id="btn-copy" class="btn btn-sm btn-outline-secondary py-0" title="Copiar log">
                     <i class="fas fa-copy"></i>
@@ -52,29 +51,30 @@
             <i class="fas fa-redo me-1"></i> Reimportar
         </button>
     </div>
-
 </div>
 
 <style>
-.log-line        { display:block; padding: 1px 0; }
-.log-ok          { color: #3fb950; }
-.log-warn        { color: #d29922; }
-.log-err         { color: #f85149; }
-.log-info        { color: #58a6ff; }
-.log-muted       { color: #8b949e; }
-.badge-skip      { background:#6c757d;color:#fff;padding:2px 6px;border-radius:4px;font-size:.75em; }
+.log-line  { display:block; padding:1px 0; }
+.log-ok    { color:#3fb950; }
+.log-warn  { color:#d29922; }
+.log-err   { color:#f85149; }
+.log-info  { color:#58a6ff; }
+.log-muted { color:#8b949e; }
+.badge-skip{ background:#6c757d;color:#fff;padding:2px 6px;border-radius:4px;font-size:.75em; }
 </style>
 
 <script>
 (function () {
-    const terminal  = document.getElementById('terminal');
-    const badge     = document.getElementById('status-badge');
-    const doneBar   = document.getElementById('done-actions');
-    const btnCopy   = document.getElementById('btn-copy');
-    const btnRe     = document.getElementById('btn-reimport');
-    const streamUrl = {{ stream_url|json_encode|raw }};
+    const terminal = document.getElementById('terminal');
+    const badge    = document.getElementById('status-badge');
+    const doneBar  = document.getElementById('done-actions');
+    const btnCopy  = document.getElementById('btn-copy');
+    const btnRe    = document.getElementById('btn-reimport');
 
-    // Número máximo de reconexões automáticas antes de desistir
+    const startUrl  = {{ start_url|json_encode|raw }};
+    const csrfToken = {{ csrf_token('import_start_' ~ state.id)|json_encode|raw }};
+    const skipWaze  = {{ skip_waze ? 'true' : 'false' }};
+
     const MAX_RETRIES = 5;
     let retries  = 0;
     let finished = false;
@@ -87,7 +87,7 @@
         if (/\[ok\]|sucesso|concluíd|✅/.test(t))  return 'log-ok';
         if (/\[warning\]|⚠️|deprecated|warning/.test(t)) return 'log-warn';
         if (/\[error\]|❌|exception|fatal|erro/.test(t))  return 'log-err';
-        if (/🚀|importand|iniciand|\[notice\]/.test(t))   return 'log-info';
+        if (/🚀|🔧|📝|importand|iniciand|\[notice\]/.test(t)) return 'log-info';
         return 'log-muted';
     }
 
@@ -105,24 +105,21 @@
 
     function markDone(code) {
         finished = true;
-        if (code === 0) {
-            badge.className = 'badge bg-success';
-            badge.innerHTML = '<i class="fas fa-check me-1"></i> Concluído';
-        } else {
-            badge.className = 'badge bg-danger';
-            badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro (exit ' + code + ')';
-        }
+        badge.className = code === 0 ? 'badge bg-success' : 'badge bg-danger';
+        badge.innerHTML = code === 0
+            ? '<i class="fas fa-check me-1"></i> Concluído'
+            : '<i class="fas fa-times me-1"></i> Erro (exit ' + code + ')';
         doneBar.style.removeProperty('display');
     }
 
-    function connect() {
-        es = new EventSource(streamUrl);
+    function connectPoll(pollUrl) {
+        es = new EventSource(pollUrl);
+
+        badge.className = 'badge bg-primary';
+        badge.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Executando…';
 
         es.onmessage = function (e) {
-            // Ignora heartbeat de conteúdo vazio
-            if (e.data && e.data.trim() !== '') {
-                addLine(e.data);
-            }
+            if (e.data && e.data.trim()) addLine(e.data);
         };
 
         es.addEventListener('done', function (e) {
@@ -132,31 +129,58 @@
 
         es.onerror = function () {
             es.close();
-
-            // Se já recebeu o evento "done", a desconexão é esperada — ignorar
             if (finished) return;
-
             if (retries < MAX_RETRIES) {
                 retries++;
-                // Backoff exponencial: 2s, 4s, 8s, 16s, 32s
                 const delay = Math.pow(2, retries) * 1000;
                 badge.className = 'badge bg-secondary';
                 badge.innerHTML = '<i class="fas fa-sync fa-spin me-1"></i> Reconectando (' + retries + '/' + MAX_RETRIES + ')…';
-                addLine('⚠️ Conexão interrompida — reconectando em ' + (delay / 1000) + 's… (tentativa ' + retries + '/' + MAX_RETRIES + ')');
-                setTimeout(connect, delay);
+                addLine('⚠️ SSE interrompido — reconectando em ' + (delay/1000) + 's (o processo continua rodando no servidor)…');
+                setTimeout(() => connectPoll(pollUrl), delay);
             } else {
-                // Esgotou as tentativas
-                addLine('❌ Não foi possível manter a conexão após ' + MAX_RETRIES + ' tentativas.');
-                addLine('ℹ️  O processo pode ainda estar rodando no servidor. Verifique os logs ou aguarde e recarregue a página.');
+                addLine('❌ Conexão SSE perdida após ' + MAX_RETRIES + ' tentativas.');
+                addLine('ℹ️  O processo CONTINUA RODANDO no servidor. Verifique os logs em var/log/ ou aguarde e recarregue.');
                 badge.className = 'badge bg-danger';
-                badge.innerHTML = '<i class="fas fa-times me-1"></i> Desconectado';
+                badge.innerHTML = '<i class="fas fa-times me-1"></i> SSE desconectado';
                 doneBar.style.removeProperty('display');
             }
         };
     }
 
-    // Inicia conexão
-    connect();
+    // ETAPA 1: POST para /start (retorna token + poll_url)
+    async function startImport() {
+        badge.className = 'badge bg-warning text-dark';
+        badge.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Iniciando…';
+
+        try {
+            const fd = new FormData();
+            fd.append('_token',    csrfToken);
+            fd.append('skip_waze', skipWaze ? '1' : '0');
+
+            const res  = await fetch(startUrl, { method: 'POST', body: fd });
+            const data = await res.json();
+
+            if (!res.ok || data.error) {
+                addLine('❌ Erro ao iniciar: ' + (data.error || res.status));
+                badge.className = 'badge bg-danger';
+                badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro ao iniciar';
+                doneBar.style.removeProperty('display');
+                return;
+            }
+
+            addLine('✅ Processo iniciado em background. Token: ' + data.token);
+            // ETAPA 2: conecta no SSE de poll
+            connectPoll(data.poll_url);
+
+        } catch (err) {
+            addLine('❌ Falha na requisição de início: ' + err.message);
+            badge.className = 'badge bg-danger';
+            badge.innerHTML = '<i class="fas fa-times me-1"></i> Erro';
+            doneBar.style.removeProperty('display');
+        }
+    }
+
+    startImport();
 
     btnCopy.addEventListener('click', function () {
         const text = Array.from(terminal.querySelectorAll('.log-line'))
@@ -167,9 +191,7 @@
         });
     });
 
-    btnRe.addEventListener('click', function () {
-        location.reload();
-    });
+    btnRe.addEventListener('click', () => location.reload());
 }());
 </script>
 {% endblock %}

@@ -20,25 +20,24 @@ use Symfony\Contracts\Cache\ItemInterface;
  *  #P1 — getStats() usa QueryCacheProfile (DBAL result cache)
  *  #P2 — getShowData() usa QueryCacheProfile nas sub-queries estáticas
  *  #P3 — addPublicCacheHeaders() aplica Cache-Control nas páginas públicas
- *  #P4 — getStatsFull() funde Q3+Q5+Q6 em 1 única query (3 roundtrips → 1)
- *  #P5 — findPaginated() usa data_validade_date (coluna gerada) em vez de
- *         STR_TO_DATE() em runtime — elimina recálculo por linha
+ *  #P4 — getStatsFull() funde Q3+Q5+Q6 em 1 única query
+ *  #P5 — findPaginated() usa data_validade_date (coluna gerada) quando
+ *         disponível; caso contrário usa STR_TO_DATE() como fallback
  */
 final class RadarService
 {
-    /**
-     * #P5 — coluna DATE gerada/persistida na migration Version20260726_ValidadeDate.
-     * Usar r.data_validade_date no lugar de STR_TO_DATE(r.data_validade, '%d/%m/%Y')
-     * elimina o recálculo em cada linha e permite uso de índice B-tree.
-     * Manter VALIDADE_ISO_EXPR como fallback para ambientes sem a migration.
-     */
-    private const VALIDADE_COL      = 'r.data_validade_date';
     private const VALIDADE_ISO_EXPR = "STR_TO_DATE(r.data_validade, '%d/%m/%Y')";
-    private const CACHE_TTL         = 3600; // 1 hora
-    private const STATS_CACHE_TTL   = 300;  // 5 min
+    private const CACHE_TTL         = 3600;
+    private const STATS_CACHE_TTL   = 300;
 
     /** @var array<string,string> */
     private array $camposEditaveis;
+
+    /**
+     * Resolvido na primeira chamada a getValidadeExpr().
+     * null = ainda não verificado, string = expressão SQL a usar.
+     */
+    private ?string $validadeExpr = null;
 
     public function __construct(
         private readonly Connection       $db,
@@ -52,14 +51,48 @@ final class RadarService
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // Helpers internos
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * #P5 — Retorna a expressão SQL a usar para a data de validade.
+     *
+     * Quando a migration Version20260726_ValidadeDate já foi executada,
+     * usa a coluna gerada `r.data_validade_date` (mais rápida, indexada).
+     * Caso contrário, usa STR_TO_DATE() como fallback — 100% compatível
+     * com o banco antes da migration.
+     *
+     * O resultado é cacheado em memória por requisição (propriedade do objeto)
+     * para evitar repetir a query ao INFORMATION_SCHEMA a cada chamada.
+     */
+    private function getValidadeExpr(): string
+    {
+        if ($this->validadeExpr !== null) {
+            return $this->validadeExpr;
+        }
+
+        $exists = (bool) $this->db->fetchOne(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME   = 'radar_medidor'
+               AND COLUMN_NAME  = 'data_validade_date'"
+        );
+
+        $this->validadeExpr = $exists ? 'r.data_validade_date' : self::VALIDADE_ISO_EXPR;
+
+        return $this->validadeExpr;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Leitura
     // ──────────────────────────────────────────────────────────────────────────
 
     public function findOrFail(int $id): array
     {
+        $viso  = $this->getValidadeExpr();
         $radar = $this->db->fetchAssociative(
-            'SELECT r.*, r.data_validade_date AS data_validade_iso
-             FROM radar_medidor r WHERE r.id = ?',
+            "SELECT r.*, $viso AS data_validade_iso
+             FROM radar_medidor r WHERE r.id = ?",
             [$id]
         );
 
@@ -72,9 +105,7 @@ final class RadarService
 
     /**
      * Monta todos os dados necessários para renderizar radar/show.html.twig.
-     *
-     * #P2 — sub-queries estáticas (faixas, historico, absorbedRadares)
-     *        cacheadas por 1h via QueryCacheProfile.
+     * #P2 — sub-queries estáticas cacheadas por 1h via QueryCacheProfile.
      */
     public function getShowData(int $id): array
     {
@@ -148,8 +179,8 @@ final class RadarService
     /**
      * Retorna página de radares com filtros aplicados.
      *
-     * #P5 — usa r.data_validade_date (coluna gerada) em vez de STR_TO_DATE().
-     *        Elimina recálculo em cada linha e habilita uso do índice B-tree.
+     * #P5 — usa getValidadeExpr() que detecta automaticamente se a coluna
+     *        gerada data_validade_date está disponível ou usa STR_TO_DATE().
      *
      * @param  array{uf:string,municipio:string,resultado:string,tipo:string,validade:string,serie:string} $filters
      * @return array{rows:list<array>,total:int,pages:int,page:int,offset:int}
@@ -160,7 +191,7 @@ final class RadarService
         int    $perPage,
         ?array $allowedUfs = null
     ): array {
-        $vcol = self::VALIDADE_COL;  // r.data_validade_date
+        $vcol = $this->getValidadeExpr();
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
         $ha30 = (new \DateTimeImmutable('-30 days'))->format('Y-m-d');
@@ -195,7 +226,6 @@ final class RadarService
             $params[] = '%' . $filters['serie'] . '%';
         }
 
-        // #P5 — filtros de validade agora usam a coluna DATE indexada
         match ($filters['validade']) {
             'valido'     => (function () use (&$where, &$params, $vcol, $hoje) {
                 $where[]  = "$vcol >= ?";
@@ -220,12 +250,11 @@ final class RadarService
 
         $wc = implode(' AND ', $where);
 
-        // SELECT traz data_validade_date diretamente — sem DATE_FORMAT em runtime
         $dataQuery = "SELECT r.id, r.sigla_uf, r.uf, r.municipio,
                             NULLIF(TRIM(r.logradouro), '') AS logradouro,
                             r.nome_empresa,
                             r.data_ultima_verificacao, r.data_verificacao_efetiva,
-                            r.data_validade, r.data_validade_date AS data_validade_iso,
+                            r.data_validade, $vcol AS data_validade_iso,
                             r.situacao, r.tipo_medidor, r.link_waze
                      FROM radar_medidor r WHERE $wc ORDER BY r.sigla_uf, r.municipio";
 
@@ -235,11 +264,7 @@ final class RadarService
     }
 
     /**
-     * #P4 — Substitui getStats() + totalMesclados do controller por uma única query.
-     *
-     * Antes: 3 roundtrips separados (Q3 COUNT paginação, Q5 SUM stats, Q6 COUNT mesclados)
-     * Agora: 1 query com SUM(CASE WHEN ...) retorna tudo de uma vez.
-     *
+     * #P4 — Substitui getStats() + totalMesclados do controller por 1 query.
      * Cacheado por 5 minutos via QueryCacheProfile.
      *
      * @return array{total:int,aprovados:int,reprovados:int,vencidos:int,
@@ -249,7 +274,7 @@ final class RadarService
     {
         $hoje = (new \DateTimeImmutable())->format('Y-m-d');
         $em30 = (new \DateTimeImmutable('+30 days'))->format('Y-m-d');
-        $vcol = self::VALIDADE_COL;
+        $vcol = $this->getValidadeExpr();
 
         $result = $this->db->executeCacheQuery(
             "SELECT
@@ -269,10 +294,7 @@ final class RadarService
         return $result->fetchAssociative() ?: null;
     }
 
-    /**
-     * @deprecated Use getStatsFull() que também retorna total_mesclados.
-     * Mantido para compatibilidade com código legado.
-     */
+    /** @deprecated Use getStatsFull() */
     public function getStats(): array|false
     {
         return $this->getStatsFull();
@@ -282,6 +304,7 @@ final class RadarService
 
     /**
      * #P3 — Aplica cabeçalhos Cache-Control em páginas públicas.
+     * Não chamar em rotas protegidas por login.
      */
     public function addPublicCacheHeaders(
         Response $response,
@@ -294,7 +317,7 @@ final class RadarService
         $response->headers->addCacheControlDirective('stale-while-revalidate', 60);
     }
 
-    // ── #11 — Cache nas queries de filtros estáticos ───────────────────────────
+    // ── Cache nas queries de filtros estáticos ───────────────────────────────
 
     public function getUfsParaFiltro(?array $allowedUfs): array
     {

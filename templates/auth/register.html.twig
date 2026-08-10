@@ -150,7 +150,7 @@
                 </label>
         
                 <div class="input-wrap">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 0 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                         <circle cx="12" cy="10" r="3"></circle>
                     </svg>
@@ -164,7 +164,7 @@
                         autocomplete="off"
                         maxlength="50"
                         inputmode="text"
-                        pattern="[A-Za-z0-9_\-\.]{3,50}"
+                        pattern="[A-Za-z0-9_.-]{3,50}"
                         value="{{ values.waze_nickname ?? '' }}"
                         placeholder="Ex: JoaoWaze_MG"
                         aria-describedby="waze_nickname_hint waze_nickname_status"
@@ -178,7 +178,7 @@
                 <div class="hint" id="waze_nickname_status" role="status" aria-live="polite"></div>
             </div>
         </div>
-
+        
         <hr class="divider">
 
         {# ---- Seleção de estados ---- #}
@@ -265,6 +265,7 @@
     (() => {
         const input = document.getElementById('waze_nickname');
         const status = document.getElementById('waze_nickname_status');
+        const form = document.querySelector('form');
     
         if (!input || !status) return;
     
@@ -289,22 +290,22 @@
                 '';
         }
     
-        function markValidity(valid) {
+        function setValidity(valid) {
             isValidNickname = valid;
             input.dataset.validNickname = valid ? '1' : '0';
             input.setAttribute('aria-invalid', valid ? 'false' : 'true');
         }
     
-        async function validateNickname(value) {
-            const clean = sanitizeNickname(value);
+        async function validateNickname(rawValue) {
+            const clean = sanitizeNickname(rawValue);
     
             if (input.value !== clean) {
                 input.value = clean;
             }
     
-            markValidity(false);
+            setValidity(false);
     
-            if (clean.length === 0) {
+            if (!clean) {
                 setStatus('');
                 return;
             }
@@ -323,24 +324,18 @@
             }
     
             controller = new AbortController();
-            setStatus('Validando nickname no Waze Discuss...', 'loading');
+            setStatus('Validando nickname...', 'loading');
     
             try {
-                const url = `https://www.waze.com/discuss/user_actions.json?offset=0&username=${encodeURIComponent(clean)}`;
-                const response = await fetch(url, {
-                    method: 'GET',
+                const response = await fetch('/auth/waze-check', {
+                    method: 'POST',
                     headers: {
+                        'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
+                    body: JSON.stringify({ nickname: clean }),
                     signal: controller.signal
                 });
-    
-                if (response.status === 404) {
-                    lastValidatedValue = '';
-                    markValidity(false);
-                    setStatus('Nickname não encontrado.', 'error');
-                    return;
-                }
     
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -348,33 +343,34 @@
     
                 const data = await response.json();
     
-                if (data && Object.prototype.hasOwnProperty.call(data, 'user_actions')) {
+                if (data.valid === true) {
                     lastValidatedValue = clean;
-                    markValidity(true);
+                    setValidity(true);
                     setStatus('Nickname validado com sucesso.', 'success');
                     return;
                 }
     
                 lastValidatedValue = '';
-                markValidity(false);
-                setStatus('Não foi possível confirmar o nickname.', 'error');
+                setValidity(false);
+                setStatus(data.message || 'Nickname não encontrado.', 'error');
             } catch (error) {
                 if (error.name === 'AbortError') return;
     
                 lastValidatedValue = '';
-                markValidity(false);
-                setStatus('Erro ao validar o nickname. Tente novamente.', 'error');
+                setValidity(false);
+                setStatus('Não foi possível validar agora. Tente novamente.', 'error');
             }
         }
     
         input.addEventListener('input', (e) => {
             const clean = sanitizeNickname(e.target.value);
+    
             if (e.target.value !== clean) {
                 e.target.value = clean;
             }
     
             lastValidatedValue = '';
-            markValidity(false);
+            setValidity(false);
     
             clearTimeout(debounceTimer);
     
@@ -383,18 +379,16 @@
                 return;
             }
     
-            debounceTimer = setTimeout(() => {
-                validateNickname(clean);
-            }, 700);
+            debounceTimer = setTimeout(() => validateNickname(clean), 700);
         });
     
         input.addEventListener('paste', (e) => {
             e.preventDefault();
             const pasted = (e.clipboardData || window.clipboardData).getData('text');
-            const clean = sanitizeNickname(pasted);
+            const cleanPaste = sanitizeNickname(pasted);
             const start = input.selectionStart ?? input.value.length;
             const end = input.selectionEnd ?? input.value.length;
-            const nextValue = input.value.slice(0, start) + clean + input.value.slice(end);
+            const nextValue = input.value.slice(0, start) + cleanPaste + input.value.slice(end);
             input.value = sanitizeNickname(nextValue);
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
@@ -406,6 +400,19 @@
                 validateNickname(clean);
             }
         });
+    
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                const clean = sanitizeNickname(input.value);
+                input.value = clean;
+    
+                if (input.dataset.validNickname !== '1') {
+                    e.preventDefault();
+                    setStatus('Valide um nickname válido antes de enviar.', 'error');
+                    input.focus();
+                }
+            });
+        }
     })();
     </script>
 

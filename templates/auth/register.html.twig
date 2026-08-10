@@ -141,6 +141,7 @@
         <div class="section-title">Identificação no Waze</div>
         <div class="waze-field">
             <div class="field" style="margin-bottom:0">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
                 <label for="waze_nickname">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;vertical-align:-2px;margin-right:.3rem">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -266,19 +267,27 @@
         const input = document.getElementById('waze_nickname');
         const status = document.getElementById('waze_nickname_status');
         const form = document.querySelector('form');
+        const submitBtn = form?.querySelector('button[type="submit"]');
     
-        if (!input || !status) return;
+        if (!input || !status || !form || !submitBtn) return;
     
         let debounceTimer = null;
         let controller = null;
         let lastValidatedValue = '';
-        let isValidNickname = false;
+        let nicknameValid = false;
+        let validating = false;
     
         function sanitizeNickname(value) {
             return value
                 .normalize('NFKC')
                 .replace(/[^A-Za-z0-9_.-]/g, '')
                 .slice(0, 50);
+        }
+    
+        function updateButtonState() {
+            const value = sanitizeNickname(input.value);
+            const ready = nicknameValid && value.length >= 3 && !validating && value === lastValidatedValue;
+            submitBtn.disabled = !ready;
         }
     
         function setStatus(message, type = 'neutral') {
@@ -290,10 +299,11 @@
                 '';
         }
     
-        function setValidity(valid) {
-            isValidNickname = valid;
+        function setValidState(valid) {
+            nicknameValid = valid;
             input.dataset.validNickname = valid ? '1' : '0';
             input.setAttribute('aria-invalid', valid ? 'false' : 'true');
+            updateButtonState();
         }
     
         async function validateNickname(rawValue) {
@@ -303,28 +313,27 @@
                 input.value = clean;
             }
     
-            setValidity(false);
-    
-            if (!clean) {
+            if (!clean || clean.length < 3) {
+                validating = false;
+                setValidState(false);
                 setStatus('');
+                updateButtonState();
                 return;
             }
     
-            if (clean.length < 3) {
-                setStatus('Informe pelo menos 3 caracteres.', 'error');
+            if (clean === lastValidatedValue && nicknameValid) {
+                validating = false;
+                updateButtonState();
                 return;
             }
     
-            if (clean === lastValidatedValue) {
-                return;
-            }
-    
-            if (controller) {
-                controller.abort();
-            }
-    
+            if (controller) controller.abort();
             controller = new AbortController();
+    
+            validating = true;
+            setValidState(false);
             setStatus('Validando nickname...', 'loading');
+            updateButtonState();
     
             try {
                 const response = await fetch('/auth/waze-check', {
@@ -337,84 +346,81 @@
                     signal: controller.signal
                 });
     
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                const data = await response.json().catch(() => ({}));
     
-                const data = await response.json();
-    
-                if (data.valid === true) {
-                    lastValidatedValue = clean;
-                    setValidity(true);
-                    setStatus('Nickname validado com sucesso.', 'success');
+                if (!response.ok || data.valid !== true) {
+                    lastValidatedValue = '';
+                    validating = false;
+                    setValidState(false);
+                    setStatus(data.message || 'Nickname inválido.', 'error');
+                    updateButtonState();
                     return;
                 }
     
-                lastValidatedValue = '';
-                setValidity(false);
-                setStatus(data.message || 'Nickname não encontrado.', 'error');
+                lastValidatedValue = clean;
+                validating = false;
+                setValidState(true);
+                setStatus('Nickname validado com sucesso.', 'success');
+                updateButtonState();
             } catch (error) {
                 if (error.name === 'AbortError') return;
     
                 lastValidatedValue = '';
-                setValidity(false);
-                setStatus('Não foi possível validar agora. Tente novamente.', 'error');
+                validating = false;
+                setValidState(false);
+                setStatus('Não foi possível validar agora.', 'error');
+                updateButtonState();
             }
         }
     
         input.addEventListener('input', (e) => {
             const clean = sanitizeNickname(e.target.value);
-    
-            if (e.target.value !== clean) {
-                e.target.value = clean;
-            }
+            if (e.target.value !== clean) e.target.value = clean;
     
             lastValidatedValue = '';
-            setValidity(false);
+            validating = false;
+            setValidState(false);
+            setStatus('');
     
             clearTimeout(debounceTimer);
     
-            if (!clean) {
-                setStatus('');
+            if (!clean || clean.length < 3) {
+                updateButtonState();
                 return;
             }
     
+            updateButtonState();
             debounceTimer = setTimeout(() => validateNickname(clean), 700);
+        });
+    
+        input.addEventListener('blur', () => {
+            clearTimeout(debounceTimer);
+            const clean = sanitizeNickname(input.value);
+            if (clean.length >= 3) validateNickname(clean);
         });
     
         input.addEventListener('paste', (e) => {
             e.preventDefault();
             const pasted = (e.clipboardData || window.clipboardData).getData('text');
-            const cleanPaste = sanitizeNickname(pasted);
-            const start = input.selectionStart ?? input.value.length;
-            const end = input.selectionEnd ?? input.value.length;
-            const nextValue = input.value.slice(0, start) + cleanPaste + input.value.slice(end);
-            input.value = sanitizeNickname(nextValue);
+            const clean = sanitizeNickname(pasted);
+            input.value = clean;
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
     
-        input.addEventListener('blur', () => {
+        form.addEventListener('submit', (e) => {
             const clean = sanitizeNickname(input.value);
-            if (clean.length >= 3) {
-                clearTimeout(debounceTimer);
-                validateNickname(clean);
+            input.value = clean;
+    
+            if (!nicknameValid || clean !== lastValidatedValue) {
+                e.preventDefault();
+                setStatus('Valide um nickname Waze antes de solicitar acesso.', 'error');
+                input.focus();
             }
         });
     
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                const clean = sanitizeNickname(input.value);
-                input.value = clean;
-    
-                if (input.dataset.validNickname !== '1') {
-                    e.preventDefault();
-                    setStatus('Valide um nickname válido antes de enviar.', 'error');
-                    input.focus();
-                }
-            });
-        }
+        updateButtonState();
     })();
-    </script>
+</script>
 
 </body>
 </html>

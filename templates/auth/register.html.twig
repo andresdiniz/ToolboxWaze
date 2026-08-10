@@ -142,14 +142,40 @@
         <div class="waze-field">
             <div class="field" style="margin-bottom:0">
                 <label for="waze_nickname">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;vertical-align:-2px;margin-right:.3rem"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;vertical-align:-2px;margin-right:.3rem">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 8v4l3 3"></path>
+                    </svg>
                     Nickname no Waze <span class="label-hint">(obrigatório)</span>
                 </label>
+        
                 <div class="input-wrap">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <input class="has-icon" type="text" id="waze_nickname" name="waze_nickname" required value="{{ values.waze_nickname ?? '' }}" placeholder="Ex: JoaoWaze_MG">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+        
+                    <input
+                        class="has-icon"
+                        type="text"
+                        id="waze_nickname"
+                        name="waze_nickname"
+                        required
+                        autocomplete="off"
+                        maxlength="50"
+                        inputmode="text"
+                        pattern="[A-Za-z0-9_\-\.]{3,50}"
+                        value="{{ values.waze_nickname ?? '' }}"
+                        placeholder="Ex: JoaoWaze_MG"
+                        aria-describedby="waze_nickname_hint waze_nickname_status"
+                    >
                 </div>
-                <span class="hint">Seu nome de usuário exatamente como aparece no Waze.</span>
+        
+                <span class="hint" id="waze_nickname_hint">
+                    Seu nome de usuário exatamente como aparece no Waze.
+                </span>
+        
+                <div class="hint" id="waze_nickname_status" role="status" aria-live="polite"></div>
             </div>
         </div>
 
@@ -234,5 +260,154 @@
     document.getElementById('selNone')?.addEventListener('click',()=>{grid.querySelectorAll('input').forEach(i=>i.checked=false);upd();});
 })();
 </script>
+<!-- Validação de Nickname com santização e envio para api do discuss-->
+<script>
+    (() => {
+        const input = document.getElementById('waze_nickname');
+        const status = document.getElementById('waze_nickname_status');
+    
+        if (!input || !status) return;
+    
+        let debounceTimer = null;
+        let controller = null;
+        let lastValidatedValue = '';
+        let isValidNickname = false;
+    
+        function sanitizeNickname(value) {
+            return value
+                .normalize('NFKC')
+                .replace(/[^A-Za-z0-9_.-]/g, '')
+                .slice(0, 50);
+        }
+    
+        function setStatus(message, type = 'neutral') {
+            status.textContent = message;
+            status.style.color =
+                type === 'success' ? '#437a22' :
+                type === 'error' ? '#a12c7b' :
+                type === 'loading' ? '#7a7974' :
+                '';
+        }
+    
+        function markValidity(valid) {
+            isValidNickname = valid;
+            input.dataset.validNickname = valid ? '1' : '0';
+            input.setAttribute('aria-invalid', valid ? 'false' : 'true');
+        }
+    
+        async function validateNickname(value) {
+            const clean = sanitizeNickname(value);
+    
+            if (input.value !== clean) {
+                input.value = clean;
+            }
+    
+            markValidity(false);
+    
+            if (clean.length === 0) {
+                setStatus('');
+                return;
+            }
+    
+            if (clean.length < 3) {
+                setStatus('Informe pelo menos 3 caracteres.', 'error');
+                return;
+            }
+    
+            if (clean === lastValidatedValue) {
+                return;
+            }
+    
+            if (controller) {
+                controller.abort();
+            }
+    
+            controller = new AbortController();
+            setStatus('Validando nickname no Waze Discuss...', 'loading');
+    
+            try {
+                const url = `https://www.waze.com/discuss/user_actions.json?offset=0&username=${encodeURIComponent(clean)}`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    signal: controller.signal
+                });
+    
+                if (response.status === 404) {
+                    lastValidatedValue = '';
+                    markValidity(false);
+                    setStatus('Nickname não encontrado.', 'error');
+                    return;
+                }
+    
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+    
+                const data = await response.json();
+    
+                if (data && Object.prototype.hasOwnProperty.call(data, 'user_actions')) {
+                    lastValidatedValue = clean;
+                    markValidity(true);
+                    setStatus('Nickname validado com sucesso.', 'success');
+                    return;
+                }
+    
+                lastValidatedValue = '';
+                markValidity(false);
+                setStatus('Não foi possível confirmar o nickname.', 'error');
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+    
+                lastValidatedValue = '';
+                markValidity(false);
+                setStatus('Erro ao validar o nickname. Tente novamente.', 'error');
+            }
+        }
+    
+        input.addEventListener('input', (e) => {
+            const clean = sanitizeNickname(e.target.value);
+            if (e.target.value !== clean) {
+                e.target.value = clean;
+            }
+    
+            lastValidatedValue = '';
+            markValidity(false);
+    
+            clearTimeout(debounceTimer);
+    
+            if (!clean) {
+                setStatus('');
+                return;
+            }
+    
+            debounceTimer = setTimeout(() => {
+                validateNickname(clean);
+            }, 700);
+        });
+    
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pasted = (e.clipboardData || window.clipboardData).getData('text');
+            const clean = sanitizeNickname(pasted);
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            const nextValue = input.value.slice(0, start) + clean + input.value.slice(end);
+            input.value = sanitizeNickname(nextValue);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    
+        input.addEventListener('blur', () => {
+            const clean = sanitizeNickname(input.value);
+            if (clean.length >= 3) {
+                clearTimeout(debounceTimer);
+                validateNickname(clean);
+            }
+        });
+    })();
+    </script>
+
 </body>
 </html>

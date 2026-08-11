@@ -25,25 +25,37 @@ final class DashboardController extends AbstractController
     public function index(): Response
     {
         $user = $this->getUser();
-        $allowedUfs = $user instanceof User ? $user->getUfsForQuery() : null;
-        $isAdmin = $this->isGranted('ROLE_ADMIN');
+        if (!$user instanceof User) {
+            throw $this->createAccessDeniedException('Usuário inválido.');
+        }
 
-        // Dados agregados com cache
-        $radarKpis = $this->dataProvider->getRadarKpis($allowedUfs);
-        $radarPorUf = $this->dataProvider->getRadarPorUf($allowedUfs);
-        $radarResultado = $this->dataProvider->getRadarResultado($allowedUfs);
-        $radarMensais = $this->dataProvider->getRadarMensais($allowedUfs);
-        $radarCobertura = $this->dataProvider->getRadarCobertura($allowedUfs);
-        $radarSemWaze = $this->dataProvider->getRadarSemWaze($allowedUfs, 8);
+        $allowedUfs = $user->getUfsForQuery();
+        $isAdmin = $user->isAdmin();
 
-        $postoKpis = $this->dataProvider->getPostoKpis($allowedUfs);
-        $postoAtividade = $this->dataProvider->getPostoAtividade($allowedUfs);
+        // Permissões de módulo – usando hasPermission() diretamente
+        $showRadar = $user->hasPermission(User::PERMISSION_RADARES);
+        $showPosto = $user->hasPermission(User::PERMISSION_POSTOS);
+        $showEscola = $user->hasPermission(User::PERMISSION_ESCOLAS);
+        // Solicitações: apenas administradores (ou crie a constante)
+        $showSolicitacao = $isAdmin; // ou $user->hasPermission(User::PERMISSION_SOLICITACOES) se criada
 
-        $escolaKpis = $this->dataProvider->getEscolaKpis();
-        $solicKpis = $this->dataProvider->getSolicitacaoKpis();
-        $solicDiarias = $this->dataProvider->getSolicitacoesDiarias();
-        $estadosAtivos = $this->dataProvider->getEstadosAtivos();
+        // Carrega dados apenas se o usuário tiver permissão
+        $radarKpis = $showRadar ? $this->dataProvider->getRadarKpis($allowedUfs) : null;
+        $radarPorUf = $showRadar ? $this->dataProvider->getRadarPorUf($allowedUfs) : null;
+        $radarResultado = $showRadar ? $this->dataProvider->getRadarResultado($allowedUfs) : null;
+        $radarMensais = $showRadar ? $this->dataProvider->getRadarMensais($allowedUfs) : null;
+        $radarCobertura = $showRadar ? $this->dataProvider->getRadarCobertura($allowedUfs) : null;
+        $radarSemWaze = $showRadar ? $this->dataProvider->getRadarSemWaze($allowedUfs, 8) : [];
 
+        $postoKpis = $showPosto ? $this->dataProvider->getPostoKpis($allowedUfs) : null;
+        $postoAtividade = $showPosto ? $this->dataProvider->getPostoAtividade($allowedUfs) : null;
+
+        $escolaKpis = $showEscola ? $this->dataProvider->getEscolaKpis() : null;
+        
+        $solicKpis = $showSolicitacao ? $this->dataProvider->getSolicitacaoKpis() : null;
+        $solicDiarias = $showSolicitacao ? $this->dataProvider->getSolicitacoesDiarias() : null;
+        
+        $estadosAtivos = $this->dataProvider->getEstadosAtivos(); // público
         $usuarioKpis = $isAdmin ? $this->dataProvider->getUsuarioKpis() : null;
 
         return $this->render('dashboard/index.html.twig', [
@@ -62,6 +74,10 @@ final class DashboardController extends AbstractController
             'usuarioKpis' => $usuarioKpis,
             'isAdmin' => $isAdmin,
             'allowedUfs' => $allowedUfs,
+            'showRadar' => $showRadar,
+            'showPosto' => $showPosto,
+            'showEscola' => $showEscola,
+            'showSolicitacao' => $showSolicitacao,
         ]);
     }
 
@@ -69,32 +85,51 @@ final class DashboardController extends AbstractController
     public function refresh(): JsonResponse
     {
         $user = $this->getUser();
-        $allowedUfs = $user instanceof User ? $user->getUfsForQuery() : null;
-        $isAdmin = $this->isGranted('ROLE_ADMIN');
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Usuário inválido'], 403);
+        }
 
-        $radarKpis = $this->dataProvider->getRadarKpis($allowedUfs);
-        $postoKpis = $this->dataProvider->getPostoKpis($allowedUfs);
-        $escolaKpis = $this->dataProvider->getEscolaKpis();
-        $solicKpis = $this->dataProvider->getSolicitacaoKpis();
-        $usuarioKpis = $isAdmin ? $this->dataProvider->getUsuarioKpis() : null;
+        $allowedUfs = $user->getUfsForQuery();
+        $isAdmin = $user->isAdmin();
 
-        return $this->json([
-            'radares_vencidos' => $radarKpis->vencidos,
-            'radares_total'    => $radarKpis->total,
-            'postos_total'     => $postoKpis->total,
-            'postos_com_waze'  => $postoKpis->comWaze,
-            'postos_sem_waze'  => $postoKpis->semWaze,
-            'escolas_total'    => $escolaKpis['total'] ?? 0,
-            'escolas_estados'  => $escolaKpis['estados'] ?? 0,
-            'solic_total'      => $solicKpis['geral']['total'] ?? 0,
-            'solic_pendentes'  => $solicKpis['geral']['pendentes'] ?? 0,
-            'solic_atendidas'  => $solicKpis['geral']['atendidas'] ?? 0,
-            'solic_recusadas'  => $solicKpis['geral']['recusadas'] ?? 0,
-            'solic_hoje'       => $solicKpis['geral']['hoje'] ?? 0,
-            'usuarios_total'   => $usuarioKpis['total'] ?? 0,
-            'usuarios_ativos'  => $usuarioKpis['ativos'] ?? 0,
-            'usuarios_aprovados' => $usuarioKpis['aprovados'] ?? 0,
-            'usuarios_pendentes' => $usuarioKpis['pendentes'] ?? 0,
-        ]);
+        $showRadar = $user->hasPermission(User::PERMISSION_RADARES);
+        $showPosto = $user->hasPermission(User::PERMISSION_POSTOS);
+        $showEscola = $user->hasPermission(User::PERMISSION_ESCOLAS);
+        $showSolicitacao = $isAdmin;
+
+        $data = [];
+        if ($showRadar) {
+            $radarKpis = $this->dataProvider->getRadarKpis($allowedUfs);
+            $data['radares_vencidos'] = $radarKpis->vencidos;
+            $data['radares_total']    = $radarKpis->total;
+        }
+        if ($showPosto) {
+            $postoKpis = $this->dataProvider->getPostoKpis($allowedUfs);
+            $data['postos_total']     = $postoKpis->total;
+            $data['postos_com_waze']  = $postoKpis->comWaze;
+            $data['postos_sem_waze']  = $postoKpis->semWaze;
+        }
+        if ($showEscola) {
+            $escolaKpis = $this->dataProvider->getEscolaKpis();
+            $data['escolas_total']    = $escolaKpis['total'] ?? 0;
+            $data['escolas_estados']  = $escolaKpis['estados'] ?? 0;
+        }
+        if ($showSolicitacao) {
+            $solicKpis = $this->dataProvider->getSolicitacaoKpis();
+            $data['solic_total']      = $solicKpis['geral']['total'] ?? 0;
+            $data['solic_pendentes']  = $solicKpis['geral']['pendentes'] ?? 0;
+            $data['solic_atendidas']  = $solicKpis['geral']['atendidas'] ?? 0;
+            $data['solic_recusadas']  = $solicKpis['geral']['recusadas'] ?? 0;
+            $data['solic_hoje']       = $solicKpis['geral']['hoje'] ?? 0;
+        }
+        if ($isAdmin) {
+            $usuarioKpis = $this->dataProvider->getUsuarioKpis();
+            $data['usuarios_total']     = $usuarioKpis['total'] ?? 0;
+            $data['usuarios_ativos']    = $usuarioKpis['ativos'] ?? 0;
+            $data['usuarios_aprovados'] = $usuarioKpis['aprovados'] ?? 0;
+            $data['usuarios_pendentes'] = $usuarioKpis['pendentes'] ?? 0;
+        }
+
+        return $this->json($data);
     }
 }

@@ -20,16 +20,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
-    public const PERMISSION_RADARES  = 'PERM_RADARES';
-    public const PERMISSION_ESCOLAS  = 'PERM_ESCOLAS';
-    public const PERMISSION_POSTOS   = 'PERM_POSTOS';
-    public const PERMISSION_EXPORT   = 'PERM_EXPORT';
+    public const PERMISSION_RADARES      = 'PERM_RADARES';
+    public const PERMISSION_ESCOLAS      = 'PERM_ESCOLAS';
+    public const PERMISSION_POSTOS       = 'PERM_POSTOS';
+    public const PERMISSION_EXPORT       = 'PERM_EXPORT';
+    public const PERMISSION_SOLICITACOES = 'PERM_SOLICITACOES'; // NOVA
 
     public const ALL_PERMISSIONS = [
-        self::PERMISSION_RADARES => 'Radares',
-        self::PERMISSION_ESCOLAS => 'Escolas',
-        self::PERMISSION_POSTOS  => 'Postos',
-        self::PERMISSION_EXPORT  => 'Exportação',
+        self::PERMISSION_RADARES      => 'Radares',
+        self::PERMISSION_ESCOLAS      => 'Escolas',
+        self::PERMISSION_POSTOS       => 'Postos',
+        self::PERMISSION_EXPORT       => 'Exportação',
+        self::PERMISSION_SOLICITACOES => 'Solicitações',
     ];
 
     public const ALL_UFS = [
@@ -174,7 +176,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getUfsForQuery(): ?array
     {
         if ($this->isAdmin() || $this->isGlobalChamp() || $this->allowedUfs === null) { return null; }
-        // array vazio significa que nenhuma UF foi configurada ainda → acesso total
         if (count($this->allowedUfs) === 0) { return null; }
         return $this->allowedUfs;
     }

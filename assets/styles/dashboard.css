@@ -86,12 +86,24 @@
 /* ── Gráficos ────────────────────────────────────────────── */
 .chart-container {
     position: relative;
-    min-height: 220px;
+    width: 100%;
+    height: 260px;               /* altura fixa para todos os gráficos */
+    max-height: 260px;
 }
 .chart-container canvas {
+    display: block;
     width: 100% !important;
-    height: auto !important;
-    max-height: 240px;
+    height: 100% !important;     /* Chart.js vai preencher o container */
+    max-height: 100%;
+}
+
+/* Ajuste para gráficos menores (ex: postos) */
+.chart-container-sm {
+    height: 180px;
+    max-height: 180px;
+}
+.chart-container-sm canvas {
+    height: 100% !important;
 }
 
 /* ── Tabelas ────────────────────────────────────────────── */
@@ -109,6 +121,26 @@
 .dashboard-table-wrapper .table td {
     vertical-align: middle;
     font-size: 0.85rem;
+}
+
+/* ── Correção para estouro da tabela em telas pequenas ── */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.table-responsive .table {
+    min-width: 420px;
+    width: 100%;
+    margin-bottom: 0;
+}
+.table-responsive .table th,
+.table-responsive .table td {
+    white-space: nowrap;
+}
+@media (max-width: 575.98px) {
+    .table-responsive .table {
+        min-width: 360px;
+    }
 }
 
 /* ── Stats boxes ────────────────────────────────────────── */
@@ -207,7 +239,7 @@
     color: #34d399 !important;
 }
 
-/* KPIs em dark mode */
+/* KPIs em dark mode — contraste reforçado */
 [data-theme="dark"] .kpi-card-dashboard .card {
     background: var(--color-surface);
     border-color: rgba(255,255,255,0.08) !important;
@@ -329,7 +361,15 @@
         font-size: 1.25rem !important;
     }
     .chart-container {
-        min-height: 180px;
+        height: 200px;
+        max-height: 200px;
+    }
+    .chart-container-sm {
+        height: 150px;
+        max-height: 150px;
+    }
+    .table-responsive .table {
+        min-width: 320px;
     }
 }
 

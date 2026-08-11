@@ -30,6 +30,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function createChart(canvasId, config, fallbackMessage = 'Sem dados para exibir.') {
         const canvas = document.getElementById(canvasId);
+
+        config.options.responsive = true;
+        config.options.maintainAspectRatio = false;
+        config.options.resizeDelay = 300;   // debounce agressivo, só para teste
+        config.options.animation = false;   // desliga animação, só para teste
+
         if (!canvas) {
             console.warn(`[Dashboard] Canvas #${canvasId} não encontrado.`);
             return null;

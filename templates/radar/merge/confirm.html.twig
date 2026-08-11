@@ -1,6 +1,11 @@
 {% extends 'base.html.twig' %}
 {% block title %}Mesclar Radares — ToolboxWaze{% endblock %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('styles/radar.css') }}">
+{% endblock %}
+
 {% block body %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div>
@@ -36,7 +41,6 @@
                 {% for r in radares %}
                 <div class="col-12 col-md-6 col-lg-4">
                     <label class="survivor-card card h-100 p-3 cursor-pointer border-2"
-                           style="cursor:pointer;transition:border-color .15s,background .15s"
                            for="survivor_{{ r.id }}">
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <input type="radio" name="survivor_id" id="survivor_{{ r.id }}"
@@ -44,7 +48,6 @@
                                    {{ loop.first ? 'checked' }}>
                             <span class="badge-uf">{{ r.sigla_uf }}</span>
                             <strong class="small">#{{ r.id }}</strong>
-                            {# situacao pode não existir na tabela — usar ?? #}
                             {% if (r.situacao ?? '') == 'MESCLADO' %}
                                 <span class="badge bg-secondary ms-auto">MESCLADO</span>
                             {% elseif (r.merged_into_id ?? null) is not null %}
@@ -72,10 +75,6 @@
     </div>
 
     {# ── Comparação campo a campo ── #}
-    {#
-      Filtrar comparableFields para exibir somente os campos que existem
-      no primeiro radar (evita RuntimeError para colunas ausentes na tabela).
-    #}
     {% set firstRadar = radares|first %}
     {% set visibleFields = {} %}
     {% for field, label in comparableFields %}
@@ -108,7 +107,6 @@
                     {% for r in radares %}
                         {% set values = values|merge([(r[field] ?? '')]) %}
                     {% endfor %}
-                    {# Deduplicar sem |unique (não existe no Twig nativo) #}
                     {% set valMap = {} %}
                     {% for v in values %}
                         {% set valMap = valMap|merge({(v): 1}) %}
@@ -205,4 +203,9 @@ document.getElementById('mergeForm').addEventListener('submit', e => {
     }
 });
 </script>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/radar.js') }}" defer></script>
 {% endblock %}

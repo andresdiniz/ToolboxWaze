@@ -6,188 +6,32 @@
     <meta name="theme-color" content="#01696f">
     <title>{% block title %}ToolboxWaze{% endblock %}</title>
 
-    {# Skip link — acessibilidade: primeiro elemento focalizável #}
+    {# Skip link #}
     <a href="#main-content" class="tw-skip-link">Ir ao conteúdo principal</a>
 
-    {#
-      Bootstrap DEVE ser carregado ANTES do importmap/app.js.
-      Sem defer e no <head> para garantir que o Dropdown esteja disponível
-      quando qualquer script inicializar componentes Bootstrap.
-    #}
+    {# Bootstrap CSS + Icons (CDN) #}
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
           crossorigin="anonymous">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+          crossorigin="anonymous">
+
+    {# Bootstrap JS (bundle) #}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-            crossorigin="anonymous"></script>
+            crossorigin="anonymous" defer></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=optional" rel="stylesheet">
 
     {{ importmap('app') }}
+
+    {# CSS principal (app.css) #}
+    <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
     {% block stylesheets %}{% endblock %}
 
-    <style>
-    /* ── Tokens próprios ────────────────────────────────────── */
-    :root {
-        --tw-surface:        #ffffff;
-        --tw-surface-hover:  #f5f5f5;
-        --tw-border:         rgba(0,0,0,.12);
-        --tw-text:           #212529;
-        --tw-text-muted:     #6c757d;
-        --tw-shadow-dropdown: 0 8px 24px rgba(0,0,0,.14);
-    }
-    [data-theme="dark"] {
-        --tw-surface:        #1e1e1e;
-        --tw-surface-hover:  #2a2a2a;
-        --tw-border:         rgba(255,255,255,.12);
-        --tw-text:           #e3e3e3;
-        --tw-text-muted:     #9e9e9e;
-        --tw-shadow-dropdown: 0 8px 24px rgba(0,0,0,.45);
-    }
-
-    /* ── Skip link ─────────────────────────────────────────── */
-    .tw-skip-link {
-        position: absolute;
-        left: -9999px;
-        top: .5rem;
-        z-index: 9999;
-        padding: .4rem .9rem;
-        background: var(--tw-surface);
-        color: var(--tw-text);
-        border: 1px solid var(--tw-border);
-        border-radius: .4rem;
-        font-size: .875rem;
-        text-decoration: none;
-    }
-    .tw-skip-link:focus { left: 1rem; }
-
-    /* ── Animações de alerta ───────────────────────────────── */
-    @keyframes twSlideIn {
-        from { opacity: 0; transform: translateY(-8px); }
-        to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes twFadeOut {
-        from { opacity: 1; }
-        to   { opacity: 0; transform: translateY(-4px); }
-    }
-    .alert-animated {
-        animation: twSlideIn 220ms cubic-bezier(0.16,1,0.3,1) both;
-    }
-    .alert-animated.tw-hiding {
-        animation: twFadeOut 300ms ease forwards;
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .alert-animated,
-        .alert-animated.tw-hiding,
-        .reveal { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
-    }
-
-    /* ── Busca global ──────────────────────────────────────── */
-    .navbar-search-wrap { position: relative; }
-    .navbar-search-input {
-        background: transparent;
-        border: 1px solid rgba(255,255,255,.22);
-        border-radius: 20px;
-        color: inherit;
-        font-size: .82rem;
-        padding: .3rem .85rem .3rem 2rem;
-        width: min(200px, 20vw);
-        transition: width .25s ease, border-color .2s;
-        outline: none;
-    }
-    .navbar-search-input:focus {
-        width: min(280px, 28vw);
-        border-color: rgba(255,255,255,.5);
-        background: rgba(255,255,255,.08);
-    }
-    .navbar-search-input::placeholder { color: rgba(255,255,255,.5); }
-    .navbar-search-icon {
-        position: absolute;
-        left: .55rem;
-        top: 50%;
-        transform: translateY(-50%);
-        opacity: .5;
-        pointer-events: none;
-    }
-    .search-dropdown {
-        position: absolute;
-        top: calc(100% + 6px);
-        left: 0;
-        right: 0;
-        min-width: 320px;
-        background: var(--tw-surface);
-        border: 1px solid var(--tw-border);
-        border-radius: .5rem;
-        box-shadow: var(--tw-shadow-dropdown);
-        z-index: 1040;
-        display: none;
-        max-height: 360px;
-        overflow-y: auto;
-    }
-    .search-dropdown.show { display: block; }
-    .search-item {
-        display: flex;
-        align-items: center;
-        gap: .5rem;
-        padding: .5rem .85rem;
-        font-size: .82rem;
-        color: var(--tw-text);
-        text-decoration: none;
-        transition: background .15s;
-        border-bottom: 1px solid var(--tw-border);
-    }
-    .search-item:last-child { border-bottom: none; }
-    .search-item:hover, .search-item:focus { background: var(--tw-surface-hover); outline: none; }
-    .search-item-label { flex: 1; line-height: 1.3; }
-    .search-item-type {
-        font-size: .7rem;
-        padding: .12em .45em;
-        border-radius: 8px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-    .search-item-type.radar  { background: rgba(13,110,253,.15);  color: #0d6efd; }
-    .search-item-type.posto  { background: rgba(253,126,20,.15);   color: #fd7e14; }
-    .search-item-type.escola { background: rgba(25,135,84,.15);    color: #198754; }
-    .search-empty {
-        padding: .75rem 1rem;
-        font-size: .82rem;
-        color: var(--tw-text-muted);
-        text-align: center;
-    }
-    .search-footer {
-        display: block;
-        padding: .45rem 1rem;
-        font-size: .75rem;
-        color: var(--tw-text-muted);
-        text-align: center;
-        border-top: 1px solid var(--tw-border);
-        text-decoration: none;
-    }
-    .search-footer:hover { background: var(--tw-surface-hover); color: var(--tw-text); }
-
-    /* ── Botão lupa mobile ──────────────────────────────────── */
-    .tw-search-mobile-btn {
-        background: none;
-        border: none;
-        color: inherit;
-        padding: .25rem .4rem;
-        opacity: .8;
-        cursor: pointer;
-    }
-    .tw-search-mobile-btn:hover { opacity: 1; }
-
-    /* ── Fix: garantir pointer-events e z-index na navbar ───── */
-    .navbar .nav-link,
-    .navbar .dropdown-toggle {
-        pointer-events: auto !important;
-        position: relative;
-        z-index: 1;
-    }
-    </style>
-
-    {# ── Google Tag Manager — inicialização do dataLayer ──────────────────── #}
+    {# Google Tag Manager #}
     {% set gtmId = app_gtm_id|default('') %}
     {% if gtmId %}
     <script>
@@ -199,16 +43,14 @@
         'page_section':   '{{ app.request.pathInfo|split('/')|filter(v => v != '')|first|default('home') }}'
     });
     </script>
-    <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','{{ gtmId|e('js') }}');</script>
-    <!-- End Google Tag Manager -->
     {% endif %}
 
-    {# Tema inicial sem flash — com try/catch para Safari privado #}
+    {# Tema inicial (apenas JS mínimo para evitar flash) #}
     <script>
     (function(){
         var t;
@@ -221,14 +63,13 @@
 <body>
 
 {% if gtmId is defined and gtmId %}
-<!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ gtmId|e('html_attr') }}"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-<!-- End Google Tag Manager (noscript) -->
 {% endif %}
 
+{# ===== NAVBAR ===== #}
 <header role="banner">
-<nav class="navbar navbar-expand-lg mb-4">
+<nav class="navbar navbar-expand-lg bg-dark navbar-dark mb-4">
     <div class="container-xl">
         <a class="navbar-brand" href="{{ path('app_dashboard') }}">
             <span class="navbar-brand-icon">
@@ -243,19 +84,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             ToolboxWaze
         </a>
         <div class="d-flex align-items-center gap-2">
-            <button class="theme-toggle" data-theme-toggle aria-label="Alternar tema" title="Alternar modo escuro">
-                <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
-                    <circle cx="12" cy="12" r="5"/>
-                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-                </svg>
-                <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
+            <button class="theme-toggle btn btn-outline-light btn-sm" data-theme-toggle aria-label="Alternar tema" title="Alternar modo escuro">
+                <i id="icon-sun" class="bi bi-sun" style="display:none"></i>
+                <i id="icon-moon" class="bi bi-moon"></i>
             </button>
 
-            {# Botão lupa mobile — abre offcanvas de busca #}
             {% if app.user %}
-            <button class="tw-search-mobile-btn d-lg-none" type="button"
+            <button class="tw-search-mobile-btn d-lg-none text-light" type="button"
                     data-bs-toggle="offcanvas" data-bs-target="#searchOffcanvas"
                     aria-label="Buscar" title="Buscar">
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -264,144 +99,47 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </button>
             {% endif %}
 
-            <button class="navbar-toggler bg-transparent border-0" type="button"
+            <button class="navbar-toggler border-0" type="button"
                     data-bs-toggle="collapse" data-bs-target="#nav"
-                    aria-controls="nav" aria-expanded="false" aria-label="Abrir menu"
-                    id="navToggler">
-                <svg id="nav-icon-menu" xmlns="http://www.w3.org/2000/svg" width="22" height="22"
-                     fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
-                </svg>
-                <svg id="nav-icon-close" xmlns="http://www.w3.org/2000/svg" width="22" height="22"
-                     fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" style="display:none">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
-                </svg>
+                    aria-controls="nav" aria-expanded="false" aria-label="Abrir menu">
+                <span class="navbar-toggler-icon"></span>
             </button>
         </div>
 
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav me-auto gap-1">
-                <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/radares' %}active{% endif %}"
-                       href="{{ path('radar_index') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M9.732 1.001a.5.5 0 0 1 .5-.5h.001a.5.5 0 0 1 .5.5v1.618a5.5 5.5 0 0 1 4.249 4.249h1.618a.5.5 0 0 1 0 1H15a5.5 5.5 0 0 1-4.768 4.768v1.618a.5.5 0 0 1-1 0v-1.618A5.5 5.5 0 0 1 4.483 8.37H2.865a.5.5 0 0 1 0-1h1.618A5.5 5.5 0 0 1 9.232 2.62V1zm.5 1.638A4.5 4.5 0 1 0 10.867 12.5 4.5 4.5 0 0 0 10.232 2.64zm.5 3.86A1 1 0 1 1 8.5 7.5a1 1 0 0 1 2.232-1z"/></svg>
-                        Radares
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/postos' %}active{% endif %}"
-                       href="{{ path('posto_index') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5zm1 .5v4h4V3z"/><path d="M0 1.5A.5.5 0 0 1 .5 1H8a.5.5 0 0 1 .5.5V8H9a1.5 1.5 0 0 1 1.5 1.5V12a.5.5 0 0 0 1 0V8.354l-.853-.853a.5.5 0 1 1 .707-.707l1.5 1.5A.5.5 0 0 1 13 8.5V12a1.5 1.5 0 0 1-3 0V9.5A.5.5 0 0 0 9.5 9H9V15.5a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5zm1 0v13h7v-13z"/></svg>
-                        Postos
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/escolas' %}active{% endif %}"
-                       href="{{ path('escola_inep_index') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8.211 2.047a.5.5 0 0 0-.422 0l-7.5 3.5a.5.5 0 0 0 .025.917l7.5 3a.5.5 0 0 0 .372 0L14 7.14V13a1 1 0 0 0-1 1v2h3v-2a1 1 0 0 0-1-1V6.739l.686-.275a.5.5 0 0 0 .025-.917zM8 8.46 1.758 5.965 8 3.052l6.242 2.913z"/><path d="M4.176 9.032a.5.5 0 0 0-.656.327l-.5 1.7a.5.5 0 0 0 .294.605l4.5 1.8a.5.5 0 0 0 .372 0l4.5-1.8a.5.5 0 0 0 .294-.605l-.5-1.7a.5.5 0 0 0-.656-.327L8 10.466z"/></svg>
-                        Escolas
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}"
-                       href="{{ path('solicitacao_hub') }}">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083zm-1.833 1.89L6.637 10.07l-.215-.338L14.13 2.577z"/><path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0m-3.5-2a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1a.5.5 0 0 0-.5-.5"/></svg>
-                        Solicitações
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if app.request.pathInfo starts with '/cobertura' %}active{% endif %}"
-                       href="{{ path('cobertura_radar') }}" title="Cobertura Waze">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/></svg>
-                        Cobertura
-                    </a>
-                </li>
+                <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/radares' %}active{% endif %}" href="{{ path('radar_index') }}"><i class="bi bi-broadcast me-1"></i> Radares</a></li>
+                <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/postos' %}active{% endif %}" href="{{ path('posto_index') }}"><i class="bi bi-fuel-pump me-1"></i> Postos</a></li>
+                <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/escolas' %}active{% endif %}" href="{{ path('escola_inep_index') }}"><i class="bi bi-building me-1"></i> Escolas</a></li>
+                <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}" href="{{ path('solicitacao_hub') }}"><i class="bi bi-inbox me-1"></i> Solicitações</a></li>
+                <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/cobertura' %}active{% endif %}" href="{{ path('cobertura_radar') }}" title="Cobertura Waze"><i class="bi bi-globe me-1"></i> Cobertura</a></li>
 
                 {% if is_granted('ROLE_ADMIN') %}
-                {%
-                    set adminActive = app.request.pathInfo starts with '/admin'
-                        or app.request.pathInfo starts with '/auditoria'
-                        or app.request.pathInfo starts with '/monitoring'
-                %}
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle {% if adminActive %}active{% endif %}"
-                       href="#" role="button"
-                       data-bs-toggle="dropdown"
-                       data-turbo="false"
-                       aria-expanded="false">
-                        <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M9.5 1a.5.5 0 0 1 .5.5v1h1.5A1.5 1.5 0 0 1 13 4v9a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13V4a1.5 1.5 0 0 1 1.5-1.5H6v-1a.5.5 0 0 1 1 0v1h2v-1a.5.5 0 0 1 .5-.5m-3 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1zm-2 3a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1z"/>
-                        </svg>
-                        Admin
+                    <a class="nav-link dropdown-toggle" href="#" role="button"
+                       data-bs-toggle="dropdown" data-turbo="false" aria-expanded="false">
+                        <i class="bi bi-shield-lock me-1"></i> Admin
                     </a>
                     <ul class="dropdown-menu shadow">
-                        <li>
-                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Gerenciamento</h6>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/usuarios' %}active{% endif %}"
-                               href="{{ path('admin_users_index') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002H7.022zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.088.179-.943.753-1.664C2.293 10.62 3.088 10 5 10c-.08 0-.16.005-.238.015A6 6 0 0 0 4.92 10zM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>
-                                Usuários
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/estados' %}active{% endif %}"
-                               href="{{ path('admin_estados_index') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/></svg>
-                                Estados / Radares
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo == '/admin/waze-links' %}active{% endif %}"
-                               href="{{ path('admin_waze_link_index') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1 1 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4 4 0 0 1-.128-1.287zm5.57-3.228a3 3 0 0 0-4.243 0L4.213 5.143a3 3 0 0 0 .829 4.928l.556-.555-.887-.888a2 2 0 0 1 0-2.83l1.828-1.828a2 2 0 0 1 2.83 0l.887.888.556-.555a3 3 0 0 0-.243-3.829z"/></svg>
-                                Links Waze
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/waze-links/novo' %}active{% endif %}"
-                               href="{{ path('admin_waze_link_new') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/></svg>
-                                Novo Formulário
-                            </a>
-                        </li>
+                        <li><h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Gerenciamento</h6></li>
+                        <li><a class="dropdown-item" href="{{ path('admin_users_index') }}"><i class="bi bi-people me-2"></i>Usuários</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin_estados_index') }}"><i class="bi bi-geo-alt me-2"></i>Estados / Radares</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin_waze_link_index') }}"><i class="bi bi-link-45deg me-2"></i>Links Waze</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin_waze_link_new') }}"><i class="bi bi-plus-circle me-2"></i>Novo Formulário</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Monitoramento</h6>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo starts with '/auditoria' %}active{% endif %}"
-                               href="{{ path('auditoria_index') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>
-                                Auditoria
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo starts with '/monitoring' %}active{% endif %}"
-                               href="{{ path('monitoring_dashboard') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1.5A.5.5 0 0 1 .5 1h15a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5H14v9.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5V4H.5a.5.5 0 0 1-.5-.5zm5.5 3v7a.5.5 0 0 0 1 0v-7a.5.5 0 0 0-1 0m2.5 0v7a.5.5 0 0 0 1 0v-7a.5.5 0 0 0-1 0m2.5 0v7a.5.5 0 0 0 1 0v-7a.5.5 0 0 0-1 0"/></svg>
-                                Frontend Monitor
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo starts with '/admin/suspicious-requests' %}active{% endif %}"
-                               href="{{ path('admin_suspicious_requests_index') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.45rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/></svg>
-                                Requisições Suspeitas
-                            </a>
-                        </li>
+                        <li><h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Monitoramento</h6></li>
+                        <li><a class="dropdown-item" href="{{ path('auditoria_index') }}"><i class="bi bi-clipboard-data me-2"></i>Auditoria</a></li>
+                        <li><a class="dropdown-item" href="{{ path('monitoring_dashboard') }}"><i class="bi bi-graph-up me-2"></i>Frontend Monitor</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin_suspicious_requests_index') }}"><i class="bi bi-exclamation-triangle me-2"></i>Requisições Suspeitas</a></li>
                     </ul>
                 </li>
                 {% endif %}
             </ul>
 
-            {# ── Busca global desktop ─────────────────────────────── #}
+            {# Busca desktop #}
             {% if app.user %}
             <div class="navbar-search-wrap d-none d-lg-block me-2">
-                <svg class="navbar-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>
-                </svg>
+                <i class="bi bi-search navbar-search-icon"></i>
                 <input type="text" id="globalSearch" class="navbar-search-input"
                        placeholder="Buscar radares, postos…"
                        autocomplete="off" aria-label="Busca global">
@@ -409,6 +147,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
             {% endif %}
 
+            {# Usuário #}
             {% if app.user %}
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item dropdown user-menu">
@@ -417,67 +156,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         {% if app.user.avatarUrl %}
                             <img src="{{ app.user.avatarUrl }}" class="avatar-sm" alt="" loading="lazy">
                         {% else %}
-                            <div class="avatar-sm bg-white text-success d-flex align-items-center justify-content-center fw-bold"
-                                 style="font-size:.8rem">
+                            <span class="avatar-sm bg-light text-dark d-flex align-items-center justify-content-center fw-bold">
                                 {{ app.user.name|first|upper }}
-                            </div>
+                            </span>
                         {% endif %}
                         <span class="d-none d-md-inline">{{ app.user.name|split(' ')|first }}</span>
-                        <svg class="nav-icon" style="width:10px;height:10px" viewBox="0 0 16 16" fill="currentColor"><path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/></svg>
+                        <i class="bi bi-chevron-down small"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow">
-                        <li>
-                            <div class="dropdown-item-text">
-                                <div class="fw-semibold">{{ app.user.name }}</div>
-                                <small class="text-muted">{{ app.user.email }}</small>
-                            </div>
-                        </li>
+                        <li><div class="dropdown-item-text"><div class="fw-semibold">{{ app.user.name }}</div><small class="text-muted">{{ app.user.email }}</small></div></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo == '/perfil' %}active{% endif %}"
-                               href="{{ path('perfil_index') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z"/>
-                                </svg>
-                                Meu Perfil
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item {% if app.request.pathInfo starts with '/perfil/api-token' %}active{% endif %}"
-                               href="{{ path('perfil_api_token') }}" data-turbo="false">
-                                <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10H7.465A4 4 0 0 1 0 8m4-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6m0 2.5a.5.5 0 1 1 0 1 .5.5 0 0 1 0-1"/>
-                                </svg>
-                                Token de API
-                                {% if not app.user.apiToken %}
-                                    <span class="badge bg-secondary ms-1" style="font-size:.6rem">Inativo</span>
-                                {% else %}
-                                    <span class="badge bg-success ms-1" style="font-size:.6rem">• Ativo</span>
-                                {% endif %}
-                            </a>
-                        </li>
+                        <li><a class="dropdown-item" href="{{ path('perfil_index') }}"><i class="bi bi-person me-2"></i>Meu Perfil</a></li>
+                        <li><a class="dropdown-item" href="{{ path('perfil_api_token') }}"><i class="bi bi-key me-2"></i>Token de API</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item" href="{{ path('export_radares_csv') }}"
-                               data-gtm-event="export_csv" data-gtm-tipo="radares">
-                                <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
-                                Exportar Radares CSV
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="{{ path('export_postos_csv') }}"
-                               data-gtm-event="export_csv" data-gtm-tipo="postos">
-                                <svg style="width:15px;height:15px;margin-right:.4rem;vertical-align:-.15em" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg>
-                                Exportar Postos CSV
-                            </a>
-                        </li>
+                        <li><a class="dropdown-item" href="{{ path('export_radares_csv') }}" data-gtm-event="export_csv" data-gtm-tipo="radares"><i class="bi bi-download me-2"></i>Exportar Radares CSV</a></li>
+                        <li><a class="dropdown-item" href="{{ path('export_postos_csv') }}" data-gtm-event="export_csv" data-gtm-tipo="postos"><i class="bi bi-download me-2"></i>Exportar Postos CSV</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item text-danger" href="{{ path('app_logout') }}">
-                                <svg style="width:16px;height:16px;margin-right:.4rem;vertical-align:-.2em" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/><path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/></svg>
-                                Sair
-                            </a>
-                        </li>
+                        <li><a class="dropdown-item text-danger" href="{{ path('app_logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Sair</a></li>
                     </ul>
                 </li>
             </ul>
@@ -487,20 +182,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </nav>
 </header>
 
-{# ── Offcanvas busca mobile ──────────────────────────────── #}
+{# Offcanvas busca mobile #}
 {% if app.user %}
-<div class="offcanvas offcanvas-top" tabindex="-1" id="searchOffcanvas" aria-labelledby="searchOffcanvasLabel" style="height:auto;max-height:80vh">
+<div class="offcanvas offcanvas-top" tabindex="-1" id="searchOffcanvas" aria-labelledby="searchOffcanvasLabel">
     <div class="offcanvas-header pb-0">
         <h5 class="offcanvas-title" id="searchOffcanvasLabel" style="font-size:.9rem">Buscar</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
     </div>
     <div class="offcanvas-body pt-2">
         <div class="input-group mb-2">
-            <span class="input-group-text">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>
-                </svg>
-            </span>
+            <span class="input-group-text"><svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/></svg></span>
             <input type="text" id="globalSearchMobile" class="form-control"
                    placeholder="Buscar radares, postos…" autocomplete="off" aria-label="Busca global mobile">
         </div>
@@ -509,6 +200,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 {% endif %}
 
+{# ===== CONTEÚDO ===== #}
 <main id="main-content" class="container-xl pb-5">
     {% for label, messages in app.flashes(['success','warning','danger','info','error']) %}
         {% for msg in messages %}
@@ -521,313 +213,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     {% block body %}{% endblock %}
 </main>
 
-{% block javascripts %}{% endblock %}
-
-<script>
-(function () {
-  'use strict';
-  var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  var fmtDateTime = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  var fmtDate = new Intl.DateTimeFormat('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
-  document.querySelectorAll('[data-utc]').forEach(function (el) {
-    var raw = el.getAttribute('data-utc');
-    if (!raw) return;
-    if (!/Z|[+-]\d{2}:?\d{2}$/.test(raw)) raw = raw.replace(' ', 'T') + 'Z';
-    var d = new Date(raw);
-    if (isNaN(d.getTime())) return;
-    var hasTime = /T|\d{2}:\d{2}/.test(el.getAttribute('data-utc'));
-    el.setAttribute('title', 'UTC: ' + el.getAttribute('data-utc'));
-    el.setAttribute('datetime', el.getAttribute('data-utc'));
-    el.textContent = hasTime ? fmtDateTime.format(d) : fmtDate.format(d);
-  });
-}());
-</script>
-
-<script>
-(function(){
-  var html = document.documentElement;
-  var btn  = document.querySelector('[data-theme-toggle]');
-  var sun  = document.getElementById('icon-sun');
-  var moon = document.getElementById('icon-moon');
-
-  function applyTheme(t) {
-    var style = document.createElement('style');
-    style.id = '__theme-no-transition';
-    style.textContent = '*, *::before, *::after { transition: none !important; }';
-    document.head.appendChild(style);
-    html.setAttribute('data-theme', t);
-    try { localStorage.setItem('twTheme', t); } catch(e){}
-    if (sun && moon) {
-      sun.style.display  = t === 'dark' ? 'block' : 'none';
-      moon.style.display = t === 'dark' ? 'none'  : 'block';
-    }
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({ event: 'theme_toggle', theme: t });
-    requestAnimationFrame(function(){
-      requestAnimationFrame(function(){
-        var el = document.getElementById('__theme-no-transition');
-        if (el) el.remove();
-      });
-    });
-  }
-
-  var saved = null;
-  try { saved = localStorage.getItem('twTheme'); } catch(e){}
-  var current = saved || (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
-  applyTheme(current);
-
-  if (btn) {
-    btn.addEventListener('click', function(){
-      applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-    });
-  }
-}());
-</script>
-
-<script>
-(function(){
-  var navEl     = document.getElementById('nav');
-  var iconMenu  = document.getElementById('nav-icon-menu');
-  var iconClose = document.getElementById('nav-icon-close');
-  if (!navEl || !iconMenu || !iconClose) return;
-  navEl.addEventListener('show.bs.collapse',  function(){ iconMenu.style.display='none';  iconClose.style.display=''; });
-  navEl.addEventListener('hide.bs.collapse',  function(){ iconMenu.style.display='';     iconClose.style.display='none'; });
-}());
-</script>
-
-<script>
-(function(){
-  document.querySelectorAll('.alert-animated').forEach(function(el){
-    setTimeout(function(){
-      el.classList.add('tw-hiding');
-      setTimeout(function(){ el.remove(); }, 320);
-    }, 4000);
-  });
-}());
-</script>
-
-<script>
-(function(){
-  if (!('IntersectionObserver' in window)) {
-    document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('visible'); });
-    return;
-  }
-  var io = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){
-      if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
-    });
-  }, { threshold: 0.1 });
-  document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
-}());
-</script>
-
-<script>
-/* countUp com requestAnimationFrame + easeOutQuart */
-(function(){
-  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  function easeOutQuart(t){ return 1 - Math.pow(1 - t, 4); }
-
-  function countUp(el) {
-    var target = parseFloat(el.textContent.replace(/[^0-9.]/g,''));
-    if (isNaN(target) || target === 0) return;
-    if (reducedMotion) { el.textContent = Math.round(target).toLocaleString('pt-BR'); return; }
-    var duration = Math.min(1200, Math.max(600, target / 50));
-    var startTime = null;
-    function step(ts) {
-      if (!startTime) startTime = ts;
-      var elapsed = ts - startTime;
-      var progress = Math.min(elapsed / duration, 1);
-      el.textContent = Math.round(easeOutQuart(progress) * target).toLocaleString('pt-BR');
-      if (progress < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
-
-  var io2 = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){
-      if (e.isIntersecting) { countUp(e.target); io2.unobserve(e.target); }
-    });
-  }, { threshold: 0.5 });
-  document.querySelectorAll('.count-up').forEach(function(el){ io2.observe(el); });
-}());
-</script>
-
-<script>
-/* Busca global — desktop + mobile, com AbortController anti-race */
-(function(){
-  function buildSearch(inputEl, dropdownEl) {
-    if (!inputEl || !dropdownEl) return;
-    var timer = null;
-    var lastQ = '';
-    var controller = null;
-
-    function badgeClass(tipo) { return tipo === 'radar' ? 'radar' : (tipo === 'escola' ? 'escola' : 'posto'); }
-    function typeLabel(tipo)  { return tipo === 'radar' ? 'Radar' : (tipo === 'escola' ? 'Escola' : 'Posto'); }
-
-    function trackEvent(ev, data) {
-      window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push(Object.assign({ event: ev }, data));
-    }
-
-    function render(items, q) {
-      while (dropdownEl.firstChild) dropdownEl.removeChild(dropdownEl.firstChild);
-
-      if (!items.length) {
-        var empty = document.createElement('div');
-        empty.className = 'search-empty';
-        empty.textContent = 'Nenhum resultado encontrado.';
-        dropdownEl.appendChild(empty);
-      } else {
-        items.forEach(function(r) {
-          var a = document.createElement('a');
-          a.className = 'search-item';
-          a.href = r.url;
-          a.setAttribute('tabindex', '0');
-          a.setAttribute('role', 'option');
-
-          var badge = document.createElement('span');
-          badge.className = 'search-item-type ' + badgeClass(r.tipo);
-          badge.textContent = typeLabel(r.tipo);
-
-          var label = document.createElement('span');
-          label.className = 'search-item-label';
-          label.textContent = r.label;
-
-          a.appendChild(badge);
-          a.appendChild(label);
-
-          if (r.badge) {
-            var sm = document.createElement('small');
-            sm.className = 'text-muted';
-            sm.textContent = r.badge;
-            a.appendChild(sm);
-          }
-
-          a.addEventListener('click', function() {
-            trackEvent('busca_click', { search_term: lastQ, item_tipo: r.tipo, item_label: r.label });
-          });
-          dropdownEl.appendChild(a);
-        });
-      }
-
-      var footer = document.createElement('a');
-      footer.className = 'search-footer';
-      footer.href = '/busca?q=' + encodeURIComponent(q);
-      footer.textContent = 'Ver todos os resultados para "' + q + '" \u2192';
-      dropdownEl.appendChild(footer);
-      dropdownEl.classList.add('show');
-    }
-
-    function search(q) {
-      if (controller) { try { controller.abort(); } catch(e){} }
-      controller = new AbortController();
-      fetch('/busca/ac?q=' + encodeURIComponent(q), { signal: controller.signal })
-        .then(function(r){ return r.json(); })
-        .then(function(items) {
-          render(items, q);
-          trackEvent('busca_global', {
-            search_term: q,
-            results_count: items.length,
-            result_tipos: items.map(function(i){ return i.tipo; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(',')
-          });
-        })
-        .catch(function(err){ if (err.name !== 'AbortError') dropdownEl.classList.remove('show'); });
-    }
-
-    inputEl.addEventListener('input', function() {
-      var q = this.value.trim();
-      clearTimeout(timer);
-      if (q.length < 2) { dropdownEl.classList.remove('show'); return; }
-      if (q === lastQ) return;
-      lastQ = q;
-      timer = setTimeout(function(){ search(q); }, 280);
-    });
-
-    inputEl.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') { dropdownEl.classList.remove('show'); inputEl.blur(); return; }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        var q = inputEl.value.trim();
-        if (q.length >= 2) { window.location.href = '/busca?q=' + encodeURIComponent(q); }
-        return;
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        var items = dropdownEl.querySelectorAll('.search-item');
-        if (items.length) items[0].focus();
-      }
-    });
-
-    dropdownEl.addEventListener('keydown', function(e) {
-      var items = Array.from(dropdownEl.querySelectorAll('.search-item, .search-footer'));
-      var idx   = items.indexOf(document.activeElement);
-      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); idx > 0 ? items[idx - 1].focus() : inputEl.focus(); }
-      if (e.key === 'Escape')    { dropdownEl.classList.remove('show'); inputEl.focus(); }
-    });
-
-    document.addEventListener('click', function(e) {
-      if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) {
-        dropdownEl.classList.remove('show');
-      }
-    });
-  }
-
-  buildSearch(
-    document.getElementById('globalSearch'),
-    document.getElementById('searchDropdown')
-  );
-  buildSearch(
-    document.getElementById('globalSearchMobile'),
-    document.getElementById('searchDropdownMobile')
-  );
-}());
-</script>
-
-<script>
-/* Fix: fechar searchDropdown ao clicar em qualquer nav-link */
-(function(){
-  document.querySelectorAll('.nav-link').forEach(function(el) {
-    el.addEventListener('click', function() {
-      var sd = document.getElementById('searchDropdown');
-      if (sd) sd.classList.remove('show');
-    });
-  });
-}());
-</script>
-
-<script>
-/* Fix: reinicializar Bootstrap Dropdowns após navegação Turbo */
-document.addEventListener('turbo:load', function() {
-  document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(function(el) {
-    var existing = bootstrap.Dropdown.getInstance(el);
-    if (existing) existing.dispose();
-    new bootstrap.Dropdown(el);
-  });
-});
-</script>
-
-<script>
-/* GTM: listener delegado para data-gtm-event — substitui onclick inline */
-(function(){
-  document.addEventListener('click', function(e) {
-    var el = e.target.closest('[data-gtm-event]');
-    if (!el) return;
-    var payload = { event: el.getAttribute('data-gtm-event') };
-    Array.from(el.attributes).forEach(function(attr) {
-      if (attr.name.startsWith('data-gtm-') && attr.name !== 'data-gtm-event') {
-        payload[attr.name.replace('data-gtm-', '')] = attr.value;
-      }
-    });
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push(payload);
-  });
-}());
-</script>
-
-{# ── tw-monitor.js: monitoramento frontend (erros, Web Vitals, AJAX, rage-click) ── #}
-<script src="{{ asset('js/tw-monitor.js') }}" defer></script>
+{# ===== JAVASCRIPT ===== #}
+{% block javascripts %}
+    <script src="{{ asset('js/app.js') }}" defer></script>
+    <script src="{{ asset('js/tw-monitor.js') }}" defer></script>
+{% endblock %}
 
 </body>
 </html>

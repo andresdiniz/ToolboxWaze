@@ -2,6 +2,11 @@
 
 {% block title %}{{ radar.logradouro|default('Radar #' ~ radar.id) }} — Radar #{{ radar.id }}{% endblock %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('styles/radar.css') }}">
+{% endblock %}
+
 {% block body %}
 
 <nav aria-label="breadcrumb" class="mb-3">
@@ -15,7 +20,7 @@
 <div class="d-flex align-items-start justify-content-between mb-4 gap-3 flex-wrap">
     <div>
         <h1 class="h4 mb-1 fw-bold">
-            <span class="badge badge-uf me-2">{{ radar.sigla_uf }}</span>
+            <span class="badge-uf me-2">{{ radar.sigla_uf }}</span>
             {{ radar.logradouro ?? '—' }}
         </h1>
         <div class="text-muted small">
@@ -536,84 +541,9 @@
     </div>{# /col-lg-5 #}
 </div>
 
-<style>
-.waze-timeline { position:relative; padding-left:1.5rem; }
-.waze-timeline::before { content:''; position:absolute; left:.45rem; top:.5rem; bottom:.5rem; width:2px; background:var(--color-border); border-radius:2px; }
-.waze-timeline-item { position:relative; margin-bottom:1rem; }
-.waze-timeline-item:last-child { margin-bottom:0; }
-.waze-timeline-dot { position:absolute; left:-1.5rem; top:.3rem; width:.7rem; height:.7rem; border-radius:50%; border:2px solid var(--color-surface); box-shadow:0 0 0 2px currentColor; }
-.waze-timeline-dot.dot-link { color:var(--tw); }
-.waze-timeline-dot.dot-obs  { color:var(--color-text-muted); }
-.waze-timeline-content { background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:.5rem .75rem; }
-.badge-sm { font-size:.7rem; padding:.2em .5em; }
-#waze-map .leaflet-tile-pane { filter:none; }
-[data-theme="dark"] #waze-map .leaflet-tile-pane { filter:brightness(.85) saturate(.7) invert(1) hue-rotate(180deg); }
-[data-theme="dark"] #waze-map .leaflet-marker-icon { filter:none; }
-.leaflet-popup-content-wrapper { background:var(--color-surface); color:var(--color-text); border:1px solid var(--color-border); box-shadow:var(--shadow-md); border-radius:var(--radius-md); }
-.leaflet-popup-tip { background:var(--color-surface); }
-.waze-map-actions { display:flex; gap:.5rem; padding:.6rem .75rem; background:var(--color-surface-2); border-bottom:1px solid var(--color-border); font-size:.78rem; align-items:center; }
-.waze-map-coords { font-family:'SFMono-Regular',Consolas,monospace; font-size:.72rem; color:var(--color-text-muted); margin-left:auto; }
-</style>
+{% endblock %}
 
-<script>
-(function () {
-    const input    = document.getElementById('waze-link-input');
-    const preview  = document.getElementById('waze-hazard-preview');
-    const hazardEl = document.getElementById('waze-hazard-id');
-    if (input) {
-        function updateHazard() {
-            const m = input.value.match(/[?&]permanentHazards=(\d+)/);
-            if (m) { hazardEl.textContent = m[1]; preview.classList.remove('d-none'); }
-            else   { preview.classList.add('d-none'); }
-        }
-        input.addEventListener('input', updateHazard);
-        updateHazard();
-    }
-
-    const mapDiv = document.getElementById('waze-map');
-    if (!mapDiv) return;
-    const wazeUrl  = mapDiv.dataset.wazeUrl || '';
-    const latMatch = wazeUrl.match(/[?&]lat=(-?[\d.]+)/);
-    const lonMatch = wazeUrl.match(/[?&]lon=(-?[\d.]+)/);
-    if (!latMatch || !lonMatch) { mapDiv.style.display = 'none'; return; }
-    const lat = parseFloat(latMatch[1]);
-    const lon = parseFloat(lonMatch[1]);
-
-    const actions = document.createElement('div');
-    actions.className = 'waze-map-actions';
-    actions.innerHTML =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" style="color:var(--tw);flex-shrink:0"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>' +
-        '<span style="color:var(--color-text);font-weight:600">Localização no mapa</span>' +
-        '<span class="waze-map-coords">' + lat.toFixed(5) + ', ' + lon.toFixed(5) + '</span>' +
-        '<a href="https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '&zoom=17" ' +
-           'target="_blank" rel="noopener" style="color:var(--tw);font-size:.72rem;text-decoration:none;margin-left:.5rem">OSM ↗</a>';
-    mapDiv.parentNode.insertBefore(actions, mapDiv);
-
-    function initMap() {
-        const L = window.L;
-        const map = L.map(mapDiv, { center:[lat,lon], zoom:17, scrollWheelZoom:false });
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
-            maxZoom: 19
-        }).addTo(map);
-        L.marker([lat,lon]).addTo(map)
-            .bindPopup('<div style="font-size:.82rem"><strong style="display:block;margin-bottom:.3rem">📍 Radar</strong>' +
-                '<a href="' + wazeUrl + '" target="_blank" rel="noopener" style="color:var(--tw);font-weight:600">🗺 Abrir no Editor Waze</a></div>')
-            .openPopup();
-        setTimeout(function(){ map.invalidateSize(); }, 300);
-    }
-
-    if (window.L) { initMap(); }
-    else {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet'; link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = initMap;
-        document.head.appendChild(script);
-    }
-}());
-</script>
-
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/radar.js') }}" defer></script>
 {% endblock %}

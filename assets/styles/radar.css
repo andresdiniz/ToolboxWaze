@@ -1,0 +1,236 @@
+/* =========================================================
+   radar.css — estilos do módulo Radares
+   ========================================================= */
+
+/* ── Stats cards (KPIs) ────────────────────────────────── */
+.stat-card {
+    background: var(--color-surface-2);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    text-align: center;
+    transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+    border: 1px solid transparent;
+}
+.stat-card:hover {
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+}
+.stat-card .stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--color-text);
+}
+.stat-card .stat-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+/* Ícones dentro dos cards */
+.stat-card i {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.35rem;
+}
+/* Bordas coloridas (aplicadas via classes do Bootstrap) */
+.stat-card.border-success { border-color: var(--bs-success, #198754) !important; }
+.stat-card.border-danger  { border-color: var(--bs-danger, #dc3545) !important; }
+.stat-card.border-warning { border-color: var(--bs-warning, #ffc107) !important; }
+.stat-card.border-info    { border-color: var(--bs-info, #0dcaf0) !important; }
+.stat-card.border-primary { border-color: var(--bs-primary, #0d6efd) !important; }
+/* Cores dos textos (já aplicadas via classes .text-*) */
+
+/* ── Badges de status ───────────────────────────────────── */
+.badge-aprovado {
+    background: var(--bs-success-bg-subtle, #d1e7dd);
+    color: var(--bs-success-text-emphasis, #0f5132);
+}
+.badge-reprovado {
+    background: var(--bs-danger-bg-subtle, #f8d7da);
+    color: var(--bs-danger-text-emphasis, #842029);
+}
+.badge-uf {
+    background: var(--tw);
+    color: #fff;
+    font-size: 0.7rem;
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+[data-theme="dark"] .badge-uf {
+    background: #2a6b74;
+    color: #e8f6f7;
+    border: 1px solid rgba(255,255,255,.12);
+}
+
+/* ── Filtros ─────────────────────────────────────────────── */
+.filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+}
+.filter-tag .remove {
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: color 0.15s;
+}
+.filter-tag .remove:hover {
+    color: #dc3545;
+}
+
+/* ── Tabela de radares ───────────────────────────────────── */
+.radar-table .badge-uf {
+    font-size: 0.65rem;
+}
+.radar-table .radar-check {
+    margin: 0;
+}
+
+/* ── Barra de mesclagem flutuante ───────────────────────── */
+#mergeBar {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1050;
+    min-width: 320px;
+    max-width: 90vw;
+}
+#mergeBar .card {
+    background: var(--color-surface);
+    border: 2px solid var(--bs-warning, #ffc107) !important;
+    box-shadow: var(--shadow-lg);
+}
+
+/* ── Timeline de alterações do Waze ────────────────────── */
+.waze-timeline {
+    position: relative;
+    padding-left: 1.5rem;
+}
+.waze-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.45rem;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 2px;
+    background: var(--color-border);
+    border-radius: 2px;
+}
+.waze-timeline-item {
+    position: relative;
+    margin-bottom: 1rem;
+}
+.waze-timeline-item:last-child {
+    margin-bottom: 0;
+}
+.waze-timeline-dot {
+    position: absolute;
+    left: -1.5rem;
+    top: 0.3rem;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    border: 2px solid var(--color-surface);
+    box-shadow: 0 0 0 2px currentColor;
+}
+.waze-timeline-dot.dot-link {
+    color: var(--tw);
+}
+.waze-timeline-dot.dot-obs {
+    color: var(--color-text-muted);
+}
+.waze-timeline-content {
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+}
+
+/* ── Mapa Leaflet ────────────────────────────────────────── */
+#waze-map .leaflet-tile-pane {
+    filter: none;
+}
+[data-theme="dark"] #waze-map .leaflet-tile-pane {
+    filter: brightness(0.85) saturate(0.7) invert(1) hue-rotate(180deg);
+}
+[data-theme="dark"] #waze-map .leaflet-marker-icon {
+    filter: none;
+}
+.leaflet-popup-content-wrapper {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-md);
+}
+.leaflet-popup-tip {
+    background: var(--color-surface);
+}
+.waze-map-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--color-surface-2);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.78rem;
+    align-items: center;
+}
+.waze-map-coords {
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    margin-left: auto;
+}
+
+/* ── Página de mesclagem ─────────────────────────────────── */
+.survivor-card {
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.15s, background 0.15s;
+}
+.survivor-card.border-success {
+    background: color-mix(in oklab, var(--bs-success, #198754) 8%, transparent);
+}
+
+/* ── Responsivo ──────────────────────────────────────────── */
+@media (max-width: 575.98px) {
+    .stat-card .stat-value {
+        font-size: 1.25rem;
+    }
+    #mergeBar {
+        min-width: 260px;
+        bottom: 0.75rem;
+    }
+    #mergeBar .card-body {
+        padding: 0.5rem 0.75rem;
+    }
+}
+
+/* ── Dark mode: ajustes adicionais para cards ──────────── */
+[data-theme="dark"] .stat-card {
+    background: var(--color-surface-2);
+    border-color: var(--color-border);
+}
+[data-theme="dark"] .stat-card:hover {
+    background: var(--color-surface);
+}
+[data-theme="dark"] .stat-card .stat-value {
+    color: var(--color-text);
+}
+[data-theme="dark"] .stat-card .stat-label {
+    color: var(--color-text-muted);
+}
+[data-theme="dark"] .stat-card i {
+    opacity: 0.9;
+}

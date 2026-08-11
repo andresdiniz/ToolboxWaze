@@ -2,6 +2,11 @@
 
 {% block title %}Radares Manuais{% endblock %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('styles/radar.css') }}">
+{% endblock %}
+
 {% block body %}
 <div class="container-xl py-4">
 
@@ -57,7 +62,7 @@
             {% for r in radares %}
             <tr>
               <td class="text-muted small">{{ r.id }}</td>
-              <td><span class="badge bg-secondary">{{ r.siglaUf }}</span></td>
+              <td><span class="badge-uf">{{ r.siglaUf }}</span></td>
               <td>{{ r.municipio }}</td>
               <td class="text-truncate" style="max-width:260px" title="{{ r.localVerificacao }}">{{ r.localVerificacao }}</td>
               <td class="small text-muted">{{ r.tipoMedidor ?? '—' }}</td>
@@ -98,4 +103,9 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/radar.js') }}" defer></script>
 {% endblock %}

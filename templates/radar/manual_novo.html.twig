@@ -2,6 +2,11 @@
 
 {% block title %}Novo Radar Manual{% endblock %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('styles/radar.css') }}">
+{% endblock %}
+
 {% block body %}
 <div class="container py-4" style="max-width:760px">
 
@@ -14,7 +19,6 @@
 
   <div class="d-flex align-items-center gap-2 mb-1">
     <h1 class="h4 fw-semibold mb-0">Novo Radar Manual</h1>
-    {# badge de qualidade — atualizado via JS #}
     <span id="badge-qualidade" class="badge rounded-pill d-none"></span>
   </div>
   <p class="text-muted small mb-4">
@@ -89,7 +93,6 @@
           {{ form_label(form.marca) }}
           {{ form_widget(form.marca) }}
           {{ form_errors(form.marca) }}
-          {# datalist de marcas comuns #}
           <datalist id="marcas-list">
             <option value="Pardini"><option value="Cinemometer"><option value="Perkons">
             <option value="Multiradar"><option value="Iscam"><option value="Redflex">
@@ -165,7 +168,6 @@
             Cole uma URL (Diretran, prefeitura, notícia, post do Waze) ou descreva a fonte.
             Isso é salvo no log de merge para rastreabilidade.
           </div>
-          {# preview do link quando é URL #}
           <div id="fonte-preview" class="mt-2 d-none">
             <a id="fonte-link" href="#" target="_blank" rel="noopener noreferrer"
                class="small text-decoration-none">
@@ -257,4 +259,9 @@
   }
 }());
 </script>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/radar.js') }}" defer></script>
 {% endblock %}

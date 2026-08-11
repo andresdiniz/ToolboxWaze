@@ -1,404 +1,339 @@
 {% extends 'base.html.twig' %}
 {% block title %}Dashboard — ToolboxWaze{% endblock %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('styles/dashboard.css') }}">
+{% endblock %}
+
 {% block body %}
 <div class="container-fluid py-4">
 
-{# ── Cabeçalho #}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-  <div>
-    <h4 class="mb-0 fw-bold"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h4>
-    <p class="text-muted small mb-0">Visão geral do WazeToolbox
-      {% if allowedUfs is not null %} — <span class="text-info">{{ allowedUfs|join(', ') }}</span>{% endif %}
-    </p>
+  {# ── Cabeçalho ───────────────────────────────────────────── #}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h4 class="mb-0 fw-bold"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h4>
+      <p class="text-muted small mb-0">Visão geral do WazeToolbox
+        {% if allowedUfs is not null %} — <span class="text-info">{{ allowedUfs|join(', ') }}</span>{% endif %}
+      </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <button id="refresh-dashboard" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-arrow-clockwise"></i> Atualizar
+      </button>
+      <a href="{{ path('radar_index') }}"       class="btn btn-sm btn-outline-secondary"><i class="bi bi-broadcast me-1"></i>Radares</a>
+      <a href="{{ path('posto_index') }}"        class="btn btn-sm btn-outline-secondary"><i class="bi bi-fuel-pump me-1"></i>Postos</a>
+      <a href="{{ path('escola_inep_index') }}"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-building me-1"></i>Escolas</a>
+      <a href="{{ path('solicitacao_hub') }}"    class="btn btn-sm btn-outline-secondary"><i class="bi bi-inbox me-1"></i>Solicitações</a>
+      {% if isAdmin %}<a href="{{ path('admin_users_index') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-people me-1"></i>Usuários</a>{% endif %}
+      <a href="{{ path('cobertura_radar') }}"    class="btn btn-sm btn-outline-danger"><i class="bi bi-broadcast me-1"></i>Cobertura</a>
+    </div>
   </div>
-  <div class="d-flex flex-wrap gap-2">
-    <a href="{{ path('radar_index') }}"       class="btn btn-sm btn-outline-secondary"><i class="bi bi-broadcast me-1"></i>Radares</a>
-    <a href="{{ path('posto_index') }}"        class="btn btn-sm btn-outline-secondary"><i class="bi bi-fuel-pump me-1"></i>Postos</a>
-    <a href="{{ path('escola_inep_index') }}"  class="btn btn-sm btn-outline-secondary"><i class="bi bi-building me-1"></i>Escolas</a>
-    <a href="{{ path('solicitacao_hub') }}"    class="btn btn-sm btn-outline-secondary"><i class="bi bi-inbox me-1"></i>Solicitações</a>
-    {% if isAdmin %}<a href="{{ path('admin_users_index') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-people me-1"></i>Usuários</a>{% endif %}
-    <a href="{{ path('cobertura_radar') }}"    class="btn btn-sm btn-outline-danger"><i class="bi bi-broadcast me-1"></i>Cobertura</a>
-  </div>
-</div>
 
-{# ── LINHA 1 ─ Visão Geral #}
-<p class="text-uppercase text-muted small fw-semibold mb-2"><i class="bi bi-globe me-1"></i>Visão Geral</p>
-<div class="row g-3 mb-4">
-  {% set globais = [
-    {icon:'bi-map',       label:'Estados',      val: estadosAtivos,              sub: null,                                   color:'primary'},
-    {icon:'bi-building',  label:'Escolas INEP', val: escolaKpis.total ?? 0,      sub: (escolaKpis.estados ?? 0)~' estados',   color:'warning'},
-    {icon:'bi-broadcast', label:'Radares',      val: radarKpis.total ?? 0,       sub: (radarKpis.aprovados ?? 0)~' aprov.',   color:'success'},
-    {icon:'bi-fuel-pump', label:'Postos',       val: postoKpis.total ?? 0,       sub: (postoKpis.comWaze ?? 0)~' com Waze',  color:'warning'},
-    {icon:'bi-inbox',     label:'Solicitações', val: solicKpis.geral.total ?? 0, sub: (solicKpis.geral.hoje ?? 0)~' hoje',    color:'info'},
-  ] %}
-  {% if isAdmin and usuarioKpis.total is defined %}
-    {% set globais = globais|merge([{icon:'bi-people', label:'Usuários', val: usuarioKpis.total, sub: (usuarioKpis.pendentes ?? 0)~' pendentes', color:'secondary'}]) %}
-  {% endif %}
-  {% for g in globais %}
-  <div class="col-6 col-sm-4 col-xl-2">
-    <div class="card border-0 shadow-sm h-100" style="border-left:4px solid var(--bs-{{ g.color }}) !important">
-      <div class="card-body py-3">
-        <div class="text-muted small mb-1"><i class="bi {{ g.icon }} me-1"></i>{{ g.label }}</div>
-        <div class="fs-3 fw-bold count-up" data-target="{{ g.val }}">0</div>
-        {% if g.sub %}<div class="small text-muted">{{ g.sub }}</div>{% endif %}
-      </div>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
-{# ── LINHA 2 ─ KPIs Radares #}
-<p class="text-uppercase text-muted small fw-semibold mb-2"><i class="bi bi-broadcast me-1"></i>Radares Medidores</p>
-<div class="row g-3 mb-4">
-  {% for c in [
-    {label:'Total',         val: radarKpis.total ?? 0,      color:'primary', sub:null,                    suffix:''},
-    {label:'Aprovados',     val: radarKpis.aprovados ?? 0,  color:'success', sub:null,                    suffix:''},
-    {label:'Reprovados',    val: radarKpis.reprovados ?? 0, color:'danger',  sub:null,                    suffix:''},
-    {label:'Vencidos',      val: radarKpis.vencidos ?? 0,   color:'warning', sub:'validade expirada',     suffix:''},
-    {label:'Vencendo',      val: radarKpis.vencendo ?? 0,   color:'warning', sub:'próx. 30 dias',         suffix:''},
-    {label:'Cobertura Waze',val: radarKpis.pctWaze ?? 0,    color:'info',    sub:(radarKpis.comWaze ?? 0)~' vinculados', suffix:'%'},
-  ] %}
-  <div class="col-6 col-sm-4 col-xl-2">
-    <div class="card border-0 shadow-sm h-100" style="border-left:4px solid var(--bs-{{ c.color }}) !important">
-      <div class="card-body py-3">
-        <div class="text-{{ c.color }} small mb-1">{{ c.label }}</div>
-        <div class="fs-4 fw-bold text-{{ c.color }} count-up" data-target="{{ c.val }}" data-suffix="{{ c.suffix }}">0</div>
-        {% if c.sub %}<div class="small text-muted">{{ c.sub }}</div>{% endif %}
-      </div>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
-{# ── LINHA 3 ─ Gráficos Radares linha 1 #}
-<div class="row g-3 mb-4">
-  <div class="col-12 col-xl-8">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-bar-chart-fill me-1 text-primary"></i>Radares por Estado</span>
-        <a href="{{ path('radar_index') }}" class="btn btn-sm btn-outline-secondary">Ver todos</a>
-      </div>
-      <div class="card-body" style="min-height:260px"><canvas id="chartRadarUf"></canvas></div>
-    </div>
-  </div>
-  <div class="col-12 col-xl-4">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent"><span class="fw-semibold"><i class="bi bi-pie-chart-fill me-1 text-success"></i>Resultado Geral</span></div>
-      <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px">
-        <canvas id="chartRadarResultado" style="max-height:240px"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# Gráficos Radares linha 2 #}
-<div class="row g-3 mb-4">
-  <div class="col-12 col-xl-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent"><span class="fw-semibold"><i class="bi bi-graph-up me-1 text-primary"></i>Verificações Mensais (12 meses)</span></div>
-      <div class="card-body" style="min-height:220px"><canvas id="chartVerifMensais"></canvas></div>
-    </div>
-  </div>
-  <div class="col-12 col-xl-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-broadcast me-1 text-danger"></i>Cobertura Waze por Estado</span>
-        <a href="{{ path('cobertura_radar') }}" class="btn btn-sm btn-outline-danger">Relatório</a>
-      </div>
-      <div class="card-body" style="min-height:220px"><canvas id="chartCoberturaUf"></canvas></div>
-    </div>
-  </div>
-</div>
-
-{# ── LINHA 4 ─ Postos + Escolas #}
-<div class="row g-3 mb-4">
-  <div class="col-12 col-xl-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-fuel-pump me-1 text-warning"></i>Postos de Combustível</span>
-        <div>
-          <a href="{{ path('posto_index') }}" class="btn btn-sm btn-outline-secondary">Ver lista</a>
-          <a href="{{ path('cobertura_posto') }}" class="btn btn-sm btn-outline-warning ms-1">Cobertura</a>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="row g-2 mb-3">
-          <div class="col-6"><div class="p-2 rounded bg-body-secondary text-center">
-            <div class="small text-muted">Total</div><div class="fw-bold fs-5 count-up" data-target="{{ postoKpis.total ?? 0 }}">0</div>
-          </div></div>
-          <div class="col-6"><div class="p-2 rounded bg-success bg-opacity-10 text-center">
-            <div class="small text-success">Com Waze</div><div class="fw-bold fs-5 text-success count-up" data-target="{{ postoKpis.comWaze ?? 0 }}">0</div>
-          </div></div>
-          <div class="col-6"><div class="p-2 rounded bg-danger bg-opacity-10 text-center">
-            <div class="small text-danger">Sem Waze</div><div class="fw-bold fs-5 text-danger count-up" data-target="{{ postoKpis.semWaze ?? 0 }}">0</div>
-          </div></div>
-          <div class="col-6"><div class="p-2 rounded bg-info bg-opacity-10 text-center">
-            <div class="small text-info">Cobertura</div>
-            <div class="fw-bold fs-5 text-info">{{ postoKpis.pct ?? 0 }}%</div>
-            <div class="progress mt-1" style="height:3px"><div class="progress-bar bg-info" style="width:{{ postoKpis.pct ?? 0 }}%"></div></div>
-          </div></div>
-        </div>
-        <canvas id="chartPostoAtividade" style="max-height:140px"></canvas>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-xl-6">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-building me-1 text-warning"></i>Escolas INEP</span>
-        <a href="{{ path('escola_inep_index') }}" class="btn btn-sm btn-outline-secondary">Ver lista</a>
-      </div>
-      <div class="card-body">
-        <div class="row g-2">
-          <div class="col-6"><div class="p-2 rounded bg-body-secondary text-center">
-            <div class="small text-muted">Total</div><div class="fw-bold fs-5 count-up" data-target="{{ escolaKpis.total ?? 0 }}">0</div>
-          </div></div>
-          <div class="col-6"><div class="p-2 rounded bg-primary bg-opacity-10 text-center">
-            <div class="small text-primary">Estados</div><div class="fw-bold fs-5 text-primary count-up" data-target="{{ escolaKpis.estados ?? 0 }}">0</div>
-          </div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# ── LINHA 5 ─ Solicitações #}
-<div class="row g-3 mb-4">
-  <div class="col-12 col-xl-5">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-inbox me-1 text-info"></i>Solicitações por Tipo</span>
-        <a href="{{ path('solicitacao_hub') }}" class="btn btn-sm btn-outline-secondary">Ver todas</a>
-      </div>
-      <div class="card-body p-0">
-        {% if solicKpis.geral.total is defined %}
-        <div class="px-3 py-2 border-bottom d-flex gap-3 flex-wrap">
-          <span class="small">Total <strong class="count-up" data-target="{{ solicKpis.geral.total }}">0</strong></span>
-          <span class="small text-success">Atendidas <strong class="count-up text-success" data-target="{{ solicKpis.geral.atendidas ?? 0 }}">0</strong></span>
-          <span class="small text-warning">Pendentes <strong class="count-up text-warning" data-target="{{ solicKpis.geral.pendentes ?? 0 }}">0</strong></span>
-          <span class="small text-danger">Recusadas <strong class="count-up text-danger" data-target="{{ solicKpis.geral.recusadas ?? 0 }}">0</strong></span>
-        </div>
-        {% endif %}
-        <table class="table table-sm table-hover align-middle mb-0">
-          <thead class="table-light sticky-top"><tr><th>Tipo</th><th class="text-end">Total</th><th class="text-end text-success">Atend.</th><th>Taxa</th></tr></thead>
-          <tbody>
-          {% for t in solicKpis.totais ?? [] %}
-            {% set taxa = t.total > 0 ? (t.atendidas / t.total * 100)|round(0) : 0 %}
-            <tr>
-              <td><span class="badge bg-secondary">{{ t.tipo }}</span></td>
-              <td class="text-end fw-semibold">{{ t.total }}</td>
-              <td class="text-end text-success">{{ t.atendidas ?? 0 }}</td>
-              <td style="min-width:80px">
-                <div class="progress mb-1" style="height:5px">
-                  <div class="progress-bar bg-{{ taxa >= 75 ? 'success' : (taxa >= 40 ? 'warning' : 'danger') }}" style="width:{{ taxa }}%"></div>
-                </div>
-                <small class="text-muted">{{ taxa }}%</small>
-              </td>
-            </tr>
-          {% else %}
-            <tr><td colspan="4" class="text-center text-muted py-3">Nenhuma solicitação.</td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-xl-7">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent">
-        <span class="fw-semibold"><i class="bi bi-graph-up-arrow me-1 text-info"></i>Solicitações Diárias (30 dias)</span>
-      </div>
-      <div class="card-body" style="min-height:240px"><canvas id="chartSolicDiarias"></canvas></div>
-    </div>
-  </div>
-</div>
-
-{# ── LINHA 6 ─ Radares sem Waze + Usuários admin #}
-<div class="row g-3 mb-2">
-  <div class="col-12 col-xl-8">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-exclamation-triangle-fill me-1 text-danger"></i>Radares APROVADOS sem Link Waze</span>
-        <a href="{{ path('cobertura_radar') }}" class="btn btn-sm btn-outline-warning">Ver todos</a>
-      </div>
-      <div class="card-body p-0" style="max-height:280px;overflow-y:auto">
-        <table class="table table-sm table-hover align-middle mb-0">
-          <thead class="sticky-top table-light"><tr><th>UF</th><th>Município</th><th>Logradouro</th><th class="text-end">Ação</th></tr></thead>
-          <tbody>
-          {% for r in radarSemWaze %}
-            <tr>
-              <td><span class="badge bg-secondary">{{ r.sigla_uf }}</span></td>
-              <td class="small">{{ r.municipio }}</td>
-              <td class="small text-muted text-truncate" style="max-width:180px">{{ r.logradouro ?? '—' }}</td>
-              <td class="text-end">
-                <a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="bi bi-link-45deg"></i></a>
-              </td>
-            </tr>
-          {% else %}
-            <tr><td colspan="4" class="text-center py-4 text-success">
-              <i class="bi bi-check-circle-fill fs-3 d-block mb-1"></i>Todos vinculados!
-            </td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  {% if isAdmin and usuarioKpis.total is defined %}
-  <div class="col-12 col-xl-4">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-        <span class="fw-semibold"><i class="bi bi-people me-1 text-secondary"></i>Usuários</span>
-        <a href="{{ path('admin_users_index') }}" class="btn btn-sm btn-outline-secondary">Gerenciar</a>
-      </div>
-      <div class="card-body">
-        <div class="row g-2">
-          {% for u in [
-            {label:'Total',     val: usuarioKpis.total ?? 0,     color:'secondary'},
-            {label:'Ativos',    val: usuarioKpis.ativos ?? 0,    color:'success'},
-            {label:'Aprovados', val: usuarioKpis.aprovados ?? 0, color:'primary'},
-            {label:'Pendentes', val: usuarioKpis.pendentes ?? 0, color:'warning'},
-          ] %}
-          <div class="col-6">
-            <div class="p-2 rounded bg-{{ u.color }} bg-opacity-10 text-center">
-              <div class="small text-{{ u.color }}">{{ u.label }}</div>
-              <div class="fw-bold fs-5 text-{{ u.color }} count-up" data-target="{{ u.val }}">0</div>
-            </div>
+  {# ── Cards de alerta ──────────────────────────────────────── #}
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card border-danger border-2 shadow-sm">
+        <div class="card-body d-flex align-items-center">
+          <i class="bi bi-exclamation-triangle-fill text-danger fs-1 me-3"></i>
+          <div>
+            <div class="text-uppercase small text-muted">Radares Vencidos</div>
+              <div class="fs-2 fw-bold text-danger count-up"
+                data-key="radares_vencidos"
+                data-target="{{ radarKpis.vencidos }}">0</div>
           </div>
-          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-warning border-2 shadow-sm">
+        <div class="card-body d-flex align-items-center">
+          <i class="bi bi-inbox-fill text-warning fs-1 me-3"></i>
+          <div>
+            <div class="text-uppercase small text-muted">Solicitações Pendentes</div>
+            <div class="fs-2 fw-bold text-warning count-up"
+                 data-key="solic_pendentes"
+                 data-target="{{ solicKpis.geral.pendentes ?? 0 }}">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-success border-2 shadow-sm">
+        <div class="card-body d-flex align-items-center">
+          <i class="bi bi-broadcast text-success fs-1 me-3"></i>
+          <div>
+            <div class="text-uppercase small text-muted">Cobertura Waze</div>
+            <div class="fs-2 fw-bold text-success">{{ radarKpis.pctWaze|round(1) }}%</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
-  {% endif %}
-</div>
+
+  {# ── KPIs (cards animados) ────────────────────────────────── #}
+  <div class="row g-3 mb-4">
+    {% set kpi_items = [
+      { label: 'Radares',       icon: 'bi-broadcast', value: radarKpis.total,           color: 'primary', subtitle: null, key: 'radares_total' },
+      { label: 'Postos',        icon: 'bi-fuel-pump', value: postoKpis.total,           color: 'warning', subtitle: (postoKpis.comWaze ?? 0) ~ ' com Waze', key: 'postos_total' },
+      { label: 'Escolas',       icon: 'bi-building',  value: escolaKpis.total ?? 0,     color: 'info',    subtitle: (escolaKpis.estados ?? 0) ~ ' estados', key: 'escolas_total' },
+      { label: 'Solicitações',  icon: 'bi-inbox',     value: solicKpis.geral.total,     color: 'secondary', subtitle: (solicKpis.geral.hoje ?? 0) ~ ' hoje', key: 'solic_total' },
+      { label: 'Usuários',      icon: 'bi-people',    value: usuarioKpis.total ?? 0,    color: 'dark',    subtitle: (usuarioKpis.pendentes ?? 0) ~ ' pendentes', hide: not isAdmin, key: 'usuarios_total' }
+    ] %}
+    {% for item in kpi_items %}
+      {% if not item.hide ?? false %}
+        <div class="col-6 col-sm-3 col-xl-2 card-dashboard">
+          {% include 'components/kpi_card.html.twig' with {
+            color: item.color,
+            icon: item.icon,
+            label: item.label,
+            value: item.value,
+            suffix: item.suffix|default(''),
+            subtitle: item.subtitle|default(null),
+            data_key: item.key
+          } %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {# ── GRÁFICOS ──────────────────────────────────────────────── #}
+
+  {# Linha 1: Radares por Estado + Resultado #}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-8">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-bar-chart-fill me-1 text-primary"></i>Radares por Estado</span>
+          <a href="{{ path('radar_index') }}" class="btn btn-sm btn-outline-secondary">Ver todos</a>
+        </div>
+        <div class="card-body chart-container" style="min-height:260px">
+          <canvas id="chartRadarUf"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent"><span class="fw-semibold"><i class="bi bi-pie-chart-fill me-1 text-success"></i>Resultado Geral</span></div>
+        <div class="card-body d-flex align-items-center justify-content-center chart-container" style="min-height:260px">
+          <canvas id="chartRadarResultado" style="max-height:240px"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Linha 2: Verificações Mensais + Cobertura por Estado #}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent"><span class="fw-semibold"><i class="bi bi-graph-up me-1 text-primary"></i>Verificações Mensais (12 meses)</span></div>
+        <div class="card-body chart-container" style="min-height:220px">
+          <canvas id="chartVerifMensais"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-broadcast me-1 text-danger"></i>Cobertura Waze por Estado</span>
+          <a href="{{ path('cobertura_radar') }}" class="btn btn-sm btn-outline-danger">Relatório</a>
+        </div>
+        <div class="card-body chart-container" style="min-height:220px">
+          <canvas id="chartCoberturaUf"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Linha 3: Postos + Escolas #}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-fuel-pump me-1 text-warning"></i>Postos de Combustível</span>
+          <div>
+            <a href="{{ path('posto_index') }}" class="btn btn-sm btn-outline-secondary">Ver lista</a>
+            <a href="{{ path('cobertura_posto') }}" class="btn btn-sm btn-outline-warning ms-1">Cobertura</a>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row g-2 mb-3">
+            <div class="col-6"><div class="p-2 rounded bg-body-secondary text-center">
+              <div class="small text-muted">Total</div>
+              <div class="fw-bold fs-5 count-up" data-key="postos_total" data-target="{{ postoKpis.total ?? 0 }}">0</div>
+            </div></div>
+            <div class="col-6"><div class="p-2 rounded bg-success bg-opacity-10 text-center">
+              <div class="small text-success">Com Waze</div>
+              <div class="fw-bold fs-5 text-success count-up" data-key="postos_com_waze" data-target="{{ postoKpis.comWaze ?? 0 }}">0</div>
+            </div></div>
+            <div class="col-6"><div class="p-2 rounded bg-danger bg-opacity-10 text-center">
+              <div class="small text-danger">Sem Waze</div>
+              <div class="fw-bold fs-5 text-danger count-up" data-key="postos_sem_waze" data-target="{{ postoKpis.semWaze ?? 0 }}">0</div>
+            </div></div>
+            <div class="col-6"><div class="p-2 rounded bg-info bg-opacity-10 text-center">
+              <div class="small text-info">Cobertura</div>
+              <div class="fw-bold fs-5 text-info">{{ postoKpis.pct ?? 0 }}%</div>
+              <div class="progress mt-1" style="height:3px"><div class="progress-bar bg-info" style="width:{{ postoKpis.pct ?? 0 }}%"></div></div>
+            </div></div>
+          </div>
+          <div class="chart-container"><canvas id="chartPostoAtividade" style="max-height:140px"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-building me-1 text-warning"></i>Escolas INEP</span>
+          <a href="{{ path('escola_inep_index') }}" class="btn btn-sm btn-outline-secondary">Ver lista</a>
+        </div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-6"><div class="p-2 rounded bg-body-secondary text-center">
+              <div class="small text-muted">Total</div>
+              <div class="fw-bold fs-5 count-up" data-key="escolas_total" data-target="{{ escolaKpis.total ?? 0 }}">0</div>
+            </div></div>
+            <div class="col-6"><div class="p-2 rounded bg-primary bg-opacity-10 text-center">
+              <div class="small text-primary">Estados</div>
+              <div class="fw-bold fs-5 text-primary count-up" data-key="escolas_estados" data-target="{{ escolaKpis.estados ?? 0 }}">0</div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Linha 4: Solicitações por Tipo + Diárias #}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-xl-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-inbox me-1 text-info"></i>Solicitações por Tipo</span>
+          <a href="{{ path('solicitacao_hub') }}" class="btn btn-sm btn-outline-secondary">Ver todas</a>
+        </div>
+        <div class="card-body p-0">
+          {% if solicKpis.geral.total is defined %}
+          <div class="px-3 py-2 border-bottom d-flex gap-3 flex-wrap">
+            <span class="small">Total <strong class="count-up" data-key="solic_total" data-target="{{ solicKpis.geral.total }}">0</strong></span>
+            <span class="small text-success">Atendidas <strong class="count-up text-success" data-key="solic_atendidas" data-target="{{ solicKpis.geral.atendidas ?? 0 }}">0</strong></span>
+            <span class="small text-warning">Pendentes <strong class="count-up text-warning" data-key="solic_pendentes" data-target="{{ solicKpis.geral.pendentes ?? 0 }}">0</strong></span>
+            <span class="small text-danger">Recusadas <strong class="count-up text-danger" data-key="solic_recusadas" data-target="{{ solicKpis.geral.recusadas ?? 0 }}">0</strong></span>
+          </div>
+          {% endif %}
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light sticky-top"><tr><th>Tipo</th><th class="text-end">Total</th><th class="text-end text-success">Atend.</th><th>Taxa</th></tr></thead>
+            <tbody>
+            {% for t in solicKpis.totais ?? [] %}
+              {% set taxa = t.total > 0 ? (t.atendidas / t.total * 100)|round(0) : 0 %}
+              <tr>
+                <td><span class="badge bg-secondary">{{ t.tipo }}</span></td>
+                <td class="text-end fw-semibold">{{ t.total }}</td>
+                <td class="text-end text-success">{{ t.atendidas ?? 0 }}</td>
+                <td style="min-width:80px">
+                  <div class="progress mb-1" style="height:5px">
+                    <div class="progress-bar bg-{{ taxa >= 75 ? 'success' : (taxa >= 40 ? 'warning' : 'danger') }}" style="width:{{ taxa }}%"></div>
+                  </div>
+                  <small class="text-muted">{{ taxa }}%</small>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4" class="text-center text-muted py-3">Nenhuma solicitação.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent">
+          <span class="fw-semibold"><i class="bi bi-graph-up-arrow me-1 text-info"></i>Solicitações Diárias (30 dias)</span>
+        </div>
+        <div class="card-body chart-container" style="min-height:240px">
+          <canvas id="chartSolicDiarias"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Linha 5: Radares sem Waze + Usuários (admin) #}
+  <div class="row g-3 mb-2">
+    <div class="col-12 col-xl-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-exclamation-triangle-fill me-1 text-danger"></i>Radares APROVADOS sem Link Waze</span>
+          <a href="{{ path('cobertura_radar') }}" class="btn btn-sm btn-outline-warning">Ver todos</a>
+        </div>
+        <div class="card-body p-0" style="max-height:280px;overflow-y:auto">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="sticky-top table-light"><tr><th>UF</th><th>Município</th><th>Logradouro</th><th class="text-end">Ação</th></tr></thead>
+            <tbody>
+            {% for r in radarSemWaze %}
+              <tr>
+                <td><span class="badge bg-secondary">{{ r.sigla_uf }}</span></td>
+                <td class="small">{{ r.municipio }}</td>
+                <td class="small text-muted text-truncate" style="max-width:180px">{{ r.logradouro ?? '—' }}</td>
+                <td class="text-end">
+                  <a href="{{ path('radar_show', {id: r.id}) }}" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="bi bi-link-45deg"></i></a>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4" class="text-center py-4 text-success">
+                <i class="bi bi-check-circle-fill fs-3 d-block mb-1"></i>Todos vinculados!
+              </td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% if isAdmin and usuarioKpis.total is defined %}
+    <div class="col-12 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-people me-1 text-secondary"></i>Usuários</span>
+          <a href="{{ path('admin_users_index') }}" class="btn btn-sm btn-outline-secondary">Gerenciar</a>
+        </div>
+        <div class="card-body">
+          <div class="row g-2">
+            {% for u in [
+              {label:'Total',     val: usuarioKpis.total ?? 0,     color:'secondary', key:'usuarios_total'},
+              {label:'Ativos',    val: usuarioKpis.ativos ?? 0,    color:'success',   key:'usuarios_ativos'},
+              {label:'Aprovados', val: usuarioKpis.aprovados ?? 0, color:'primary',   key:'usuarios_aprovados'},
+              {label:'Pendentes', val: usuarioKpis.pendentes ?? 0, color:'warning',   key:'usuarios_pendentes'},
+            ] %}
+            <div class="col-6">
+              <div class="p-2 rounded bg-{{ u.color }} bg-opacity-10 text-center">
+                <div class="small text-{{ u.color }}">{{ u.label }}</div>
+                <div class="fw-bold fs-5 text-{{ u.color }} count-up" data-key="{{ u.key }}" data-target="{{ u.val }}">0</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
 
 </div>{# /container #}
 {% endblock %}
 
 {% block javascripts %}
 {{ parent() }}
+
+{# Carrega Chart.js (CDN) #}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+{# Injeta os dados dos gráficos como variáveis globais #}
 <script>
-(function(){
-  'use strict';
-
-  const radarUf      = {{ (radarPorUf     is iterable ? radarPorUf     : []) | json_encode | raw }};
-  const resultado    = {{ (radarResultado is iterable ? radarResultado : []) | json_encode | raw }};
-  const mensais      = {{ (radarMensais   is iterable ? radarMensais   : []) | json_encode | raw }};
-  const coberturaUf  = {{ (radarCobertura is iterable ? radarCobertura : []) | json_encode | raw }};
-  const postoAtiv    = {{ (postoAtividade is iterable ? postoAtividade : []) | json_encode | raw }};
-  const solicDiarias = {{ (solicDiarias   is iterable ? solicDiarias   : []) | json_encode | raw }};
-
-  const dark = () => document.documentElement.getAttribute('data-bs-theme') === 'dark'
-                  || window.matchMedia('(prefers-color-scheme:dark)').matches;
-  const gc = () => dark() ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
-  const tc = () => dark() ? '#adb5bd' : '#6c757d';
-  Chart.defaults.font.size = 11;
-
-  const sc = (stacked = false) => ({
-    x: { stacked, grid: { color: gc() }, ticks: { color: tc() } },
-    y: { stacked, beginAtZero: true, grid: { color: gc() }, ticks: { color: tc(), precision: 0 } },
-  });
-
-  function safeChart(id, config) {
-    const el = document.getElementById(id);
-    if (el) { try { new Chart(el, config); } catch(e) { console.warn('Chart ' + id, e); } }
-  }
-
-  safeChart('chartRadarUf', {
-    type: 'bar',
-    data: {
-      labels: radarUf.map(r => r.uf),
-      datasets: [
-        { label: 'Aprovados',  data: radarUf.map(r => +r.aprovados),  backgroundColor: '#20c997', stack: 's', borderRadius: 3 },
-        { label: 'Reprovados', data: radarUf.map(r => +r.reprovados), backgroundColor: '#dc3545', stack: 's', borderRadius: 3 },
-        { label: 'Outros',     data: radarUf.map(r => +r.total - (+r.aprovados||0) - (+r.reprovados||0)), backgroundColor: '#6c757d', stack: 's', borderRadius: 3 },
-      ],
-    },
-    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: tc() } } }, scales: sc(true) },
-  });
-
-  const rc = { 'APROVADO': '#20c997', 'REPROVADO': '#dc3545', 'SEM INFO': '#6c757d' };
-  safeChart('chartRadarResultado', {
-    type: 'doughnut',
-    data: {
-      labels: resultado.map(r => r.resultado),
-      datasets: [{ data: resultado.map(r => +r.total), backgroundColor: resultado.map(r => rc[r.resultado] ?? '#adb5bd'), borderWidth: 2 }],
-    },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: tc() } } } },
-  });
-
-  safeChart('chartVerifMensais', {
-    type: 'line',
-    data: {
-      labels: mensais.map(r => r.mes),
-      datasets: [{ label: 'Verificações', data: mensais.map(r => +r.total), borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,.1)', fill: true, tension: .4, pointRadius: 4 }],
-    },
-    options: { responsive: true, plugins: { legend: { display: false } }, scales: sc() },
-  });
-
-  safeChart('chartCoberturaUf', {
-    type: 'bar',
-    data: {
-      labels: coberturaUf.map(r => r.uf),
-      datasets: [
-        { label: 'Com Waze', data: coberturaUf.map(r => +r.com_waze), backgroundColor: 'rgba(32,201,151,.8)', borderRadius: 3 },
-        { label: 'Sem Waze', data: coberturaUf.map(r => +r.sem_waze), backgroundColor: 'rgba(220,53,69,.7)',  borderRadius: 3 },
-      ],
-    },
-    options: { indexAxis: 'y', responsive: true, plugins: { legend: { position: 'bottom', labels: { color: tc() } } }, scales: sc() },
-  });
-
-  safeChart('chartPostoAtividade', {
-    type: 'line',
-    data: {
-      labels: postoAtiv.map(r => r.dia),
-      datasets: [{ label: 'Cadastros', data: postoAtiv.map(r => +r.cadastros), borderColor: '#fd7e14', backgroundColor: 'rgba(253,126,20,.1)', fill: true, tension: .4, pointRadius: 3 }],
-    },
-    options: { responsive: true, plugins: { legend: { display: false } }, scales: sc() },
-  });
-
-  safeChart('chartSolicDiarias', {
-    type: 'line',
-    data: {
-      labels: solicDiarias.map(r => r.dia),
-      datasets: [{ label: 'Solicitações', data: solicDiarias.map(r => +r.total), borderColor: '#0dcaf0', backgroundColor: 'rgba(13,202,240,.12)', fill: true, tension: .4, pointRadius: 3 }],
-    },
-    options: { responsive: true, plugins: { legend: { display: false } }, scales: sc() },
-  });
-
-  // ── count-up corrigido ────────────────────────────────────────────────────
-  function formatVal(val, isInt, suffix) {
-    if (isNaN(val)) return '0' + suffix;
-    return (isInt ? Math.round(val).toLocaleString('pt-BR') : val.toFixed(1)) + suffix;
-  }
-
-  document.querySelectorAll('.count-up').forEach(el => {
-    const raw    = parseFloat(el.dataset.target ?? '0');
-    const target = isNaN(raw) ? 0 : raw;
-    const suffix = el.dataset.suffix ?? '';
-    const isInt  = Number.isInteger(target);
-
-    // Escreve o valor final imediatamente como fallback
-    el.textContent = formatVal(target, isInt, suffix);
-
-    if (target === 0) return;
-
-    const dur   = 1000;
-    const start = performance.now();
-
-    const step = t => {
-      const p = Math.min((t - start) / dur, 1);
-      const e = 1 - Math.pow(1 - p, 3);          // ease-out cubic
-      el.textContent = formatVal(e * target, isInt, suffix);
-      if (p < 1) requestAnimationFrame(step);
-      else        el.textContent = formatVal(target, isInt, suffix); // valor exato no final
-    };
-    requestAnimationFrame(step);
-  });
-
-})();
+    window.radarUf      = {{ (radarPorUf     is iterable ? radarPorUf     : []) | json_encode | raw }};
+    window.radarResultado = {{ (radarResultado is iterable ? radarResultado : []) | json_encode | raw }};
+    window.radarMensais   = {{ (radarMensais   is iterable ? radarMensais   : []) | json_encode | raw }};
+    window.radarCobertura = {{ (radarCobertura is iterable ? radarCobertura : []) | json_encode | raw }};
+    window.postoAtividade = {{ (postoAtividade is iterable ? postoAtividade : []) | json_encode | raw }};
+    window.solicDiarias   = {{ (solicDiarias   is iterable ? solicDiarias   : []) | json_encode | raw }};
 </script>
+
+{# Carrega a lógica do dashboard (gráficos, refresh, etc.) #}
+<script src="{{ asset('js/dashboard.js') }}" defer></script>
 {% endblock %}

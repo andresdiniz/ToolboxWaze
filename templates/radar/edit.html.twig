@@ -2,6 +2,11 @@
 
 {% block title %}Editar Radar #{{ radar.id }}{% endblock %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('styles/radar.css') }}">
+{% endblock %}
+
 {% block body %}
 
 <nav aria-label="breadcrumb" class="mb-3">
@@ -296,4 +301,9 @@ function syncEstado(uf) {
 }
 </script>
 
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/radar.js') }}" defer></script>
 {% endblock %}

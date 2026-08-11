@@ -2,6 +2,11 @@
 
 {% block title %}Radar Manual #{{ radar.id }}{% endblock %}
 
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('styles/radar.css') }}">
+{% endblock %}
+
 {% block body %}
 <div class="container py-4" style="max-width:720px">
 
@@ -25,7 +30,7 @@
     <div class="card-body">
       <dl class="row mb-0">
         <dt class="col-sm-4 text-muted">UF</dt>
-        <dd class="col-sm-8"><span class="badge bg-secondary">{{ radar.siglaUf }}</span></dd>
+        <dd class="col-sm-8"><span class="badge-uf">{{ radar.siglaUf }}</span></dd>
 
         <dt class="col-sm-4 text-muted">Município</dt>
         <dd class="col-sm-8">{{ radar.municipio }}</dd>
@@ -82,4 +87,9 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/radar.js') }}" defer></script>
 {% endblock %}

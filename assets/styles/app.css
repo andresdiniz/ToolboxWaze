@@ -1,7 +1,6 @@
 /*
- * Bootstrap CSS — carregado via <link> no base.html.twig (evita bloqueio CSP font-src).
- * Bootstrap Icons: removido do CDN (causava bloqueio CSP font-src).
- * Ícones agora são SVG inline nos templates — zero dependência de fonte externa.
+ * app.css — Estilos globais do ToolboxWaze
+ * Carregado via <link> no base.html.twig
  */
 
 /* =========================================================
@@ -24,7 +23,6 @@ body, button, input, select, textarea {
     --tw-surface:      #f7f6f2;
     --tw-highlight:    #cedcd8;
 
-    /* Surfaces */
     --color-bg:        #f7f6f2;
     --color-surface:   #ffffff;
     --color-surface-2: #f9f8f5;
@@ -33,53 +31,16 @@ body, button, input, select, textarea {
     --color-text-muted:#6c757d;
     --color-text-faint:#adb5bd;
 
-    /* Tokens de solicitações */
-    --sol-bg:          var(--color-surface);
-    --sol-border:      rgba(0,0,0,.09);
-    --sol-border-hover:#b2c8d0;
-    --sol-radius:      12px;
-    --sol-radius-sm:   8px;
-    --sol-shadow:      0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
-    --sol-shadow-hover:0 4px 16px rgba(1,105,111,.12), 0 8px 32px rgba(0,0,0,.06);
-
-    /* Status */
-    --status-pendente-bg:   #fff8e1;
-    --status-pendente-text: #92600a;
-    --status-pendente-dot:  #f59e0b;
-    --status-resolvida-bg:  #ecfdf5;
-    --status-resolvida-text:#065f46;
-    --status-resolvida-dot: #10b981;
-    --status-cancelada-bg:  #fef2f2;
-    --status-cancelada-text:#991b1b;
-    --status-cancelada-dot: #ef4444;
-
-    /* Shadows */
     --shadow-sm:  0 1px 3px rgba(0,0,0,.07);
     --shadow-md:  0 4px 12px rgba(0,0,0,.09);
     --shadow-lg:  0 8px 28px rgba(0,0,0,.12);
-
-    /* Transitions */
-    --t-fast:   150ms cubic-bezier(.16,1,.3,1);
-    --t-medium: 220ms cubic-bezier(.16,1,.3,1);
-    --t-slow:   380ms cubic-bezier(.16,1,.3,1);
-
-    /* Radius */
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 20px;
-
-    /* Type */
-    --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
-    --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
-    --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
-    --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
-    --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+    --t-fast:     150ms cubic-bezier(.16,1,.3,1);
+    --t-medium:   220ms cubic-bezier(.16,1,.3,1);
+    --radius-sm:  6px;
+    --radius-md:  10px;
+    --radius-lg:  14px;
 }
 
-/* =========================================================
-   DARK MODE
-   ========================================================= */
 [data-theme="dark"] {
     --tw:              #4f98a3;
     --tw-d:            #3a8290;
@@ -88,7 +49,6 @@ body, button, input, select, textarea {
     --tw-border:       #2a3f41;
     --tw-surface:      #111a1b;
     --tw-highlight:    #1d3537;
-
     --color-bg:        #111a1b;
     --color-surface:   #182224;
     --color-surface-2: #1e2b2d;
@@ -96,150 +56,35 @@ body, button, input, select, textarea {
     --color-text:      #d4e0e1;
     --color-text-muted:#94b5b8;
     --color-text-faint:#6a8c8f;
-
-    --sol-bg:          var(--color-surface);
-    --sol-border:      rgba(255,255,255,.09);
-    --sol-border-hover:#3a7880;
-
-    --status-pendente-bg:   #2a2000;
-    --status-pendente-text: #f5c451;
-    --status-pendente-dot:  #f5c451;
-    --status-resolvida-bg:  #012418;
-    --status-resolvida-text:#35c98a;
-    --status-resolvida-dot: #35c98a;
-    --status-cancelada-bg:  #2a0808;
-    --status-cancelada-text:#ff8a95;
-    --status-cancelada-dot: #ff6b7a;
-
     --shadow-sm:  0 1px 3px rgba(0,0,0,.25);
     --shadow-md:  0 4px 12px rgba(0,0,0,.35);
     --shadow-lg:  0 8px 28px rgba(0,0,0,.45);
-
-    /* Bootstrap color utility overrides para dark mode */
-    --bs-secondary-color:    #94b5b8;
-    --bs-secondary-rgb:      148,181,184;
-    --bs-body-color:         #d4e0e1;
-    --bs-body-color-rgb:     212,224,225;
-
-    /* =====================================================
-       FIX CRÍTICO: Bootstrap 5 usa --bs-table-bg e
-       --bs-table-color em .table e variantes (table-light,
-       table-hover etc.) com valores hardcoded em hex.
-       Redefinir aqui garante que TODAS as variantes do
-       Bootstrap herdem as cores corretas no dark mode.
-       ===================================================== */
+    --bs-secondary-color: #94b5b8;
+    --bs-body-color:      #d4e0e1;
     --bs-table-bg:           #182224;
     --bs-table-color:        #d4e0e1;
     --bs-table-border-color: rgba(255,255,255,.08);
     --bs-table-striped-bg:   rgba(255,255,255,.03);
-    --bs-table-striped-color:#d4e0e1;
-    --bs-table-active-bg:    rgba(255,255,255,.07);
-    --bs-table-active-color: #d4e0e1;
     --bs-table-hover-bg:     rgba(255,255,255,.05);
-    --bs-table-hover-color:  #d4e0e1;
-
-    /* table-light no dark mode — Bootstrap sobrescreve com hex fixo */
-    --bs-light-bg-subtle:    #1e2b2d;
-    --bs-light-text-emphasis:#d4e0e1;
-    --bs-light-border-subtle:rgba(255,255,255,.08);
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme]) {
-        --tw:              #4f98a3;
-        --tw-d:            #3a8290;
-        --tw-dark:         #a8d8dc;
-        --tw-light:        #1a2f31;
-        --tw-border:       #2a3f41;
-        --tw-surface:      #111a1b;
-        --tw-highlight:    #1d3537;
-        --color-bg:        #111a1b;
-        --color-surface:   #182224;
-        --color-surface-2: #1e2b2d;
-        --color-border:    rgba(255,255,255,.10);
-        --color-text:      #d4e0e1;
-        --color-text-muted:#94b5b8;
-        --color-text-faint:#6a8c8f;
-        --sol-bg:          var(--color-surface);
-        --sol-border:      rgba(255,255,255,.09);
-        --sol-border-hover:#3a7880;
-        --status-pendente-bg:   #2a2000;
-        --status-pendente-text: #f5c451;
-        --status-pendente-dot:  #f5c451;
-        --status-resolvida-bg:  #012418;
-        --status-resolvida-text:#35c98a;
-        --status-resolvida-dot: #35c98a;
-        --status-cancelada-bg:  #2a0808;
-        --status-cancelada-text:#ff8a95;
-        --status-cancelada-dot: #ff6b7a;
-        --shadow-sm:  0 1px 3px rgba(0,0,0,.25);
-        --shadow-md:  0 4px 12px rgba(0,0,0,.35);
-        --shadow-lg:  0 8px 28px rgba(0,0,0,.45);
-        --bs-secondary-color:    #94b5b8;
-        --bs-body-color:         #d4e0e1;
-        --bs-table-bg:           #182224;
-        --bs-table-color:        #d4e0e1;
-        --bs-table-border-color: rgba(255,255,255,.08);
-        --bs-table-striped-bg:   rgba(255,255,255,.03);
-        --bs-table-striped-color:#d4e0e1;
-        --bs-table-active-bg:    rgba(255,255,255,.07);
-        --bs-table-active-color: #d4e0e1;
-        --bs-table-hover-bg:     rgba(255,255,255,.05);
-        --bs-table-hover-color:  #d4e0e1;
-        --bs-light-bg-subtle:    #1e2b2d;
-        --bs-light-text-emphasis:#d4e0e1;
-        --bs-light-border-subtle:rgba(255,255,255,.08);
-    }
 }
 
 /* =========================================================
-   Ícones SVG na navbar
-   ========================================================= */
-.nav-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: .3rem;
-    vertical-align: -.2em;
-    flex-shrink: 0;
-}
-
-/* =========================================================
-   Base
+   Reset / base
    ========================================================= */
 *, *::before, *::after { box-sizing: border-box; }
-
 html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
 }
-
 body {
     background: var(--color-bg);
-    font-size: .9375rem;
     color: var(--color-text);
     transition: background var(--t-medium), color var(--t-medium);
+    font-size: .9375rem;
 }
-
-/*
- * FIX: a regra global abaixo força display:block em TODOS os SVGs,
- * quebrando ícones SVG usados como filhos de containers flex/grid
- * (ex: .tipo-icon, .sol-card-header, .page-header-icon).
- *
- * A exceção .icon-svg garante que SVGs marcados explicitamente como
- * ícones inline fiquem com display:inline / flex-item correto.
- * Nos templates, todo <svg> que é ícone deve usar a classe .icon-svg.
- *
- * ATENÇÃO: não remover o seletor img/picture/video/canvas — ele é
- * necessário para evitar overflow horizontal de mídias.
- */
 img, picture, video, canvas { display: block; max-width: 100%; }
-
-/* SVGs de conteúdo (standalone) ficam block */
 svg:not(.icon-svg) { display: block; max-width: 100%; }
-
-/* SVGs de ícone (inline em flex/texto) ficam inline-block com tamanho fixo */
 svg.icon-svg {
     display: inline-block;
     flex-shrink: 0;
@@ -249,7 +94,25 @@ svg.icon-svg {
 }
 
 /* =========================================================
-   Navbar
+   Skip link
+   ========================================================= */
+.tw-skip-link {
+    position: absolute;
+    left: -9999px;
+    top: .5rem;
+    z-index: 9999;
+    padding: .4rem .9rem;
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: .875rem;
+    text-decoration: none;
+}
+.tw-skip-link:focus { left: 1rem; }
+
+/* =========================================================
+   Navbar (reutiliza classes Bootstrap com sobrescrita)
    ========================================================= */
 .navbar {
     background: var(--tw) !important;
@@ -259,9 +122,7 @@ svg.icon-svg {
     top: 0;
     z-index: 1030;
 }
-.navbar-brand,
-.nav-link { color: rgba(255,255,255,.95) !important; }
-
+.navbar-brand, .nav-link { color: rgba(255,255,255,.95) !important; }
 .navbar-brand {
     font-weight: 700;
     letter-spacing: -.01em;
@@ -279,7 +140,6 @@ svg.icon-svg {
     transition: background var(--t-fast);
 }
 .navbar-brand:hover .navbar-brand-icon { background: rgba(255,255,255,.28); }
-
 .nav-link {
     display: flex;
     align-items: center;
@@ -289,16 +149,11 @@ svg.icon-svg {
     font-size: .875rem;
     font-weight: 500;
 }
-.nav-link:hover {
-    background: rgba(0,0,0,.15);
-    opacity: 1;
-}
+.nav-link:hover { background: rgba(0,0,0,.15); }
 .nav-link.active {
     background: rgba(0,0,0,.22);
     font-weight: 600;
 }
-
-/* Active indicator line */
 .nav-link.active::after {
     content: '';
     display: block;
@@ -312,7 +167,7 @@ svg.icon-svg {
 }
 .nav-item { position: relative; }
 
-/* Dark mode toggle */
+/* Theme toggle */
 .theme-toggle {
     background: rgba(255,255,255,.12);
     border: 1px solid rgba(255,255,255,.20);
@@ -320,7 +175,7 @@ svg.icon-svg {
     color: #fff !important;
     width: 34px;
     height: 34px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
@@ -332,60 +187,304 @@ svg.icon-svg {
     transform: rotate(15deg);
 }
 
-/* =========================================================
-   Page layout
-   ========================================================= */
-.page-container {
-    max-width: 1280px;
-    margin-inline: auto;
-    padding: var(--space-6, 1.5rem) var(--space-4, 1rem) 5rem;
-}
-
-/* =========================================================
-   Page header
-   ========================================================= */
-.page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1.75rem;
-    flex-wrap: wrap;
-}
-.page-header h1 {
-    font-size: var(--text-lg);
-    font-weight: 700;
-    color: var(--color-text);
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-}
-.page-header-icon {
-    width: 36px;
-    height: 36px;
-    background: var(--tw-light);
-    border-radius: var(--radius-md);
+/* Avatar */
+.avatar-sm {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--tw);
-    flex-shrink: 0;
+    font-weight: 600;
+    font-size: .75rem;
+    background: rgba(255,255,255,.15);
+    color: #fff;
 }
 
 /* =========================================================
-   Cards & badges genéricos
+   Busca global
+   ========================================================= */
+.navbar-search-wrap { position: relative; }
+.navbar-search-input {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 20px;
+    color: inherit;
+    font-size: .82rem;
+    padding: .3rem .85rem .3rem 2rem;
+    width: min(200px, 20vw);
+    transition: width .25s ease, border-color .2s;
+    outline: none;
+}
+.navbar-search-input:focus {
+    width: min(280px, 28vw);
+    border-color: rgba(255,255,255,.5);
+    background: rgba(255,255,255,.08);
+}
+.navbar-search-input::placeholder { color: rgba(255,255,255,.5); }
+.navbar-search-icon {
+    position: absolute;
+    left: .55rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: .5;
+    pointer-events: none;
+}
+.search-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    min-width: 320px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 1040;
+    display: none;
+    max-height: 360px;
+    overflow-y: auto;
+}
+.search-dropdown.show { display: block; }
+.search-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .85rem;
+    font-size: .82rem;
+    color: var(--color-text);
+    text-decoration: none;
+    transition: background .15s;
+    border-bottom: 1px solid var(--color-border);
+}
+.search-item:last-child { border-bottom: none; }
+.search-item:hover, .search-item:focus { background: var(--color-surface-2); outline: none; }
+.search-item-label { flex: 1; line-height: 1.3; }
+.search-item-type {
+    font-size: .7rem;
+    padding: .12em .45em;
+    border-radius: 8px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.search-item-type.radar  { background: rgba(13,110,253,.15);  color: #0d6efd; }
+.search-item-type.posto  { background: rgba(253,126,20,.15);   color: #fd7e14; }
+.search-item-type.escola { background: rgba(25,135,84,.15);    color: #198754; }
+.search-empty {
+    padding: .75rem 1rem;
+    font-size: .82rem;
+    color: var(--color-text-muted);
+    text-align: center;
+}
+.search-footer {
+    display: block;
+    padding: .45rem 1rem;
+    font-size: .75rem;
+    color: var(--color-text-muted);
+    text-align: center;
+    border-top: 1px solid var(--color-border);
+    text-decoration: none;
+}
+.search-footer:hover { background: var(--color-surface-2); color: var(--color-text); }
+
+/* ── Botão de busca mobile ─────────────────────────────────── */
+.tw-search-mobile-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.tw-search-mobile-btn:hover {
+    background: rgba(255,255,255,.12);
+}
+.tw-search-mobile-btn svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+/* Offcanvas busca mobile */
+.offcanvas-top {
+    height: auto;
+    max-height: 80vh;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* =========================================================
+   DROPDOWNS — Admin e Usuário
+   ========================================================= */
+.dropdown-menu {
+    background: var(--color-surface) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: var(--shadow-lg) !important;
+    padding: 0.4rem !important;
+    min-width: 220px !important;
+}
+
+.dropdown-header {
+    color: var(--color-text-muted) !important;
+    font-size: 0.65rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    padding: 0.5rem 0.75rem 0.25rem !important;
+    opacity: 0.7 !important;
+}
+
+.dropdown-item {
+    color: var(--color-text) !important;
+    font-size: 0.875rem !important;
+    padding: 0.45rem 0.75rem !important;
+    border-radius: var(--radius-sm) !important;
+    transition: background 0.15s ease, color 0.15s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background: var(--color-surface-2) !important;
+    color: var(--color-text) !important;
+}
+
+.dropdown-item.active {
+    background: rgba(1,105,111, 0.1) !important;
+    color: var(--tw) !important;
+    font-weight: 600 !important;
+}
+
+.dropdown-item i {
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+}
+.dropdown-item:hover i {
+    color: var(--color-text);
+}
+.dropdown-item.text-danger i {
+    color: #dc3545;
+}
+.dropdown-item.text-danger:hover i {
+    color: #dc3545;
+}
+
+.dropdown-divider {
+    border-color: var(--color-border) !important;
+    margin: 0.3rem 0 !important;
+}
+
+.dropdown-item-text {
+    color: var(--color-text) !important;
+    padding: 0.4rem 0.75rem !important;
+}
+.dropdown-item-text small {
+    color: var(--color-text-muted) !important;
+}
+
+/* =========================================================
+   DROPDOWNS — DARK MODE
+   ========================================================= */
+[data-theme="dark"] .dropdown-menu {
+    background: var(--color-surface) !important;
+    border-color: rgba(255,255,255,0.10) !important;
+}
+
+[data-theme="dark"] .dropdown-item {
+    color: #d4e0e1 !important;
+}
+
+[data-theme="dark"] .dropdown-item:hover,
+[data-theme="dark"] .dropdown-item:focus {
+    background: rgba(255,255,255,0.06) !important;
+    color: #d4e0e1 !important;
+}
+
+[data-theme="dark"] .dropdown-item.active {
+    background: rgba(79,152,163, 0.15) !important;
+    color: #4f98a3 !important;
+}
+
+[data-theme="dark"] .dropdown-header {
+    color: #94b5b8 !important;
+}
+
+[data-theme="dark"] .dropdown-divider {
+    border-color: rgba(255,255,255,0.08) !important;
+}
+
+[data-theme="dark"] .dropdown-item-text small {
+    color: #94b5b8 !important;
+}
+
+[data-theme="dark"] .dropdown-item i {
+    color: #94b5b8;
+}
+[data-theme="dark"] .dropdown-item:hover i {
+    color: #d4e0e1;
+}
+
+/* =========================================================
+   USER MENU — avatar e nome
+   ========================================================= */
+.user-menu .dropdown-toggle {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.3rem 0.6rem !important;
+    border-radius: 50px !important;
+    transition: background 0.15s !important;
+}
+.user-menu .dropdown-toggle:hover {
+    background: rgba(255,255,255,0.08) !important;
+}
+
+.user-menu .dropdown-toggle .avatar-sm {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+}
+
+.user-menu .dropdown-toggle .bi-chevron-down {
+    font-size: 0.65rem;
+    opacity: 0.6;
+    transition: transform 0.15s;
+}
+.user-menu .dropdown-toggle[aria-expanded="true"] .bi-chevron-down {
+    transform: rotate(180deg);
+}
+
+[data-theme="dark"] .user-menu .dropdown-toggle .avatar-sm.bg-light {
+    background: #2a2a2a !important;
+    color: #d4e0e1 !important;
+}
+
+/* =========================================================
+   Cards
    ========================================================= */
 .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border) !important;
     border-radius: var(--radius-lg) !important;
     box-shadow: var(--shadow-sm);
-    transition: box-shadow var(--t-fast), transform var(--t-fast), border-color var(--t-fast);
+    transition: box-shadow var(--t-fast), transform var(--t-fast);
 }
-.card:hover {
-    box-shadow: var(--shadow-md);
-}
+.card:hover { box-shadow: var(--shadow-md); }
 .card-header {
     background: var(--color-surface-2) !important;
     border-bottom: 1px solid var(--color-border) !important;
@@ -396,7 +495,9 @@ svg.icon-svg {
 }
 .card-body { color: var(--color-text); }
 
-/* KPI cards */
+/* =========================================================
+   KPI cards
+   ========================================================= */
 .kpi-card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -422,26 +523,6 @@ svg.icon-svg {
     transform: translateY(-2px);
 }
 .kpi-card:hover::before { opacity: 1; }
-.kpi-card .kpi-label {
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--color-text-muted);
-    font-weight: 600;
-    margin-bottom: .4rem;
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-}
-.kpi-card .kpi-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
 .kpi-card .kpi-value {
     font-size: 2rem;
     font-weight: 800;
@@ -449,101 +530,15 @@ svg.icon-svg {
     letter-spacing: -.03em;
     color: var(--color-text);
     font-variant-numeric: tabular-nums;
-    transition: color var(--t-fast);
 }
 .kpi-card .kpi-subtext {
-    font-size: var(--text-xs);
+    font-size: .75rem;
     color: var(--color-text-muted);
     margin-top: .35rem;
 }
-.kpi-card .kpi-trend {
-    font-size: var(--text-xs);
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: .2rem;
-    padding: .15rem .45rem;
-    border-radius: 999px;
-    margin-top: .4rem;
-}
-.kpi-trend.up   { background: var(--status-resolvida-bg); color: var(--status-resolvida-text); }
-.kpi-trend.down { background: var(--status-cancelada-bg); color: var(--status-cancelada-text); }
-
-/* Stat card (legado) — cards de stats das páginas de radar/posto */
-.stat-card {
-    background: var(--tw-highlight);
-    border-color: transparent !important;
-}
-/* FIX: .stat-value sem cor explícita herdava --tw-dark que no dark mode
-   era #a8d8dc (OK) mas Bootstrap fs-4 + fw-bold sobrescrevia com
-   --bs-body-color hardcoded. Forçamos o token correto em ambos os modos. */
-.stat-card .stat-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--tw-dark);  /* light: #0f3638 escuro sobre fundo claro */
-}
-.stat-card .stat-label {
-    font-size: .75rem;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--tw-d);
-}
-
-[data-theme="dark"] .stat-card .stat-value { color: var(--color-text) !important; }
-[data-theme="dark"] .stat-card .stat-label  { color: var(--color-text-muted) !important; }
 
 /* =========================================================
-   FIX DARK MODE — Bootstrap text utilities
-   Bootstrap aplica color hardcoded (hex/rgb) via .text-muted,
-   .text-secondary, .text-body-secondary etc.
-   Sobrescrevemos com !important para garantir legibilidade.
-   Afeta: subtítulos de página (small.text-muted), card Estados
-   (text-secondary), rodapés de card (text-muted small).
-   ========================================================= */
-[data-theme="dark"] .text-muted,
-[data-theme="dark"] .text-body-secondary {
-    color: var(--color-text-muted) !important;
-}
-[data-theme="dark"] .text-secondary {
-    color: var(--color-text-muted) !important;
-}
-[data-theme="dark"] small.text-muted,
-[data-theme="dark"] .small.text-muted {
-    color: var(--color-text-muted) !important;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme]) .text-muted,
-    :root:not([data-theme]) .text-body-secondary,
-    :root:not([data-theme]) .text-secondary,
-    :root:not([data-theme]) small.text-muted,
-    :root:not([data-theme]) .small.text-muted {
-        color: #94b5b8 !important;
-    }
-}
-
-/* =========================================================
-   Badges
-   ========================================================= */
-.badge-aprovado  { background: #198754; }
-.badge-reprovado { background: #dc3545; }
-.badge-uf {
-    background: var(--tw);
-    color: #fff;
-    font-size: .7rem;
-    border-radius: 6px;
-    padding: .2em .5em;
-    font-weight: 700;
-    letter-spacing: .03em;
-}
-[data-theme="dark"] .badge-uf {
-    background: #2a6b74;
-    color: #e8f6f7;
-    border: 1px solid rgba(255,255,255,.12);
-}
-
-/* =========================================================
-   Tabelas — estilos base
+   Tabelas — dark mode fix
    ========================================================= */
 .table {
     color: var(--color-text);
@@ -553,7 +548,7 @@ svg.icon-svg {
 .table thead th {
     background: var(--color-surface-2) !important;
     color: var(--color-text-muted) !important;
-    font-size: var(--text-xs);
+    font-size: .75rem;
     text-transform: uppercase;
     letter-spacing: .05em;
     font-weight: 700;
@@ -566,73 +561,20 @@ svg.icon-svg {
     vertical-align: middle;
     color: var(--color-text);
 }
-.row-link:hover td {
-    background: rgba(1,105,111,.05);
-    cursor: pointer;
-}
-
-/* =========================================================
-   Tabelas — dark mode
-   FIX: Bootstrap aplica background/color hardcoded em hex
-   via .table-light, .table-hover, td inline styles.
-   Forçamos tudo via seletores específicos aqui.
-   ========================================================= */
-[data-theme="dark"] .table {
-    --bs-table-bg:           #182224;
-    --bs-table-color:        #d4e0e1;
-    --bs-table-border-color: rgba(255,255,255,.08);
-    --bs-table-hover-bg:     rgba(255,255,255,.05);
-    --bs-table-hover-color:  #d4e0e1;
-    --bs-table-striped-bg:   rgba(255,255,255,.03);
-    --bs-table-striped-color:#d4e0e1;
-    color: #d4e0e1;
-}
-
-/* Garante que TODAS as células (td e th) em dark mode
-   nunca recebam cor/fundo hardcoded do Bootstrap */
 [data-theme="dark"] .table td,
 [data-theme="dark"] .table th {
     color: var(--color-text) !important;
     border-color: rgba(255,255,255,.08) !important;
 }
-
 [data-theme="dark"] .table thead th {
     background: var(--color-surface-2) !important;
     color: var(--color-text-muted) !important;
     border-bottom: 1px solid rgba(255,255,255,.13) !important;
 }
 
-[data-theme="dark"] .table tbody td {
-    background: transparent !important;
-}
-
-[data-theme="dark"] .table tbody tr:hover td {
-    background: rgba(255,255,255,.05) !important;
-}
-
-[data-theme="dark"] .table tbody tr + tr td {
-    border-top: 1px solid rgba(255,255,255,.05);
-}
-
-[data-theme="dark"] .row-link:hover td {
-    background: rgba(255,255,255,.04) !important;
-}
-
-/* text-muted dentro de tabelas no dark mode */
-[data-theme="dark"] .table .text-muted {
-    color: var(--color-text-muted) !important;
-}
-
 /* =========================================================
-   Filtros e formulários
+   Formulários
    ========================================================= */
-.filters-form .form-select,
-.filters-form .form-control {
-    font-size: .875rem;
-    background: var(--color-surface);
-    border-color: var(--color-border);
-    color: var(--color-text);
-}
 .form-control, .form-select {
     background: var(--color-surface) !important;
     color: var(--color-text) !important;
@@ -642,13 +584,6 @@ svg.icon-svg {
 .form-control:focus, .form-select:focus {
     border-color: var(--tw) !important;
     box-shadow: 0 0 0 3px rgba(1,105,111,.15) !important;
-}
-
-[data-theme="dark"] .form-control::placeholder,
-[data-theme="dark"] .form-select::placeholder,
-[data-theme="dark"] input::placeholder {
-    color: var(--color-text-faint);
-    opacity: 1;
 }
 [data-theme="dark"] .form-control,
 [data-theme="dark"] .form-select {
@@ -661,150 +596,17 @@ svg.icon-svg {
 }
 
 /* =========================================================
-   Paginação
-   ========================================================= */
-.page-link {
-    color: var(--tw);
-    background: var(--color-surface);
-    border-color: var(--color-border);
-}
-.page-item.active .page-link { background: var(--tw); border-color: var(--tw); }
-.page-link:hover { background: var(--tw-light); color: var(--tw-d); }
-
-/* =========================================================
    Botões
    ========================================================= */
-.btn { transition: all var(--t-fast); }
-.btn:hover { transform: translateY(-1px); }
-.btn:active { transform: translateY(0); }
 .btn-primary { background: var(--tw); border-color: var(--tw); }
 .btn-primary:hover, .btn-primary:focus { background: var(--tw-d); border-color: var(--tw-d); }
 .btn-outline-primary { color: var(--tw); border-color: var(--tw); }
 .btn-outline-primary:hover { background: var(--tw); border-color: var(--tw); color: #fff; }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
 
 /* =========================================================
-   Detail labels
-   ========================================================= */
-.detail-label {
-    font-size: .75rem;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--color-text-muted);
-}
-.detail-value { font-size: .9375rem; font-weight: 500; color: var(--color-text); }
-
-/* =========================================================
-   Avatar
-   ========================================================= */
-.avatar-sm {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid rgba(255,255,255,.3);
-}
-
-/* =========================================================
-   User menu
-   ========================================================= */
-.user-menu .dropdown-toggle::after { display: none; }
-.dropdown-menu {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    padding: .4rem;
-}
-.dropdown-item {
-    color: var(--color-text);
-    border-radius: var(--radius-sm);
-    font-size: .875rem;
-    transition: background var(--t-fast);
-}
-.dropdown-item:hover { background: var(--color-surface-2); color: var(--color-text); }
-.dropdown-divider { border-color: var(--color-border); }
-.dropdown-item-text { color: var(--color-text); padding: .4rem .75rem; }
-
-/* =========================================================
-   Badge de pendências na navbar
-   ========================================================= */
-.navbar-pending-badge {
-    position: absolute; top: -4px; right: -4px;
-    background: #dc3545; color: #fff;
-    border-radius: 50%;
-    width: 16px; height: 16px; font-size: .6rem;
-    display: flex; align-items: center; justify-content: center;
-    animation: badgePop .3s cubic-bezier(.34,1.56,.64,1) both;
-}
-@keyframes badgePop {
-    from { transform: scale(0); opacity: 0; }
-    to   { transform: scale(1); opacity: 1; }
-}
-
-/* =========================================================
-   Flash messages — fade slide down
-   ========================================================= */
-@keyframes flashSlideDown {
-    from { opacity: 0; transform: translateY(-8px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-.alert { animation: flashSlideDown .25s ease; }
-.alert-success { background: var(--status-resolvida-bg); color: var(--status-resolvida-text); border-color: var(--status-resolvida-dot); }
-.alert-danger, .alert-error { background: var(--status-cancelada-bg); color: var(--status-cancelada-text); border-color: var(--status-cancelada-dot); }
-.alert-warning { background: var(--status-pendente-bg); color: var(--status-pendente-text); border-color: var(--status-pendente-dot); }
-
-/* =========================================================
-   Scroll-reveal animation
-   ========================================================= */
-.reveal {
-    opacity: 0;
-    transform: translateY(16px);
-    transition: opacity .45s cubic-bezier(.16,1,.3,1), transform .45s cubic-bezier(.16,1,.3,1);
-}
-.reveal.visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-.reveal-delay-1 { transition-delay: .07s; }
-.reveal-delay-2 { transition-delay: .14s; }
-.reveal-delay-3 { transition-delay: .21s; }
-.reveal-delay-4 { transition-delay: .28s; }
-
-@media (prefers-reduced-motion: reduce) {
-    .reveal { opacity: 1; transform: none; transition: none; }
-}
-
-/* =========================================================
-   Skeleton loaders
-   ========================================================= */
-@keyframes shimmer {
-    0%  { background-position: -200% 0; }
-    100%{ background-position:  200% 0; }
-}
-.skeleton {
-    background: linear-gradient(90deg,
-        var(--color-surface-2) 25%,
-        rgba(1,105,111,.08)  50%,
-        var(--color-surface-2) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-    border-radius: var(--radius-sm);
-}
-.skeleton-text { height: 1em; margin-bottom: .4rem; }
-.skeleton-text:last-child { width: 60%; }
-.skeleton-heading { height: 1.5em; width: 40%; margin-bottom: .75rem; }
-.skeleton-kpi { height: 88px; border-radius: var(--radius-lg); }
-
-/* =========================================================
-   Number counter animation
-   ========================================================= */
-.count-up {
-    display: inline-block;
-    font-variant-numeric: tabular-nums;
-}
-
-/* =========================================================
-   Progress bars
+   Progress
    ========================================================= */
 .progress {
     background: var(--color-surface-2);
@@ -816,547 +618,49 @@ svg.icon-svg {
     transition: width .8s cubic-bezier(.16,1,.3,1);
 }
 
-/* #########################################################
-   SOLICITAÇÕES — Hub, formulário, histórico, gestão
-   ######################################################### */
-
-/* ---------------------------------------------------------
-   Hub header
-   --------------------------------------------------------- */
-.sol-hub-header { margin-bottom: 1.75rem; }
-.sol-hub-header h4 {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--color-text);
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    margin: 0;
-}
-.sol-hub-header p {
-    color: var(--color-text-muted);
-    font-size: .85rem;
-    margin: .25rem 0 0 0;
-}
-
-/* ---------------------------------------------------------
-   Tabs do hub
-   --------------------------------------------------------- */
-.hub-tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 2px solid var(--color-border);
-    margin-bottom: 1.75rem;
-    overflow-x: auto;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-.hub-tabs::-webkit-scrollbar { display: none; }
-
-.hub-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: .4rem;
-    padding: .7rem 1.35rem;
-    font-size: .85rem;
-    font-weight: 600;
-    color: var(--color-text-muted);
-    text-decoration: none;
-    border-bottom: 2.5px solid transparent;
-    margin-bottom: -2px;
-    white-space: nowrap;
-    transition: color var(--t-fast), border-color var(--t-fast);
-    position: relative;
-}
-.hub-tab:hover { color: var(--tw); text-decoration: none; }
-.hub-tab.active { color: var(--tw); border-bottom-color: var(--tw); }
-
-.tab-badge {
-    background: #ef4444;
-    color: #fff;
-    font-size: .65rem;
-    font-weight: 700;
-    border-radius: 999px;
-    padding: 1px 7px;
-    line-height: 1.5;
-    letter-spacing: .02em;
-}
-
-/* ---------------------------------------------------------
-   Cards de formulário (sol-card)
-   --------------------------------------------------------- */
-.sol-card {
-    background: var(--sol-bg);
-    border: 1.5px solid var(--sol-border);
-    border-radius: var(--sol-radius);
-    box-shadow: var(--sol-shadow);
-    margin-bottom: 1.1rem;
-    overflow: hidden;
-    transition: box-shadow var(--t-medium), border-color var(--t-medium);
-}
-.sol-card:focus-within {
-    border-color: var(--sol-border-hover);
-    box-shadow: var(--sol-shadow-hover);
-}
-
-.sol-card-header {
-    background: var(--color-surface-2);
-    border-bottom: 1.5px solid var(--sol-border);
-    padding: .6rem 1.1rem;
-    font-size: .72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--color-text-muted);
-    display: flex;
-    align-items: center;
-    gap: .45rem;
-}
-
-/* FIX: SVGs no .sol-card-header são ícones inline dentro de flex —
-   a regra global svg:not(.icon-svg) os tornava display:block,
-   quebrando o alinhamento. Corrigimos localmente sem depender da classe. */
-.sol-card-header svg {
+/* =========================================================
+   Misc
+   ========================================================= */
+.count-up {
     display: inline-block;
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
+    font-variant-numeric: tabular-nums;
+}
+.text-muted { color: var(--color-text-muted) !important; }
+[data-theme="dark"] .text-muted { color: var(--color-text-muted) !important; }
+
+/* Reveal animation */
+.reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity .45s cubic-bezier(.16,1,.3,1), transform .45s cubic-bezier(.16,1,.3,1);
+}
+.reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
-.sol-card-body { padding: 1.15rem 1.25rem; }
-.sol-card-body .form-label {
-    font-weight: 500;
-    font-size: .875rem;
-    color: var(--color-text);
-    margin-bottom: .3rem;
+/* Flash messages */
+.alert {
+    animation: flashSlideDown .25s ease;
 }
-.sol-card-body .form-text {
-    font-size: .78rem;
-    color: var(--color-text-muted);
-    margin-top: .3rem;
-}
-.sol-card-body .form-control,
-.sol-card-body .form-select {
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--sol-radius-sm);
-    font-size: .875rem;
-    background: var(--color-surface) !important;
-    color: var(--color-text) !important;
-    transition: border-color var(--t-fast), box-shadow var(--t-fast);
-    padding: .48rem .75rem;
-}
-.sol-card-body .form-control:focus,
-.sol-card-body .form-select:focus {
-    border-color: var(--tw);
-    box-shadow: 0 0 0 3px rgba(1,105,111,.15);
-    outline: none;
-}
-.sol-card-body .form-control.is-invalid { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.1); }
-.sol-card-body .form-control.is-valid   { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.1); }
-.sol-card-body .invalid-feedback { font-size: .8rem; }
-.sol-card-body textarea.form-control { min-height: 90px; resize: vertical; }
-.sol-card-body .form-check-input:checked { background-color: var(--tw); border-color: var(--tw); }
-.sol-card-body .form-check-input:focus  { box-shadow: 0 0 0 3px rgba(1,105,111,.15); border-color: var(--tw); }
-
-/* ---------------------------------------------------------
-   Campos sol_theme
-   --------------------------------------------------------- */
-.sol-field { display: flex; flex-direction: column; gap: .3rem; margin-bottom: 1rem; }
-.sol-field:last-child { margin-bottom: 0; }
-
-.sol-label {
-    display: block;
-    font-size: .875rem;
-    font-weight: 500;
-    color: var(--color-text);
-    line-height: 1.4;
-}
-.sol-label--required .sol-required,
-.sol-required { color: #ef4444; margin-left: .2rem; font-weight: 700; }
-
-.sol-input {
-    display: block;
-    width: 100%;
-    padding: .48rem .75rem;
-    font-size: .875rem;
-    font-family: inherit;
-    color: var(--color-text);
-    background: var(--color-surface);
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--sol-radius-sm);
-    line-height: 1.5;
-    appearance: none;
-    transition: border-color var(--t-fast), box-shadow var(--t-fast);
-}
-.sol-input:focus { outline: none; border-color: var(--tw); box-shadow: 0 0 0 3px rgba(1,105,111,.15); }
-.sol-input.is-invalid { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.1); }
-.sol-input.is-valid   { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.1); }
-
-.sol-select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right .75rem center;
-    background-size: 10px 6px;
-    padding-right: 2.25rem;
-    cursor: pointer;
-}
-
-.sol-textarea { min-height: 90px; resize: vertical; }
-
-.sol-help  { font-size: .78rem; color: var(--color-text-muted); margin: 0; line-height: 1.45; }
-.sol-error { font-size: .8rem; color: #dc2626; margin: 0; display: flex; align-items: center; gap: .3rem; }
-
-/* ---------------------------------------------------------
-   Checkbox customizado (.sol-check)
-   --------------------------------------------------------- */
-.sol-check {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: .6rem;
-    cursor: pointer;
-    user-select: none;
-    padding: .1rem 0;
-}
-.sol-check input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
-.sol-check__box {
-    flex-shrink: 0;
-    width: 18px; height: 18px;
-    margin-top: .1rem;
-    border: 2px solid var(--color-border);
-    border-radius: 5px;
-    background: var(--color-surface);
-    display: flex; align-items: center; justify-content: center;
-    transition: border-color var(--t-fast), background var(--t-fast);
-}
-.sol-check__box::after {
-    content: '';
-    width: 9px; height: 5px;
-    border-left: 2px solid #fff;
-    border-bottom: 2px solid #fff;
-    transform: rotate(-45deg) scale(0);
-    transform-origin: center;
-    transition: transform var(--t-fast);
-    margin-top: -2px;
-}
-.sol-check input:checked ~ .sol-check__box { background: var(--tw); border-color: var(--tw); }
-.sol-check input:checked ~ .sol-check__box::after { transform: rotate(-45deg) scale(1); }
-.sol-check input:focus-visible ~ .sol-check__box { box-shadow: 0 0 0 3px rgba(1,105,111,.2); }
-.sol-check__label { font-size: .875rem; color: var(--color-text); line-height: 1.45; }
-
-/* ---------------------------------------------------------
-   Radio customizado (.sol-radio)
-   --------------------------------------------------------- */
-.sol-radio { display: inline-flex; align-items: center; gap: .55rem; cursor: pointer; user-select: none; padding: .1rem 0; }
-.sol-radio input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
-.sol-radio__dot {
-    flex-shrink: 0;
-    width: 18px; height: 18px;
-    border: 2px solid var(--color-border);
-    border-radius: 50%;
-    background: var(--color-surface);
-    display: flex; align-items: center; justify-content: center;
-    transition: border-color var(--t-fast);
-}
-.sol-radio__dot::after {
-    content: ''; width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--tw);
-    transform: scale(0);
-    transition: transform var(--t-fast);
-}
-.sol-radio input:checked ~ .sol-radio__dot { border-color: var(--tw); }
-.sol-radio input:checked ~ .sol-radio__dot::after { transform: scale(1); }
-.sol-radio input:focus-visible ~ .sol-radio__dot { box-shadow: 0 0 0 3px rgba(1,105,111,.2); }
-.sol-radio__label { font-size: .875rem; color: var(--color-text); }
-
-/* ---------------------------------------------------------
-   Grupo de choices / tipo-pills
-   --------------------------------------------------------- */
-.sol-choices { display: flex; flex-wrap: wrap; gap: .5rem .75rem; }
-.sol-choices--radio, .sol-choices--checkbox { flex-direction: column; gap: .45rem; }
-
-.tipo-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: .6rem;
-    margin-top: .4rem;
-}
-.tipo-pill {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    padding: .65rem .9rem;
-    border: 1.5px solid var(--sol-border);
-    border-radius: var(--sol-radius-sm);
-    cursor: pointer;
-    background: var(--color-surface);
-    transition: border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
-    user-select: none;
-    outline: none;
-}
-.tipo-pill:hover { border-color: var(--tw); background: var(--tw-light); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(1,105,111,.12); }
-.tipo-pill:active { transform: translateY(0); }
-.tipo-pill.active { border-color: var(--tw); background: var(--tw-light); box-shadow: 0 0 0 3px rgba(1,105,111,.13); }
-.tipo-pill:focus-visible { outline: 2.5px solid var(--tw); outline-offset: 2px; }
-
-.tipo-icon {
-    width: 34px; height: 34px;
-    border-radius: 8px;
-    background: var(--tw-light);
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    color: var(--tw);
-    transition: background var(--t-fast), color var(--t-fast);
-}
-
-/*
- * FIX CRÍTICO: a regra global svg:not(.icon-svg) aplica display:block
- * e max-width:100% em TODOS os SVGs, incluindo os ícones dentro de
- * .tipo-icon (que é um flex container de 34×34px).
- *
- * display:block em item flex = ocupa linha inteira → empurra .tipo-label
- * max-width:100% = SVG tenta 34px de largura mas height:auto o colapsa a 0
- *   quando o SVG não tem height intrínseco explícito no HTML.
- *
- * Correção: dentro de .tipo-icon, o SVG filho deve ser inline-block
- * com tamanho fixo 18×18px, sem max-width override.
- */
-.tipo-icon > svg {
-    display: inline-block;
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    max-width: none;
-}
-
-.tipo-pill.active .tipo-icon { background: var(--tw); color: #fff; }
-.tipo-label { font-size: .82rem; font-weight: 500; color: var(--color-text); line-height: 1.3; }
-.tipo-pill.active .tipo-label { color: var(--tw-dark); font-weight: 600; }
-
-/* ---------------------------------------------------------
-   Spinner de campos dinâmicos
-   --------------------------------------------------------- */
-#campos-dinamicos { transition: opacity var(--t-medium); }
-#campos-dinamicos.loading { opacity: .35; pointer-events: none; }
-#campos-spinner { display: none; justify-content: center; align-items: center; padding: 1.75rem 0; gap: .6rem; color: var(--tw); font-size: .88rem; font-weight: 500; }
-#campos-spinner.show { display: flex; }
-
-/* ---------------------------------------------------------
-   Animação de campos dinâmicos
-   --------------------------------------------------------- */
-@keyframes fadeSlideUp {
-    from { opacity: 0; transform: translateY(10px); }
+@keyframes flashSlideDown {
+    from { opacity: 0; transform: translateY(-8px); }
     to   { opacity: 1; transform: translateY(0); }
 }
-.campo-animado { animation: fadeSlideUp .3s cubic-bezier(.16,1,.3,1) both; }
-
-/* ---------------------------------------------------------
-   Botão enviar
-   --------------------------------------------------------- */
-.btn-enviar {
-    background: var(--tw);
-    color: #fff;
-    border: none;
-    border-radius: var(--sol-radius-sm);
-    padding: .6rem 2.2rem;
-    font-weight: 600;
-    font-size: .9rem;
-    letter-spacing: .01em;
-    display: inline-flex;
-    align-items: center;
-    gap: .45rem;
-    transition: background var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+.alert-animated {
+    animation: twSlideIn 220ms cubic-bezier(0.16,1,0.3,1) both;
 }
-.btn-enviar:hover:not(:disabled) { background: var(--tw-d); box-shadow: 0 4px 14px rgba(1,105,111,.28); transform: translateY(-1px); color: #fff; }
-.btn-enviar:active:not(:disabled) { transform: translateY(0); }
-.btn-enviar:disabled { background: var(--color-text-faint); cursor: not-allowed; box-shadow: none; }
-
-/* FIX: SVG do botão enviar dentro de inline-flex */
-.btn-enviar > svg {
-    display: inline-block;
-    flex-shrink: 0;
-    width: 15px;
-    height: 15px;
-    max-width: none;
+.alert-animated.tw-hiding {
+    animation: twFadeOut 300ms ease forwards;
 }
-
-/* ---------------------------------------------------------
-   Permalink
-   --------------------------------------------------------- */
-.permalink-wrapper { position: relative; }
-.permalink-wrapper .sol-input,
-.permalink-wrapper .form-control {
-    padding-right: 2.5rem;
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-    font-size: .82rem;
-    letter-spacing: -.01em;
+@keyframes twSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
-.permalink-copy-btn {
-    position: absolute; right: .5rem; top: 50%; transform: translateY(-50%);
-    background: none; border: none;
-    color: var(--color-text-faint);
-    padding: .25rem; cursor: pointer; font-size: .95rem;
-    transition: color var(--t-fast);
-    line-height: 1;
+@keyframes twFadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; transform: translateY(-4px); }
 }
-.permalink-copy-btn:hover { color: var(--tw); }
-.permalink-zoom-badge {
-    display: inline-flex; align-items: center; gap: .3rem;
-    margin-top: .4rem; font-size: .78rem; font-weight: 600;
-    padding: .2rem .6rem; border-radius: 999px;
-    transition: all var(--t-fast);
-}
-.permalink-zoom-badge.zoom-ok  { background: var(--status-resolvida-bg); color: var(--status-resolvida-text); }
-.permalink-zoom-badge.zoom-bad { background: var(--status-cancelada-bg); color: var(--status-cancelada-text); }
-
-/* ---------------------------------------------------------
-   Status badges
-   --------------------------------------------------------- */
-.badge-status {
-    display: inline-flex; align-items: center; gap: .3rem;
-    padding: .25rem .65rem; border-radius: 999px;
-    font-size: .75rem; font-weight: 600; line-height: 1; white-space: nowrap;
-}
-.badge-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.badge-status.pendente  { background: var(--status-pendente-bg);  color: var(--status-pendente-text); }
-.badge-status.pendente::before  { background: var(--status-pendente-dot); }
-.badge-status.resolvida { background: var(--status-resolvida-bg); color: var(--status-resolvida-text); }
-.badge-status.resolvida::before { background: var(--status-resolvida-dot); }
-.badge-status.cancelada { background: var(--status-cancelada-bg); color: var(--status-cancelada-text); }
-.badge-status.cancelada::before { background: var(--status-cancelada-dot); }
-
-/* ---------------------------------------------------------
-   Linhas de histórico
-   --------------------------------------------------------- */
-.hist-row {
-    display: flex; align-items: center; gap: .75rem;
-    padding: .85rem 1.1rem;
-    border-radius: var(--sol-radius-sm);
-    border: 1.5px solid var(--sol-border);
-    background: var(--sol-bg);
-    margin-bottom: .5rem;
-    text-decoration: none;
-    color: var(--color-text);
-    transition: box-shadow var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
-}
-.hist-row:hover {
-    box-shadow: var(--sol-shadow-hover);
-    border-color: var(--sol-border-hover);
-    transform: translateX(2px);
-    color: var(--color-text);
-    text-decoration: none;
-}
-.hist-row .hist-id { font-size: .72rem; color: var(--color-text-faint); font-family: 'SFMono-Regular', monospace; min-width: 38px; }
-.hist-row .hist-tipo { flex: 1; font-weight: 500; font-size: .875rem; color: var(--color-text); }
-.hist-row .hist-uf { font-size: .72rem; padding: .2rem .55rem; background: var(--tw-light); color: var(--tw-dark); border-radius: 999px; font-weight: 600; }
-.hist-row .hist-data { font-size: .72rem; color: var(--color-text-faint); white-space: nowrap; }
-.hist-row .hist-arrow { color: var(--color-text-faint); font-size: .85rem; flex-shrink: 0; transition: color var(--t-fast), transform var(--t-fast); }
-.hist-row:hover .hist-arrow { color: var(--tw); transform: translateX(3px); }
-
-/* ---------------------------------------------------------
-   Contadores da gestão
-   --------------------------------------------------------- */
-.gestao-counters { display: flex; gap: .75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-.gestao-counter {
-    display: flex; flex-direction: column; align-items: center;
-    padding: .75rem 1.25rem;
-    border-radius: var(--sol-radius-sm);
-    border: 2px solid transparent;
-    cursor: pointer; text-decoration: none;
-    min-width: 96px;
-    transition: border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
-}
-.gestao-counter:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); text-decoration: none; }
-.gestao-counter.ativo { border-color: currentColor; }
-.gestao-counter .gc-num { font-size: 1.6rem; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
-.gestao-counter .gc-lbl { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-top: .25rem; opacity: .8; }
-.gc-pendente  { background: var(--status-pendente-bg);  color: var(--status-pendente-text); }
-.gc-resolvida { background: var(--status-resolvida-bg); color: var(--status-resolvida-text); }
-.gc-cancelada { background: var(--status-cancelada-bg); color: var(--status-cancelada-text); }
-
-/* ---------------------------------------------------------
-   Filtros de tipo na gestão
-   --------------------------------------------------------- */
-.gestao-tipo-filters { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.1rem; }
-.gestao-tipo-filters .btn {
-    font-size: .78rem; padding: .3rem .75rem; border-radius: 999px; font-weight: 500;
-    transition: background var(--t-fast), color var(--t-fast), transform var(--t-fast);
-}
-.gestao-tipo-filters .btn:hover { transform: translateY(-1px); }
-.gestao-tipo-filters .btn-secondary { background: var(--tw); border-color: var(--tw); color: #fff; }
-.gestao-tipo-filters .btn-secondary:hover { background: var(--tw-d); border-color: var(--tw-d); }
-
-/* ---------------------------------------------------------
-   Linhas da gestão
-   --------------------------------------------------------- */
-.gestao-row {
-    display: flex; align-items: center; gap: .75rem;
-    padding: .85rem 1.1rem;
-    border-radius: var(--sol-radius-sm);
-    border: 1.5px solid var(--sol-border);
-    background: var(--sol-bg);
-    margin-bottom: .5rem;
-    transition: box-shadow var(--t-fast), border-color var(--t-fast);
-}
-.gestao-row:hover { box-shadow: var(--sol-shadow-hover); border-color: var(--sol-border-hover); }
-.gestao-row .gr-id { font-size: .72rem; color: var(--color-text-faint); font-family: 'SFMono-Regular', monospace; min-width: 38px; }
-.gestao-row .gr-tipo { flex: 1; font-weight: 500; font-size: .875rem; color: var(--color-text); }
-.gestao-row .gr-user { font-size: .8rem; color: var(--color-text-muted); white-space: nowrap; }
-.gestao-row .gr-data { font-size: .72rem; color: var(--color-text-faint); white-space: nowrap; }
-.gestao-row .gr-actions { display: flex; gap: .4rem; margin-left: auto; flex-shrink: 0; }
-.gestao-row .btn-sm { font-size: .78rem; padding: .3rem .7rem; border-radius: 6px; font-weight: 500; }
-
-/* ---------------------------------------------------------
-   Empty states
-   --------------------------------------------------------- */
-.sol-empty {
-    display: flex; flex-direction: column; align-items: center; text-align: center;
-    padding: 3.5rem 2rem;
-    color: var(--color-text-faint);
-}
-.sol-empty .sol-empty-icon { font-size: 2.5rem; margin-bottom: .85rem; opacity: .5; }
-.sol-empty p { font-size: .9rem; max-width: 32ch; margin: 0 0 1.25rem; color: var(--color-text-muted); }
-.sol-empty .btn { font-size: .85rem; }
-
-/* ---------------------------------------------------------
-   Confirmação
-   --------------------------------------------------------- */
-.sol-confirmacao { text-align: center; padding: 3rem 2rem; }
-.sol-confirmacao .sol-check-icon {
-    width: 72px; height: 72px;
-    background: var(--status-resolvida-bg);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 1.25rem;
-    font-size: 2rem;
-    color: var(--status-resolvida-text);
-    animation: popIn .4s cubic-bezier(.34,1.56,.64,1) both;
-}
-@keyframes popIn { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-/* ---------------------------------------------------------
-   Detalhe de solicitação
-   --------------------------------------------------------- */
-.sol-detalhe-header {
-    display: flex; justify-content: space-between; align-items: flex-start;
-    gap: 1rem; margin-bottom: 1.5rem;
-}
-.sol-detalhe-header h2 { font-size: 1.15rem; font-weight: 700; color: var(--color-text); margin: 0; }
-.sol-detalhe-header .sol-meta { font-size: .78rem; color: var(--color-text-faint); margin-top: .2rem; }
-
-/* ---------------------------------------------------------
-   Responsivo — mobile
-   --------------------------------------------------------- */
-@media (max-width: 575px) {
-    .tipo-grid { grid-template-columns: 1fr 1fr; }
-    .gestao-row { flex-wrap: wrap; }
-    .gestao-row .gr-user,
-    .gestao-row .gr-data { display: none; }
-    .gestao-row .gr-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
-    .hist-row .hist-data { display: none; }
-    .hub-tab { padding: .6rem .9rem; font-size: .8rem; }
-    .gestao-counters { gap: .5rem; }
-    .gestao-counter { min-width: 76px; padding: .6rem .8rem; }
-    .gestao-counter .gc-num { font-size: 1.3rem; }
-    .kpi-card .kpi-value { font-size: 1.6rem; }
+@media (prefers-reduced-motion: reduce) {
+    .alert-animated, .alert-animated.tw-hiding, .reveal { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
 }

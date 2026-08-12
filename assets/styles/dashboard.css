@@ -1,6 +1,6 @@
 /* =========================================================
-   dashboard.css — estilos específicos do dashboard
-   ========================================================= */
+dashboard.css — estilos específicos do dashboard
+========================================================= */
 
 /* ── Animações de entrada ────────────────────────────────── */
 .card-dashboard {
@@ -87,17 +87,21 @@
 .chart-container {
     position: relative;
     width: 100%;
-    height: 260px;               /* altura fixa para todos os gráficos */
+    height: 260px; /* altura fixa para todos os gráficos */
     max-height: 260px;
 }
+
+/* IMPORTANTE:
+   Não force width/height no canvas. Chart.js (responsive:true) já
+   define o tamanho via style inline com base no .chart-container.
+   Se você adicionar algo como:
+       .chart-container canvas { width: 100% !important; height: 100% !important; }
+   isso entra em conflito com os cálculos de resize do Chart.js e pode
+   gerar um loop de resize/redraw (especialmente com ResizeObserver),
+   causando o efeito visual de "vibração" contínua. */
 .chart-container canvas {
     display: block;
-    /* NÃO forçar width/height aqui: o Chart.js (responsive:true) já
-       define o tamanho do canvas via style inline com base no
-       .chart-container. Sobrescrever com !important cria um loop de
-       resize/redraw (ResizeObserver detecta a diferença de arredondamento
-       entre o valor em % e o pixel exato que o Chart.js calculou),
-       causando o efeito de "vibração" contínua nos gráficos. */
+    /* sem width/height aqui */
 }
 
 /* Ajuste para gráficos menores (ex: postos) */
@@ -105,9 +109,7 @@
     height: 180px;
     max-height: 180px;
 }
-/* .chart-container-sm canvas não precisa de regra própria — herda o
-   comportamento de .chart-container canvas acima (sem width/height
-   forçado), e a altura de exibição vem do .chart-container-sm no pai. */
+/* .chart-container-sm canvas herda o comportamento acima. */
 
 /* ── Tabelas ────────────────────────────────────────────── */
 .dashboard-table-wrapper {
@@ -199,8 +201,8 @@
 }
 
 /* =========================================================
-   DARK MODE — correções de contraste
-   ========================================================= */
+DARK MODE — correções de contraste
+========================================================= */
 
 [data-theme="dark"] .card-dashboard .card-body {
     color: #e8f0f0;
@@ -344,8 +346,9 @@
 }
 
 /* =========================================================
-   RESPONSIVIDADE
-   ========================================================= */
+RESPONSIVIDADE
+========================================================= */
+
 @media (max-width: 575.98px) {
     .card-dashboard .card-body {
         padding: 0.75rem 1rem;

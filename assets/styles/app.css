@@ -83,7 +83,8 @@ body {
     transition: background var(--t-medium), color var(--t-medium);
     font-size: .9375rem;
 }
-img, picture, video, canvas { display: block; max-width: 100%; }
+img, picture, video { display: block; max-width: 100%; }
+canvas { display: block; }
 svg:not(.icon-svg) { display: block; max-width: 100%; }
 svg.icon-svg {
     display: inline-block;

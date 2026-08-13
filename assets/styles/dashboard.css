@@ -1,12 +1,13 @@
 /* =========================================================
-dashboard.css — estilos específicos do dashboard
-========================================================= */
+   dashboard.css — estilos específicos do dashboard
+   Corrigido para evitar vibração dos gráficos
+   ========================================================= */
 
 /* ── Animações de entrada ────────────────────────────────── */
 .card-dashboard {
-    opacity: 0;
-    transform: translateY(20px);
-    animation: fadeInUp 0.5s ease forwards;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeInUp 0.5s ease forwards;
 }
 .card-dashboard:nth-child(1) { animation-delay: 0.05s; }
 .card-dashboard:nth-child(2) { animation-delay: 0.10s; }
@@ -16,376 +17,369 @@ dashboard.css — estilos específicos do dashboard
 .card-dashboard:nth-child(6) { animation-delay: 0.30s; }
 
 @keyframes fadeInUp {
-    to { opacity: 1; transform: translateY(0); }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Cards do dashboard ──────────────────────────────────── */
 .card-dashboard {
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 .card-dashboard:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 /* ── Cards de alerta (destaque) ─────────────────────────── */
 .dashboard-alert-card .card {
-    border-width: 2px !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-width: 2px !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .dashboard-alert-card .card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,.10);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 .dashboard-alert-card .card-body {
-    padding: 1rem 1.25rem;
+  padding: 1rem 1.25rem;
 }
 .dashboard-alert-card .card-body i {
-    font-size: 1.75rem;
+  font-size: 1.75rem;
 }
 .dashboard-alert-card .card-body .text-uppercase {
-    font-size: 0.7rem;
-    letter-spacing: 0.05em;
-    font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  font-weight: 600;
 }
 .dashboard-alert-card .card-body .fs-2 {
-    font-size: 1.75rem !important;
-    line-height: 1.2;
+  font-size: 1.75rem !important;
+  line-height: 1.2;
 }
 
 /* ── KPIs (cards de números) ────────────────────────────── */
 .kpi-card-dashboard .card {
-    border-left: 4px solid var(--bs-primary) !important;
-    border-radius: var(--radius-lg) !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-left: 4px solid var(--bs-primary) !important;
+  border-radius: var(--radius-lg) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .kpi-card-dashboard .card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 .kpi-card-dashboard .card-body {
-    padding: 1rem 1.25rem;
+  padding: 1rem 1.25rem;
 }
 .kpi-card-dashboard .card-body .text-muted {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
 }
 .kpi-card-dashboard .card-body .count-up {
-    font-size: 1.75rem;
-    font-weight: 700;
-    line-height: 1.2;
-    color: var(--color-text);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text);
 }
 .kpi-card-dashboard .card-body .small.text-muted {
-    font-size: 0.7rem;
-    color: var(--color-text-muted) !important;
+  font-size: 0.7rem;
+  color: var(--color-text-muted) !important;
 }
 
 /* ── Gráficos ────────────────────────────────────────────── */
 .chart-container {
     position: relative;
-    width: 100%;
-    height: 260px; /* altura fixa para todos os gráficos */
-    max-height: 260px;
-}
-
-/* IMPORTANTE:
-   Não force width/height no canvas. Chart.js (responsive:true) já
-   define o tamanho via style inline com base no .chart-container.
-   Se você adicionar algo como:
-       .chart-container canvas { width: 100% !important; height: 100% !important; }
-   isso entra em conflito com os cálculos de resize do Chart.js e pode
-   gerar um loop de resize/redraw (especialmente com ResizeObserver),
-   causando o efeito visual de "vibração" contínua. */
-.chart-container canvas {
-    display: block;
-    /* sem width/height aqui */
-}
+    min-height: 220px;
+  }
+  
+  .chart-container canvas {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 240px;
+  }
 
 /* Ajuste para gráficos menores (ex: postos) */
 .chart-container-sm {
-    height: 180px;
-    max-height: 180px;
+  height: 180px;
+  max-height: 180px;
 }
-/* .chart-container-sm canvas herda o comportamento acima. */
 
 /* ── Tabelas ────────────────────────────────────────────── */
 .dashboard-table-wrapper {
-    max-height: 280px;
-    overflow-y: auto;
+  max-height: 280px;
+  overflow-y: auto;
 }
 .dashboard-table-wrapper .table th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--color-surface-2) !important;
-    border-bottom: 2px solid var(--color-border) !important;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-surface-2) !important;
+  border-bottom: 2px solid var(--color-border) !important;
 }
 .dashboard-table-wrapper .table td {
-    vertical-align: middle;
-    font-size: 0.85rem;
+  vertical-align: middle;
+  font-size: 0.85rem;
 }
 
 /* ── Correção para estouro da tabela em telas pequenas ── */
 .table-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .table-responsive .table {
-    min-width: 420px;
-    width: 100%;
-    margin-bottom: 0;
+  min-width: 420px;
+  width: 100%;
+  margin-bottom: 0;
 }
 .table-responsive .table th,
 .table-responsive .table td {
-    white-space: nowrap;
+  white-space: nowrap;
 }
 @media (max-width: 575.98px) {
-    .table-responsive .table {
-        min-width: 360px;
-    }
+  .table-responsive .table {
+    min-width: 360px;
+  }
 }
 
 /* ── Stats boxes ────────────────────────────────────────── */
 .stats-grid .stat-box {
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--radius-sm);
-    background: var(--color-surface-2);
-    text-align: center;
-    transition: background 0.2s;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  text-align: center;
+  transition: background 0.2s;
 }
 .stats-grid .stat-box:hover {
-    background: var(--color-surface);
-    box-shadow: var(--shadow-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 .stats-grid .stat-box .small {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 600;
-    color: var(--color-text-muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 .stats-grid .stat-box .count-up {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--color-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
 }
 
-/* ── Botão "Atualizar" ───────────────────────────────────── */
+/* ── Botão \"Atualizar\" ───────────────────────────────────── */
 #refresh-dashboard {
-    transition: all 0.2s;
+  transition: all 0.2s;
 }
 #refresh-dashboard:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 #refresh-dashboard .spinner-border {
-    width: 1rem;
-    height: 1rem;
-    border-width: 0.15rem;
+  width: 1rem;
+  height: 1rem;
+  border-width: 0.15rem;
 }
 
 /* ── Progresso da cobertura ──────────────────────────────── */
 .coverage-progress {
-    height: 4px;
-    border-radius: 999px;
-    background: var(--color-surface-2);
-    overflow: hidden;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  overflow: hidden;
 }
 .coverage-progress .progress-bar {
-    height: 100%;
-    border-radius: 999px;
-    transition: width 0.6s ease;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
 }
 
 /* =========================================================
-DARK MODE — correções de contraste
-========================================================= */
+   DARK MODE — correções de contraste
+   ========================================================= */
 
 [data-theme="dark"] .card-dashboard .card-body {
-    color: #e8f0f0;
+  color: #e8f0f0;
 }
 [data-theme="dark"] .card-dashboard .text-muted {
-    color: #a0c0c0 !important;
+  color: #a0c0c0 !important;
 }
 [data-theme="dark"] .card-dashboard .count-up {
-    color: #f0f8f8;
+  color: #f0f8f8;
 }
 
 /* Cards de alerta em dark mode */
 [data-theme="dark"] .dashboard-alert-card .card {
-    background: var(--color-surface);
-    border-color: rgba(255,255,255,0.12) !important;
+  background: var(--color-surface);
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 [data-theme="dark"] .dashboard-alert-card .card.text-danger {
-    border-color: #ef4444 !important;
+  border-color: #ef4444 !important;
 }
 [data-theme="dark"] .dashboard-alert-card .card.text-warning {
-    border-color: #f59e0b !important;
+  border-color: #f59e0b !important;
 }
 [data-theme="dark"] .dashboard-alert-card .card.text-success {
-    border-color: #10b981 !important;
+  border-color: #10b981 !important;
 }
 [data-theme="dark"] .dashboard-alert-card .card-body i {
-    opacity: 0.9;
+  opacity: 0.9;
 }
 [data-theme="dark"] .dashboard-alert-card .card-body .fs-2 {
-    color: #f0f8f8 !important;
+  color: #f0f8f8 !important;
 }
 [data-theme="dark"] .dashboard-alert-card .card-body .text-danger {
-    color: #f87171 !important;
+  color: #f87171 !important;
 }
 [data-theme="dark"] .dashboard-alert-card .card-body .text-warning {
-    color: #fbbf24 !important;
+  color: #fbbf24 !important;
 }
 [data-theme="dark"] .dashboard-alert-card .card-body .text-success {
-    color: #34d399 !important;
+  color: #34d399 !important;
 }
 
 /* KPIs em dark mode — contraste reforçado */
 [data-theme="dark"] .kpi-card-dashboard .card {
-    background: var(--color-surface);
-    border-color: rgba(255,255,255,0.08) !important;
+  background: var(--color-surface);
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .count-up {
-    color: #f0f8f8;
+  color: #f0f8f8;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .small.text-muted {
-    color: #a0c0c0 !important;
+  color: #a0c0c0 !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .text-primary {
-    color: #5fb8c4 !important;
+  color: #5fb8c4 !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .text-warning {
-    color: #fbbf24 !important;
+  color: #fbbf24 !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .text-info {
-    color: #38bdf8 !important;
+  color: #38bdf8 !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .text-success {
-    color: #34d399 !important;
+  color: #34d399 !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .text-danger {
-    color: #f87171 !important;
+  color: #f87171 !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .text-secondary {
-    color: #a0c0c0 !important;
+  color: #a0c0c0 !important;
 }
 [data-theme="dark"] .kpi-card-dashboard .card .text-dark {
-    color: #e8f0f0 !important;
+  color: #e8f0f0 !important;
 }
 
 /* Tabelas em dark mode */
 [data-theme="dark"] .dashboard-table-wrapper .table {
-    color: #e8f0f0;
+  color: #e8f0f0;
 }
 [data-theme="dark"] .dashboard-table-wrapper .table th {
-    background: var(--color-surface-2) !important;
-    color: #a0c0c0 !important;
-    border-bottom: 2px solid rgba(255,255,255,0.10) !important;
+  background: var(--color-surface-2) !important;
+  color: #a0c0c0 !important;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1) !important;
 }
 [data-theme="dark"] .dashboard-table-wrapper .table td {
-    border-color: rgba(255,255,255,0.06) !important;
-    color: #e8f0f0;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  color: #e8f0f0;
 }
 [data-theme="dark"] .dashboard-table-wrapper .table tbody tr:hover td {
-    background: rgba(255,255,255,0.03) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
 }
 [data-theme="dark"] .dashboard-table-wrapper .text-muted {
-    color: #a0c0c0 !important;
+  color: #a0c0c0 !important;
 }
 
 /* Stats boxes em dark mode */
 [data-theme="dark"] .stats-grid .stat-box {
-    background: var(--color-surface-2);
+  background: var(--color-surface-2);
 }
 [data-theme="dark"] .stats-grid .stat-box:hover {
-    background: var(--color-surface);
+  background: var(--color-surface);
 }
 [data-theme="dark"] .stats-grid .stat-box .small {
-    color: #a0c0c0;
+  color: #a0c0c0;
 }
 [data-theme="dark"] .stats-grid .stat-box .count-up {
-    color: #f0f8f8;
+  color: #f0f8f8;
 }
 [data-theme="dark"] .stats-grid .stat-box .text-success {
-    color: #34d399 !important;
+  color: #34d399 !important;
 }
 [data-theme="dark"] .stats-grid .stat-box .text-danger {
-    color: #f87171 !important;
+  color: #f87171 !important;
 }
 [data-theme="dark"] .stats-grid .stat-box .text-primary {
-    color: #5fb8c4 !important;
+  color: #5fb8c4 !important;
 }
 [data-theme="dark"] .stats-grid .stat-box .text-warning {
-    color: #fbbf24 !important;
+  color: #fbbf24 !important;
 }
 [data-theme="dark"] .stats-grid .stat-box .text-info {
-    color: #38bdf8 !important;
+  color: #38bdf8 !important;
 }
 
 /* Progresso em dark mode */
 [data-theme="dark"] .coverage-progress {
-    background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 [data-theme="dark"] .coverage-progress .progress-bar {
-    background: #38bdf8;
+  background: #38bdf8;
 }
 
 /* Títulos e subtítulos */
 [data-theme="dark"] .dashboard-title {
-    color: #f0f8f8;
+  color: #f0f8f8;
 }
 [data-theme="dark"] .dashboard-subtitle {
-    color: #a0c0c0;
+  color: #a0c0c0;
 }
 [data-theme="dark"] .fw-bold {
-    color: #f0f8f8;
+  color: #f0f8f8;
 }
 
 /* =========================================================
-RESPONSIVIDADE
-========================================================= */
+   RESPONSIVIDADE
+   ========================================================= */
 
 @media (max-width: 575.98px) {
-    .card-dashboard .card-body {
-        padding: 0.75rem 1rem;
-    }
-    .card-dashboard .count-up {
-        font-size: 1.25rem !important;
-    }
-    .dashboard-alert-card .card-body i {
-        font-size: 1.25rem !important;
-        margin-right: 0.5rem !important;
-    }
-    .dashboard-alert-card .card-body .fs-2 {
-        font-size: 1.25rem !important;
-    }
-    .kpi-card-dashboard .card-body .count-up {
-        font-size: 1.25rem !important;
-    }
-    .chart-container {
-        height: 200px;
-        max-height: 200px;
-    }
-    .chart-container-sm {
-        height: 150px;
-        max-height: 150px;
-    }
-    .table-responsive .table {
-        min-width: 320px;
-    }
+  .card-dashboard .card-body {
+    padding: 0.75rem 1rem;
+  }
+  .card-dashboard .count-up {
+    font-size: 1.25rem !important;
+  }
+  .dashboard-alert-card .card-body i {
+    font-size: 1.25rem !important;
+    margin-right: 0.5rem !important;
+  }
+  .dashboard-alert-card .card-body .fs-2 {
+    font-size: 1.25rem !important;
+  }
+  .kpi-card-dashboard .card-body .count-up {
+    font-size: 1.25rem !important;
+  }
+  .chart-container {
+    height: 200px;
+    max-height: 200px;
+  }
+  .chart-container-sm {
+    height: 150px;
+    max-height: 150px;
+  }
+  .table-responsive .table {
+    min-width: 320px;
+  }
 }
 
 @media (max-width: 767.98px) {
-    .kpi-card-dashboard .card-body {
-        padding: 0.75rem 0.9rem;
-    }
-    .kpi-card-dashboard .card-body .count-up {
-        font-size: 1.5rem;
-    }
+  .kpi-card-dashboard .card-body {
+    padding: 0.75rem 0.9rem;
+  }
+  .kpi-card-dashboard .card-body .count-up {
+    font-size: 1.5rem;
+  }
 }
 
 /* Transição suave para troca de tema */
@@ -396,5 +390,5 @@ RESPONSIVIDADE
 [data-theme] .count-up,
 [data-theme] .text-muted,
 [data-theme] .fs-2 {
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }

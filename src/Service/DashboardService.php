@@ -60,12 +60,13 @@ final class DashboardService
                         SUM(status = 'ATENDIDA')         AS atendidas,
                         SUM(status = 'PENDENTE')         AS pendentes,
                         SUM(status = 'RECUSADA')         AS recusadas,
-                        SUM(DATE(criada_em) = CURDATE()) AS hoje
+                        SUM(DATE(criada_em) = CURDATE()) AS hoje,
+                        SUM(status = 'PENDENTE' AND criada_em < DATE_SUB(NOW(), INTERVAL 3 DAY)) AS atrasadas
                  FROM solicitacoes"
             ) ?: [];
         } catch (\Throwable) {
             $totais = [];
-            $geral  = ['total' => 0, 'atendidas' => 0, 'pendentes' => 0, 'recusadas' => 0, 'hoje' => 0];
+            $geral  = ['total' => 0, 'atendidas' => 0, 'pendentes' => 0, 'recusadas' => 0, 'hoje' => 0, 'atrasadas' => 0];
         }
         return ['totais' => $totais, 'geral' => $geral];
     }

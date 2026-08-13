@@ -126,7 +126,20 @@ document.addEventListener('DOMContentLoaded', function () {
     if (resultadoData.length > 0) {
         const labels = resultadoData.map(item => String(item.resultado || 'Desconhecido'));
         const values = resultadoData.map(item => Number(item.total) || 0);
-        const backgroundColors = ['#198754', '#dc3545', '#ffc107', '#0d6efd', '#6c757d'];
+
+        // Cor fixa por SIGNIFICADO do resultado, não por posição no array.
+        // Antes a cor vinha de backgroundColors[index], então a ordem que o
+        // banco devolvia as linhas decidia a cor — e por acaso "REPARADO"
+        // caía no vermelho e "REPROVADO" no amarelo. Agora cada status tem
+        // cor fixa, não importa a ordem do GROUP BY.
+        const resultadoColorMap = {
+            'APROVADO': '#198754',
+            'REPROVADO': '#dc3545',
+            'REPARADO': '#ffc107',
+            'PENDENTE': '#0d6efd',
+        };
+        const fallbackColor = '#6c757d';
+        const backgroundColors = labels.map(l => resultadoColorMap[l.toUpperCase()] || fallbackColor);
 
         createChart('chartRadarResultado', {
             type: 'doughnut',
@@ -134,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 labels: labels,
                 datasets: [{
                     data: values,
-                    backgroundColor: backgroundColors.slice(0, labels.length),
+                    backgroundColor: backgroundColors,
                     borderWidth: 2
                 }]
             },

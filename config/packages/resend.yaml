@@ -8,4 +8,3 @@ services:
         arguments:
             $apiKey: '%app.resend_api_key%'
             $from: '%app.mailer_from_name% <%app.mailer_from%>'
-    App\\Email\\Contract\\EmailTransportInterface: '@App\\Email\\Transport\\ResendEmailTransport'

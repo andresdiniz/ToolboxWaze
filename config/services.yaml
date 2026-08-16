@@ -1,43 +1,18 @@
-# This file is the entry point to configure your own services.
-# Files in the packages/ subdirectory configure your dependencies.
-
 parameters:
-    # ID do container GTM (ex: GTM-XXXXXX). Deixe vazio para desabilitar o snippet.
-    # Defina GTM_ID no .env.local — nunca commite o ID real no repositório.
-    app.gtm_id: '%env(string:default::GTM_ID)%'
-
-    # Endereço de e-mail remetente usado em controllers (ex: AuthController).
-    # Deve corresponder ao MAILER_FROM definido no .env / .env.local
-    app.mail_from: '%env(MAILER_FROM)%'
+    locale: 'pt_BR'
 
 services:
     _defaults:
         autowire: true
         autoconfigure: true
 
-    App\:
+    App\\:
         resource: '../src/'
         exclude:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
+            - '../src/Tests/'
 
-    # ---------------------------------------------------------------
-    # MessageHandlers
-    # ---------------------------------------------------------------
-
-    App\MessageHandler\EnviarEmailContaHandler:
-        arguments:
-            $emailQueueLogger: '@monolog.logger.email_queue'
-            $mailerFrom:       '%env(MAILER_FROM)%'
-            $appBaseUrl:       '%env(APP_BASE_URL)%'
-
-    App\MessageHandler\EnviarEmailRadarVencidoHandler:
-        arguments:
-            $emailQueueLogger: '@monolog.logger.email_queue'
-            $mailerFrom:       '%env(MAILER_FROM)%'
-            $appBaseUrl:       '%env(APP_BASE_URL)%'
-
-    App\MessageHandler\NotificarRadaresRecentesHandler:
-        arguments:
-            $emailFrom: '%env(MAILER_FROM)%'
+    App\\Email\\Contract\\EmailTransportInterface: '@App\\Email\\Transport\\ResendEmailTransport'
+    App\\Email\\Contract\\EmailEventLoggerInterface: '@App\\Email\\Logging\\MonologEmailEventLogger'

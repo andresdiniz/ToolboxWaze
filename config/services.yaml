@@ -1,5 +1,11 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
 parameters:
     locale: 'pt_BR'
+    app.gtm_id: '%env(string:default::GTM_ID)%'
+    app.mail_from: '%env(default::MAILER_FROM_EMAIL)%'
+    app.mailer_from: '%env(default::MAILER_FROM_EMAIL)%'
 
 services:
     _defaults:

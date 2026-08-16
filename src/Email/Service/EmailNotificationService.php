@@ -17,8 +17,14 @@ final readonly class EmailNotificationService
     }
 
     /** @param array<string, mixed> $context */
+    public function buildPayload(string $to, string $subject, string $template, array $context = [], ?string $name = null, ?string $text = null): EmailPayload
+    {
+        return new EmailPayload($to, $subject, $this->twig->render($template, $context), $text, $name);
+    }
+
+    /** @param array<string, mixed> $context */
     public function sendTemplate(string $to, string $subject, string $template, array $context = [], ?string $name = null, ?string $text = null): ?string
     {
-        return $this->transport->send(new EmailPayload($to, $subject, $this->twig->render($template, $context), $text, $name));
+        return $this->transport->send($this->buildPayload($to, $subject, $template, $context, $name, $text));
     }
 }

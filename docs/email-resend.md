@@ -1,12 +1,11 @@
 # E-mails transacionais com Resend
 
-Use `php bin/console app:resend:check-config` para validar as variáveis sem enviar mensagens.
+A camada de e-mail é reutilizável e independente do domínio. Templates disponíveis:
 
-Para testar o fluxo assíncrono:
+- `email/welcome_user.html.twig`: boas-vindas ao usuário.
+- `email/welcome_admin.html.twig`: aviso aos administradores sobre nova conta.
+- `email/password_reset.html.twig`: redefinição de senha.
+- `email/password_reset_success.html.twig`: confirmação de alteração.
+- `email/radar_weekly_digest.html.twig`: resumo semanal agrupado.
 
-```bash
-php bin/console app:resend:test-email destinatario@exemplo.com
-php bin/console messenger:consume async --time-limit=3600 --memory-limit=128M
-```
-
-O comando de teste apenas despacha uma mensagem; o worker é quem realiza o envio. Nunca versione `RESEND_API_KEY`.
+Valide a configuração com `php bin/console app:resend:check-config` e teste o envio assíncrono com `php bin/console app:resend:test-email destinatario@exemplo.com`.

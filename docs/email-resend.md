@@ -1,11 +1,20 @@
 # E-mails transacionais com Resend
 
-A camada de e-mail é reutilizável e independente do domínio. Templates disponíveis:
+## Validação local
 
-- `email/welcome_user.html.twig`: boas-vindas ao usuário.
-- `email/welcome_admin.html.twig`: aviso aos administradores sobre nova conta.
-- `email/password_reset.html.twig`: redefinição de senha.
-- `email/password_reset_success.html.twig`: confirmação de alteração.
-- `email/radar_weekly_digest.html.twig`: resumo semanal agrupado.
+```bash
+php bin/console app:resend:check-config
+php bin/console app:email:check-template email/welcome_user.html.twig
+php bin/console app:email:check-template email/welcome_admin.html.twig
+php bin/console app:email:check-template email/password_reset.html.twig
+php bin/console app:email:check-template email/radar_weekly_digest.html.twig
+```
 
-Valide a configuração com `php bin/console app:resend:check-config` e teste o envio assíncrono com `php bin/console app:resend:test-email destinatario@exemplo.com`.
+O comando de template renderiza o HTML localmente e não envia e-mail.
+
+## Envio assíncrono
+
+```bash
+php bin/console app:resend:test-email destinatario@exemplo.com
+php bin/console messenger:consume async --time-limit=3600 --memory-limit=128M
+```

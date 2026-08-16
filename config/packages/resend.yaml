@@ -1,0 +1,11 @@
+parameters:
+    app.mailer_from: '%env(MAILER_FROM_EMAIL)%'
+    app.mailer_from_name: '%env(default::MAILER_FROM_NAME)%'
+    app.resend_api_key: '%env(RESEND_API_KEY)%'
+
+services:
+    App\\Email\\Transport\\ResendEmailTransport:
+        arguments:
+            $apiKey: '%app.resend_api_key%'
+            $from: '%app.mailer_from_name% <%app.mailer_from%>'
+    App\\Email\\Contract\\EmailTransportInterface: '@App\\Email\\Transport\\ResendEmailTransport'

@@ -4,7 +4,7 @@ parameters:
     app.resend_api_key: '%env(RESEND_API_KEY)%'
 
 services:
-    App\\Email\\Transport\\ResendEmailTransport:
+    App\Email\Transport\ResendEmailTransport:
         arguments:
             $apiKey: '%app.resend_api_key%'
             $from: '%app.mailer_from_name% <%app.mailer_from%>'

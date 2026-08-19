@@ -9,7 +9,7 @@ use App\Email\DTO\EmailPayload;
 use RuntimeException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-final readonly class ResendEmailTransport implements EmailTransportInterface
+final class ResendEmailTransport implements EmailTransportInterface
 {
     public function __construct(
         private HttpClientInterface $httpClient,

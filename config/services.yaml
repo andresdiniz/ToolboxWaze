@@ -1,13 +1,8 @@
-# This file is the entry point to configure your own services.
-# Files in the packages/ subdirectory configure your dependencies.
-
-
 parameters:
     locale: 'pt_BR'
     app.gtm_id: '%env(string:default::GTM_ID)%'
     app.mail_from: '%env(default::MAILER_FROM_EMAIL)%'
     app.mailer_from: '%env(default::MAILER_FROM_EMAIL)%'
-
 
 services:
     _defaults:
@@ -22,15 +17,15 @@ services:
             - '../src/Kernel.php'
             - '../src/Tests/'
 
-    # Registrar a classe explicitamente
-    App\Email\Transport\ResendEmailTransport:
-        arguments:
-            $apiKey: '%env(RESEND_API_KEY)%'
-            $from: '%env(MAILER_FROM_EMAIL)%'
-
-    # Alias usando a sintaxe correta
     App\Email\Contract\EmailTransportInterface:
         alias: App\Email\Transport\ResendEmailTransport
-    
+
     App\Email\Contract\EmailEventLoggerInterface:
         alias: App\Email\Logging\MonologEmailEventLogger
+
+    # Usamos o 'bind' para injetar as variáveis escalares, 
+    # mantendo toda a estrutura de autowiring intacta.
+    App\Email\Transport\ResendEmailTransport:
+        bind:
+            $apiKey: '%env(RESEND_API_KEY)%'
+            $from: '%env(MAILER_FROM_EMAIL)%'

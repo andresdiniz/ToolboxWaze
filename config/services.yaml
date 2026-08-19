@@ -8,6 +8,8 @@ services:
     _defaults:
         autowire: true
         autoconfigure: true
+        bind:
+            string $emailFrom: '%env(MAILER_FROM_EMAIL)%'
 
     App\:
         resource: '../src/'

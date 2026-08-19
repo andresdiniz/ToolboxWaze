@@ -4,7 +4,8 @@ twig:
         # Disponibiliza o ID do GTM como variável global nos templates Twig.
         # Uso: {% if app_gtm_id %}...snippet GTM...{% endif %}
         # Definir GTM_ID no .env.local para ativar (ex: GTM_ID=GTM-XXXXXX)
-        app_gtm_id: '%app.gtm_id%'
+        gtm_id: '%env(string:default::GTM_ID)%'
+        mail_from: '%env(default::MAILER_FROM_EMAIL)%'
 
 when@test:
     twig:

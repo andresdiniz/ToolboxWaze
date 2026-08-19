@@ -14,7 +14,6 @@ services:
         autowire: true
         autoconfigure: true
 
-
     App\:
         resource: '../src/'
         exclude:
@@ -23,6 +22,15 @@ services:
             - '../src/Kernel.php'
             - '../src/Tests/'
 
+    # Registrar a classe explicitamente
+    App\Email\Transport\ResendEmailTransport:
+        arguments:
+            $apiKey: '%env(RESEND_API_KEY)%'
+            $from: '%env(MAILER_FROM_EMAIL)%'
 
-    App\Email\Contract\EmailTransportInterface: '@App\Email\Transport\ResendEmailTransport'
-    App\Email\Contract\EmailEventLoggerInterface: '@App\Email\Logging\MonologEmailEventLogger'
+    # Alias usando a sintaxe correta
+    App\Email\Contract\EmailTransportInterface:
+        alias: App\Email\Transport\ResendEmailTransport
+    
+    App\Email\Contract\EmailEventLoggerInterface:
+        alias: App\Email\Logging\MonologEmailEventLogger

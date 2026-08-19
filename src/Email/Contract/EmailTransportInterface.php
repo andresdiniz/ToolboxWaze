@@ -8,6 +8,5 @@ use App\Email\DTO\EmailPayload;
 
 interface EmailTransportInterface
 {
-    /** @return string|null External provider message identifier. */
     public function send(EmailPayload $payload): ?string;
 }

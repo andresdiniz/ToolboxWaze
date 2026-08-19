@@ -89,15 +89,37 @@
 
 /* ── Gráficos ────────────────────────────────────────────── */
 .chart-container {
-    position: relative;
-    min-height: 220px;
-  }
-  
-  .chart-container canvas {
-    width: 100% !important;
-    height: auto !important;
-    max-height: 240px;
-  }
+  position: relative;
+  width: 100%;
+  height: 300px;
+  min-height: 0;
+}
+
+.chart-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none;
+}
+
+.chart-container-bars,
+.chart-container-doughnut,
+.chart-container-coverage {
+    height: 300px;
+}
+
+.chart-container-line {
+    height: 280px;
+}
+
+@media (max-width: 767.98px) {
+    .chart-container-bars,
+    .chart-container-doughnut,
+    .chart-container-line,
+    .chart-container-coverage {
+        height: 240px;
+    }
+}
 
 /* Ajuste para gráficos menores (ex: postos) */
 .chart-container-sm {

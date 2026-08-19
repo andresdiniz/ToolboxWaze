@@ -1,6 +1,13 @@
 /* =========================================================
    dashboard.css — estilos específicos do dashboard
    Corrigido para evitar vibração dos gráficos
+
+   FIX (contraste dark mode): todo o bloco de correções de KPI
+   estava sob o seletor ".kpi-card-dashboard", mas o template
+   (dashboard/index.html.twig) usa ".card-dashboard" nos cards
+   de KPI. O seletor nunca casava com nada e as correções de
+   dark mode ficavam mortas. Renomeado para ".card-dashboard"
+   em todo o arquivo.
    ========================================================= */
 
 /* ── Animações de entrada ────────────────────────────────── */
@@ -58,31 +65,31 @@
 }
 
 /* ── KPIs (cards de números) ────────────────────────────── */
-.kpi-card-dashboard .card {
+.card-dashboard .card {
   border-left: 4px solid var(--bs-primary) !important;
   border-radius: var(--radius-lg) !important;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.kpi-card-dashboard .card:hover {
+.card-dashboard .card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
-.kpi-card-dashboard .card-body {
+.card-dashboard .card-body {
   padding: 1rem 1.25rem;
 }
-.kpi-card-dashboard .card-body .text-muted {
+.card-dashboard .card-body .text-muted {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 600;
 }
-.kpi-card-dashboard .card-body .count-up {
+.card-dashboard .card-body .count-up {
   font-size: 1.75rem;
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-text);
 }
-.kpi-card-dashboard .card-body .small.text-muted {
+.card-dashboard .card-body .small.text-muted {
   font-size: 0.7rem;
   color: var(--color-text-muted) !important;
 }
@@ -261,35 +268,35 @@
 }
 
 /* KPIs em dark mode — contraste reforçado */
-[data-theme="dark"] .kpi-card-dashboard .card {
+[data-theme="dark"] .card-dashboard .card {
   background: var(--color-surface);
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .count-up {
+[data-theme="dark"] .card-dashboard .card .count-up {
   color: #f0f8f8;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .small.text-muted {
+[data-theme="dark"] .card-dashboard .card .small.text-muted {
   color: #a0c0c0 !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .text-primary {
+[data-theme="dark"] .card-dashboard .card .text-primary {
   color: #5fb8c4 !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .text-warning {
+[data-theme="dark"] .card-dashboard .card .text-warning {
   color: #fbbf24 !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .text-info {
+[data-theme="dark"] .card-dashboard .card .text-info {
   color: #38bdf8 !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .text-success {
+[data-theme="dark"] .card-dashboard .card .text-success {
   color: #34d399 !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .text-danger {
+[data-theme="dark"] .card-dashboard .card .text-danger {
   color: #f87171 !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .text-secondary {
+[data-theme="dark"] .card-dashboard .card .text-secondary {
   color: #a0c0c0 !important;
 }
-[data-theme="dark"] .kpi-card-dashboard .card .text-dark {
+[data-theme="dark"] .card-dashboard .card .text-dark {
   color: #e8f0f0 !important;
 }
 
@@ -379,7 +386,7 @@
   .dashboard-alert-card .card-body .fs-2 {
     font-size: 1.25rem !important;
   }
-  .kpi-card-dashboard .card-body .count-up {
+  .card-dashboard .card-body .count-up {
     font-size: 1.25rem !important;
   }
   .chart-container {
@@ -396,10 +403,10 @@
 }
 
 @media (max-width: 767.98px) {
-  .kpi-card-dashboard .card-body {
+  .card-dashboard .card-body {
     padding: 0.75rem 0.9rem;
   }
-  .kpi-card-dashboard .card-body .count-up {
+  .card-dashboard .card-body .count-up {
     font-size: 1.5rem;
   }
 }

@@ -66,6 +66,19 @@ body, button, input, select, textarea {
     --bs-table-border-color: rgba(255,255,255,.08);
     --bs-table-striped-bg:   rgba(255,255,255,.03);
     --bs-table-hover-bg:     rgba(255,255,255,.05);
+
+    /* Tokens do Bootstrap que o próprio Bootstrap só recalcula quando
+       existe [data-bs-theme="dark"]. Como o projeto usa [data-theme]
+       (custom) em vez do atributo nativo, essas variáveis ficavam
+       travadas no valor claro do Bootstrap e vazavam em qualquer
+       utilitário que dependesse delas — ex: .bg-body-secondary,
+       .bg-body-tertiary, .text-dark, .text-secondary. Isso é o que
+       causava as caixas "Total" claras dentro dos cards escuros do
+       dashboard (Postos / Escolas). */
+    --bs-secondary-bg:  var(--color-surface-2);
+    --bs-tertiary-bg:   var(--color-surface-2);
+    --bs-dark-rgb:      212, 224, 225;   /* = --color-text (#d4e0e1) */
+    --bs-secondary-rgb: 148, 181, 184;   /* = --color-text-muted (#94b5b8) */
 }
 
 /* =========================================================

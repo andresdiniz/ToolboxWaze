@@ -25,6 +25,10 @@
         }
         window.dataLayer = window.dataLayer || [];
         window.dataLayer.push({ event: 'theme_toggle', theme: t });
+        // Avisa outros scripts (ex: dashboard.js) que o tema mudou,
+        // pra quem depende de cor calculada em JS (Chart.js) poder
+        // se redesenhar sem precisar de F5.
+        document.dispatchEvent(new CustomEvent('tw:themechange', { detail: { theme: t } }));
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 const el = document.getElementById('__theme-no-transition');

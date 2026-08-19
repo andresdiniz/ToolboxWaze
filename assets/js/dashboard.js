@@ -1,5 +1,15 @@
 // dashboard.js — lógica de gráficos e refresh do dashboard ToolboxWaze
 // Ajustado para evitar vibração: responsive: false e instâncias destruídas antes de recriar.
+//
+// FIX (contraste dark mode): Chart.js não sabia nada sobre o tema do
+// app. Sem configurar cor de eixo/legenda/grid, ele usa o padrão
+// pensado pra fundo branco (~#666 pro texto, cinza claro pro grid),
+// que fica quase ilegível sobre os cards escuros (#182224/#1e2b2d).
+// Agora lemos o atributo [data-theme] da <html> e aplicamos uma
+// paleta compatível via Chart.defaults antes de montar os gráficos.
+// Também escutamos o evento "tw:themechange" (disparado em app.js
+// quando o usuário clica no botão de tema) pra reconstruir os
+// gráficos na hora, sem precisar recarregar a página.
 
 document.addEventListener('DOMContentLoaded', function () {
     console.log('[Dashboard] Inicializando...');
@@ -17,6 +27,49 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const chartInstances = {};
 
+    // ==================================================================
+    // Tema dos gráficos
+    // ==================================================================
+
+    function isDarkTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'dark';
+    }
+
+    function getChartTheme() {
+        const dark = isDarkTheme();
+        return {
+            dark,
+            text:          dark ? '#c7d8d9' : '#495057',
+            textMuted:     dark ? '#94b5b8' : '#6c757d',
+            grid:          dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+            tooltipBg:     dark ? '#1e2b2d' : '#ffffff',
+            tooltipBorder: dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+        };
+    }
+
+    // Aplica a paleta em Chart.defaults — vale pra todo gráfico criado
+    // depois desse ponto, sem precisar repetir cor em cada config.
+    function applyChartTheme() {
+        const theme = getChartTheme();
+
+        Chart.defaults.color = theme.text;
+        Chart.defaults.borderColor = theme.grid;
+
+        Chart.defaults.plugins.legend.labels.color = theme.text;
+
+        Chart.defaults.plugins.tooltip.backgroundColor = theme.tooltipBg;
+        Chart.defaults.plugins.tooltip.titleColor = theme.text;
+        Chart.defaults.plugins.tooltip.bodyColor = theme.text;
+        Chart.defaults.plugins.tooltip.borderColor = theme.tooltipBorder;
+        Chart.defaults.plugins.tooltip.borderWidth = 1;
+
+        Chart.defaults.scale.grid.color = theme.grid;
+        Chart.defaults.scale.ticks.color = theme.textMuted;
+
+        console.log(`[Dashboard] Tema dos gráficos aplicado: ${theme.dark ? 'dark' : 'light'}.`);
+        return theme;
+    }
+
     function createChart(canvasId, config, fallbackMessage = 'Sem dados para exibir.') {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
@@ -31,6 +84,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } catch (e) {
                 console.warn(`[Dashboard] ${canvasId}: erro ao destruir instância anterior:`, e);
             }
+            delete chartInstances[canvasId];
         }
 
         if (!config || !config.data || !config.data.datasets || config.data.datasets.length === 0) {
@@ -78,247 +132,296 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // ==============================================================
-    // 1. Radares por Estado (chartRadarUf)
-    // ==============================================================
+    // Precisamos de um <canvas> "fresco" pra recriar um gráfico depois
+    // que o fallback de "sem dados" substituiu o canvas por um <div>.
+    // Isso só importa numa troca de tema em runtime; no load inicial
+    // os canvases do template já existem.
+    function ensureCanvas(canvasId) {
+        const existing = document.getElementById(canvasId);
+        if (existing && existing.tagName === 'CANVAS') return existing;
 
-    const radarUfData = Array.isArray(window.radarUf) ? window.radarUf : [];
-    console.log('[Dashboard] radarUf:', radarUfData.length, 'registros.');
+        const container = existing ? existing.parentElement : null;
+        if (!container) return null;
 
-    if (radarUfData.length > 0) {
-        const labels = radarUfData.map(item => String(item.sigla_uf || item.uf || ''));
-        const totais = radarUfData.map(item => Number(item.total) || 0);
+        const canvas = document.createElement('canvas');
+        canvas.id = canvasId;
+        container.innerHTML = '';
+        container.appendChild(canvas);
+        return canvas;
+    }
 
-        createChart('chartRadarUf', {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Radares',
-                    data: totais,
-                    backgroundColor: 'rgba(13, 110, 253, 0.7)',
-                    borderColor: '#0d6efd',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                plugins: {
-                    legend: { display: false }
+    // ==================================================================
+    // Construção de todos os gráficos do dashboard
+    // ==================================================================
+    // Isolado numa função pra poder ser chamado de novo quando o tema
+    // muda (evento tw:themechange), sem duplicar a lógica de leitura
+    // dos dados (que continuam nos mesmos window.* já embutidos pelo
+    // Twig — não recarregamos do servidor, só redesenhamos).
+    function buildCharts() {
+
+        // ==============================================================
+        // 1. Radares por Estado (chartRadarUf)
+        // ==============================================================
+
+        const radarUfData = Array.isArray(window.radarUf) ? window.radarUf : [];
+        console.log('[Dashboard] radarUf:', radarUfData.length, 'registros.');
+
+        if (radarUfData.length > 0) {
+            const labels = radarUfData.map(item => String(item.sigla_uf || item.uf || ''));
+            const totais = radarUfData.map(item => Number(item.total) || 0);
+
+            ensureCanvas('chartRadarUf');
+            createChart('chartRadarUf', {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Radares',
+                        data: totais,
+                        backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                        borderColor: '#0d6efd',
+                        borderWidth: 1
+                    }]
                 },
-                scales: {
-                    x: { grid: { display: false } },
-                    y: { beginAtZero: true }
+                options: {
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true }
+                    }
                 }
-            }
-        }, 'Nenhum dado de radar por estado.');
-    } else {
-        const container = document.getElementById('chartRadarUf')?.parentElement;
-        if (container) container.innerHTML = '<div class="text-muted small">Nenhum dado de radar por estado.</div>';
-    }
+            }, 'Nenhum dado de radar por estado.');
+        } else {
+            const container = document.getElementById('chartRadarUf')?.parentElement;
+            if (container) container.innerHTML = '<div class="text-muted small">Nenhum dado de radar por estado.</div>';
+        }
 
-    // ==============================================================
-    // 2. Resultado Geral (chartRadarResultado)
-    // ==============================================================
+        // ==============================================================
+        // 2. Resultado Geral (chartRadarResultado)
+        // ==============================================================
 
-    const resultadoData = Array.isArray(window.radarResultado) ? window.radarResultado : [];
-    console.log('[Dashboard] radarResultado:', resultadoData.length, 'registros.');
+        const resultadoData = Array.isArray(window.radarResultado) ? window.radarResultado : [];
+        console.log('[Dashboard] radarResultado:', resultadoData.length, 'registros.');
 
-    if (resultadoData.length > 0) {
-        const labels = resultadoData.map(item => String(item.resultado || 'Desconhecido'));
-        const values = resultadoData.map(item => Number(item.total) || 0);
+        if (resultadoData.length > 0) {
+            const labels = resultadoData.map(item => String(item.resultado || 'Desconhecido'));
+            const values = resultadoData.map(item => Number(item.total) || 0);
 
-        // Cor fixa por SIGNIFICADO do resultado, não por posição no array.
-        // Antes a cor vinha de backgroundColors[index], então a ordem que o
-        // banco devolvia as linhas decidia a cor — e por acaso "REPARADO"
-        // caía no vermelho e "REPROVADO" no amarelo. Agora cada status tem
-        // cor fixa, não importa a ordem do GROUP BY.
-        const resultadoColorMap = {
-            'APROVADO': '#198754',
-            'REPROVADO': '#dc3545',
-            'REPARADO': '#ffc107',
-            'PENDENTE': '#0d6efd',
-        };
-        const fallbackColor = '#6c757d';
-        const backgroundColors = labels.map(l => resultadoColorMap[l.toUpperCase()] || fallbackColor);
+            // Cor fixa por SIGNIFICADO do resultado, não por posição no array.
+            // Antes a cor vinha de backgroundColors[index], então a ordem que o
+            // banco devolvia as linhas decidia a cor — e por acaso "REPARADO"
+            // caía no vermelho e "REPROVADO" no amarelo. Agora cada status tem
+            // cor fixa, não importa a ordem do GROUP BY.
+            const resultadoColorMap = {
+                'APROVADO': '#198754',
+                'REPROVADO': '#dc3545',
+                'REPARADO': '#ffc107',
+                'PENDENTE': '#0d6efd',
+            };
+            const fallbackColor = '#6c757d';
+            const backgroundColors = labels.map(l => resultadoColorMap[l.toUpperCase()] || fallbackColor);
 
-        createChart('chartRadarResultado', {
-            type: 'doughnut',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: values,
-                    backgroundColor: backgroundColors,
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                plugins: {
-                    legend: { position: 'bottom' }
+            ensureCanvas('chartRadarResultado');
+            createChart('chartRadarResultado', {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 2,
+                        borderColor: isDarkTheme() ? '#182224' : '#ffffff'
+                    }]
                 },
-                cutout: '60%'
-            }
-        }, 'Sem dados de resultado.');
-    } else {
-        const container = document.getElementById('chartRadarResultado')?.parentElement;
-        if (container) container.innerHTML = '<div class="text-muted small">Sem dados de resultado.</div>';
-    }
-
-    // ==============================================================
-    // 3. Verificações Mensais (chartVerifMensais)
-    // ==============================================================
-
-    const mensaisData = Array.isArray(window.radarMensais) ? window.radarMensais : [];
-    console.log('[Dashboard] radarMensais:', mensaisData.length, 'registros.');
-
-    if (mensaisData.length > 0) {
-        const labels = mensaisData.map(item => String(item.mes || ''));
-        const valores = mensaisData.map(item => Number(item.total) || 0);
-
-        createChart('chartVerifMensais', {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Verificações',
-                    data: valores,
-                    borderColor: '#0d6efd',
-                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    pointBackgroundColor: '#0d6efd'
-                }]
-            },
-            options: {
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    x: { grid: { display: false } },
-                    y: { beginAtZero: true }
+                options: {
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    cutout: '60%'
                 }
-            }
-        }, 'Nenhuma verificação mensal.');
-    } else {
-        const container = document.getElementById('chartVerifMensais')?.parentElement;
-        if (container) container.innerHTML = '<div class="text-muted small">Nenhuma verificação mensal.</div>';
-    }
+            }, 'Sem dados de resultado.');
+        } else {
+            const container = document.getElementById('chartRadarResultado')?.parentElement;
+            if (container) container.innerHTML = '<div class="text-muted small">Sem dados de resultado.</div>';
+        }
 
-    // ==============================================================
-    // 4. Cobertura Waze por Estado (chartCoberturaUf)
-    // ==============================================================
+        // ==============================================================
+        // 3. Verificações Mensais (chartVerifMensais)
+        // ==============================================================
 
-    const coberturaData = Array.isArray(window.radarCobertura) ? window.radarCobertura : [];
-    console.log('[Dashboard] radarCobertura:', coberturaData.length, 'registros.');
+        const mensaisData = Array.isArray(window.radarMensais) ? window.radarMensais : [];
+        console.log('[Dashboard] radarMensais:', mensaisData.length, 'registros.');
 
-    if (coberturaData.length > 0) {
-        const labels = coberturaData.map(item => String(item.sigla_uf || item.uf || ''));
-        const pct = coberturaData.map(item => Number(item.pct) || 0);
+        if (mensaisData.length > 0) {
+            const labels = mensaisData.map(item => String(item.mes || ''));
+            const valores = mensaisData.map(item => Number(item.total) || 0);
 
-        createChart('chartCoberturaUf', {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Cobertura (%)',
-                    data: pct,
-                    backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                    borderColor: '#dc3545',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                plugins: {
-                    legend: { display: false }
+            ensureCanvas('chartVerifMensais');
+            createChart('chartVerifMensais', {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Verificações',
+                        data: valores,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: '#0d6efd'
+                    }]
                 },
-                scales: {
-                    x: { beginAtZero: true, max: 100 },
-                    y: { grid: { display: false } }
+                options: {
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true }
+                    }
                 }
-            }
-        }, 'Dados de cobertura indisponíveis.');
-    } else {
-        const container = document.getElementById('chartCoberturaUf')?.parentElement;
-        if (container) container.innerHTML = '<div class="text-muted small">Dados de cobertura indisponíveis.</div>';
-    }
+            }, 'Nenhuma verificação mensal.');
+        } else {
+            const container = document.getElementById('chartVerifMensais')?.parentElement;
+            if (container) container.innerHTML = '<div class="text-muted small">Nenhuma verificação mensal.</div>';
+        }
 
-    // ==============================================================
-    // 5. Atividade dos Postos (chartPostoAtividade)
-    // ==============================================================
+        // ==============================================================
+        // 4. Cobertura Waze por Estado (chartCoberturaUf)
+        // ==============================================================
 
-    const postoAtividade = Array.isArray(window.postoAtividade) ? window.postoAtividade : [];
-    console.log('[Dashboard] postoAtividade:', postoAtividade.length, 'registros.');
+        const coberturaData = Array.isArray(window.radarCobertura) ? window.radarCobertura : [];
+        console.log('[Dashboard] radarCobertura:', coberturaData.length, 'registros.');
 
-    if (postoAtividade.length > 0) {
-        const labels = postoAtividade.map(item => String(item.dia || item.data || ''));
-        const valores = postoAtividade.map(item => Number(item.total) || 0);
+        if (coberturaData.length > 0) {
+            const labels = coberturaData.map(item => String(item.sigla_uf || item.uf || ''));
+            const pct = coberturaData.map(item => Number(item.pct) || 0);
 
-        createChart('chartPostoAtividade', {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Atividade',
-                    data: valores,
-                    backgroundColor: 'rgba(255, 193, 7, 0.7)',
-                    borderColor: '#ffc107',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                plugins: {
-                    legend: { display: false }
+            ensureCanvas('chartCoberturaUf');
+            createChart('chartCoberturaUf', {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Cobertura (%)',
+                        data: pct,
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: '#dc3545',
+                        borderWidth: 1
+                    }]
                 },
-                scales: {
-                    x: { grid: { display: false } },
-                    y: { beginAtZero: true }
+                options: {
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true, max: 100 },
+                        y: { grid: { display: false } }
+                    }
                 }
-            }
-        }, 'Dados de atividade não disponíveis.');
-    } else {
-        const container = document.getElementById('chartPostoAtividade')?.parentElement;
-        if (container) container.innerHTML = '<div class="text-muted small">Dados de atividade não disponíveis.</div>';
-    }
+            }, 'Dados de cobertura indisponíveis.');
+        } else {
+            const container = document.getElementById('chartCoberturaUf')?.parentElement;
+            if (container) container.innerHTML = '<div class="text-muted small">Dados de cobertura indisponíveis.</div>';
+        }
 
-    // ==============================================================
-    // 6. Solicitações Diárias (chartSolicDiarias)
-    // ==============================================================
+        // ==============================================================
+        // 5. Atividade dos Postos (chartPostoAtividade)
+        // ==============================================================
 
-    const solicDiarias = Array.isArray(window.solicDiarias) ? window.solicDiarias : [];
-    console.log('[Dashboard] solicDiarias:', solicDiarias.length, 'registros.');
+        const postoAtividade = Array.isArray(window.postoAtividade) ? window.postoAtividade : [];
+        console.log('[Dashboard] postoAtividade:', postoAtividade.length, 'registros.');
 
-    if (solicDiarias.length > 0) {
-        const labels = solicDiarias.map(item => String(item.dia || ''));
-        const valores = solicDiarias.map(item => Number(item.total) || 0);
+        if (postoAtividade.length > 0) {
+            const labels = postoAtividade.map(item => String(item.dia || item.data || ''));
+            const valores = postoAtividade.map(item => Number(item.total) || 0);
 
-        createChart('chartSolicDiarias', {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Solicitações',
-                    data: valores,
-                    borderColor: '#0dcaf0',
-                    backgroundColor: 'rgba(13, 202, 240, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    pointBackgroundColor: '#0dcaf0'
-                }]
-            },
-            options: {
-                plugins: {
-                    legend: { display: false }
+            ensureCanvas('chartPostoAtividade');
+            createChart('chartPostoAtividade', {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Atividade',
+                        data: valores,
+                        backgroundColor: 'rgba(255, 193, 7, 0.7)',
+                        borderColor: '#ffc107',
+                        borderWidth: 1
+                    }]
                 },
-                scales: {
-                    x: { grid: { display: false } },
-                    y: { beginAtZero: true }
+                options: {
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true }
+                    }
                 }
-            }
-        }, 'Nenhuma solicitação diária.');
-    } else {
-        const container = document.getElementById('chartSolicDiarias')?.parentElement;
-        if (container) container.innerHTML = '<div class="text-muted small">Nenhuma solicitação diária.</div>';
+            }, 'Dados de atividade não disponíveis.');
+        } else {
+            const container = document.getElementById('chartPostoAtividade')?.parentElement;
+            if (container) container.innerHTML = '<div class="text-muted small">Dados de atividade não disponíveis.</div>';
+        }
+
+        // ==============================================================
+        // 6. Solicitações Diárias (chartSolicDiarias)
+        // ==============================================================
+
+        const solicDiarias = Array.isArray(window.solicDiarias) ? window.solicDiarias : [];
+        console.log('[Dashboard] solicDiarias:', solicDiarias.length, 'registros.');
+
+        if (solicDiarias.length > 0) {
+            const labels = solicDiarias.map(item => String(item.dia || ''));
+            const valores = solicDiarias.map(item => Number(item.total) || 0);
+
+            ensureCanvas('chartSolicDiarias');
+            createChart('chartSolicDiarias', {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Solicitações',
+                        data: valores,
+                        borderColor: '#0dcaf0',
+                        backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: '#0dcaf0'
+                    }]
+                },
+                options: {
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true }
+                    }
+                }
+            }, 'Nenhuma solicitação diária.');
+        } else {
+            const container = document.getElementById('chartSolicDiarias')?.parentElement;
+            if (container) container.innerHTML = '<div class="text-muted small">Nenhuma solicitação diária.</div>';
+        }
     }
+
+    // ==================================================================
+    // Inicialização
+    // ==================================================================
+
+    applyChartTheme();
+    buildCharts();
+
+    // Troca de tema em runtime (clique no botão sol/lua) — reaplica a
+    // paleta e reconstrói os gráficos, sem precisar de F5.
+    document.addEventListener('tw:themechange', function () {
+        applyChartTheme();
+        buildCharts();
+    });
 
     // ==============================================================
     // Botão Refresh (atualiza KPIs)

@@ -127,6 +127,12 @@
     function initWazeMap() {
         const mapDiv = document.getElementById('waze-map');
         if (!mapDiv) return;
+        // Evita recriar o mapa: se a página vier de um snapshot em cache do
+        // Turbo (ex.: usuário navegou pra outra rota e voltou), o mesmo
+        // elemento #waze-map já pode ter um Leaflet ativo — chamar L.map()
+        // de novo nele gera "Map container is already initialized.".
+        if (mapDiv.dataset.mapInitialized === '1') return;
+
         const wazeUrl = mapDiv.dataset.wazeUrl || '';
         if (!wazeUrl) { mapDiv.style.display = 'none'; return; }
 
@@ -135,6 +141,8 @@
         if (!latMatch || !lonMatch) { mapDiv.style.display = 'none'; return; }
         const lat = parseFloat(latMatch[1]);
         const lon = parseFloat(lonMatch[1]);
+
+        mapDiv.dataset.mapInitialized = '1';
 
         // Inserir barra de ações
         const actions = document.createElement('div');
@@ -164,12 +172,20 @@
         if (typeof L !== 'undefined') {
             initLeaflet();
         } else {
-            // Carregar Leaflet dinamicamente
+            // Carregar Leaflet dinamicamente (só uma vez por página: o
+            // guard acima impede reentrância aqui mesmo que initWazeMap()
+            // seja chamado de novo antes do script terminar de carregar)
+            const existingScript = document.querySelector('script[data-leaflet-loader]');
+            if (existingScript) {
+                existingScript.addEventListener('load', initLeaflet);
+                return;
+            }
             const link = document.createElement('link');
             link.rel = 'stylesheet';
             link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
             document.head.appendChild(link);
             const script = document.createElement('script');
+            script.dataset.leafletLoader = '1';
             script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
             script.onload = initLeaflet;
             document.head.appendChild(script);
@@ -230,11 +246,25 @@
     }
 
     // ── INICIALIZAÇÃO ──────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', function() {
+    // DOMContentLoaded cobre o hard-load (F5 / digitar a URL). turbo:load
+    // cobre a navegação SPA do Turbo Drive (ex.: clicar num radar na
+    // listagem) — sem isso, nada aqui roda ao chegar via link, porque
+    // DOMContentLoaded só dispara uma vez por documento.
+    function initPage() {
+        // No load inicial (F5), tanto DOMContentLoaded quanto turbo:load
+        // disparam — sem essa trava, tudo abaixo rodaria 2x (listeners
+        // duplicados em checkboxes, ordenação de coluna, etc.). O
+        // atributo fica no <body>, que o Turbo substitui inteiro a cada
+        // navegação real, então a trava não "vaza" para a próxima página.
+        if (document.body.dataset.radarJsInit === '1') return;
+        document.body.dataset.radarJsInit = '1';
+
         setupMerge();
         initWazeMap();
         setupHazardPreview();
         setupTableSort();
-    });
+    }
+    document.addEventListener('DOMContentLoaded', initPage);
+    document.addEventListener('turbo:load', initPage);
 
 })();

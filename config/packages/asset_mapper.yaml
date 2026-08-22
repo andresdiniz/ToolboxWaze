@@ -4,6 +4,14 @@ framework:
         paths:
             - assets/
         missing_import_mode: strict
+        # Sem isso, o Turbo tenta mesclar/reinserir o <script type="importmap">
+        # a cada navegação em vez de reconhecer que já está lá — daí os avisos
+        # "was removed, as it conflicted with already resolved module
+        # specifiers" no console. Com data-turbo-track=reload, o Turbo só
+        # recarrega a página inteira SE esse script realmente mudar de
+        # conteúdo (ex.: novo deploy); se for igual, ele não mexe.
+        importmap_script_attributes:
+            data-turbo-track: reload
 
 when@prod:
     framework:

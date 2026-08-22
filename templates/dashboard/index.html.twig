@@ -545,8 +545,12 @@
 {% block javascripts %}
     {{ parent() }}
 
-    {# Chart.js CDN #}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    {# Chart.js CDN — precisa de defer: sem isso é um script bloqueante no
+       meio do <body> e atrasa (ou trava, se o CDN estiver lento/bloqueado)
+       o DOMContentLoaded. Como bootstrap.bundle.min.js também é defer, ele
+       só roda depois disso — e é por isso que, sem o defer aqui, os
+       dropdowns (Admin / usuário) ficavam sem funcionar só nesta página. #}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
 
     {# Dados dos gráficos como variáveis globais #}
     <script>
@@ -560,5 +564,4 @@
 
     {# Lógica do dashboard (gráficos, refresh, etc.) #}
     <script src="{{ asset('js/dashboard.js') }}" defer></script>
-    <script src="{{ asset('js/charts.js') }}" defer></script>
 {% endblock %}

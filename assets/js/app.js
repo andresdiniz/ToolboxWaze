@@ -257,14 +257,11 @@
         });
     });
 
-    // ── Reinicializar dropdowns após Turbo ──────────────────
-    document.addEventListener('turbo:load', function() {
-        document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(function(el) {
-            const existing = bootstrap.Dropdown.getInstance(el);
-            if (existing) existing.dispose();
-            new bootstrap.Dropdown(el);
-        });
-    });
+    // Reinicialização dos dropdowns do Bootstrap após navegação via Turbo
+    // é feita em assets/bootstrap_dropdown_fix.js (turbo:render / turbo:load).
+    // Não duplicar aqui: esse arquivo fica no <body>, que o Turbo reexecuta
+    // a cada visita — um segundo listener de turbo:load aqui significa um
+    // dispose()+recreate() concorrente a mais por navegação, empilhando.
 
     // ── GTM: listener delegado para data-gtm-event ──────────
     document.addEventListener('click', function(e) {

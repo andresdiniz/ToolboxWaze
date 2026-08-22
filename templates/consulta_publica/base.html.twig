@@ -1,34 +1,37 @@
-{% extends 'base.html.twig' %}
-
-{% block title %}Consulta pública | Dados oficiais{% endblock %}
-{% block meta_description %}Consulte dados públicos de radares, escolas e postos por estado e município.{% endblock %}
-{% block head_extra %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Consulta pública | Dados oficiais{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Consulte informações públicas por estado e município.{% endblock %}">
     <meta name="robots" content="index,follow">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Consulta pública | Dados oficiais">
-    <meta property="og:description" content="Consulte informações públicas por estado e município.">
-    <meta property="og:url" content="{{ app.request.uri }}">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Consulta pública | Dados oficiais">
-    <meta name="twitter:description" content="Consulte informações públicas por estado e município.">
+    <meta name="theme-color" content="#172554">
     <link rel="canonical" href="{{ app.request.uri }}">
-    {% if app.environment != 'dev' and google_analytics_id is defined and google_analytics_id %}
-        <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id|e('html_attr') }}"></script>
-    {% endif %}
-{% endblock %}
-
-{% block body %}
-    <main class="public-shell">
+    <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
+    <link rel="stylesheet" href="{{ asset('styles/consulta-publica.css') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    <main id="main-content" class="public-shell">
         {% block public_content %}{% endblock %}
     </main>
-{% endblock %}
 
-{% block footer %}
     <footer class="public-footer">
         <div class="public-footer__inner">
-            <div><strong>Consulta pública</strong><p>Informação para pesquisa e transparência.</p></div>
-            <nav aria-label="Links institucionais"><a href="{{ path('app_privacy')|default('#') }}">Privacidade</a><a href="{{ path('app_terms')|default('#') }}">Termos</a><a href="#top">Voltar ao topo</a></nav>
+            <div>
+                <strong>Consulta pública</strong>
+                <p>Informação para pesquisa e transparência.</p>
+            </div>
+            <nav aria-label="Links institucionais">
+                <a href="#main-content">Voltar ao topo</a>
+            </nav>
         </div>
         <div class="public-footer__bottom">Fonte dos dados: órgãos e bases oficiais indicados na consulta.</div>
     </footer>
-{% endblock %}
+
+    {% block javascripts %}
+        {{ importmap('app') }}
+    {% endblock %}
+</body>
+</html>

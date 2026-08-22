@@ -20,9 +20,7 @@ export default class extends Controller {
         this.page = 1;
         this.resetResults();
         this.resetCity('Selecione o estado para carregar municípios');
-        if (this.stateTarget.value) {
-            this.loadCities();
-        }
+        if (this.stateTarget.value) this.loadCities();
     }
 
     async loadCities() {
@@ -74,8 +72,8 @@ export default class extends Controller {
     async fetchResults() {
         this.abortController?.abort();
         this.abortController = new AbortController();
-        const url = new URL(this.element.dataset.searchBaseUrl, window.location.origin);
-        url.searchParams.set('tipo', this.type);
+        const base = this.element.dataset.searchBaseUrl;
+        const url = new URL(`${base}/${this.type}`, window.location.origin);
         url.searchParams.set('uf', this.stateTarget.value);
         url.searchParams.set('municipio', this.cityTarget.value);
         if (this.queryTarget.value.trim()) url.searchParams.set('q', this.queryTarget.value.trim());
@@ -115,18 +113,8 @@ export default class extends Controller {
     }
 
     toggleMap() { this.mapTarget.hidden = !this.mapTarget.hidden; }
-
-    resetResults() {
-        this.resultsTarget.hidden = true;
-        this.listTarget.innerHTML = '';
-        this.paginationTarget.innerHTML = '';
-    }
-
-    resetCity(message) {
-        this.cityTarget.innerHTML = `<option value="">${this.escape(message)}</option>`;
-        this.cityTarget.disabled = true;
-    }
-
+    resetResults() { this.resultsTarget.hidden = true; this.listTarget.innerHTML = ''; this.paginationTarget.innerHTML = ''; }
+    resetCity(message) { this.cityTarget.innerHTML = `<option value="">${this.escape(message)}</option>`; this.cityTarget.disabled = true; }
     label() { return ({ radar: 'radares', escola: 'escolas', posto: 'postos' })[this.type] || 'registros'; }
     escape(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char])); }
 }

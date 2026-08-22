@@ -56,10 +56,7 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
     private function selectFields(QueryBuilder $qb, string $tipo, string $alias): void
     {
         if ($tipo === 'radar') { $qb->leftJoin($alias . '.faixas', 'faixa')->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.logradouro AS endereco', $alias.'.tipoMedidor AS tipo', $alias.'.numeroSerie AS numeroSerie', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude', 'faixa.numeroInmetro AS numeroInmetro', 'faixa.numeroFaixa AS numeroFaixa', 'faixa.sentido AS sentido', 'faixa.velocidadeNominal AS velocidade']))->addOrderBy($alias.'.municipio', 'ASC')->addOrderBy('faixa.numeroFaixa', 'ASC'); return; }
-        if ($tipo === 'escola') {
-            $fields = [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.inep AS codigoInep', $alias.'.nome AS nome', $alias.'.rede AS rede', $alias.'.dependenciaAdministrativa AS dependencia', $alias.'.situacaoFuncionamento AS situacao', $alias.'.endereco AS endereco', $alias.'.bairro AS bairro', $alias.'.cep AS cep', $alias.'.telefone AS telefone', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude'];
-            $qb->select(implode(', ', $fields))->addOrderBy($alias.'.municipio', 'ASC'); return;
-        }
+        if ($tipo === 'escola') { $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf']))->addOrderBy($alias.'.municipio', 'ASC'); return; }
         $fields = [$alias.'.id AS id', $alias.'.codigoIsimp AS codigoIsimp', $alias.'.autorizacao AS autorizacao', $alias.'.dataPublicacao AS dataPublicacao', $alias.'.razaoSocial AS razaoSocial', $alias.'.cnpj AS cnpj', $alias.'.endereco AS endereco', $alias.'.complemento AS complemento', $alias.'.bairro AS bairro', $alias.'.cep AS cep', $alias.'.uf AS uf', $alias.'.municipio AS municipio', $alias.'.bandeira AS bandeira', $alias.'.dataVinculacao AS dataVinculacao', $alias.'.nomeFantasia AS nomeFantasia', $alias.'.importedAt AS importedAt', $alias.'.updatedAt AS updatedAt'];
         $qb->select(implode(', ', $fields))->addOrderBy($alias.'.municipio', 'ASC')->addOrderBy($alias.'.nomeFantasia', 'ASC');
     }

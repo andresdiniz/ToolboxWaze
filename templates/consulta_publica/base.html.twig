@@ -1,28 +1,34 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#071d2f">
-    <title>{% block title %}Consulta Pública | ToolboxWaze{% endblock %}</title>
-    <meta name="description" content="Consulte radares, escolas e postos por estado e município, com fontes identificadas e dados organizados.">
-    <meta name="robots" content="index,follow,max-image-preview:large">
-    <link rel="canonical" href="{{ app.request.schemeAndHttpHost ~ app.request.pathInfo }}">
+{% extends 'base.html.twig' %}
+
+{% block title %}Consulta pública | Dados oficiais{% endblock %}
+{% block meta_description %}Consulte dados públicos de radares, escolas e postos por estado e município.{% endblock %}
+{% block head_extra %}
+    <meta name="robots" content="index,follow">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Consulta Pública | ToolboxWaze">
-    <meta property="og:description" content="Encontre radares, escolas e postos por estado e município.">
+    <meta property="og:title" content="Consulta pública | Dados oficiais">
+    <meta property="og:description" content="Consulte informações públicas por estado e município.">
     <meta property="og:url" content="{{ app.request.uri }}">
-    <meta property="og:locale" content="pt_BR">
-    {% block meta %}{% endblock %}
-    {% block stylesheets %}<style>{{ include('consulta_publica/public.css') }}</style>{% endblock %}
-    {% block analytics_head %}{% endblock %}
-</head>
-<body class="public-body">
-<div class="public-shell">
-    <header class="public-header"><div class="public-container public-header__inner"><a class="public-brand" href="{{ path('consulta_publica') }}" aria-label="ToolboxWaze Consulta Pública"><span class="public-brand__mark"><span>TW</span></span><span class="public-brand__copy"><strong>ToolboxWaze</strong><small>Consulta pública</small></span></a><a class="public-header__link" href="{{ path('app_login') }}"><span>Área dos editores</span><span aria-hidden="true">↗</span></a></div></header>
-    <div class="public-main">{% block body %}{% endblock %}</div>
-    <footer class="public-footer"><div class="public-footer__glow" aria-hidden="true"></div><div class="public-container public-footer__top"><div class="public-footer__identity"><a class="public-footer__brand" href="{{ path('consulta_publica') }}"><span class="public-brand__mark"><span>TW</span></span><span class="public-brand__copy"><strong>ToolboxWaze</strong><small>Consulta pública</small></span></a><p>Informação pública organizada para você encontrar o que precisa com clareza, rapidez e confiança.</p><span class="public-footer__status"><i aria-hidden="true"></i> Serviço disponível</span></div><nav class="public-footer__column" aria-label="Explorar"><h2>Explorar</h2><a href="{{ path('consulta_publica') }}">Radares</a><a href="{{ path('consulta_publica') }}">Escolas</a><a href="{{ path('consulta_publica') }}">Postos</a></nav><nav class="public-footer__column" aria-label="Projeto"><h2>Projeto</h2><a href="{{ path('consulta_publica') }}">Nova consulta</a><a href="{{ path('app_login') }}">Área dos editores</a></nav><div class="public-footer__column"><h2>Transparência</h2><p>As fontes e datas de atualização ficam visíveis em cada resultado.</p></div></div><div class="public-container public-footer__divider"></div><div class="public-container public-footer__bottom"><span>© {{ 'now'|date('Y') }} ToolboxWaze</span><span>Dados sujeitos à atualização das fontes oficiais.</span><a href="{{ path('consulta_publica') }}">Voltar ao início ↑</a></div></footer>
-</div>
-{% block javascripts %}{{ importmap('app') }}{% endblock %}
-</body>
-</html>
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Consulta pública | Dados oficiais">
+    <meta name="twitter:description" content="Consulte informações públicas por estado e município.">
+    <link rel="canonical" href="{{ app.request.uri }}">
+    {% if app.environment != 'dev' and google_analytics_id is defined and google_analytics_id %}
+        <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id|e('html_attr') }}"></script>
+    {% endif %}
+{% endblock %}
+
+{% block body %}
+    <main class="public-shell">
+        {% block public_content %}{% endblock %}
+    </main>
+{% endblock %}
+
+{% block footer %}
+    <footer class="public-footer">
+        <div class="public-footer__inner">
+            <div><strong>Consulta pública</strong><p>Informação para pesquisa e transparência.</p></div>
+            <nav aria-label="Links institucionais"><a href="{{ path('app_privacy')|default('#') }}">Privacidade</a><a href="{{ path('app_terms')|default('#') }}">Termos</a><a href="#top">Voltar ao topo</a></nav>
+        </div>
+        <div class="public-footer__bottom">Fonte dos dados: órgãos e bases oficiais indicados na consulta.</div>
+    </footer>
+{% endblock %}

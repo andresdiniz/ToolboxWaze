@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\EscolaInep;
 use App\Entity\FuelResellerRaw;
+use App\Entity\RadarFaixa;
 use App\Entity\RadarMedidor;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
@@ -78,11 +79,9 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
             if ($tipo === 'radar') {
                 $qb->leftJoin($alias . '.faixas', 'faixaBusca');
                 $expressions = [sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.logradouro) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.numeroSerie) LIKE LOWER(:q)', $alias), 'LOWER(faixaBusca.numeroInmetro) LIKE LOWER(:q)'];
-            } else {
-                $nameField = $tipo === 'escola' ? 'nomeEscola' : 'nome';
-                $expressions = [sprintf('LOWER(%s.%s) LIKE LOWER(:q)', $alias, $nameField)];
+                $qb->andWhere($qb->expr()->orX(...$expressions));
             }
-            $qb->andWhere($qb->expr()->orX(...$expressions))->setParameter('q', '%' . trim((string) $filters['q']) . '%');
+            $qb->setParameter('q', '%' . trim((string) $filters['q']) . '%');
         }
     }
 
@@ -95,8 +94,13 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
             return;
         }
 
-        $nameField = $tipo === 'escola' ? 'nomeEscola' : 'nome';
-        $fields = [$alias.'.id AS id', $alias.'.'.$nameField.' AS nome', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.endereco AS endereco', $alias.'.telefone AS telefone', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude'];
-        $qb->select(implode(', ', $fields))->addOrderBy($alias.'.municipio', 'ASC');
+        if ($tipo === 'escola') {
+            $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf']))
+                ->addOrderBy($alias.'.municipio', 'ASC');
+            return;
+        }
+
+        $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf']))
+            ->addOrderBy($alias.'.municipio', 'ASC');
     }
 }

@@ -26,13 +26,11 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
         $tipo = strtolower(trim($tipo));
         $uf = strtoupper(trim($uf));
         if (!in_array($tipo, self::TYPES, true) || !preg_match('/^[A-Z]{2}$/', $uf)) return [];
-
         [$entity, $field] = match ($tipo) {
             'radar' => [RadarMedidor::class, 'municipio'],
             'escola' => [EscolaInep::class, 'municipio'],
             'posto' => [FuelResellerRaw::class, 'municipio'],
         };
-
         $alias = 'record';
         $qb = $this->getEntityManager()->createQueryBuilder()
             ->select(sprintf('DISTINCT %s.%s AS municipio', $alias, $field))
@@ -42,7 +40,6 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
             ->andWhere(sprintf("%s.%s <> ''", $alias, $field))
             ->setParameter('uf', $uf)
             ->orderBy(sprintf('%s.%s', $alias, $field), 'ASC');
-
         return array_values(array_filter(array_map(static fn (array $row): string => trim((string) $row['municipio']), $qb->getQuery()->getArrayResult())));
     }
 
@@ -57,7 +54,6 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
             'escola' => [EscolaInep::class, 'escola'],
             'posto' => [FuelResellerRaw::class, 'posto'],
         };
-
         $qb = $this->getEntityManager()->createQueryBuilder()->from($entity, $alias);
         $this->applyFilters($qb, $alias, $filters, $tipo);
         $this->selectFields($qb, $tipo, $alias);
@@ -71,36 +67,31 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
     private function applyFilters(QueryBuilder $qb, string $alias, array $filters, string $tipo): void
     {
         foreach (['uf', 'municipio'] as $field) {
-            if (!empty($filters[$field])) {
-                $qb->andWhere(sprintf('UPPER(%s.%s) = UPPER(:%s)', $alias, $field, $field))->setParameter($field, trim((string) $filters[$field]));
-            }
+            if (!empty($filters[$field])) $qb->andWhere(sprintf('UPPER(%s.%s) = UPPER(:%s)', $alias, $field, $field))->setParameter($field, trim((string) $filters[$field]));
         }
         if (!empty($filters['q'])) {
             if ($tipo === 'radar') {
                 $qb->leftJoin($alias . '.faixas', 'faixaBusca');
                 $expressions = [sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.logradouro) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.numeroSerie) LIKE LOWER(:q)', $alias), 'LOWER(faixaBusca.numeroInmetro) LIKE LOWER(:q)'];
-                $qb->andWhere($qb->expr()->orX(...$expressions));
+            } elseif ($tipo === 'posto') {
+                $expressions = [sprintf('LOWER(%s.razaoSocial) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.nomeFantasia) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias)];
+            } else {
+                $expressions = [sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias)];
             }
-            $qb->setParameter('q', '%' . trim((string) $filters['q']) . '%');
+            $qb->andWhere($qb->expr()->orX(...$expressions))->setParameter('q', '%' . trim((string) $filters['q']) . '%');
         }
     }
 
     private function selectFields(QueryBuilder $qb, string $tipo, string $alias): void
     {
         if ($tipo === 'radar') {
-            $qb->leftJoin($alias . '.faixas', 'faixa')
-                ->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.logradouro AS endereco', $alias.'.tipoMedidor AS tipo', $alias.'.numeroSerie AS numeroSerie', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude', 'faixa.numeroInmetro AS numeroInmetro', 'faixa.numeroFaixa AS numeroFaixa', 'faixa.sentido AS sentido', 'faixa.velocidadeNominal AS velocidade']))
-                ->addOrderBy($alias.'.municipio', 'ASC')->addOrderBy('faixa.numeroFaixa', 'ASC');
+            $qb->leftJoin($alias . '.faixas', 'faixa')->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.logradouro AS endereco', $alias.'.tipoMedidor AS tipo', $alias.'.numeroSerie AS numeroSerie', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude', 'faixa.numeroInmetro AS numeroInmetro', 'faixa.numeroFaixa AS numeroFaixa', 'faixa.sentido AS sentido', 'faixa.velocidadeNominal AS velocidade']))->addOrderBy($alias.'.municipio', 'ASC')->addOrderBy('faixa.numeroFaixa', 'ASC');
             return;
         }
-
         if ($tipo === 'escola') {
-            $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf']))
-                ->addOrderBy($alias.'.municipio', 'ASC');
+            $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf']))->addOrderBy($alias.'.municipio', 'ASC');
             return;
         }
-
-        $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf']))
-            ->addOrderBy($alias.'.municipio', 'ASC');
+        $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.razaoSocial AS razaoSocial', $alias.'.nomeFantasia AS nomeFantasia', $alias.'.cnpj AS cnpj', $alias.'.endereco AS endereco', $alias.'.numero AS numero', $alias.'.complemento AS complemento', $alias.'.bairro AS bairro', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.cep AS cep', $alias.'.bandeira AS bandeira', $alias.'.distribuidora AS distribuidora', $alias.'.produtos AS produtos', $alias.'.servicos AS servicos', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude']))->addOrderBy($alias.'.municipio', 'ASC');
     }
 }

@@ -1,24 +1,13 @@
-{% extends 'base.html.twig' %}
+{% extends 'consulta_publica/base.html.twig' %}
 
 {% block title %}Consulta Pública | ToolboxWaze{% endblock %}
 
 {% block stylesheets %}
     {{ parent() }}
-    <style>{{ include('consulta_publica/public.css') }}</style>
 {% endblock %}
 
 {% block body %}
 <main class="public-page" data-controller="consulta-publica" data-municipios-url="{{ path('consulta_publica_municipios') }}" data-search-base-url="{{ path('consulta_publica_search', {tipo: 'radar'})|replace({'/radar': ''}) }}">
-    <header class="public-header">
-        <div class="public-container public-header__inner">
-            <a class="public-brand" href="{{ path('consulta_publica') }}">
-                <span class="public-brand__mark">TW</span>
-                <span><strong>Toolbox</strong><small>Consulta pública</small></span>
-            </a>
-            <a class="public-header__link" href="{{ path('app_login') }}">Área dos editores <span aria-hidden="true">→</span></a>
-        </div>
-    </header>
-
     <section class="public-hero">
         <div class="public-container public-hero__content">
             <span class="public-eyebrow">Informação pública, organizada</span>

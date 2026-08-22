@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#102a43">
+    <title>{% block title %}Consulta Pública | ToolboxWaze{% endblock %}</title>
+    <meta name="description" content="Consulte radares, escolas e postos por estado e município, com fonte e data de atualização.">
+    {% block meta %}{% endblock %}
+    {% block stylesheets %}
+        <style>{{ include('consulta_publica/public.css') }}</style>
+    {% endblock %}
+</head>
+<body>
+    <div class="public-shell">
+        <header class="public-header">
+            <div class="public-container public-header__inner">
+                <a class="public-brand" href="{{ path('consulta_publica') }}" aria-label="ToolboxWaze Consulta Pública">
+                    <span class="public-brand__mark">TW</span>
+                    <span><strong>ToolboxWaze</strong><small>Consulta pública</small></span>
+                </a>
+                <a class="public-header__link" href="{{ path('app_login') }}">Área dos editores <span aria-hidden="true">→</span></a>
+            </div>
+        </header>
+
+        <div class="public-main">
+            {% block body %}{% endblock %}
+        </div>
+
+        <footer class="public-footer">
+            <div class="public-container public-footer__inner">
+                <div>
+                    <a class="public-footer__brand" href="{{ path('consulta_publica') }}">ToolboxWaze</a>
+                    <p>Consultas públicas com fontes identificadas e informações organizadas.</p>
+                </div>
+                <nav class="public-footer__nav" aria-label="Links institucionais">
+                    <a href="{{ path('consulta_publica') }}">Nova consulta</a>
+                    <a href="{{ path('app_login') }}">Área dos editores</a>
+                </nav>
+            </div>
+            <div class="public-container public-footer__bottom">
+                <span>© {{ 'now'|date('Y') }} ToolboxWaze</span>
+                <span>Dados sujeitos à atualização das fontes oficiais.</span>
+            </div>
+        </footer>
+    </div>
+
+    {% block javascripts %}
+        {{ importmap('app') }}
+    {% endblock %}
+</body>
+</html>

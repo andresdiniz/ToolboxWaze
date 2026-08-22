@@ -56,7 +56,7 @@ final class ConsultaPublicaController extends AbstractController
             'source' => match ($tipo) {
                 'radar' => ['name' => 'PSIE/INMETRO', 'updatedAt' => null],
                 'escola' => ['name' => 'Censo Escolar/INEP', 'updatedAt' => null],
-                'posto' => ['name' => 'Base pública de revendedores', 'updatedAt' => null],
+                'posto' => ['name' => 'ANP — revendedores de combustíveis', 'updatedAt' => null],
             },
         ]);
     }

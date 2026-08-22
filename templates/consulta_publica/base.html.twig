@@ -3,35 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Consulta pública | Dados oficiais{% endblock %}</title>
-    <meta name="description" content="{% block meta_description %}Consulte informações públicas por estado e município.{% endblock %}">
+    <title>{% block title %}Consulta pública | Waze Toolbox{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Consulte dados públicos de radares, escolas e postos por estado e município.{% endblock %}">
     <meta name="robots" content="index,follow">
-    <meta name="theme-color" content="#172554">
-    <link rel="canonical" href="{{ app.request.uri }}">
+    <meta name="theme-color" content="#101828">
     <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
-    <link rel="stylesheet" href="{{ asset('styles/consulta-publica.css') }}">
+    <link rel="stylesheet" href="{{ asset('styles/consulta_publica.css') }}">
     {% block head_extra %}{% endblock %}
 </head>
 <body>
-    <main id="main-content" class="public-shell">
+    <div class="public-site">
         {% block public_content %}{% endblock %}
-    </main>
-
+    </div>
     <footer class="public-footer">
-        <div class="public-footer__inner">
-            <div>
-                <strong>Consulta pública</strong>
-                <p>Informação para pesquisa e transparência.</p>
-            </div>
-            <nav aria-label="Links institucionais">
-                <a href="#main-content">Voltar ao topo</a>
-            </nav>
-        </div>
-        <div class="public-footer__bottom">Fonte dos dados: órgãos e bases oficiais indicados na consulta.</div>
+        <div class="public-footer__inner"><div><span class="public-footer__brand">Waze Toolbox</span><p>Consulta pública de informações oficiais.</p></div><a href="#public-top">Voltar ao topo ↑</a></div>
+        <div class="public-footer__bottom">Use os dados como referência e consulte sempre a fonte oficial.</div>
     </footer>
-
-    {% block javascripts %}
-        {{ importmap('app') }}
-    {% endblock %}
+    {% block javascripts %}{{ importmap('app') }}{% endblock %}
 </body>
 </html>

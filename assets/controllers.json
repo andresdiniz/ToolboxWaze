@@ -1,15 +1,20 @@
 {
-    "controllers": {
-        "@symfony/ux-turbo": {
-            "turbo-core": {
-                "enabled": true,
-                "fetch": "eager"
+    "@symfony/ux-turbo": {
+        "turbo": {
+            "fetch": "eager"
+        }
+    },
+    "@symfony/stimulus-bundle": {
+        "controllers": {
+            "bootstrap": {
+                "dropdown": {
+                    "enabled": true
+                }
             },
-            "mercure-turbo-stream": {
-                "enabled": false,
+            "consulta-publica": {
+                "enabled": true,
                 "fetch": "eager"
             }
         }
-    },
-    "entrypoints": []
+    }
 }

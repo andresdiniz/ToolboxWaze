@@ -6,8 +6,10 @@ namespace App\Repository;
 
 use App\Entity\EscolaInep;
 use App\Entity\FuelResellerRaw;
+use App\Entity\RadarFaixa;
 use App\Entity\RadarMedidor;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 final class ConsultaPublicaRepository extends ServiceEntityRepository
@@ -65,7 +67,7 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
         $this->selectFields($qb, $tipo, $alias);
 
         $countQb = $this->getEntityManager()->createQueryBuilder()
-            ->select(sprintf('COUNT(%s.id)', $alias))
+            ->select(sprintf('COUNT(DISTINCT %s.id)', $alias))
             ->from($entity, $alias);
         $this->applyFilters($countQb, $alias, $filters, $tipo);
 
@@ -74,7 +76,7 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
         return compact('items', 'total', 'page', 'limit');
     }
 
-    private function applyFilters($qb, string $alias, array $filters, string $tipo): void
+    private function applyFilters(QueryBuilder $qb, string $alias, array $filters, string $tipo): void
     {
         foreach (['uf', 'municipio'] as $field) {
             if (!empty($filters[$field])) {
@@ -84,44 +86,43 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
         }
 
         if (!empty($filters['q'])) {
-            $searchField = $tipo === 'radar' ? 'numeroInmetro' : 'nome';
-            $qb->andWhere(sprintf('LOWER(%s.%s) LIKE LOWER(:q)', $alias, $searchField))
-                ->setParameter('q', '%' . trim((string) $filters['q']) . '%');
+            $searchExpressions = $tipo === 'radar'
+                ? [sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.logradouro) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.numeroSerie) LIKE LOWER(:q)', $alias)]
+                : [sprintf('LOWER(%s.nome) LIKE LOWER(:q)', $alias)];
+            if ($tipo === 'radar') {
+                $searchExpressions[] = 'LOWER(faixa.numeroInmetro) LIKE LOWER(:q)';
+            }
+            $qb->andWhere($qb->expr()->orX(...$searchExpressions))->setParameter('q', '%' . trim((string) $filters['q']) . '%');
         }
     }
 
-    private function selectFields($qb, string $tipo, string $alias): void
+    private function selectFields(QueryBuilder $qb, string $tipo, string $alias): void
     {
-        $fields = match ($tipo) {
-            'radar' => [
-                $alias.'.id AS id',
-                $alias.'.municipio AS municipio',
-                $alias.'.uf AS uf',
-                "'Medidor de velocidade' AS tipo",
-                $alias.'.numeroInmetro AS numeroInmetro',
-                $alias.'.numeroSerie AS numeroSerie',
-            ],
-            'escola' => [
-                $alias.'.id AS id',
-                $alias.'.nome AS nome',
-                $alias.'.municipio AS municipio',
-                $alias.'.uf AS uf',
-                $alias.'.endereco AS endereco',
-                $alias.'.telefone AS telefone',
-                $alias.'.latitude AS latitude',
-                $alias.'.longitude AS longitude',
-            ],
-            'posto' => [
-                $alias.'.id AS id',
-                $alias.'.nome AS nome',
-                $alias.'.municipio AS municipio',
-                $alias.'.uf AS uf',
-                $alias.'.endereco AS endereco',
-                $alias.'.telefone AS telefone',
-                $alias.'.latitude AS latitude',
-                $alias.'.longitude AS longitude',
-            ],
-        };
-        $qb->select(implode(', ', $fields));
+        if ($tipo === 'radar') {
+            $qb->leftJoin($alias . '.faixas', 'faixa')
+                ->select(implode(', ', [
+                    $alias . '.id AS id',
+                    $alias . '.municipio AS municipio',
+                    $alias . '.uf AS uf',
+                    $alias . '.logradouro AS endereco',
+                    $alias . '.tipoMedidor AS tipo',
+                    $alias . '.numeroSerie AS numeroSerie',
+                    $alias . '.latitude AS latitude',
+                    $alias . '.longitude AS longitude',
+                    'faixa.numeroInmetro AS numeroInmetro',
+                    'faixa.numeroFaixa AS numeroFaixa',
+                    'faixa.sentido AS sentido',
+                    'faixa.velocidadeNominal AS velocidade',
+                ]))
+                ->addOrderBy($alias . '.municipio', 'ASC')
+                ->addOrderBy('faixa.numeroFaixa', 'ASC');
+            return;
+        }
+
+        $fields = $tipo === 'escola'
+            ? [$alias.'.id AS id', $alias.'.nome AS nome', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.endereco AS endereco', $alias.'.telefone AS telefone', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude']
+            : [$alias.'.id AS id', $alias.'.nome AS nome', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.endereco AS endereco', $alias.'.telefone AS telefone', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude'];
+
+        $qb->select(implode(', ', $fields))->addOrderBy($alias.'.municipio', 'ASC');
     }
 }

@@ -47,5 +47,6 @@ security:
         - { path: ^/reset-password,  roles: PUBLIC_ACCESS }
         - { path: ^/connect,         roles: PUBLIC_ACCESS }
         - { path: ^/auth/waze-check, roles: PUBLIC_ACCESS }
+        - { path: ^/consultar,  roles: PUBLIC_ACCESS }
         - { path: ^/admin,           roles: ROLE_ADMIN }
         - { path: ^/,                roles: ROLE_USER }

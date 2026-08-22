@@ -3,68 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#102a43">
+    <meta name="theme-color" content="#071d2f">
     <title>{% block title %}Consulta Pública | ToolboxWaze{% endblock %}</title>
-    <meta name="description" content="Consulte radares, escolas e postos por estado e município, com fonte e data de atualização.">
+    <meta name="description" content="Consulte radares, escolas e postos por estado e município, com fontes identificadas e dados organizados.">
     {% block meta %}{% endblock %}
-    {% block stylesheets %}
-        <style>{{ include('consulta_publica/public.css') }}</style>
-    {% endblock %}
+    {% block stylesheets %}<style>{{ include('consulta_publica/public.css') }}</style>{% endblock %}
 </head>
-<body>
-    <div class="public-shell">
-        <header class="public-header">
-            <div class="public-container public-header__inner">
-                <a class="public-brand" href="{{ path('consulta_publica') }}" aria-label="ToolboxWaze Consulta Pública">
-                    <span class="public-brand__mark">TW</span>
-                    <span><strong>ToolboxWaze</strong><small>Consulta pública</small></span>
-                </a>
-                <a class="public-header__link" href="{{ path('app_login') }}">Área dos editores <span aria-hidden="true">→</span></a>
-            </div>
-        </header>
-
-        <div class="public-main">
-            {% block body %}{% endblock %}
+<body class="public-body">
+<div class="public-shell">
+    <header class="public-header">
+        <div class="public-container public-header__inner">
+            <a class="public-brand" href="{{ path('consulta_publica') }}" aria-label="ToolboxWaze Consulta Pública">
+                <span class="public-brand__mark"><span>TW</span></span>
+                <span class="public-brand__copy"><strong>ToolboxWaze</strong><small>Consulta pública</small></span>
+            </a>
+            <a class="public-header__link" href="{{ path('app_login') }}"><span class="public-header__link-label">Área dos editores</span><span aria-hidden="true">↗</span></a>
         </div>
-
-        <footer class="public-footer">
-            <div class="public-container public-footer__top">
-                <div class="public-footer__identity">
-                    <a class="public-footer__brand" href="{{ path('consulta_publica') }}" aria-label="Voltar para a consulta pública">
-                        <span class="public-brand__mark">TW</span>
-                        <span><strong>ToolboxWaze</strong><small>Consulta pública</small></span>
-                    </a>
-                    <p>Informação pública organizada para você encontrar radares, escolas e postos com mais rapidez.</p>
-                    <span class="public-footer__status"><i aria-hidden="true"></i> Serviço de consulta disponível</span>
-                </div>
-                <div class="public-footer__column">
-                    <h2>Consultas</h2>
-                    <a href="{{ path('consulta_publica') }}">Radares</a>
-                    <a href="{{ path('consulta_publica') }}">Escolas</a>
-                    <a href="{{ path('consulta_publica') }}">Postos</a>
-                </div>
-                <div class="public-footer__column">
-                    <h2>Projeto</h2>
-                    <a href="{{ path('consulta_publica') }}">Nova consulta</a>
-                    <a href="{{ path('app_login') }}">Área dos editores</a>
-                    <a href="{{ path('consulta_publica') }}">Sobre os dados</a>
-                </div>
-                <div class="public-footer__column public-footer__column--last">
-                    <h2>Transparência</h2>
-                    <p>As páginas informam a origem dos dados e a data da última atualização disponível.</p>
-                    <a class="public-footer__source-link" href="{{ path('consulta_publica') }}">Conheça a consulta <span aria-hidden="true">↗</span></a>
-                </div>
+    </header>
+    <div class="public-main">{% block body %}{% endblock %}</div>
+    <footer class="public-footer">
+        <div class="public-footer__glow" aria-hidden="true"></div>
+        <div class="public-container public-footer__top">
+            <div class="public-footer__identity">
+                <a class="public-footer__brand" href="{{ path('consulta_publica') }}"><span class="public-brand__mark"><span>TW</span></span><span class="public-brand__copy"><strong>ToolboxWaze</strong><small>Consulta pública</small></span></a>
+                <p>Informação pública organizada para você encontrar o que precisa com clareza, rapidez e confiança.</p>
+                <span class="public-footer__status"><i aria-hidden="true"></i> Serviço disponível</span>
             </div>
-            <div class="public-container public-footer__divider"></div>
-            <div class="public-container public-footer__bottom">
-                <span>© {{ 'now'|date('Y') }} ToolboxWaze. Todos os direitos reservados.</span>
-                <div class="public-footer__legal"><span>Dados sujeitos à atualização das fontes oficiais.</span><a href="{{ path('consulta_publica') }}">Voltar ao início ↑</a></div>
-            </div>
-        </footer>
-    </div>
-
-    {% block javascripts %}
-        {{ importmap('app') }}
-    {% endblock %}
+            <nav class="public-footer__column" aria-label="Consultas"><h2>Explorar</h2><a href="{{ path('consulta_publica') }}">Radares</a><a href="{{ path('consulta_publica') }}">Escolas</a><a href="{{ path('consulta_publica') }}">Postos</a></nav>
+            <nav class="public-footer__column" aria-label="Projeto"><h2>Projeto</h2><a href="{{ path('consulta_publica') }}">Nova consulta</a><a href="{{ path('app_login') }}">Área dos editores</a><a href="{{ path('consulta_publica') }}">Sobre os dados</a></nav>
+            <div class="public-footer__column public-footer__column--last"><h2>Transparência</h2><p>As fontes e as datas de atualização ficam visíveis em cada resultado.</p><a class="public-footer__source-link" href="{{ path('consulta_publica') }}">Começar uma consulta <span aria-hidden="true">→</span></a></div>
+        </div>
+        <div class="public-container public-footer__divider"></div>
+        <div class="public-container public-footer__bottom"><span>© {{ 'now'|date('Y') }} ToolboxWaze</span><span>Dados sujeitos à atualização das fontes oficiais.</span><a href="{{ path('consulta_publica') }}">Voltar ao início ↑</a></div>
+    </footer>
+</div>
+{% block javascripts %}{{ importmap('app') }}{% endblock %}
 </body>
 </html>

@@ -37,7 +37,7 @@
                 <button class="public-type" type="button" data-type="posto" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--posto">⌖</span><span><strong>Postos</strong><small>Revendedores e serviços</small></span></button>
             </div>
             <div class="public-filters">
-                <label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#loadCities"><option value="">Selecione o estado</option>{% for state in states %}<option value="{{ state.abbreviation|e }}">{{ state.name|e }}</option>{% endfor %}</select></label>
+                <label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#loadCities"><option value="">Selecione o estado</option>{% for state in states %}<option value="{{ state.uf|e }}">{{ state.name|e }}</option>{% endfor %}</select></label>
                 <label>Município<select data-consulta-publica-target="city" disabled data-action="change->consulta-publica#cityChanged"><option value="">Primeiro escolha o estado</option></select></label>
                 <label>Busca opcional<input type="search" maxlength="100" placeholder="Nome ou palavra-chave" data-consulta-publica-target="query" data-action="keydown.enter->consulta-publica#search"></label>
                 <button class="public-submit" type="button" data-action="click->consulta-publica#search"><span>Consultar</span><span aria-hidden="true">→</span></button>

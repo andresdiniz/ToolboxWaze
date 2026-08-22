@@ -1,16 +1,54 @@
 {% extends 'consulta_publica/base.html.twig' %}
 
+{% set consulta_search_url = search_base_url|default('/consultar/api') %}
+{% set consulta_municipios_url = municipios_url|default('/consultar/api/municipios') %}
+
 {% block public_content %}
-<div id="top" class="public-page" data-controller="consulta-publica" data-search-base-url="{{ search_base_url }}" data-municipios-url="{{ municipios_url }}" data-ga-id="{{ google_analytics_id|default('')|e('html_attr') }}" data-adsense-client="{{ adsense_client|default('')|e('html_attr') }}">
+<div id="top" class="public-page" data-controller="consulta-publica" data-search-base-url="{{ consulta_search_url|e('html_attr') }}" data-municipios-url="{{ consulta_municipios_url|e('html_attr') }}" data-ga-id="{{ google_analytics_id|default('')|e('html_attr') }}" data-adsense-client="{{ adsense_client|default('')|e('html_attr') }}">
     <header class="public-hero">
-        <div class="public-hero__content"><span class="public-eyebrow">Dados abertos</span><h1>Consulta pública inteligente</h1><p>Pesquise informações oficiais com clareza, rapidez e transparência.</p><div class="public-hero__actions"><button type="button" class="public-button public-button--light" data-share-page>Compartilhar consulta</button></div></div>
+        <div class="public-hero__content">
+            <span class="public-eyebrow">Dados abertos</span>
+            <h1>Consulta pública inteligente</h1>
+            <p>Pesquise informações oficiais com clareza, rapidez e transparência.</p>
+            <div class="public-hero__actions">
+                <button type="button" class="public-button public-button--light" data-share-page>Compartilhar consulta</button>
+            </div>
+        </div>
         <div class="public-hero__orb" aria-hidden="true"></div>
     </header>
 
-    <section class="public-ad-slot" aria-label="Publicidade"><span>Publicidade</span>{% if adsense_client is defined and adsense_client and adsense_slot_top is defined and adsense_slot_top %}<ins class="adsbygoogle" style="display:block" data-ad-client="{{ adsense_client|e('html_attr') }}" data-ad-slot="{{ adsense_slot_top|e('html_attr') }}" data-ad-format="auto" data-full-width-responsive="true"></ins>{% endif %}</section>
+    <section class="public-ad-slot" aria-label="Publicidade">
+        <span>Publicidade</span>
+        {% if adsense_client|default('') and adsense_slot_top|default('') %}
+            <ins class="adsbygoogle" style="display:block" data-ad-client="{{ adsense_client|e('html_attr') }}" data-ad-slot="{{ adsense_slot_top|e('html_attr') }}" data-ad-format="auto" data-full-width-responsive="true"></ins>
+        {% endif %}
+    </section>
 
-    <section class="public-panel" aria-labelledby="search-title"><div class="public-panel__heading"><div><span class="public-eyebrow">Pesquisa</span><h2 id="search-title">Encontre um registro</h2></div><p data-consultation-helper>Escolha a categoria, o estado e o município.</p></div><div class="public-type-tabs" role="tablist" aria-label="Categoria">{% for type in types %}<button type="button" role="tab" class="public-type-tab{% if loop.first %} is-active{% endif %}" data-type="{{ type.key }}" data-consulta-publica-target="type" aria-selected="{{ loop.first ? 'true' : 'false' }}">{{ type.label }}</button>{% endfor %}</div><form class="public-form" data-action="submit->consulta-publica#search"><label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#stateChanged" required><option value="">Selecione</option>{% for state in states %}<option value="{{ state.uf }}">{{ state.name }}</option>{% endfor %}</select></label><label>Município<select data-consulta-publica-target="city" disabled required><option>Primeiro escolha o estado</option></select></label><label class="public-form__query">Busca opcional<input type="search" data-consulta-publica-target="query" placeholder="Nome, endereço ou código"></label><button class="public-button" type="submit">Consultar</button></form></section>
+    <section class="public-panel" aria-labelledby="search-title">
+        <div class="public-panel__heading">
+            <div><span class="public-eyebrow">Pesquisa</span><h2 id="search-title">Encontre um registro</h2></div>
+            <p data-consulta-publica-helper>Escolha a categoria, o estado e o município.</p>
+        </div>
 
-    <section class="public-results" data-consulta-publica-target="results" hidden aria-live="polite"><div class="public-results__heading"><h2 data-consulta-publica-target="resultTitle">Resultados</h2><button type="button" class="public-button public-button--ghost" data-share-results>Compartilhar resultados</button></div><div class="public-list" data-consulta-publica-target="list"></div><nav class="public-pagination" data-consulta-publica-target="pagination" aria-label="Paginação"></nav><p class="public-source" data-consulta-publica-target="source"></p></section>
+        <div class="public-type-tabs" role="tablist" aria-label="Categoria">
+            {% for type in types|default([]) %}
+                <button type="button" role="tab" class="public-type-tab{% if loop.first %} is-active{% endif %}" data-type="{{ type.key|default('radar')|e('html_attr') }}" data-consulta-publica-target="type" aria-selected="{{ loop.first ? 'true' : 'false' }}">{{ type.label|default(type.key|default('Categoria')) }}</button>
+            {% endfor %}
+        </div>
+
+        <form class="public-form" data-action="submit->consulta-publica#search">
+            <label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#stateChanged" required><option value="">Selecione</option>{% for state in states|default([]) %}<option value="{{ state.uf|default('')|e('html_attr') }}">{{ state.name|default(state.uf|default('')) }}</option>{% endfor %}</select></label>
+            <label>Município<select data-consulta-publica-target="city" data-action="change->consulta-publica#cityChanged" disabled required><option>Primeiro escolha o estado</option></select></label>
+            <label class="public-form__query">Busca opcional<input type="search" data-consulta-publica-target="query" placeholder="Nome, endereço ou código"></label>
+            <button class="public-button" type="submit">Consultar</button>
+        </form>
+    </section>
+
+    <section class="public-results" data-consulta-publica-target="results" hidden aria-live="polite">
+        <div class="public-results__heading"><h2 data-consulta-publica-target="resultTitle">Resultados</h2><button type="button" class="public-button public-button--ghost" data-share-results>Compartilhar resultados</button></div>
+        <div class="public-list" data-consulta-publica-target="list"></div>
+        <nav class="public-pagination" data-consulta-publica-target="pagination" aria-label="Paginação"></nav>
+        <p class="public-source" data-consulta-publica-target="source"></p>
+    </section>
 </div>
 {% endblock %}

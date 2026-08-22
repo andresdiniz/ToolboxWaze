@@ -28,19 +28,37 @@
         </div>
 
         <footer class="public-footer">
-            <div class="public-container public-footer__inner">
-                <div>
-                    <a class="public-footer__brand" href="{{ path('consulta_publica') }}">ToolboxWaze</a>
-                    <p>Consultas públicas com fontes identificadas e informações organizadas.</p>
+            <div class="public-container public-footer__top">
+                <div class="public-footer__identity">
+                    <a class="public-footer__brand" href="{{ path('consulta_publica') }}" aria-label="Voltar para a consulta pública">
+                        <span class="public-brand__mark">TW</span>
+                        <span><strong>ToolboxWaze</strong><small>Consulta pública</small></span>
+                    </a>
+                    <p>Informação pública organizada para você encontrar radares, escolas e postos com mais rapidez.</p>
+                    <span class="public-footer__status"><i aria-hidden="true"></i> Serviço de consulta disponível</span>
                 </div>
-                <nav class="public-footer__nav" aria-label="Links institucionais">
+                <div class="public-footer__column">
+                    <h2>Consultas</h2>
+                    <a href="{{ path('consulta_publica') }}">Radares</a>
+                    <a href="{{ path('consulta_publica') }}">Escolas</a>
+                    <a href="{{ path('consulta_publica') }}">Postos</a>
+                </div>
+                <div class="public-footer__column">
+                    <h2>Projeto</h2>
                     <a href="{{ path('consulta_publica') }}">Nova consulta</a>
                     <a href="{{ path('app_login') }}">Área dos editores</a>
-                </nav>
+                    <a href="{{ path('consulta_publica') }}">Sobre os dados</a>
+                </div>
+                <div class="public-footer__column public-footer__column--last">
+                    <h2>Transparência</h2>
+                    <p>As páginas informam a origem dos dados e a data da última atualização disponível.</p>
+                    <a class="public-footer__source-link" href="{{ path('consulta_publica') }}">Conheça a consulta <span aria-hidden="true">↗</span></a>
+                </div>
             </div>
+            <div class="public-container public-footer__divider"></div>
             <div class="public-container public-footer__bottom">
-                <span>© {{ 'now'|date('Y') }} ToolboxWaze</span>
-                <span>Dados sujeitos à atualização das fontes oficiais.</span>
+                <span>© {{ 'now'|date('Y') }} ToolboxWaze. Todos os direitos reservados.</span>
+                <div class="public-footer__legal"><span>Dados sujeitos à atualização das fontes oficiais.</span><a href="{{ path('consulta_publica') }}">Voltar ao início ↑</a></div>
             </div>
         </footer>
     </div>

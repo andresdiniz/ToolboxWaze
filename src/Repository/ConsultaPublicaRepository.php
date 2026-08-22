@@ -6,7 +6,6 @@ namespace App\Repository;
 
 use App\Entity\EscolaInep;
 use App\Entity\FuelResellerRaw;
-use App\Entity\RadarFaixa;
 use App\Entity\RadarMedidor;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
@@ -32,14 +31,7 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
             'posto' => [FuelResellerRaw::class, 'municipio'],
         };
         $alias = 'record';
-        $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select(sprintf('DISTINCT %s.%s AS municipio', $alias, $field))
-            ->from($entity, $alias)
-            ->andWhere(sprintf('UPPER(%s.uf) = :uf', $alias))
-            ->andWhere(sprintf('%s.%s IS NOT NULL', $alias, $field))
-            ->andWhere(sprintf("%s.%s <> ''", $alias, $field))
-            ->setParameter('uf', $uf)
-            ->orderBy(sprintf('%s.%s', $alias, $field), 'ASC');
+        $qb = $this->getEntityManager()->createQueryBuilder()->select(sprintf('DISTINCT %s.%s AS municipio', $alias, $field))->from($entity, $alias)->andWhere(sprintf('UPPER(%s.uf) = :uf', $alias))->andWhere(sprintf('%s.%s IS NOT NULL', $alias, $field))->andWhere(sprintf("%s.%s <> ''", $alias, $field))->setParameter('uf', $uf)->orderBy(sprintf('%s.%s', $alias, $field), 'ASC');
         return array_values(array_filter(array_map(static fn (array $row): string => trim((string) $row['municipio']), $qb->getQuery()->getArrayResult())));
     }
 
@@ -47,16 +39,10 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
     {
         $tipo = strtolower(trim($tipo));
         if (!in_array($tipo, self::TYPES, true)) return ['items' => [], 'total' => 0, 'page' => 1, 'limit' => $limit];
-        $page = max(1, $page);
-        $limit = min(50, max(1, $limit));
-        [$entity, $alias] = match ($tipo) {
-            'radar' => [RadarMedidor::class, 'radar'],
-            'escola' => [EscolaInep::class, 'escola'],
-            'posto' => [FuelResellerRaw::class, 'posto'],
-        };
+        $page = max(1, $page); $limit = min(50, max(1, $limit));
+        [$entity, $alias] = match ($tipo) { 'radar' => [RadarMedidor::class, 'radar'], 'escola' => [EscolaInep::class, 'escola'], 'posto' => [FuelResellerRaw::class, 'posto'] };
         $qb = $this->getEntityManager()->createQueryBuilder()->from($entity, $alias);
-        $this->applyFilters($qb, $alias, $filters, $tipo);
-        $this->selectFields($qb, $tipo, $alias);
+        $this->applyFilters($qb, $alias, $filters, $tipo); $this->selectFields($qb, $tipo, $alias);
         $countQb = $this->getEntityManager()->createQueryBuilder()->select(sprintf('COUNT(DISTINCT %s.id)', $alias))->from($entity, $alias);
         $this->applyFilters($countQb, $alias, $filters, $tipo);
         $total = (int) $countQb->getQuery()->getSingleScalarResult();
@@ -74,7 +60,7 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
                 $qb->leftJoin($alias . '.faixas', 'faixaBusca');
                 $expressions = [sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.logradouro) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.numeroSerie) LIKE LOWER(:q)', $alias), 'LOWER(faixaBusca.numeroInmetro) LIKE LOWER(:q)'];
             } elseif ($tipo === 'posto') {
-                $expressions = [sprintf('LOWER(%s.razaoSocial) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.nomeFantasia) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias)];
+                $expressions = [sprintf('LOWER(%s.razaoSocial) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.nomeFantasia) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias), sprintf('LOWER(%s.bandeira) LIKE LOWER(:q)', $alias)];
             } else {
                 $expressions = [sprintf('LOWER(%s.municipio) LIKE LOWER(:q)', $alias)];
             }
@@ -92,6 +78,7 @@ final class ConsultaPublicaRepository extends ServiceEntityRepository
             $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.municipio AS municipio', $alias.'.uf AS uf']))->addOrderBy($alias.'.municipio', 'ASC');
             return;
         }
-        $qb->select(implode(', ', [$alias.'.id AS id', $alias.'.razaoSocial AS razaoSocial', $alias.'.nomeFantasia AS nomeFantasia', $alias.'.cnpj AS cnpj', $alias.'.endereco AS endereco', $alias.'.numero AS numero', $alias.'.complemento AS complemento', $alias.'.bairro AS bairro', $alias.'.municipio AS municipio', $alias.'.uf AS uf', $alias.'.cep AS cep', $alias.'.bandeira AS bandeira', $alias.'.distribuidora AS distribuidora', $alias.'.produtos AS produtos', $alias.'.servicos AS servicos', $alias.'.latitude AS latitude', $alias.'.longitude AS longitude']))->addOrderBy($alias.'.municipio', 'ASC');
+        $fields = [$alias.'.id AS id', $alias.'.codigoIsimp AS codigoIsimp', $alias.'.autorizacao AS autorizacao', $alias.'.dataPublicacao AS dataPublicacao', $alias.'.razaoSocial AS razaoSocial', $alias.'.cnpj AS cnpj', $alias.'.endereco AS endereco', $alias.'.complemento AS complemento', $alias.'.bairro AS bairro', $alias.'.cep AS cep', $alias.'.uf AS uf', $alias.'.municipio AS municipio', $alias.'.bandeira AS bandeira', $alias.'.dataVinculacao AS dataVinculacao', $alias.'.nomeFantasia AS nomeFantasia', $alias.'.importedAt AS importedAt', $alias.'.updatedAt AS updatedAt'];
+        $qb->select(implode(', ', $fields))->addOrderBy($alias.'.municipio', 'ASC')->addOrderBy($alias.'.nomeFantasia', 'ASC');
     }
 }

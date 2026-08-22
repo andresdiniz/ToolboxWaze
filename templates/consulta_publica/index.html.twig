@@ -1,24 +1,13 @@
-{% extends 'base.html.twig' %}
+{% extends 'consulta_publica/base.html.twig' %}
 
 {% block title %}Consulta Pública | ToolboxWaze{% endblock %}
 
 {% block stylesheets %}
     {{ parent() }}
-    <style>{{ include('consulta_publica/public.css') }}</style>
 {% endblock %}
 
 {% block body %}
 <main class="public-page" data-controller="consulta-publica" data-municipios-url="{{ path('consulta_publica_municipios') }}" data-search-base-url="{{ path('consulta_publica_search', {tipo: 'radar'})|replace({'/radar': ''}) }}">
-    <header class="public-header">
-        <div class="public-container public-header__inner">
-            <a class="public-brand" href="{{ path('consulta_publica') }}">
-                <span class="public-brand__mark">TW</span>
-                <span><strong>Toolbox</strong><small>Consulta pública</small></span>
-            </a>
-            <a class="public-header__link" href="{{ path('app_login') }}">Área dos editores <span aria-hidden="true">→</span></a>
-        </div>
-    </header>
-
     <section class="public-hero">
         <div class="public-container public-hero__content">
             <span class="public-eyebrow">Informação pública, organizada</span>
@@ -37,7 +26,7 @@
                 <button class="public-type" type="button" data-type="posto" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--posto">⌖</span><span><strong>Postos</strong><small>Revendedores e serviços</small></span></button>
             </div>
             <div class="public-filters">
-                <label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#loadCities"><option value="">Selecione o estado</option>{% for state in states %}<option value="{{ state.abbreviation|e }}">{{ state.name|e }}</option>{% endfor %}</select></label>
+                <label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#loadCities"><option value="">Selecione o estado</option>{% for state in states %}<option value="{{ state.uf|e }}">{{ state.name|e }}</option>{% endfor %}</select></label>
                 <label>Município<select data-consulta-publica-target="city" disabled data-action="change->consulta-publica#cityChanged"><option value="">Primeiro escolha o estado</option></select></label>
                 <label>Busca opcional<input type="search" maxlength="100" placeholder="Nome ou palavra-chave" data-consulta-publica-target="query" data-action="keydown.enter->consulta-publica#search"></label>
                 <button class="public-submit" type="button" data-action="click->consulta-publica#search"><span>Consultar</span><span aria-hidden="true">→</span></button>

@@ -2,48 +2,15 @@
 
 {% block title %}Consulta Pública | ToolboxWaze{% endblock %}
 
-{% block stylesheets %}
-    {{ parent() }}
-{% endblock %}
+{% block stylesheets %}{{ parent() }}{% endblock %}
 
 {% block body %}
 <main class="public-page" data-controller="consulta-publica" data-municipios-url="{{ path('consulta_publica_municipios') }}" data-search-base-url="{{ path('consulta_publica_search', {tipo: 'radar'})|replace({'/radar': ''}) }}">
-    <section class="public-hero">
-        <div class="public-container public-hero__content">
-            <span class="public-eyebrow">Informação pública, organizada</span>
-            <h1>Encontre o que você precisa na sua cidade.</h1>
-            <p>Consulte radares, escolas e postos por estado e município. Use os filtros, confira a fonte e veja a data da última consulta.</p>
-            <div class="public-hero__stats"><span>Busca simples</span><span>Dados por fonte</span><span>Experiência mobile-first</span></div>
-        </div>
-    </section>
-
+    <section class="public-hero"><div class="public-container public-hero__content"><span class="public-eyebrow">Informação pública, organizada</span><h1>Encontre o que você precisa na sua cidade.</h1><p>Consulte radares, escolas e postos por estado e município. Use os filtros, confira a fonte e veja a data da última consulta.</p><div class="public-hero__stats"><span>Busca simples</span><span>Dados por fonte</span><span>Experiência mobile-first</span></div></div></section>
     <div class="public-container public-content">
-        <section class="public-search-card" aria-labelledby="public-search-title">
-            <div class="public-section-heading"><span class="public-section-icon">⌕</span><div><span class="public-kicker">Comece sua consulta</span><h2 id="public-search-title">O que você procura?</h2></div></div>
-            <div class="public-types" role="tablist" aria-label="Tipo de consulta">
-                <button class="public-type is-active" type="button" data-type="radar" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--radar">⌁</span><span><strong>Radares</strong><small>Medidores de velocidade</small></span></button>
-                <button class="public-type" type="button" data-type="escola" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--escola">⌂</span><span><strong>Escolas</strong><small>Dados educacionais</small></span></button>
-                <button class="public-type" type="button" data-type="posto" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--posto">⌖</span><span><strong>Postos</strong><small>Revendedores e serviços</small></span></button>
-            </div>
-            <div class="public-filters">
-                <label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#loadCities"><option value="">Selecione o estado</option>{% for state in states %}<option value="{{ state.uf|e }}">{{ state.name|e }}</option>{% endfor %}</select></label>
-                <label>Município<select data-consulta-publica-target="city" disabled data-action="change->consulta-publica#cityChanged"><option value="">Primeiro escolha o estado</option></select></label>
-                <label>Busca opcional<input type="search" maxlength="100" placeholder="Nome ou palavra-chave" data-consulta-publica-target="query" data-action="keydown.enter->consulta-publica#search"></label>
-                <button class="public-submit" type="button" data-action="click->consulta-publica#search"><span>Consultar</span><span aria-hidden="true">→</span></button>
-            </div>
-            <p class="public-helper" data-consulta-publica-target="helper">Escolha um estado e um município para iniciar.</p>
-        </section>
-
+        <section class="public-search-card" aria-labelledby="public-search-title"><div class="public-section-heading"><span class="public-section-icon">⌕</span><div><span class="public-kicker">Comece sua consulta</span><h2 id="public-search-title">O que você procura?</h2></div></div><div class="public-types" role="tablist" aria-label="Tipo de consulta"><button class="public-type is-active" type="button" data-type="radar" aria-selected="true" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--radar">⌁</span><span><strong>Radares</strong><small>Medidores de velocidade</small></span></button><button class="public-type" type="button" data-type="escola" aria-selected="false" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--escola">⌂</span><span><strong>Escolas</strong><small>Dados educacionais</small></span></button><button class="public-type" type="button" data-type="posto" aria-selected="false" data-consulta-publica-target="type" data-action="click->consulta-publica#selectType"><span class="public-type__icon public-type__icon--posto">⌖</span><span><strong>Postos</strong><small>Revendedores e serviços</small></span></button></div><div class="public-filters"><label>Estado<select data-consulta-publica-target="state" data-action="change->consulta-publica#stateChanged"><option value="">Selecione o estado</option>{% for state in states %}<option value="{{ state.uf|e }}">{{ state.name|e }}</option>{% endfor %}</select></label><label>Município<select data-consulta-publica-target="city" disabled data-action="change->consulta-publica#cityChanged"><option value="">Primeiro escolha o estado</option></select></label><label>Busca opcional<input type="search" maxlength="100" placeholder="Nome ou palavra-chave" data-consulta-publica-target="query" data-action="keydown.enter->consulta-publica#search"></label><button class="public-submit" type="button" data-action="click->consulta-publica#search"><span>Consultar</span><span aria-hidden="true">→</span></button></div><p class="public-helper" data-consulta-publica-target="helper">Escolha um estado e um município para iniciar.</p></section>
         <div class="public-ad-slot" aria-label="Publicidade"><span>Publicidade</span></div>
-
-        <section class="public-results" data-consulta-publica-target="results" hidden aria-live="polite">
-            <div class="public-results__heading"><div><span class="public-kicker">Resultados encontrados</span><h2 data-consulta-publica-target="resultTitle">Sua consulta</h2></div><button class="public-map-button" type="button" data-action="click->consulta-publica#toggleMap" hidden data-consulta-publica-target="mapButton">Ver no mapa</button></div>
-            <div class="public-map" data-consulta-publica-target="map" hidden></div>
-            <div class="public-result-list" data-consulta-publica-target="list"></div>
-            <div class="public-pagination" data-consulta-publica-target="pagination"></div>
-            <p class="public-source-note" data-consulta-publica-target="source"></p>
-        </section>
-
+        <section class="public-results" data-consulta-publica-target="results" hidden aria-live="polite"><div class="public-results__heading"><div><span class="public-kicker">Resultados encontrados</span><h2 data-consulta-publica-target="resultTitle">Sua consulta</h2></div><button class="public-map-button" type="button" data-action="click->consulta-publica#toggleMap" hidden data-consulta-publica-target="mapButton">Ver no mapa</button></div><div class="public-map" data-consulta-publica-target="map" hidden></div><div class="public-result-list" data-consulta-publica-target="list"></div><div class="public-pagination" data-consulta-publica-target="pagination"></div><p class="public-source-note" data-consulta-publica-target="source"></p></section>
         <section class="public-info-grid"><article><span class="public-info-icon">✓</span><h3>Fonte identificada</h3><p>As páginas informam a origem dos dados e a data da consulta.</p></article><article><span class="public-info-icon">↗</span><h3>Pesquisa rápida</h3><p>Os resultados são carregados somente depois da aplicação dos filtros.</p></article><article><span class="public-info-icon">◉</span><h3>Feito para celular</h3><p>Uma interface leve para consultar onde você estiver.</p></article></section>
     </div>
 </main>

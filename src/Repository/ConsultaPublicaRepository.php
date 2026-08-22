@@ -14,9 +14,210 @@ use Doctrine\Persistence\ManagerRegistry;
 final class ConsultaPublicaRepository extends ServiceEntityRepository
 {
     private const TYPES = ['radar', 'escola', 'posto'];
-    public function __construct(ManagerRegistry $registry) { parent::__construct($registry, RadarMedidor::class); }
-    public function findMunicipios(string $tipo,string $uf):array{$tipo=strtolower(trim($tipo));$uf=strtoupper(trim($uf));if(!in_array($tipo,self::TYPES,true)||!preg_match('/^[A-Z]{2}$/',$uf))return[];[$e,$f]=match($tipo){'radar'=>[RadarMedidor::class,'municipio'],'escola'=>[EscolaInep::class,'municipio'],'posto'=>[FuelResellerRaw::class,'municipio']};$a='record';$q=$this->getEntityManager()->createQueryBuilder()->select("DISTINCT $a.$f AS municipio")->from($e,$a)->andWhere("UPPER($a.uf)=:uf")->andWhere("$a.$f IS NOT NULL")->andWhere("$a.$f<>''")->setParameter('uf',$uf)->orderBy("$a.$f",'ASC');return array_values(array_filter(array_map(static fn(array $r):string=>trim((string)$r['municipio']),$q->getQuery()->getArrayResult())));}
-    public function search(string $tipo,array $filters,int $page=1,int $limit=20):array{$tipo=strtolower(trim($tipo));if(!in_array($tipo,self::TYPES,true))return['items'=>[],'total'=>0,'page'=>1,'limit'=>$limit];$page=max(1,$page);$limit=min(50,max(1,$limit));[$e,$a]=match($tipo){'radar'=>[RadarMedidor::class,'radar'],'escola'=>[EscolaInep::class,'escola'],'posto'=>[FuelResellerRaw::class,'posto']};$q=$this->getEntityManager()->createQueryBuilder()->from($e,$a);$this->applyFilters($q,$a,$filters,$tipo);$this->selectFields($q,$tipo,$a);$c=$this->getEntityManager()->createQueryBuilder()->select("COUNT(DISTINCT $a.id)")->from($e,$a);$this->applyFilters($c,$a,$filters,$tipo);$total=(int)$c->getQuery()->getSingleScalarResult();$items=$q->setFirstResult(($page-1)*$limit)->setMaxResults($limit)->getQuery()->getArrayResult();return compact('items','total','page','limit');}
-    private function applyFilters(QueryBuilder $q,string $a,array $filters,string $tipo):void{foreach(['uf','municipio'] as $f)if(!empty($filters[$f]))$q->andWhere("UPPER($a.$f)=UPPER(:$f)")->setParameter($f,trim((string)$filters[$f]));if(empty($filters['q']))return;if($tipo==='radar'){$q->leftJoin($a.'.faixas','faixaBusca');$e=["LOWER($a.municipio) LIKE LOWER(:q)","LOWER($a.logradouro) LIKE LOWER(:q)","LOWER($a.numeroSerie) LIKE LOWER(:q)",'LOWER(faixaBusca.numeroInmetro) LIKE LOWER(:q)'];}elseif($tipo==='posto')$e=["LOWER($a.razaoSocial) LIKE LOWER(:q)","LOWER($a.nomeFantasia) LIKE LOWER(:q)","LOWER($a.municipio) LIKE LOWER(:q)","LOWER($a.bandeira) LIKE LOWER(:q)"];else$e=["LOWER($a.escola) LIKE LOWER(:q)","LOWER($a.municipio) LIKE LOWER(:q)","LOWER($a.codigoInep) LIKE LOWER(:q)"]; $q->andWhere($q->expr()->orX(...$e))->setParameter('q','%'.trim((string)$filters['q']).'%');}
-    private function selectFields(QueryBuilder $q,string $tipo,string $a):void{if($tipo==='radar'){$q->leftJoin($a.'.faixas','faixa')->select(implode(', ',[$a.'.id AS id',$a.'.municipio AS municipio',$a.'.uf AS uf',$a.'.logradouro AS endereco',$a.'.tipoMedidor AS tipo',$a.'.nomeEmpresa AS nomeEmpresa',$a.'.cnpjEmpresa AS cnpjEmpresa',$a.'.marcaMedidor AS marcaMedidor',$a.'.modeloMedidor AS modeloMedidor',$a.'.numeroSerie AS numeroSerie',$a.'.capacidade AS capacidade',$a.'.situacao AS situacao',$a.'.dataVerificacao AS dataVerificacao',$a.'.dataUltimaVerificacao AS dataUltimaVerificacao',$a.'.dataValidade AS dataValidade',$a.'.dataVerificacaoEfetiva AS dataVerificacaoEfetiva',$a.'.dataLacre AS dataLacre',$a.'.lacre AS lacre',$a.'.numeroCertificado AS numeroCertificado',$a.'.orgaoVerificador AS orgaoVerificador','faixa.numeroInmetro AS numeroInmetro','faixa.numeroFaixa AS numeroFaixa','faixa.sentido AS sentido','faixa.velocidadeNominal AS velocidade'])))->addOrderBy($a.'.municipio','ASC')->addOrderBy('faixa.numeroFaixa','ASC');return;}if($tipo==='escola'){$f=[$a.'.id AS id',$a.'.escola AS nome',$a.'.codigoInep AS codigoInep',$a.'.restricaoAtendimento AS restricaoAtendimento',$a.'.municipio AS municipio',$a.'.uf AS uf',$a.'.localizacao AS localizacao',$a.'.localidadeDiferenciada AS localidadeDiferenciada',$a.'.categoriaAdministrativa AS categoriaAdministrativa',$a.'.endereco AS endereco',$a.'.telefone AS telefone',$a.'.dependenciaAdministrativa AS dependenciaAdministrativa',$a.'.categoriaEscolaPrivada AS categoriaEscolaPrivada',$a.'.conveniada AS conveniada',$a.'.regulamentacao AS regulamentacao',$a.'.porte AS porte',$a.'.etapasEnsino AS etapasEnsino',$a.'.outrasOfertas AS outrasOfertas',$a.'.latitude AS latitude',$a.'.longitude AS longitude',$a.'.linkAreaEscolar AS linkAreaEscolar'];$q->select(implode(', ',$f))->addOrderBy($a.'.municipio','ASC');return;}$f=[$a.'.id AS id',$a.'.codigoIsimp AS codigoIsimp',$a.'.autorizacao AS autorizacao',$a.'.dataPublicacao AS dataPublicacao',$a.'.razaoSocial AS razaoSocial',$a.'.cnpj AS cnpj',$a.'.endereco AS endereco',$a.'.complemento AS complemento',$a.'.bairro AS bairro',$a.'.cep AS cep',$a.'.uf AS uf',$a.'.municipio AS municipio',$a.'.bandeira AS bandeira',$a.'.dataVinculacao AS dataVinculacao',$a.'.nomeFantasia AS nomeFantasia',$a.'.importedAt AS importedAt',$a.'.updatedAt AS updatedAt'];$q->select(implode(', ',$f))->addOrderBy($a.'.municipio','ASC')->addOrderBy($a.'.nomeFantasia','ASC');}
+
+    public function __construct(ManagerRegistry $registry)
+    {
+        parent::__construct($registry, RadarMedidor::class);
+    }
+
+    public function findMunicipios(string $tipo, string $uf): array
+    {
+        $tipo = strtolower(trim($tipo));
+        $uf = strtoupper(trim($uf));
+
+        if (!in_array($tipo, self::TYPES, true) || !preg_match('/^[A-Z]{2}$/', $uf)) {
+            return [];
+        }
+
+        [$entityClass, $field] = match ($tipo) {
+            'radar' => [RadarMedidor::class, 'municipio'],
+            'escola' => [EscolaInep::class, 'municipio'],
+            'posto' => [FuelResellerRaw::class, 'municipio'],
+        };
+
+        $alias = 'record';
+        $query = $this->getEntityManager()->createQueryBuilder()
+            ->select("DISTINCT {$alias}.{$field} AS municipio")
+            ->from($entityClass, $alias)
+            ->andWhere("UPPER({$alias}.uf) = :uf")
+            ->andWhere("{$alias}.{$field} IS NOT NULL")
+            ->andWhere("{$alias}.{$field} <> ''")
+            ->setParameter('uf', $uf)
+            ->orderBy("{$alias}.{$field}", 'ASC');
+
+        return array_values(array_filter(array_map(
+            static fn (array $row): string => trim((string) $row['municipio']),
+            $query->getQuery()->getArrayResult()
+        )));
+    }
+
+    public function search(string $tipo, array $filters, int $page = 1, int $limit = 20): array
+    {
+        $tipo = strtolower(trim($tipo));
+
+        if (!in_array($tipo, self::TYPES, true)) {
+            return ['items' => [], 'total' => 0, 'page' => 1, 'limit' => $limit];
+        }
+
+        $page = max(1, $page);
+        $limit = min(50, max(1, $limit));
+
+        [$entityClass, $alias] = match ($tipo) {
+            'radar' => [RadarMedidor::class, 'radar'],
+            'escola' => [EscolaInep::class, 'escola'],
+            'posto' => [FuelResellerRaw::class, 'posto'],
+        };
+
+        $query = $this->getEntityManager()->createQueryBuilder()->from($entityClass, $alias);
+        $this->applyFilters($query, $alias, $filters, $tipo);
+        $this->selectFields($query, $tipo, $alias);
+
+        $countQuery = $this->getEntityManager()->createQueryBuilder()
+            ->select("COUNT(DISTINCT {$alias}.id)")
+            ->from($entityClass, $alias);
+        $this->applyFilters($countQuery, $alias, $filters, $tipo);
+
+        $total = (int) $countQuery->getQuery()->getSingleScalarResult();
+        $items = $query
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getArrayResult();
+
+        return compact('items', 'total', 'page', 'limit');
+    }
+
+    private function applyFilters(QueryBuilder $query, string $alias, array $filters, string $tipo): void
+    {
+        foreach (['uf', 'municipio'] as $field) {
+            if (!empty($filters[$field])) {
+                $query
+                    ->andWhere("UPPER({$alias}.{$field}) = UPPER(:{$field})")
+                    ->setParameter($field, trim((string) $filters[$field]));
+            }
+        }
+
+        if (empty($filters['q'])) {
+            return;
+        }
+
+        if ($tipo === 'radar') {
+            $query->leftJoin($alias . '.faixas', 'faixaBusca');
+            $expressions = [
+                "LOWER({$alias}.municipio) LIKE LOWER(:q)",
+                "LOWER({$alias}.logradouro) LIKE LOWER(:q)",
+                "LOWER({$alias}.numeroSerie) LIKE LOWER(:q)",
+                'LOWER(faixaBusca.numeroInmetro) LIKE LOWER(:q)',
+            ];
+        } elseif ($tipo === 'posto') {
+            $expressions = [
+                "LOWER({$alias}.razaoSocial) LIKE LOWER(:q)",
+                "LOWER({$alias}.nomeFantasia) LIKE LOWER(:q)",
+                "LOWER({$alias}.municipio) LIKE LOWER(:q)",
+                "LOWER({$alias}.bandeira) LIKE LOWER(:q)",
+            ];
+        } else {
+            $expressions = [
+                "LOWER({$alias}.escola) LIKE LOWER(:q)",
+                "LOWER({$alias}.municipio) LIKE LOWER(:q)",
+                "LOWER({$alias}.codigoInep) LIKE LOWER(:q)",
+            ];
+        }
+
+        $query
+            ->andWhere($query->expr()->orX(...$expressions))
+            ->setParameter('q', '%' . trim((string) $filters['q']) . '%');
+    }
+
+    private function selectFields(QueryBuilder $query, string $tipo, string $alias): void
+    {
+        if ($tipo === 'radar') {
+            $query
+                ->leftJoin($alias . '.faixas', 'faixa')
+                ->select(implode(', ', [
+                    $alias . '.id AS id',
+                    $alias . '.municipio AS municipio',
+                    $alias . '.uf AS uf',
+                    $alias . '.logradouro AS endereco',
+                    $alias . '.tipoMedidor AS tipo',
+                    $alias . '.nomeEmpresa AS nomeEmpresa',
+                    $alias . '.cnpjEmpresa AS cnpjEmpresa',
+                    $alias . '.marcaMedidor AS marcaMedidor',
+                    $alias . '.modeloMedidor AS modeloMedidor',
+                    $alias . '.numeroSerie AS numeroSerie',
+                    $alias . '.capacidade AS capacidade',
+                    $alias . '.situacao AS situacao',
+                    $alias . '.dataVerificacao AS dataVerificacao',
+                    $alias . '.dataUltimaVerificacao AS dataUltimaVerificacao',
+                    $alias . '.dataValidade AS dataValidade',
+                    $alias . '.dataVerificacaoEfetiva AS dataVerificacaoEfetiva',
+                    $alias . '.dataLacre AS dataLacre',
+                    $alias . '.lacre AS lacre',
+                    $alias . '.numeroCertificado AS numeroCertificado',
+                    $alias . '.orgaoVerificador AS orgaoVerificador',
+                    'faixa.numeroInmetro AS numeroInmetro',
+                    'faixa.numeroFaixa AS numeroFaixa',
+                    'faixa.sentido AS sentido',
+                    'faixa.velocidadeNominal AS velocidade',
+                ]))
+                ->addOrderBy($alias . '.municipio', 'ASC')
+                ->addOrderBy('faixa.numeroFaixa', 'ASC');
+
+            return;
+        }
+
+        if ($tipo === 'escola') {
+            $fields = [
+                $alias . '.id AS id',
+                $alias . '.escola AS nome',
+                $alias . '.codigoInep AS codigoInep',
+                $alias . '.restricaoAtendimento AS restricaoAtendimento',
+                $alias . '.municipio AS municipio',
+                $alias . '.uf AS uf',
+                $alias . '.localizacao AS localizacao',
+                $alias . '.localidadeDiferenciada AS localidadeDiferenciada',
+                $alias . '.categoriaAdministrativa AS categoriaAdministrativa',
+                $alias . '.endereco AS endereco',
+                $alias . '.telefone AS telefone',
+                $alias . '.dependenciaAdministrativa AS dependenciaAdministrativa',
+                $alias . '.categoriaEscolaPrivada AS categoriaEscolaPrivada',
+                $alias . '.conveniada AS conveniada',
+                $alias . '.regulamentacao AS regulamentacao',
+                $alias . '.porte AS porte',
+                $alias . '.etapasEnsino AS etapasEnsino',
+                $alias . '.outrasOfertas AS outrasOfertas',
+                $alias . '.latitude AS latitude',
+                $alias . '.longitude AS longitude',
+                $alias . '.linkAreaEscolar AS linkAreaEscolar',
+            ];
+
+            $query->select(implode(', ', $fields))->addOrderBy($alias . '.municipio', 'ASC');
+            return;
+        }
+
+        $fields = [
+            $alias . '.id AS id',
+            $alias . '.codigoIsimp AS codigoIsimp',
+            $alias . '.autorizacao AS autorizacao',
+            $alias . '.dataPublicacao AS dataPublicacao',
+            $alias . '.razaoSocial AS razaoSocial',
+            $alias . '.cnpj AS cnpj',
+            $alias . '.endereco AS endereco',
+            $alias . '.complemento AS complemento',
+            $alias . '.bairro AS bairro',
+            $alias . '.cep AS cep',
+            $alias . '.uf AS uf',
+            $alias . '.municipio AS municipio',
+            $alias . '.bandeira AS bandeira',
+            $alias . '.dataVinculacao AS dataVinculacao',
+            $alias . '.nomeFantasia AS nomeFantasia',
+            $alias . '.importedAt AS importedAt',
+            $alias . '.updatedAt AS updatedAt',
+        ];
+
+        $query
+            ->select(implode(', ', $fields))
+            ->addOrderBy($alias . '.municipio', 'ASC')
+            ->addOrderBy($alias . '.nomeFantasia', 'ASC');
+    }
 }

@@ -320,35 +320,28 @@ class AuthController extends AbstractController
     /**
      * Valida se o nickname existe na plataforma Waze (via API do fórum).
      */
+
     private function validateWazeNickname(string $nickname): bool
-    {
-        try {
-            $response = $this->httpClient->request('GET', 'https://www.waze.com/discuss/user_actions.json', [
-                'query' => [
-                    'offset' => 0,
-                    'username' => $nickname,
-                ],
-                'headers' => [
-                    'Accept' => 'application/json',
-                    'User-Agent' => 'ToolboxWaze/1.0',
-                ],
-                'timeout' => 10,
-            ]);
+{
+    // O padrão da URL do avatar: /discuss/user_avatar/www.waze.com/{nickname}/24/{id}_2.png
+    // O {id} numérico parece variar por usuário — o endpoint user_actions.json é mais confiável.
+    // Se quiser insistir no avatar, teria que descobrir o ID numérico do usuário antes.
+    // O endpoint user_actions.json (que você já usa) é mais direto p/ validar nickname.
 
-            $statusCode = $response->getStatusCode();
-            if ($statusCode === 404) {
-                return false;
-            }
-            if ($statusCode !== 200) {
-                $this->logger->warning('Falha ao validar nickname Waze: status ' . $statusCode);
-                return false;
-            }
+    $url = "https://www.waze.com/discuss/user_avatar/www.waze.com/{$nickname}/24/139694_2.png";
 
-            $payload = $response->toArray(false);
-            return is_array($payload) && array_key_exists('user_actions', $payload);
-        } catch (\Throwable $e) {
-            $this->logger->error('Erro ao validar nickname Waze: ' . $e->getMessage());
-            return false;
-        }
+    try {
+        $response = $this->httpClient->request('HEAD', $url, [
+            'headers' => [
+                'User-Agent' => 'ToolboxWaze/1.0',
+            ],
+            'timeout' => 10,
+        ]);
+
+        return $response->getStatusCode() === 200;
+    } catch (\Throwable $e) {
+        $this->logger->error('Erro ao validar avatar Waze: ' . $e->getMessage());
+        return false;
     }
+}
 }

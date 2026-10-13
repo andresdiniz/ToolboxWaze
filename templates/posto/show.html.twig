@@ -555,11 +555,11 @@
         } else {
             var css = document.createElement('link');
             css.rel = 'stylesheet';
-            css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';
             document.head.appendChild(css);
 
             var js = document.createElement('script');
-            js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
             js.onload = buildMap;
             document.head.appendChild(js);
         }

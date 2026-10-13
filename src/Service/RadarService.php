@@ -416,6 +416,23 @@ final class RadarService
         return count($alteracoes) > 0 ? count($alteracoes) - 2 : 0;
     }
 
+    /**
+     * Verifica se uma coluna existe na tabela atual.
+     * Isso permite manter compatibilidade com bancos que ainda não receberam
+     * a migração da coluna hazard_id.
+     */
+    private function hasTableColumn(string $table, string $column): bool
+    {
+        // Os nomes usados aqui são constantes internas do service.
+        return (bool) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = ?
+               AND COLUMN_NAME = ?',
+            [$table, $column]
+        );
+    }
+
     public function saveWazeLink(int $id, string $wazeLink, ?string $motivo, User $user): void
     {
         $errors = [];
@@ -441,32 +458,51 @@ final class RadarService
             [$id]
         ) ?: null;
 
+        $hasHazardId = $this->hasTableColumn('radar_waze_link', 'hazard_id');
+
         if ($existing) {
-            $this->db->insert('radar_waze_link_log', [
+            $logData = [
                 'radar_waze_link_id' => $existing['id'],
                 'waze_link_anterior' => $existing['waze_link'],
                 'waze_link_novo'     => $wazeLink,
-                'hazard_id_anterior' => $existing['hazard_id'],
-                'hazard_id_novo'     => $hazardId,
                 'motivo'             => $motivo,
                 'changed_by'         => $user->getId(),
                 'changed_at'         => $agora,
-            ]);
+            ];
 
-            $this->db->update('radar_waze_link', [
+            // As colunas de histórico também podem não existir em instalações antigas.
+            if (
+                $this->hasTableColumn('radar_waze_link_log', 'hazard_id_anterior')
+                && $this->hasTableColumn('radar_waze_link_log', 'hazard_id_novo')
+            ) {
+                $logData['hazard_id_anterior'] = $existing['hazard_id'] ?? null;
+                $logData['hazard_id_novo'] = $hazardId;
+            }
+
+            $this->db->insert('radar_waze_link_log', $logData);
+
+            $updateData = [
                 'waze_link'  => $wazeLink,
-                'hazard_id'  => $hazardId,
                 'updated_by' => $user->getId(),
                 'updated_at' => $agora,
-            ], ['id' => $existing['id']]);
+            ];
+            if ($hasHazardId) {
+                $updateData['hazard_id'] = $hazardId;
+            }
+
+            $this->db->update('radar_waze_link', $updateData, ['id' => $existing['id']]);
         } else {
-            $this->db->insert('radar_waze_link', [
+            $insertData = [
                 'radar_medidor_id' => $id,
                 'waze_link'        => $wazeLink,
-                'hazard_id'        => $hazardId,
                 'inserted_by'      => $user->getId(),
                 'inserted_at'      => $agora,
-            ]);
+            ];
+            if ($hasHazardId) {
+                $insertData['hazard_id'] = $hazardId;
+            }
+
+            $this->db->insert('radar_waze_link', $insertData);
         }
 
         $this->db->update('radar_medidor', ['link_waze' => $wazeLink], ['id' => $id]);

@@ -6,6 +6,9 @@ twig:
         # Definir GTM_ID no .env.local para ativar (ex: GTM_ID=GTM-XXXXXX)
         gtm_id: '%env(string:default::GTM_ID)%'
         mail_from: '%env(default::MAILER_FROM_EMAIL)%'
+        # Chave pública do MapTiler usada pelos mapas Leaflet.
+        # Definir MAPTILER_KEY no .env.local e no ambiente de produção.
+        maptiler_key: '%env(string:default::MAPTILER_KEY)%'
 
 when@test:
     twig:

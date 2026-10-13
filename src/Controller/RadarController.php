@@ -9,6 +9,7 @@ use App\Entity\User;
 use App\Service\RadarService;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -23,9 +24,12 @@ class RadarController extends AbstractController
     private const PER_PAGE = 50;
 
     public function __construct(
-        private readonly Connection   $db,
-        private readonly RadarService $radarService
-    ) {}
+        private readonly Connection $db,
+        private readonly RadarService $radarService,
+        #[Autowire('%env(MAPTILER_KEY)%')]
+        private readonly string $mapTilerKey,
+    ) {
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Listagem principal
@@ -36,12 +40,12 @@ class RadarController extends AbstractController
         $this->requirePermission(User::PERMISSION_RADARES);
 
         $filters = [
-             'uf'        => trim((string) $request->query->get('uf', '')),
+            'uf' => trim((string) $request->query->get('uf', '')),
             'municipio' => trim((string) $request->query->get('municipio', '')),
             'resultado' => trim((string) $request->query->get('resultado', '')),
-            'tipo'      => trim((string) $request->query->get('tipo', '')),
-            'validade'  => trim((string) $request->query->get('validade', '')),
-            'serie'     => trim((string) $request->query->get('serie', '')),
+            'tipo' => trim((string) $request->query->get('tipo', '')),
+            'validade' => trim((string) $request->query->get('validade', '')),
+            'serie' => trim((string) $request->query->get('serie', '')),
         ];
 
         if ($filters['uf'] !== '') {
@@ -49,38 +53,42 @@ class RadarController extends AbstractController
         }
 
         $allowedUfs = $this->allowedUfsForView();
-        $page       = max(1, (int) $request->query->get('page', 1));
-        $paginated  = $this->radarService->findPaginated($filters, $page, self::PER_PAGE, $allowedUfs);
+        $page = max(1, (int) $request->query->get('page', 1));
 
-        // #P4 — uma única query retorna stats + totalMesclados
-        // (antes eram 3 roundtrips separados: Q3 COUNT, Q5 getStats, Q6 totalMesclados)
-        $semFiltros  = array_filter($filters) === [] && $allowedUfs === null;
-        $statsFull   = $semFiltros ? $this->radarService->getStatsFull() : null;
-        $stats           = $statsFull;
-        $totalMesclados  = $statsFull['total_mesclados'] ?? (int) $this->db->fetchOne(
+        $paginated = $this->radarService->findPaginated(
+            $filters,
+            $page,
+            self::PER_PAGE,
+            $allowedUfs,
+        );
+
+        $semFiltros = array_filter($filters) === [] && $allowedUfs === null;
+        $statsFull = $semFiltros ? $this->radarService->getStatsFull() : null;
+        $stats = $statsFull;
+
+        $totalMesclados = $statsFull['total_mesclados'] ?? (int) $this->db->fetchOne(
             'SELECT COUNT(*) FROM radar_medidor WHERE merged_into_id IS NOT NULL'
         );
 
-        // #11 — filtros estáticos via cache (1 hora)
-        $ufs        = $this->radarService->getUfsParaFiltro($allowedUfs);
+        $ufs = $this->radarService->getUfsParaFiltro($allowedUfs);
         $resultados = $this->radarService->getResultadosParaFiltro();
-        $tipos      = $this->radarService->getTiposParaFiltro();
+        $tipos = $this->radarService->getTiposParaFiltro();
 
         return $this->render('radar/index.html.twig', [
-            'rows'           => $paginated['rows'],
-            'page'           => $paginated['page'],
-            'pages'          => $paginated['pages'],
-            'total'          => $paginated['total'],
-            'per_page'       => self::PER_PAGE,
-            'stats'          => $stats,
-            'ufs'            => $ufs,
-            'resultados'     => $resultados,
-            'tipos'          => $tipos,
-            'hoje'           => (new \DateTimeImmutable())->format('Y-m-d'),
-            'em30'           => (new \DateTimeImmutable('+30 days'))->format('Y-m-d'),
-            'ha30dias'       => (new \DateTimeImmutable('-30 days'))->format('Y-m-d'),
-            'filters'        => $filters,
-            'allowedUfs'     => $allowedUfs,
+            'rows' => $paginated['rows'],
+            'page' => $paginated['page'],
+            'pages' => $paginated['pages'],
+            'total' => $paginated['total'],
+            'per_page' => self::PER_PAGE,
+            'stats' => $stats,
+            'ufs' => $ufs,
+            'resultados' => $resultados,
+            'tipos' => $tipos,
+            'hoje' => (new \DateTimeImmutable())->format('Y-m-d'),
+            'em30' => (new \DateTimeImmutable('+30 days'))->format('Y-m-d'),
+            'ha30dias' => (new \DateTimeImmutable('-30 days'))->format('Y-m-d'),
+            'filters' => $filters,
+            'allowedUfs' => $allowedUfs,
             'totalMesclados' => $totalMesclados,
         ]);
     }
@@ -93,12 +101,16 @@ class RadarController extends AbstractController
     {
         $this->requirePermission(User::PERMISSION_RADARES);
 
-        $page      = max(1, (int) $request->query->get('page', 1));
-        $paginated = $this->radarService->getMescladosPaginated($page, self::PER_PAGE);
+        $page = max(1, (int) $request->query->get('page', 1));
+
+        $paginated = $this->radarService->getMescladosPaginated(
+            $page,
+            self::PER_PAGE,
+        );
 
         return $this->render('radar/mesclados.html.twig', [
-            'rows'  => $paginated['rows'],
-            'page'  => $paginated['page'],
+            'rows' => $paginated['rows'],
+            'page' => $paginated['page'],
             'pages' => $paginated['pages'],
             'total' => $paginated['total'],
         ]);
@@ -107,7 +119,7 @@ class RadarController extends AbstractController
     // ─────────────────────────────────────────────────────────────────────────
     // Detalhe
     // ─────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\\d+'])]
+    #[Route('/{id}', name: 'radar_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(int $id): Response
     {
         $this->requirePermission(User::PERMISSION_RADARES);
@@ -120,13 +132,15 @@ class RadarController extends AbstractController
 
         $this->requireUfAccess($data['radar']['sigla_uf'] ?? null);
 
+        $data['mapTilerKey'] = $this->mapTilerKey;
+
         return $this->render('radar/show.html.twig', $data);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Editar radar
     // ─────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\\d+'])]
+    #[Route('/{id}/editar', name: 'radar_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function edit(int $id, Request $request): Response
     {
         $this->requirePermission(User::PERMISSION_RADARES);
@@ -139,16 +153,28 @@ class RadarController extends AbstractController
 
         $this->requireUfAccess($radar['sigla_uf'] ?? null);
 
-        $estados    = $this->db->fetchAllAssociative('SELECT uf, name FROM brazilian_state ORDER BY uf');
+        $estados = $this->db->fetchAllAssociative(
+            'SELECT uf, name FROM brazilian_state ORDER BY uf'
+        );
+
         $estadosMap = array_column($estados, 'name', 'uf');
 
         if ($request->isMethod('POST')) {
             /** @var User $user */
-            $user  = $this->getUser();
-            $count = $this->radarService->saveEdit($id, $request->request->all(), $estadosMap, $user);
+            $user = $this->getUser();
+
+            $count = $this->radarService->saveEdit(
+                $id,
+                $request->request->all(),
+                $estadosMap,
+                $user,
+            );
 
             if ($count > 0) {
-                $this->addFlash('success', "$count campo(s) atualizado(s) com sucesso.");
+                $this->addFlash(
+                    'success',
+                    sprintf('%d campo(s) atualizado(s) com sucesso.', $count),
+                );
             } else {
                 $this->addFlash('info', 'Nenhuma alteração detectada.');
             }
@@ -156,50 +182,66 @@ class RadarController extends AbstractController
             return $this->redirectToRoute('radar_show', ['id' => $id]);
         }
 
-        $siglaUf    = $radar['sigla_uf'] ?? '';
+        $siglaUf = $radar['sigla_uf'] ?? '';
         $estadoNome = $estadosMap[$siglaUf] ?? $radar['uf'] ?? '';
 
         return $this->render('radar/edit.html.twig', [
-            'radar'           => $radar,
+            'radar' => $radar,
             'camposEditaveis' => $this->radarService->getCamposEditaveis(),
-            'editLog'         => $this->radarService->getEditLog($id),
-            'estados'         => $estados,
-            'estadoNome'      => $estadoNome,
+            'editLog' => $this->radarService->getEditLog($id),
+            'estados' => $estados,
+            'estadoNome' => $estadoNome,
         ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Salvar link Waze
     // ─────────────────────────────────────────────────────────────────────────
-    #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\\d+'])]
+    #[Route('/{id}/waze', name: 'radar_waze_save', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function wazeSave(int $id, Request $request): Response
     {
         $this->requirePermission(User::PERMISSION_RADARES);
 
-        $radar = $this->db->fetchAssociative('SELECT id, sigla_uf FROM radar_medidor WHERE id = ?', [$id]);
+        $radar = $this->db->fetchAssociative(
+            'SELECT id, sigla_uf FROM radar_medidor WHERE id = ?',
+            [$id],
+        );
+
         if (!$radar) {
             throw $this->createNotFoundException();
         }
+
         $this->requireUfAccess($radar['sigla_uf'] ?? null);
 
         $wazeLink = trim((string) $request->request->get('waze_link', ''));
-        $motivo   = trim((string) $request->request->get('motivo_revisao', '')) ?: null;
+        $motivo = trim((string) $request->request->get('motivo_revisao', '')) ?: null;
 
         /** @var User $user */
         $user = $this->getUser();
 
         try {
-            $this->radarService->saveWazeLink($id, $wazeLink, $motivo, $user);
+            $this->radarService->saveWazeLink(
+                $id,
+                $wazeLink,
+                $motivo,
+                $user,
+            );
         } catch (\InvalidArgumentException $e) {
-            $errors   = json_decode($e->getMessage(), true) ?? [];
+            $errors = json_decode($e->getMessage(), true) ?? [];
             $showData = $this->radarService->getShowData($id);
-            $showData['wazeErrors']   = $errors;
-            $showData['wazeFormData'] = ['waze_link' => $wazeLink, 'motivo_revisao' => $motivo];
+
+            $showData['wazeErrors'] = $errors;
+            $showData['wazeFormData'] = [
+                'waze_link' => $wazeLink,
+                'motivo_revisao' => $motivo,
+            ];
+            $showData['mapTilerKey'] = $this->mapTilerKey;
 
             return $this->render('radar/show.html.twig', $showData);
         }
 
         $this->addFlash('success', 'Link Waze salvo com sucesso.');
+
         return $this->redirectToRoute('radar_show', ['id' => $id]);
     }
 }

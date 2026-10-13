@@ -3,6 +3,7 @@ parameters:
     app.gtm_id: '%env(string:default::GTM_ID)%'
     app.mail_from: '%env(default::MAILER_FROM_EMAIL)%'
     app.mailer_from: '%env(default::MAILER_FROM_EMAIL)%'
+    app.maptiler_key: '%env(MAPTILER_KEY)%'
 
 services:
     _defaults:

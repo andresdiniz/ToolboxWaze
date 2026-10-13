@@ -335,8 +335,9 @@
                 {% set mapaUrl = wazeLink ? wazeLink.waze_link : radar.link_waze %}
                 {% if mapaUrl %}
                 <div id="waze-map"
-                     data-waze-url="{{ mapaUrl|e('html_attr') }}"
-                     style="height:240px;width:100%;background:var(--color-surface-2)">
+                    data-waze-url="{{ mapaUrl|e('html_attr') }}"
+                    data-maptiler-key="{{ mapTilerKey|default('')|e('html_attr') }}"
+                    style="height:240px;width:100%;background:var(--color-surface-2)">
                 </div>
                 {% endif %}
 

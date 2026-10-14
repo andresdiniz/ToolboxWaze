@@ -397,13 +397,12 @@
     if (!mapDiv.isConnected || mapDiv.dataset.mapInitialized === '1') return;
     var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat2, lon2], 17);
 
-    mapDiv.dataset.mapInitialized = '1';
-    L.tileLayer('https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=' + encodeURIComponent(mapTilerKey), {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">MapTiler</a>',
-      maxZoom: 19,
-      crossOrigin: true
-    }).on('tileerror', function () {
-      console.error('Falha nos tiles MapTiler: verifique MAPTILER_KEY, quota e restrições de domínio.');
+    var mapTilerKey = (mapDiv.dataset.maptilerKey || '').trim();
+
+    L.tileLayer('https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=' + encodeURIComponent(mapTilerKey), {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">MapTiler</a>',
+        maxZoom: 19,
+        crossOrigin: true
     }).addTo(map);
 
     map.invalidateSize();

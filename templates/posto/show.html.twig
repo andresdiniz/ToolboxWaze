@@ -89,6 +89,7 @@
             #}
             {% set wazeEditorUrl = wazeLink ? wazeLink.wazeLink : '' %}
             <div id="posto-map"
+                 data-maptiler-key="{{ maptiler_key|default('')|e('html_attr') }}"
                  data-query="{{ (posto.endereco ~ (posto.complemento ? ', ' ~ posto.complemento : '') ~ ', ' ~ posto.municipio ~ ', ' ~ posto.uf ~ ', Brasil')|e('html_attr') }}"
                  data-nome="{{ posto.razaoSocial|e('html_attr') }}"
                  data-waze-editor="{{ wazeEditorUrl|e('html_attr') }}"
@@ -524,8 +525,20 @@
         }
 
         function buildMap() {
+            if (!mapDiv.isConnected || mapDiv.dataset.mapInitialized === '1') return;
             var L = window.L;
+            var mapTilerKey = (mapDiv.dataset.maptilerKey || '').trim();
             mapDiv.innerHTML = '';
+            if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || !mapTilerKey || !L) {
+                var warning = document.createElement('div');
+                warning.className = 'alert alert-warning rounded-0 border-0 m-0 h-100 d-flex align-items-center small';
+                warning.setAttribute('role', 'alert');
+                warning.textContent = !mapTilerKey
+                    ? 'Mapa indisponível: configure MAPTILER_KEY no ambiente da aplicação.'
+                    : (!L ? 'Não foi possível carregar a biblioteca de mapas. Atualize a página.' : 'Não foi possível identificar coordenadas válidas.');
+                mapDiv.appendChild(warning);
+                return;
+            }
 
             var map = L.map(mapDiv, {
                 center: [lat, lon],
@@ -534,9 +547,13 @@
                 attributionControl: true
             });
 
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
-                maxZoom: 19
+            mapDiv.dataset.mapInitialized = '1';
+            L.tileLayer('https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=' + encodeURIComponent(mapTilerKey), {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">MapTiler</a>',
+                maxZoom: 19,
+                crossOrigin: true
+            }).on('tileerror', function () {
+                console.error('Falha nos tiles MapTiler: verifique MAPTILER_KEY, quota e restrições de domínio.');
             }).addTo(map);
 
             var marker = L.marker([lat, lon]).addTo(map);

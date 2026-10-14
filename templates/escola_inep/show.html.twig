@@ -20,6 +20,7 @@
 
 <div class="container py-3"
      id="escola-data"
+     data-maptiler-key="{{ maptiler_key|default('')|e('html_attr') }}"
      data-lat="{% if hasCoords %}{{ escola.latitude }}{% endif %}"
      data-lon="{% if hasCoords %}{{ escola.longitude }}{% endif %}"
      data-place="{{ escola.linkAreaEscolar|default('')|e('html_attr') }}"
@@ -378,12 +379,31 @@
   cardMapa.style.display = '';
   document.getElementById('mapa-fonte').textContent = fonte;
 
+  var mapTilerKey = (el.dataset.maptilerKey || '').trim();
+  var mapDiv = document.getElementById('escola-map');
+  if (!Number.isFinite(lat2) || !Number.isFinite(lon2) || Math.abs(lat2) > 90 || Math.abs(lon2) > 180) {
+    mapDiv.textContent = 'Não foi possível identificar coordenadas válidas.';
+    return;
+  }
+  if (!mapTilerKey || typeof window.L === 'undefined') {
+    mapDiv.textContent = !mapTilerKey
+      ? 'Mapa indisponível: configure MAPTILER_KEY no ambiente da aplicação.'
+      : 'Não foi possível carregar a biblioteca de mapas. Atualize a página.';
+    mapDiv.classList.add('p-3', 'text-warning');
+    return;
+  }
+
   setTimeout(function () {
+    if (!mapDiv.isConnected || mapDiv.dataset.mapInitialized === '1') return;
     var map = L.map('escola-map', { scrollWheelZoom: false }).setView([lat2, lon2], 17);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19
+    mapDiv.dataset.mapInitialized = '1';
+    L.tileLayer('https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=' + encodeURIComponent(mapTilerKey), {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">MapTiler</a>',
+      maxZoom: 19,
+      crossOrigin: true
+    }).on('tileerror', function () {
+      console.error('Falha nos tiles MapTiler: verifique MAPTILER_KEY, quota e restrições de domínio.');
     }).addTo(map);
 
     map.invalidateSize();

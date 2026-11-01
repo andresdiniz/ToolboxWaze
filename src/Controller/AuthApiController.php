@@ -23,8 +23,8 @@ final class AuthApiController extends AbstractController
 
         return $this->json([
             'valid' => true,
-            'username' => $user->getUserIdentifier(),
-            'nome' => $user->getNome(),
+            'username' => $user->getWazeNickname() ?? $user->getUserIdentifier(),
+            'nome' => $user->getName(),
         ]);
     }
 }

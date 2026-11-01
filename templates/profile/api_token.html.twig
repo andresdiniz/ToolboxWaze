@@ -1,0 +1,60 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Token de API{% endblock %}
+
+{% block body %}
+<div class="container py-4">
+    <h1 class="h3 mb-3">Token de API</h1>
+
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ type }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    {% if newToken %}
+        <div class="alert alert-warning">
+            <strong>Copie seu token agora.</strong><br>
+            Ele não será mostrado novamente.
+        </div>
+
+        <div class="input-group mb-3">
+            <input class="form-control font-monospace" readonly value="{{ newToken }}" id="api-token">
+            <button class="btn btn-outline-secondary" type="button"
+                    onclick="navigator.clipboard.writeText(document.getElementById('api-token').value)">
+                Copiar
+            </button>
+        </div>
+    {% endif %}
+
+    <p>
+        {% if tokenGeneratedAt %}
+            Token atual gerado em <strong>{{ tokenGeneratedAt|date('d/m/Y H:i') }}</strong>.
+        {% else %}
+            Você ainda não possui um token de API.
+        {% endif %}
+    </p>
+
+    <form method="post" action="{{ path('profile_api_token_generate') }}" class="d-inline">
+        <input type="hidden" name="_token" value="{{ csrf_token('api_token_generate') }}">
+        <button class="btn btn-primary">
+            {{ tokenGeneratedAt ? 'Gerar novo token' : 'Gerar token' }}
+        </button>
+    </form>
+
+    {% if tokenGeneratedAt %}
+        <form method="post" action="{{ path('profile_api_token_revoke') }}" class="d-inline"
+              onsubmit="return confirm('Revogar o token atual? Integrações que usam este token deixarão de funcionar.');">
+            <input type="hidden" name="_token" value="{{ csrf_token('api_token_revoke') }}">
+            <button class="btn btn-outline-danger">Revogar token</button>
+        </form>
+    {% endif %}
+
+    <hr>
+
+    <h2 class="h5">Como usar</h2>
+
+    <pre class="bg-light p-3 rounded"><code>curl "https://SEU-DOMINIO/api/exemplo" \
+  -H "X-API-TOKEN: SEU_TOKEN"</code></pre>
+</div>
+{% endblock %}

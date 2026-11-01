@@ -1,189 +1,148 @@
 # Guia de Autenticação — API WazeToolbox
 
-Todos os endpoints da API requerem um **token pessoal** enviado no header
-`Authorization`. Este guia explica como obter, usar e revogar esse token.
+A API do WazeToolbox usa um **token pessoal** enviado no header `X-API-TOKEN`.
 
----
+Este guia explica como obter, validar, usar e revogar o token.
 
 ## 1. Como obter seu token
 
-### Passo a passo (interface web)
+1. Faça login no site:
 
-1. Faça login no site: `https://<seu-dominio>`
-2. Acesse o menu do seu perfil e clique em **"Token de API"**,
-   ou navegue diretamente para:
-   ```
-   https://<seu-dominio>/perfil/api-token
-   ```
-3. Se ainda não tiver um token, clique em **"Gerar meu token"**.
-4. O token será exibido na tela (64 caracteres hexadecimais).
-5. Clique no ícone de **copiar** ao lado do campo.
+```text
+https://wazetoolbox.acheireviews.com.br
+```
 
-> ⚠️ **Guarde o token em local seguro.** Ele tem o mesmo nível de acesso
-> que sua senha para as rotas de API. Não compartilhe publicamente.
+2. Acesse a página do token:
 
----
+```text
+https://wazetoolbox.acheireviews.com.br/profile/api-token
+```
+
+3. Se ainda não tiver um token, clique em **Gerar novo token**.
+4. Copie o token exibido na tela.
+
+> ⚠️ **Guarde o token em local seguro.** Ele permite usar as rotas da API em seu nome.
+> Não compartilhe publicamente.
 
 ## 2. Como usar o token
 
-Envie o token no header `Authorization` em **todas** as requisições:
+Envie o token no header `X-API-TOKEN` em todas as requisições protegidas:
 
-```
-Authorization: Bearer <seu-token-de-64-chars>
-```
-
-### Python
-
-```python
-import os
-import requests
-
-API_TOKEN = os.getenv('WAZE_API_TOKEN')  # recomendado via variável de ambiente
-
-headers = {
-    'Authorization': f'Bearer {API_TOKEN}',
-    'Content-Type':  'application/json',
-}
-
-# Exemplo: consulta individual
-resp = requests.get(
-    'https://<seu-dominio>/api/radares/consultar',
-    headers=headers,
-    params={'numero_serie': 'ABC123456'},
-)
-print(resp.json())
+```http
+X-API-TOKEN: SEU_TOKEN_DE_API
 ```
 
-### JavaScript (fetch)
+### JavaScript
 
-```javascript
-const token = 'seu_token_aqui';
-
-const resp = await fetch('/api/radares/consultar?numero_serie=ABC123456', {
+```js
+const response = await fetch(
+  "https://wazetoolbox.acheireviews.com.br/api/auth/validate",
+  {
     headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-    },
-});
-const radar = await resp.json();
+      "X-API-TOKEN": token,
+      "Accept": "application/json"
+    }
+  }
+);
 ```
 
 ### cURL
 
 ```bash
-curl -H "Authorization: Bearer SEU_TOKEN" \
-     "https://<seu-dominio>/api/radares/consultar?numero_serie=ABC123456"
+curl -H "X-API-TOKEN: SEU_TOKEN_DE_API" \
+     -H "Accept: application/json" \
+     "https://wazetoolbox.acheireviews.com.br/api/auth/validate"
 ```
 
----
+## 3. Validar o token
 
-## 3. Endpoints disponíveis
+Antes de salvar o token em um aplicativo ou userscript, valide-o:
 
-| Método | Endpoint | Descrição | Auth |
-|--------|----------|-----------|------|
-| `POST` | `/api/radares/importar` | Importação bulk (até 500) | ✅ Bearer |
-| `GET`  | `/api/radares/consultar` | Busca por N/S ou INMETRO | ✅ Bearer |
-| `POST` | `/api/radares/consultar/lote` | Busca em lote (até 100) | ✅ Bearer |
-| `GET`  | `/api/meu-token` | Retorna token atual (JSON, requer sessão web) | ✅ Sessão |
-| `POST` | `/api/token/gerar` | Gera novo token (JSON, requer sessão web) | ✅ Sessão |
-| `POST` | `/api/token/revogar` | Revoga token (JSON, requer sessão web) | ✅ Sessão |
+```http
+GET /api/auth/validate
+X-API-TOKEN: SEU_TOKEN_DE_API
+Accept: application/json
+```
 
----
-
-## 4. Parâmetros de consulta
-
-### GET `/api/radares/consultar`
-
-| Parâmetro | Tipo | Obrigatório | Exemplo |
-|-----------|------|-------------|--------|
-| `numero_serie` | string | Um dos dois | `ABC123456` |
-| `numero_inmetro` | string | Um dos dois | `001/2025` |
-
-### POST `/api/radares/consultar/lote`
-
-Body JSON:
+Resposta para token válido:
 
 ```json
 {
-  "numeros_serie":   ["ABC123", "DEF456"],
-  "numeros_inmetro": ["001/2025"]
+  "valid": true,
+  "username": "andresoaresdiniz",
+  "nome": "André Soares Diniz"
 }
 ```
 
-Limite: **100 itens** por requisição (soma de série + INMETRO).
+Resposta para token inválido:
 
----
-
-## 5. Respostas e códigos HTTP
-
-| Código | Situação |
-|--------|----------|
-| `200` | Sucesso |
-| `201` | Token criado com sucesso |
-| `207` | Importação parcial (alguns erros) |
-| `400` | Parâmetros inválidos |
-| `401` | Token ausente, inválido ou revogado |
-| `404` | Radar não encontrado |
-| `422` | Limite de batch excedido |
-
-Exemplo de resposta `401`:
 ```json
-{ "error": "Unauthorized" }
+{
+  "valid": false,
+  "error": "Token inválido."
+}
 ```
 
-Ao receber `401`, acesse `/perfil/api-token` e gere um novo token.
+Código HTTP para token inválido:
 
----
+```text
+401 Unauthorized
+```
+
+## 4. Uso no WME Marcador de Tarefas
+
+No WME Marcador de Tarefas:
+
+1. Clique em **🔑 Token da API**.
+2. Clique em **Abrir página do token**.
+3. Faça login no ToolboxWaze.
+4. Clique em **Gerar novo token**.
+5. Copie o token.
+6. Cole no modal do userscript.
+7. Clique em **Validar e salvar**.
+
+O userscript chama `GET /api/auth/validate` antes de salvar.
+
+- Se o token for válido, ele é salvo no `localStorage` do navegador.
+- Se o token for inválido, ele **não é salvo** e o modal exibe o erro.
+
+Chave usada no `localStorage`:
+
+```js
+"wme_marcador_escolas_token"
+```
+
+## 5. Endpoints disponíveis
+
+| Método | Endpoint | Descrição | Autenticação |
+|---|---|---|---|
+| `GET` | `/api/auth/validate` | Valida o token da API | `X-API-TOKEN` |
+| `GET` | `/api/escolas/uf/{UF}` | Lista escolas de uma UF | `X-API-TOKEN` |
+| `GET` | `/api/escolas/uf/{UF}/proxima` | Retorna uma escola pendente | `X-API-TOKEN` |
+| `POST` | `/api/escolas/uf/{UF}/reservar` | Reserva escolas para um username | `X-API-TOKEN` |
+| `POST` | `/api/escolas/uf/{UF}/liberar` | Libera reservas de um username | `X-API-TOKEN` |
+| `PATCH` | `/api/escolas/{id}/status` | Atualiza o status de uma escola | `X-API-TOKEN` |
+| `PATCH` | `/api/escolas/{id}` | Atualiza links do Waze | `X-API-TOKEN` |
 
 ## 6. Gerenciar o token
 
-### Regenerar (substitui o atual)
+### Regenerar
 
-Acesse `/perfil/api-token` → clique em **"Regenerar token"**.
-O token anterior é **invalidado imediatamente**.
+Acesse `/profile/api-token` e clique em **Gerar novo token**.
 
-### Revogar (apaga sem gerar novo)
+O token anterior deixa de ser válido.
 
-Acesse `/perfil/api-token` → clique em **"Revogar token"**.
-Após revogar, todas as requisições com o token antigo retornam `401`.
+### Remover do navegador
 
-### Via JSON API (sessão ativa)
+No painel do WME Marcador de Tarefas, clique em **Remover**.
 
-```bash
-# Gerar novo token
-curl -X POST https://<seu-dominio>/api/token/gerar \
-     -b 'PHPSESSID=sua_sessao'  # necessita cookie de sessão
+Isso apaga apenas o token salvo no `localStorage` daquele navegador.
 
-# Revogar
-curl -X POST https://<seu-dominio>/api/token/revogar \
-     -b 'PHPSESSID=sua_sessao'
-```
+## 7. Segurança
 
----
-
-## 7. Variáveis de ambiente recomendadas
-
-```bash
-# Linux / macOS
-export WAZE_BASE_URL='https://<seu-dominio>'
-export WAZE_API_TOKEN='seu_token_de_64_chars'
-
-# Windows (PowerShell)
-$env:WAZE_API_TOKEN = 'seu_token_de_64_chars'
-```
-
-Nunca coloque o token diretamente no código-fonte versionado.
-
----
-
-## 8. Características de segurança do token
-
-| Característica | Detalhe |
-|---|---|
-| Tamanho | 64 caracteres hexadecimais (256 bits de entropia) |
-| Geração | `random_bytes(32)` — criptograficamente seguro |
-| Armazenamento | Banco de dados, coluna com índice `UNIQUE` |
-| Lookup | O(1) — busca direta por índice, sem varrer a tabela |
-| Expiração | Não expira automaticamente |
-| Revogação | Imediata (seta NULL no banco) |
-| Por usuário | Cada usuário tem exatamente 1 token ativo por vez |
+- Nunca coloque o token diretamente no código-fonte versionado.
+- Não compartilhe o token em grupos, prints ou repositórios públicos.
+- Use HTTPS sempre.
+- Cada usuário deve usar o próprio token.
+- Salve o token apenas no `localStorage` do navegador do usuário.
+- Ao receber `401`, solicite que o usuário gere um novo token.

@@ -1,6 +1,134 @@
 # Integração: Escolas no WME Marcador de Tarefas
 
-## Recomendação de desempenho
+O WME Marcador de Tarefas integra o módulo **Escolas** da API do ToolboxWaze.
+
+Cada usuário usa o próprio token da API, salvo apenas no `localStorage` do navegador.
+
+## Configuração
+
+O userscript usa esta configuração:
+
+```js
+const ESCOLAS_API = {
+    BASE: "https://wazetoolbox.acheireviews.com.br",
+    TOKEN_STORAGE_KEY: "wme_marcador_escolas_token",
+    LOTE: 50,
+    CACHE_KEY: "wme_marcador_escolas_reservadas"
+};
+```
+
+O token **não fica escrito no userscript**.
+
+Ele é informado pelo usuário no modal e salvo apenas no navegador:
+
+```js
+localStorage.setItem("wme_marcador_escolas_token", token);
+```
+
+## Como o usuário configura o token
+
+1. Abra o painel **Inspetor de Tarefas**.
+2. Clique em **🔑 Token da API**.
+3. Clique em **Abrir página do token**.
+4. Faça login no ToolboxWaze.
+5. Clique em **Gerar novo token**.
+6. Copie o token.
+7. Cole no campo do modal.
+8. Clique em **Validar e salvar**.
+
+O userscript valida o token antes de salvá-lo.
+
+## Validação do token
+
+Ao clicar em **Validar e salvar**, o userscript chama:
+
+```http
+GET /api/auth/validate
+X-API-TOKEN: SEU_TOKEN_DE_API
+Accept: application/json
+```
+
+Resposta para token válido:
+
+```json
+{
+  "valid": true,
+  "username": "andresoaresdiniz",
+  "nome": "André Soares Diniz"
+}
+```
+
+Resposta para token inválido:
+
+```json
+{
+  "valid": false,
+  "error": "Token inválido."
+}
+```
+
+O token só é salvo no `localStorage` quando a API responde:
+
+```json
+{
+  "valid": true
+}
+```
+
+Se o token for inválido, o modal exibe o erro e o token não é salvo.
+
+## Função de validação
+
+```js
+function validarTokenEscolas(token) {
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: ESCOLAS_API.BASE + "/api/auth/validate",
+            headers: {
+                "X-API-TOKEN": token,
+                "Accept": "application/json"
+            },
+            timeout: 30000,
+            onload: function(res) {
+                try {
+                    const dados = JSON.parse(res.responseText);
+
+                    if (res.status === 200 && dados.valid === true) {
+                        resolve(dados);
+                    } else {
+                        reject(new Error(dados.error || "Token inválido."));
+                    }
+                } catch (e) {
+                    reject(new Error("Resposta inválida ao validar o token."));
+                }
+            },
+            onerror: function() {
+                reject(new Error("Falha de conexão ao validar o token."));
+            },
+            ontimeout: function() {
+                reject(new Error("Tempo limite ao validar o token."));
+            }
+        });
+    });
+}
+```
+
+## Uso do token nas chamadas
+
+Todas as chamadas da API de Escolas enviam o token salvo:
+
+```js
+headers: {
+    "X-API-TOKEN": obterTokenEscolas(),
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+}
+```
+
+Se não houver token salvo, o modal de configuração abre automaticamente.
+
+## Reserva em lote
 
 Use **reserva em lote de 50 escolas**, e não uma por vez.
 
@@ -14,482 +142,32 @@ Use **reserva em lote de 50 escolas**, e não uma por vez.
 
 ## Inatividade de 30 minutos
 
-O userscript deve acompanhar a última interação do usuário. Após **30 minutos sem uso**, ele deve:
+O userscript acompanha a última interação do usuário. Após **30 minutos sem uso**, ele:
 
-1. Chamar `POST /api/escolas/uf/{UF}/liberar`.
-2. Liberar apenas as escolas com `status = reservado` e `reservado_para = username`.
-3. Limpar o `localStorage`.
-4. Limpar a lista local e os marcadores do mapa.
-
-Adicione estas constantes:
+1. Chama `POST /api/escolas/uf/{UF}/liberar`.
+2. Libera apenas as escolas com `status = reservado` e `reservado_para = username`.
+3. Limpa o `localStorage`.
+4. Limpa a lista local e os marcadores do mapa.
 
 ```js
-const INATIVIDADE_LIMITE_MS = 30 * 60 * 1000; // 30 minutos
-const INATIVIDADE_CHECK_MS = 60 * 1000; // verifica a cada 1 minuto
-
-let ultimaAtividadeEm = Date.now();
-let inatividadeIntervalId = null;
+const INATIVIDADE_LIMITE_MS = 30 * 60 * 1000;
+const INATIVIDADE_CHECK_MS = 60 * 1000;
 ```
 
-Adicione estas funções:
-
-```js
-function registrarAtividade() {
-    ultimaAtividadeEm = Date.now();
-}
-
-function iniciarControleInatividade() {
-    if (inatividadeIntervalId) return;
-
-    inatividadeIntervalId = setInterval(verificarInatividade, INATIVIDADE_CHECK_MS);
-}
-
-async function verificarInatividade() {
-    const cache = lerCacheEscolas();
-
-    if (!cache || !cache.uf || !cache.username) return;
-
-    const tempoSemUso = Date.now() - ultimaAtividadeEm;
-
-    if (tempoSemUso < INATIVIDADE_LIMITE_MS) return;
-
-    try {
-        await chamarApiEscolas(
-            "POST",
-            `/api/escolas/uf/${cache.uf}/liberar`,
-            { username: cache.username }
-        );
-
-        console.log("📍 WME Marcador: Reserva de escolas liberada por inatividade.");
-    } catch (erro) {
-        console.warn("📍 WME Marcador: Não foi possível liberar a reserva por inatividade:", erro.message);
-    }
-
-    limparCacheEscolas();
-    currentBatch = [];
-    currentIndex = 0;
-    atualizarNavegacao();
-    $ui('#wme-tarefas-status').text("Reserva liberada após 30 minutos sem uso.");
-}
-```
-
-No final da função `init()`, depois de `configurarEventosPainel()`, adicione:
-
-```js
-['click', 'keydown', 'mousemove', 'touchstart'].forEach(evento => {
-    document.addEventListener(evento, registrarAtividade, { passive: true });
-});
-
-iniciarControleInatividade();
-```
-
-## Configuração
-
-Adicione no início do userscript, depois de `URLS_API`:
-
-```js
-const ESCOLAS_API = {
-    BASE: "https://wazetoolbox.acheireviews.com.br",
-    TOKEN: "SEU_TOKEN_DE_API",
-    LOTE: 50,
-    CACHE_KEY: "wme_marcador_escolas_reservadas"
-};
-```
-
-Adicione também em `@connect`:
-
-```js
-// @connect      wazetoolbox.acheireviews.com.br
-```
-
-## Adicionar o tipo Escolas
-
-No `<select id="wme-tarefas-tipo">`, inclua:
-
-```html
-<option value="ESCOLAS">Escolas</option>
-```
-
-## Funções da API de Escolas
-
-Adicione estas funções ao userscript:
-
-```js
-function chamarApiEscolas(metodo, caminho, payload) {
-    return new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
-            method: metodo,
-            url: ESCOLAS_API.BASE + caminho,
-            headers: {
-                "X-API-TOKEN": ESCOLAS_API.TOKEN,
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            },
-            data: payload ? JSON.stringify(payload) : undefined,
-            timeout: 30000,
-            onload: function(res) {
-                try {
-                    const dados = JSON.parse(res.responseText);
-
-                    if (res.status >= 400) {
-                        reject(new Error(dados.error || `Erro HTTP ${res.status}`));
-                        return;
-                    }
-
-                    resolve(dados);
-                } catch (e) {
-                    reject(new Error("Resposta inválida da API de Escolas."));
-                }
-            },
-            onerror: function() {
-                reject(new Error("Falha de conexão com a API de Escolas."));
-            },
-            ontimeout: function() {
-                reject(new Error("Tempo limite ao chamar a API de Escolas."));
-            }
-        });
-    });
-}
-
-function salvarCacheEscolas(dados) {
-    localStorage.setItem(
-        ESCOLAS_API.CACHE_KEY,
-        JSON.stringify({
-            uf: dados.uf,
-            username: dados.username,
-            escolas: dados.escolas,
-            salvoEm: new Date().toISOString()
-        })
-    );
-}
-
-function lerCacheEscolas() {
-    try {
-        const bruto = localStorage.getItem(ESCOLAS_API.CACHE_KEY);
-        return bruto ? JSON.parse(bruto) : null;
-    } catch (e) {
-        return null;
-    }
-}
-
-function limparCacheEscolas() {
-    localStorage.removeItem(ESCOLAS_API.CACHE_KEY);
-}
-
-function converterEscolaParaTarefa(escola) {
-    const lat = parseFloat(escola.latitude);
-    const lon = parseFloat(escola.longitude);
-
-    return {
-        id: escola.id,
-        linhaDoc: escola.id,
-        tipo: "ESCOLAS",
-        escola: escola.escola,
-        codigoInep: escola.codigo_inep,
-        municipio: escola.municipio,
-        endereco: escola.endereco,
-        coords: `${lat},${lon}`,
-        linkWaze: escola.link_waze,
-        linkAreaEscolar: escola.link_area_escolar,
-        status: escola.status,
-        reservadoPara: escola.reservado_para
-    };
-}
-```
-
-## Carregar lote de escolas
-
-Substitua o início de `carregarTarefasLote()` por esta versão:
-
-```js
-async function carregarTarefasLote() {
-    const nomeUsuario = $ui('#wme-tarefas-usuario').val().trim();
-
-    if (!nomeUsuario) {
-        alert("⚠️ Por favor, digite o seu Nome de Usuário antes de carregar ou editar as tarefas!");
-        $ui('#wme-tarefas-uf').val("");
-        return;
-    }
-
-    const tipo = $ui('#wme-tarefas-tipo').val();
-    const uf = $ui('#wme-tarefas-uf').val();
-
-    if (!tipo || !uf) return;
-
-    $ui('#wme-tarefas-status').text("Carregando tarefas...");
-    $ui('#wme-tarefas-uf, #wme-tarefas-tipo, #wme-tarefas-usuario').prop('disabled', true);
-    desabilitarAcoes();
-    wmeSdk.Map.removeAllFeaturesFromLayer({ layerName: LAYER_NAME });
-
-    try {
-        if (tipo === "ESCOLAS") {
-            const cache = lerCacheEscolas();
-            const cacheValido =
-                cache &&
-                cache.uf === uf &&
-                cache.username === nomeUsuario &&
-                Array.isArray(cache.escolas) &&
-                cache.escolas.length > 0;
-
-            let escolas;
-
-            if (cacheValido) {
-                escolas = cache.escolas;
-                $ui('#wme-tarefas-status').text("Lote recuperado do cache local.");
-            } else {
-                const resposta = await chamarApiEscolas(
-                    "POST",
-                    `/api/escolas/uf/${uf}/reservar`,
-                    {
-                        username: nomeUsuario,
-                        limite: ESCOLAS_API.LOTE
-                    }
-                );
-
-                escolas = (resposta.escolas || []).slice(0, ESCOLAS_API.LOTE);
-
-                if (escolas.length === 0) {
-                    currentBatch = [];
-                    currentIndex = 0;
-                    atualizarNavegacao();
-                    $ui('#wme-tarefas-status').text("Nenhuma escola disponível para reserva nesta UF.");
-                    return;
-                }
-
-                salvarCacheEscolas({
-                    uf,
-                    username: nomeUsuario,
-                    escolas
-                });
-            }
-
-            currentBatch = escolas.map(converterEscolaParaTarefa);
-            currentIndex = 0;
-
-            $ui('#wme-tarefas-uf, #wme-tarefas-tipo, #wme-tarefas-usuario').prop('disabled', false);
-            atualizarNavegacao();
-            return;
-        }
-
-        const urlAlvo = obterUrlPorTipo(tipo);
-
-        chamarAPI(urlAlvo, {
-            action: "getTarefas",
-            tipo,
-            uf,
-            usuario: nomeUsuario
-        }, function(resposta) {
-            currentBatch = resposta.tarefas;
-            currentIndex = 0;
-
-            $ui('#wme-tarefas-uf, #wme-tarefas-tipo, #wme-tarefas-usuario').prop('disabled', false);
-
-            const total = resposta.total || 0;
-            const concluidos = resposta.concluidos || 0;
-            const perc = total > 0 ? Math.round((concluidos / total) * 100) : 0;
-
-            $ui('#wme-tarefas-progresso').text(`${perc}% concluídos (${concluidos}/${total})`);
-
-            if (currentBatch.length === 0) {
-                $ui('#wme-tarefas-status').text("Todas concluídas!");
-                $ui('#wme-tarefas-contador').text("0/0");
-            } else {
-                atualizarNavegacao();
-            }
-        }, function(erroMensagem) {
-            $ui('#wme-tarefas-status').text(erroMensagem);
-            $ui('#wme-tarefas-uf, #wme-tarefas-tipo, #wme-tarefas-usuario').prop('disabled', false);
-        });
-    } catch (erro) {
-        $ui('#wme-tarefas-status').text("Erro: " + erro.message);
-        $ui('#wme-tarefas-uf, #wme-tarefas-tipo, #wme-tarefas-usuario').prop('disabled', false);
-    }
-}
-```
-
-## Enviar ação individual
-
-Substitua `marcarAcao()` por:
-
-```js
-async function marcarAcao(tipoAcao) {
-    const nomeUsuario = $ui('#wme-tarefas-usuario').val().trim();
-
-    if (!nomeUsuario) {
-        alert("⚠️ Por favor, digite o seu Nome de Usuário antes de salvar!");
-        return;
-    }
-
-    const item = currentBatch[currentIndex];
-
-    if (!item) return;
-
-    registrarAtividade();
-
-    $ui('#wme-tarefas-status').text("Salvando...");
-    $ui('#wme-tarefas-btn-resolvido, #wme-tarefas-btn-naolocalizado').prop('disabled', true);
-
-    try {
-        if (item.tipo === "ESCOLAS") {
-            const statusApi = {
-                "RESOLVIDO": "confirmado",
-                "NÃO LOCALIZADO": "nao_localizado",
-                "PULADO": "pulado"
-            }[tipoAcao];
-
-            if (!statusApi) {
-                throw new Error("Ação inválida para Escolas.");
-            }
-
-            await chamarApiEscolas(
-                "PATCH",
-                `/api/escolas/${item.id}/status`,
-                {
-                    status: statusApi,
-                    username: nomeUsuario
-                }
-            );
-
-            const cache = lerCacheEscolas();
-
-            if (cache && Array.isArray(cache.escolas)) {
-                cache.escolas = cache.escolas.filter(
-                    escola => escola.id !== item.id
-                );
-
-                if (cache.escolas.length === 0) {
-                    limparCacheEscolas();
-                } else {
-                    salvarCacheEscolas(cache);
-                }
-            }
-
-            $ui('#wme-tarefas-status').text("Salvo!");
-            $ui('#wme-tarefas-btn-proximo').prop('disabled', false);
-            return;
-        }
-
-        const tipoTarefa = $ui('#wme-tarefas-tipo').val();
-        const urlAlvo = obterUrlPorTipo(tipoTarefa);
-
-        chamarAPI(urlAlvo, {
-            action: "salvar",
-            tipo: tipoTarefa,
-            linha: item.linhaDoc,
-            status: tipoAcao,
-            usuario: nomeUsuario
-        }, function() {
-            $ui('#wme-tarefas-status').text("Salvo!");
-            $ui('#wme-tarefas-btn-proximo').prop('disabled', false);
-        }, function(erroMensagem) {
-            $ui('#wme-tarefas-status').text("Erro: " + erroMensagem);
-            $ui('#wme-tarefas-btn-resolvido, #wme-tarefas-btn-naolocalizado').prop('disabled', false);
-        });
-    } catch (erro) {
-        $ui('#wme-tarefas-status').text("Erro: " + erro.message);
-        $ui('#wme-tarefas-btn-resolvido, #wme-tarefas-btn-naolocalizado').prop('disabled', false);
-    }
-}
-```
-
-## Melhorar a navegação
-
-Para mostrar informações da escola, substitua `irParaLocalAtual()` por:
-
-```js
-function irParaLocalAtual() {
-    const item = currentBatch[currentIndex];
-
-    if (!item || !item.coords) {
-        $ui('#wme-tarefas-status').text("Tarefa sem coordenadas.");
-        return;
-    }
-
-    registrarAtividade();
-
-    const [latStr, lonStr] = item.coords.split(',');
-    const lat = parseFloat(latStr);
-    const lon = parseFloat(lonStr);
-
-    if (Number.isNaN(lat) || Number.isNaN(lon)) {
-        $ui('#wme-tarefas-status').text("Coordenadas inválidas nesta escola.");
-        return;
-    }
-
-    if (item.tipo === "ESCOLAS") {
-        console.log("📍 Escola atual:", item);
-    }
-
-    wmeSdk.Map.setMapCenter({ lonLat: { lon, lat }, zoomLevel: 19 });
-    wmeSdk.Map.removeAllFeaturesFromLayer({ layerName: LAYER_NAME });
-    wmeSdk.Map.addFeatureToLayer({
-        layerName: LAYER_NAME,
-        feature: {
-            id: `tarefa-${item.linhaDoc}`,
-            type: "Feature",
-            geometry: {
-                type: "Point",
-                coordinates: [lon, lat]
-            },
-            properties: {}
-        }
-    });
-}
-```
-
-## Botão para limpar reserva local
-
-Adicione este botão abaixo do botão **PRÓXIMO**:
-
-```html
-<button id="wme-tarefas-btn-limpar-cache" style="width: 100%; margin-top: 8px; background: #607D8B; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">
-    🧹 Limpar reserva local
-</button>
-```
-
-E adicione em `configurarEventosPainel()`:
-
-```js
-$ui('#wme-tarefas-btn-limpar-cache').on('click', function() {
-    if (!confirm("Limpar o lote local de escolas reservadas?")) return;
-
-    limparCacheEscolas();
-    currentBatch = [];
-    currentIndex = 0;
-    atualizarNavegacao();
-    $ui('#wme-tarefas-status').text("Reserva local limpa.");
-});
-```
-
-## Endpoint de liberação
-
-```http
-POST /api/escolas/uf/{UF}/liberar
-Content-Type: application/json
-X-API-TOKEN: SEU_TOKEN_DE_API
-```
-
-```json
-{
-  "username": "andresoaresdiniz"
-}
-```
-
-Resposta:
-
-```json
-{
-  "username": "andresoaresdiniz",
-  "uf": "MG",
-  "liberadas": 12,
-  "message": "12 escola(s) liberada(s) com sucesso."
-}
-```
+## Endpoints usados
+
+| Método | Endpoint | Uso |
+|---|---|---|
+| `GET` | `/api/auth/validate` | Validar o token antes de salvar |
+| `POST` | `/api/escolas/uf/{UF}/reservar` | Reservar até 50 escolas |
+| `POST` | `/api/escolas/uf/{UF}/liberar` | Liberar reserva por inatividade |
+| `PATCH` | `/api/escolas/{id}/status` | Confirmar, não localizar ou pular escola |
 
 ## Segurança
 
-Não coloque o token da API diretamente em um userscript distribuído publicamente. Para uso pessoal, tudo bem; para distribuir a outros usuários, o ideal é:
-
-- Cada usuário informar o próprio token em um campo do painel.
-- Salvar apenas no `localStorage` do navegador.
-- Ou criar um backend intermediário que valide o usuário antes de chamar a API.
+- Cada usuário usa o próprio token.
+- O token é salvo apenas no `localStorage` do navegador.
+- O token não é incluído no código-fonte do userscript.
+- O token é validado antes de ser salvo.
+- O usuário pode remover o token salvo pelo botão **Remover**.
+- Ao receber `401`, o usuário deve gerar um novo token no site.

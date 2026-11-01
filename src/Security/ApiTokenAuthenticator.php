@@ -52,8 +52,11 @@ final class ApiTokenAuthenticator extends AbstractAuthenticator
         return new SelfValidatingPassport(new UserBadge($user->getUserIdentifier()));
     }
 
-    public function onAuthenticationSuccess(Request $request, TokenInterface $token): ?Response
-    {
+    public function onAuthenticationSuccess(
+        Request $request,
+        TokenInterface $token,
+        string $firewallName
+    ): ?Response {
         return null;
     }
 

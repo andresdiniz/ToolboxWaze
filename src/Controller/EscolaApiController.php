@@ -15,9 +15,125 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class EscolaApiController extends AbstractController
 {
+    private const RESERVA_LIMITE = 100;
+
     public function __construct(
         private readonly EntityManagerInterface $em,
     ) {
+    }
+
+    #[Route('/api/escolas/uf/{uf}/reservar', name: 'api_escolas_reservar', methods: ['POST'])]
+    public function reservar(Request $request, string $uf): JsonResponse
+    {
+        $user = $this->requireApiUser();
+        $uf = strtoupper(trim($uf));
+
+        if (!in_array($uf, User::ALL_UFS, true)) {
+            return $this->json(['error' => 'UF inválida.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!$user->canAccessUf($uf)) {
+            return $this->json(['error' => 'Você não tem acesso a esta UF.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $username = trim((string) ($data['username'] ?? ''));
+
+        if ($username === '') {
+            return $this->json(['error' => 'O campo username é obrigatório.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (mb_strlen($username) > 100) {
+            return $this->json(['error' => 'O username deve ter no máximo 100 caracteres.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $escolas = $this->em->createQueryBuilder()
+            ->select('e')
+            ->from(EscolaInep::class, 'e')
+            ->where('e.uf = :uf')
+            ->andWhere('e.status IS NULL')
+            ->setParameter('uf', $uf)
+            ->orderBy('e.escola', 'ASC')
+            ->setMaxResults(self::RESERVA_LIMITE)
+            ->getQuery()
+            ->getResult();
+
+        if ($escolas === []) {
+            return $this->json([
+                'username' => $username,
+                'uf' => $uf,
+                'total' => 0,
+                'escolas' => [],
+                'message' => 'Nenhuma escola disponível para reserva nesta UF.',
+            ]);
+        }
+
+        foreach ($escolas as $escola) {
+            $escola->setStatus(EscolaInep::STATUS_RESERVADO);
+            $escola->setReservadoPara($username);
+            $escola->setUpdatedAt(new \DateTimeImmutable());
+        }
+
+        $this->em->flush();
+
+        return $this->json([
+            'username' => $username,
+            'uf' => $uf,
+            'total' => count($escolas),
+            'escolas' => array_map($this->serializeEscola(...), $escolas),
+        ]);
+    }
+
+    #[Route('/api/escolas/{id}/status', name: 'api_escola_status', methods: ['PATCH', 'POST'])]
+    public function atualizarStatus(Request $request, int $id): JsonResponse
+    {
+        $user = $this->requireApiUser();
+
+        if (!$user->hasPermission(User::PERMISSION_ESCOLAS)) {
+            return $this->json(['error' => 'Você não tem permissão para atualizar escolas.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $escola = $this->em->find(EscolaInep::class, $id);
+
+        if (!$escola instanceof EscolaInep) {
+            return $this->json(['error' => 'Escola não encontrada.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $data = json_decode($request->getContent(), true);
+
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Corpo JSON inválido.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $status = $data['status'] ?? null;
+        $username = trim((string) ($data['username'] ?? ''));
+
+        if (!is_string($status) || !in_array($status, [EscolaInep::STATUS_CONFIRMADO, EscolaInep::STATUS_NAO_LOCALIZADO, EscolaInep::STATUS_PULADO], true)) {
+            return $this->json([
+                'error' => 'Status inválido. Use confirmado, nao_localizado ou pulado.',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($username === '') {
+            return $this->json(['error' => 'O campo username é obrigatório.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($escola->getReservadoPara() !== null && $escola->getReservadoPara() !== $username) {
+            return $this->json([
+                'error' => 'Esta escola está reservada para outro usuário.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $escola->setStatus($status);
+        $escola->setReservadoPara($username);
+        $escola->setUpdatedAt(new \DateTimeImmutable());
+
+        $this->em->flush();
+
+        return $this->json([
+            'message' => 'Status atualizado com sucesso.',
+            'escola' => $this->serializeEscola($escola),
+        ]);
     }
 
     #[Route('/api/escolas/uf/{uf}/proxima', name: 'api_escola_proxima', methods: ['GET'])]
@@ -46,8 +162,8 @@ final class EscolaApiController extends AbstractController
             $qb->andWhere('e.updatedAt IS NOT NULL')
                 ->orderBy('e.updatedAt', 'DESC');
         } else {
-            $qb->orderBy('CASE WHEN e.updatedAt IS NULL THEN 0 ELSE 1 END', 'ASC')
-                ->addOrderBy('e.updatedAt', 'ASC')
+            $qb->andWhere('e.status IS NULL')
+                ->orderBy('e.updatedAt', 'ASC')
                 ->addOrderBy('e.escola', 'ASC');
         }
 
@@ -60,13 +176,11 @@ final class EscolaApiController extends AbstractController
                 'escola' => null,
                 'message' => $somenteAtualizadas
                     ? 'Nenhuma escola atualizada encontrada para esta UF.'
-                    : 'Nenhuma escola pendente de atualização encontrada para esta UF.',
+                    : 'Nenhuma escola pendente encontrada para esta UF.',
             ]);
         }
 
-        return $this->json([
-            'escola' => $this->serializeEscola($escola),
-        ]);
+        return $this->json(['escola' => $this->serializeEscola($escola)]);
     }
 
     #[Route('/api/escolas/uf/{uf}', name: 'api_escolas_por_uf', methods: ['GET'])]
@@ -198,6 +312,8 @@ final class EscolaApiController extends AbstractController
             'link_waze' => $escola->getLinkWaze(),
             'permanent_hazard_id' => $escola->getPermanentHazardId(),
             'link_area_escolar' => $escola->getLinkAreaEscolar(),
+            'status' => $escola->getStatus(),
+            'reservado_para' => $escola->getReservadoPara(),
             'imported_at' => $escola->getImportedAt()->format(DATE_ATOM),
             'updated_at' => $escola->getUpdatedAt()?->format(DATE_ATOM),
         ];

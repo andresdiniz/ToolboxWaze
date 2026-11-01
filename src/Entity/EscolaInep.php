@@ -9,88 +9,82 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
-/**
- * Censo Escolar INEP — planilha pública Google Sheets (todos os estados).
- * Colunas mapeadas a partir do cabeçalho do CSV publicado.
- */
 #[ORM\Entity(repositoryClass: EscolaInepRepository::class)]
 #[ORM\Table(name: 'escola_inep')]
 #[ORM\Index(name: 'idx_ei_codigo_inep',    columns: ['codigo_inep'])]
 #[ORM\Index(name: 'idx_ei_uf_municipio',   columns: ['uf', 'municipio'])]
 #[ORM\Index(name: 'idx_ei_row_hash',       columns: ['row_hash'])]
 #[ORM\Index(name: 'idx_ei_identity_hash',  columns: ['identity_hash'])]
+#[ORM\Index(name: 'idx_ei_status',         columns: ['status'])]
+#[ORM\Index(name: 'idx_ei_reservado_para', columns: ['reservado_para'])]
 class EscolaInep
 {
+    public const STATUS_NULL           = null;
+    public const STATUS_RESERVADO      = 'reservado';
+    public const STATUS_CONFIRMADO     = 'confirmado';
+    public const STATUS_NAO_LOCALIZADO = 'nao_localizado';
+    public const STATUS_PULADO         = 'pulado';
+
+    public const ALL_STATUS = [
+        self::STATUS_RESERVADO,
+        self::STATUS_CONFIRMADO,
+        self::STATUS_NAO_LOCALIZADO,
+        self::STATUS_PULADO,
+    ];
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'bigint', options: ['unsigned' => true])]
     private ?int $id = null;
 
-    /** Restrição de Atendimento */
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $restricaoAtendimento = null;
 
-    /** Escola (nome) */
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $escola = null;
 
-    /** Código INEP */
     #[ORM\Column(length: 20, nullable: true)]
     private ?string $codigoInep = null;
 
-    /** UF (sigla) */
     #[ORM\Column(length: 2, nullable: true)]
     private ?string $uf = null;
 
-    /** Município */
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $municipio = null;
 
-    /** Localização (Urbana / Rural) */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $localizacao = null;
 
-    /** Localidade Diferenciada */
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $localidadeDiferenciada = null;
 
-    /** Categoria Administrativa (Pública / Privada) */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $categoriaAdministrativa = null;
 
-    /** Endereço completo */
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $endereco = null;
 
-    /** Telefone */
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $telefone = null;
 
-    /** Dependência Administrativa (Federal / Estadual / Municipal / Privada) */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $dependenciaAdministrativa = null;
 
-    /** Categoria Escola Privada */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $categoriaEscolaPrivada = null;
 
-    /** Conveniada Poder Público (Sim/Não) */
     #[ORM\Column(length: 10, nullable: true)]
     private ?string $conveniada = null;
 
-    /** Regulamentação pelo Conselho de Educação */
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $regulamentacao = null;
 
-    /** Porte da Escola */
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $porte = null;
 
-    /** Etapas e Modalidade de Ensino Oferecidas */
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $etapasEnsino = null;
 
-    /** Outras Ofertas Educacionais */
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $outrasOfertas = null;
 
@@ -100,36 +94,21 @@ class EscolaInep
     #[ORM\Column(type: 'decimal', precision: 12, scale: 8, nullable: true)]
     private ?string $longitude = null;
 
-    /**
-     * Link do Editor de Mapas do Waze — permanentHazards (zona escolar).
-     * Exemplo: https://waze.com/pt-BR/editor?env=row&permanentHazards=1134152
-     */
     #[ORM\Column(name: 'link_waze', type: 'string', length: 1000, nullable: true)]
     private ?string $linkWaze = null;
 
-    /**
-     * ID numérico extraído de permanentHazards= do link_waze.
-     * Indexado para buscas e exibição rápida.
-     */
     #[ORM\Column(name: 'permanent_hazard_id', type: 'integer', nullable: true, options: ['unsigned' => true])]
     private ?int $permanentHazardId = null;
 
-    /**
-     * URL da Área Escolar no Waze (place type = school area).
-     * Pode apontar para um venue diferente do permanentHazards.
-     */
     #[ORM\Column(name: 'link_area_escolar', type: 'string', length: 1000, nullable: true)]
     private ?string $linkAreaEscolar = null;
 
-    /** SHA-256 de toda a linha — detecta qualquer alteração */
     #[ORM\Column(length: 64)]
     private string $rowHash;
 
-    /** SHA-256 do Código INEP — identidade imutável do registro */
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $identityHash = null;
 
-    /** JSON bruto da linha original */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $rawData = null;
 
@@ -139,11 +118,13 @@ class EscolaInep
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
-    /**
-     * Comentários dos editores sobre esta escola.
-     *
-     * @var Collection<int, EscolaInepComentario>
-     */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $status = null;
+
+    #[ORM\Column(name: 'reservado_para', length: 100, nullable: true)]
+    private ?string $reservadoPara = null;
+
+    /** @var Collection<int, EscolaInepComentario> */
     #[ORM\OneToMany(
         targetEntity: EscolaInepComentario::class,
         mappedBy: 'escola',
@@ -254,6 +235,24 @@ class EscolaInep
 
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
     public function setUpdatedAt(?\DateTimeImmutable $v): self { $this->updatedAt = $v; return $this; }
+
+    public function getStatus(): ?string { return $this->status; }
+    public function setStatus(?string $v): self
+    {
+        if ($v !== null && !in_array($v, self::ALL_STATUS, true)) {
+            throw new \InvalidArgumentException('Status inválido.');
+        }
+
+        $this->status = $v;
+        return $this;
+    }
+
+    public function getReservadoPara(): ?string { return $this->reservadoPara; }
+    public function setReservadoPara(?string $v): self
+    {
+        $this->reservadoPara = $v !== null ? mb_substr(trim($v), 0, 100) : null;
+        return $this;
+    }
 
     /** @return Collection<int, EscolaInepComentario> */
     public function getComentarios(): Collection { return $this->comentarios; }

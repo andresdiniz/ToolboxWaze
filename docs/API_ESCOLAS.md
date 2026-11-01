@@ -8,96 +8,78 @@ Todas as requisições devem enviar o header:
 X-API-TOKEN: SEU_TOKEN_DE_API
 ```
 
-Gere ou gerencie seu token em:
+## Reservar 100 escolas
 
-```text
-/profile/api-token
-```
-
-## Buscar a próxima escola
-
-Retorna **uma escola por requisição**, priorizando escolas que nunca foram atualizadas e, depois, as com atualização mais antiga.
+Reserva até 100 escolas com status `NULL` para um username.
 
 ```http
-GET /api/escolas/uf/{UF}/proxima
+POST /api/escolas/uf/{UF}/reservar
+Content-Type: application/json
+X-API-TOKEN: SEU_TOKEN_DE_API
+```
+
+```json
+{
+  "username": "joao.silva"
+}
 ```
 
 Exemplo:
 
 ```http
-GET /api/escolas/uf/MG/proxima
+POST /api/escolas/uf/MG/reservar
 ```
 
-### Resposta
+A resposta retorna as escolas reservadas:
 
 ```json
 {
-  "escola": {
-    "id": 1,
-    "codigo_inep": "12345678",
-    "escola": "Escola Exemplo",
-    "uf": "MG",
-    "municipio": "Belo Horizonte",
-    "endereco": "Rua Exemplo, 123",
-    "telefone": "31999999999",
-    "latitude": "-19.91670000",
-    "longitude": "-43.93450000",
-    "link_waze": null,
-    "permanent_hazard_id": null,
-    "link_area_escolar": null,
-    "updated_at": null
-  }
+  "username": "joao.silva",
+  "uf": "MG",
+  "total": 100,
+  "escolas": [
+    {
+      "id": 1,
+      "escola": "Escola Exemplo",
+      "status": "reservado",
+      "reservado_para": "joao.silva",
+      "link_waze": null,
+      "link_area_escolar": null
+    }
+  ]
 }
 ```
 
-Quando não houver escola disponível:
+## Atualizar status
+
+```http
+PATCH /api/escolas/{id}/status
+Content-Type: application/json
+X-API-TOKEN: SEU_TOKEN_DE_API
+```
 
 ```json
 {
-  "escola": null,
-  "message": "Nenhuma escola pendente de atualização encontrada para esta UF."
+  "status": "confirmado",
+  "username": "joao.silva"
 }
 ```
 
-## Parâmetro `atualizada`
+Status aceitos:
 
-Por padrão, o endpoint retorna uma escola **pendente de atualização**:
+- `confirmado`
+- `nao_localizado`
+- `pulado`
 
-```http
-GET /api/escolas/uf/MG/proxima
-```
-
-Para retornar a escola **atualizada mais recentemente**, use:
-
-```http
-GET /api/escolas/uf/MG/proxima?atualizada=true
-```
-
-## Listar todas as escolas do estado
-
-```http
-GET /api/escolas/uf/{UF}
-```
-
-Exemplo:
-
-```http
-GET /api/escolas/uf/MG
-```
+A escola só pode ser atualizada pelo mesmo username que a reservou.
 
 ## Atualizar links
 
 ```http
 PATCH /api/escolas/{id}
+Content-Type: application/json
+X-API-TOKEN: SEU_TOKEN_DE_API
 ```
-
-Também é aceito:
-
-```http
-POST /api/escolas/{id}
-```
-
-Envie um JSON com um ou ambos os campos:
 
 ```json
 {
@@ -106,81 +88,42 @@ Envie um JSON com um ou ambos os campos:
 }
 ```
 
-Para limpar um link, envie `null`:
-
-```json
-{
-  "link_waze": null
-}
-```
-
-Ao salvar `link_waze`, o sistema extrai automaticamente o valor de `permanentHazards` e grava em `permanent_hazard_id`.
-
-## Permissões
-
-- O usuário precisa estar aprovado.
-- Para atualizar escolas, é necessário ter a permissão `PERM_ESCOLAS`.
-- Administradores têm acesso a todas as UFs.
-- Usuários comuns respeitam as UFs autorizadas no painel.
-
 ## Exemplo JavaScript
 
 ```js
-const API_BASE = 'https://seudominio.com';
-const API_TOKEN = 'SEU_TOKEN_DE_API';
-
-async function buscarProximaEscola(uf, somenteAtualizadas = false) {
-  const url = new URL(`${API_BASE}/api/escolas/uf/${uf}/proxima`);
-
-  if (somenteAtualizadas) {
-    url.searchParams.set('atualizada', 'true');
-  }
-
-  const response = await fetch(url, {
+async function reservarEscolas(uf, username) {
+  const response = await fetch(`${API_BASE}/api/escolas/uf/${uf}/reservar`, {
+    method: 'POST',
     headers: {
       'X-API-TOKEN': API_TOKEN,
-      'Accept': 'application/json',
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ username }),
   });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error ?? `Erro HTTP ${response.status}`);
-  }
 
   return response.json();
 }
 
-async function atualizarLinks(escolaId, linkWaze, linkAreaEscolar) {
-  const response = await fetch(`${API_BASE}/api/escolas/${escolaId}`, {
+async function atualizarStatus(escolaId, status, username) {
+  const response = await fetch(`${API_BASE}/api/escolas/${escolaId}/status`, {
     method: 'PATCH',
     headers: {
       'X-API-TOKEN': API_TOKEN,
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
     },
-    body: JSON.stringify({
-      link_waze: linkWaze,
-      link_area_escolar: linkAreaEscolar,
-    }),
+    body: JSON.stringify({ status, username }),
   });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error ?? `Erro HTTP ${response.status}`);
-  }
 
   return response.json();
 }
 ```
 
-## Códigos HTTP
+## Migration
 
-| Código | Significado |
-|---|---|
-| 200 | Requisição realizada com sucesso |
-| 400 | UF inválida, JSON inválido ou nenhum campo enviado |
-| 401 | Token ausente ou inválido |
-| 403 | Usuário sem permissão ou sem acesso à UF |
-| 404 | Escola não encontrada |
-| 422 | Link do Waze inválido |
+Após atualizar o projeto, execute:
+
+```bash
+php bin/console doctrine:migrations:migrate
+```
+
+Ou aplique o SQL em `docs/sql/reserva_status_escolas.sql`.

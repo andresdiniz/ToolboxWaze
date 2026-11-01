@@ -13,8 +13,6 @@ doctrine:
         # isso esgota a RAM mesmo com memory_limit=2G.
         profiling_collect_backtrace: false
 
-        use_savepoints: true
-
         # --- Proteção contra max_connections em hospedagem compartilhada ---
         # Nunca reutilizar conexões persistentes entre requests PHP-FPM.
         # Conexões persistentes acumulam slots no MySQL e causam "Too many connections".

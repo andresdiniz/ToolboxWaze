@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         WME Marcador de Tarefas
 // @namespace    https://greasyfork.org/pt-BR/users/gabrielcartajena
-// @version      1.7.0
-// @description  Marcador de Tarefas com suporte a Escolas e token pessoal
+// @version      1.8.0
+// @description  Marcador de Tarefas com suporte a Escolas e token pessoal validado
 // @author       Gabriel Cartajena
 // @match        https://www.waze.com/editor*
 // @match        https://www.waze.com/*/editor*
@@ -22,8 +22,6 @@
 
 (function() {
     'use strict';
-
-    console.log("📍 WME Marcador: Script carregado na memória.");
 
     const URLS_API = {
         RANKING: "https://script.google.com/macros/s/AKfycbyQV4Jqi2T3Oy61y7niE4JwZB0Y7auFE6QSBdaIXdytVVCIBM2z-hk_QMbcQqJ7sApU0g/exec",
@@ -90,6 +88,39 @@
         localStorage.removeItem(ESCOLAS_API.TOKEN_STORAGE_KEY);
     }
 
+    function validarTokenEscolas(token) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: ESCOLAS_API.BASE + "/api/auth/validate",
+                headers: {
+                    "X-API-TOKEN": token,
+                    "Accept": "application/json"
+                },
+                timeout: 30000,
+                onload: function(res) {
+                    try {
+                        const dados = JSON.parse(res.responseText);
+
+                        if (res.status === 200 && dados.valid === true) {
+                            resolve(dados);
+                        } else {
+                            reject(new Error(dados.error || "Token inválido."));
+                        }
+                    } catch (e) {
+                        reject(new Error("Resposta inválida ao validar o token."));
+                    }
+                },
+                onerror: function() {
+                    reject(new Error("Falha de conexão ao validar o token."));
+                },
+                ontimeout: function() {
+                    reject(new Error("Tempo limite ao validar o token."));
+                }
+            });
+        });
+    }
+
     function abrirModalToken() {
         const modal = `
             <div id="wme-token-modal" style="position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:999999; display:flex; align-items:center; justify-content:center;">
@@ -100,16 +131,17 @@
                         <li>Faça login no ToolboxWaze, se necessário.</li>
                         <li>Clique em <b>Gerar novo token</b>.</li>
                         <li>Copie o token gerado.</li>
-                        <li>Cole no campo abaixo e clique em <b>Salvar token</b>.</li>
+                        <li>Cole no campo abaixo e clique em <b>Validar e salvar</b>.</li>
                     </ol>
 
                     <a href="https://wazetoolbox.acheireviews.com.br/profile/api-token" target="_blank" style="display:block; text-align:center; background:#2196F3; color:#fff; padding:10px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:14px;">Abrir página do token</a>
 
                     <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:6px;">Cole seu token:</label>
                     <input type="password" id="wme-token-modal-input" placeholder="Cole aqui o token" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+                    <div id="wme-token-modal-status" style="margin-top:8px; font-size:12px; color:#666;"></div>
 
                     <div style="display:flex; gap:8px; margin-top:14px;">
-                        <button id="wme-token-modal-salvar" style="flex:1; background:#4CAF50; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:bold;">Salvar token</button>
+                        <button id="wme-token-modal-salvar" style="flex:1; background:#4CAF50; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:bold;">Validar e salvar</button>
                         <button id="wme-token-modal-fechar" style="flex:1; background:#607D8B; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:bold;">Fechar</button>
                     </div>
                 </div>
@@ -118,17 +150,26 @@
 
         $('body').append(modal);
 
-        $('#wme-token-modal-salvar').on('click', function() {
+        $('#wme-token-modal-salvar').on('click', async function() {
             const token = $('#wme-token-modal-input').val().trim();
+            const $status = $('#wme-token-modal-status');
 
             if (!token) {
-                alert('Cole o token gerado no site.');
+                $status.text('Cole o token gerado no site.').css('color', '#f44336');
                 return;
             }
 
-            salvarTokenEscolas(token);
-            $('#wme-token-modal').remove();
-            $ui('#wme-tarefas-token-status').text('Token salvo neste navegador.');
+            $status.text('Validando token...').css('color', '#666');
+
+            try {
+                const dados = await validarTokenEscolas(token);
+                salvarTokenEscolas(token);
+                $status.text(`Token válido para ${dados.username}.`).css('color', '#4CAF50');
+                $ui('#wme-tarefas-token-status').text('Token válido salvo neste navegador.');
+                setTimeout(() => $('#wme-token-modal').remove(), 1200);
+            } catch (erro) {
+                $status.text(erro.message).css('color', '#f44336');
+            }
         });
 
         $('#wme-token-modal-fechar').on('click', function() {

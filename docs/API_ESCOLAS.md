@@ -8,6 +8,33 @@ Todas as requisições devem enviar o header:
 X-API-TOKEN: SEU_TOKEN_DE_API
 ```
 
+## Validar token
+
+```http
+GET /api/auth/validate
+X-API-TOKEN: SEU_TOKEN_DE_API
+Accept: application/json
+```
+
+Resposta quando o token é válido:
+
+```json
+{
+  "valid": true,
+  "username": "andresoaresdiniz",
+  "nome": "André Soares Diniz"
+}
+```
+
+Resposta quando o token é inválido:
+
+```json
+{
+  "valid": false,
+  "error": "Token inválido."
+}
+```
+
 ## Reservar escolas
 
 ```http
@@ -23,12 +50,6 @@ X-API-TOKEN: SEU_TOKEN_DE_API
 }
 ```
 
-- `limite` é opcional.
-- Padrão: `100`.
-- Máximo: `100`.
-
-A API reserva escolas com `status IS NULL`, define `status = reservado` e `reservado_para = username`.
-
 ## Liberar reservas
 
 ```http
@@ -40,22 +61,6 @@ X-API-TOKEN: SEU_TOKEN_DE_API
 ```json
 {
   "username": "andresoaresdiniz"
-}
-```
-
-Libera apenas escolas com:
-
-- `status = reservado`
-- `reservado_para = username`
-
-Resposta:
-
-```json
-{
-  "username": "andresoaresdiniz",
-  "uf": "MG",
-  "liberadas": 12,
-  "message": "12 escola(s) liberada(s) com sucesso."
 }
 ```
 
@@ -74,12 +79,6 @@ X-API-TOKEN: SEU_TOKEN_DE_API
 }
 ```
 
-Status aceitos:
-
-- `confirmado`
-- `nao_localizado`
-- `pulado`
-
 ## Atualizar links
 
 ```http
@@ -93,29 +92,4 @@ X-API-TOKEN: SEU_TOKEN_DE_API
   "link_waze": "https://waze.com/pt-BR/editor?env=row&permanentHazards=1134152",
   "link_area_escolar": "https://waze.com/pt-BR/editor?env=venue&venue=..."
 }
-```
-
-## Exemplo JavaScript
-
-```js
-async function liberarPorInatividade(uf, username) {
-  const response = await fetch(`${API_BASE}/api/escolas/uf/${uf}/liberar`, {
-    method: 'POST',
-    headers: {
-      'X-API-TOKEN': API_TOKEN,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ username }),
-  });
-
-  return response.json();
-}
-```
-
-## Migration
-
-Após atualizar o projeto, execute:
-
-```bash
-php bin/console doctrine:migrations:migrate
 ```

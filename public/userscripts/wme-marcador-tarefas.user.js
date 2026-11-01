@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         WME Marcador de Tarefas
 // @namespace    https://greasyfork.org/pt-BR/users/gabrielcartajena
-// @version      1.6.0
-// @description  Marcador de Tarefas com suporte a Escolas
+// @version      1.7.0
+// @description  Marcador de Tarefas com suporte a Escolas e token pessoal
 // @author       Gabriel Cartajena
 // @match        https://www.waze.com/editor*
 // @match        https://www.waze.com/*/editor*
@@ -36,7 +36,7 @@
 
     const ESCOLAS_API = {
         BASE: "https://wazetoolbox.acheireviews.com.br",
-        TOKEN: "SEU_TOKEN_DE_API",
+        TOKEN_STORAGE_KEY: "wme_marcador_escolas_token",
         LOTE: 50,
         CACHE_KEY: "wme_marcador_escolas_reservadas"
     };
@@ -78,6 +78,64 @@
         return $(painelRaiz).find(seletor);
     }
 
+    function obterTokenEscolas() {
+        return localStorage.getItem(ESCOLAS_API.TOKEN_STORAGE_KEY) || "";
+    }
+
+    function salvarTokenEscolas(token) {
+        localStorage.setItem(ESCOLAS_API.TOKEN_STORAGE_KEY, token.trim());
+    }
+
+    function limparTokenEscolas() {
+        localStorage.removeItem(ESCOLAS_API.TOKEN_STORAGE_KEY);
+    }
+
+    function abrirModalToken() {
+        const modal = `
+            <div id="wme-token-modal" style="position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:999999; display:flex; align-items:center; justify-content:center;">
+                <div style="background:#fff; width:420px; max-width:92%; border-radius:10px; padding:20px; font-family:Arial, sans-serif;">
+                    <h3 style="margin:0 0 12px;">🔑 Gerar e salvar seu token</h3>
+                    <ol style="margin:0 0 16px; padding-left:20px; font-size:13px; line-height:1.6; color:#333;">
+                        <li>Clique em <b>Abrir página do token</b>.</li>
+                        <li>Faça login no ToolboxWaze, se necessário.</li>
+                        <li>Clique em <b>Gerar novo token</b>.</li>
+                        <li>Copie o token gerado.</li>
+                        <li>Cole no campo abaixo e clique em <b>Salvar token</b>.</li>
+                    </ol>
+
+                    <a href="https://wazetoolbox.acheireviews.com.br/profile/api-token" target="_blank" style="display:block; text-align:center; background:#2196F3; color:#fff; padding:10px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:14px;">Abrir página do token</a>
+
+                    <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:6px;">Cole seu token:</label>
+                    <input type="password" id="wme-token-modal-input" placeholder="Cole aqui o token" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+
+                    <div style="display:flex; gap:8px; margin-top:14px;">
+                        <button id="wme-token-modal-salvar" style="flex:1; background:#4CAF50; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:bold;">Salvar token</button>
+                        <button id="wme-token-modal-fechar" style="flex:1; background:#607D8B; color:#fff; border:none; padding:10px; border-radius:6px; font-weight:bold;">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('body').append(modal);
+
+        $('#wme-token-modal-salvar').on('click', function() {
+            const token = $('#wme-token-modal-input').val().trim();
+
+            if (!token) {
+                alert('Cole o token gerado no site.');
+                return;
+            }
+
+            salvarTokenEscolas(token);
+            $('#wme-token-modal').remove();
+            $ui('#wme-tarefas-token-status').text('Token salvo neste navegador.');
+        });
+
+        $('#wme-token-modal-fechar').on('click', function() {
+            $('#wme-token-modal').remove();
+        });
+    }
+
     function initializeScriptSetup() {
         if (typeof getWmeSdk === 'undefined') {
             setTimeout(initializeScriptSetup, 500);
@@ -106,8 +164,6 @@
         if (scriptInicializado) return;
         scriptInicializado = true;
 
-        console.log("📍 WME Marcador: Iniciando construção da interface...");
-
         try {
             criarCamadaMarcadores();
         } catch (e) {
@@ -120,7 +176,7 @@
             configurarEventosPainel();
             atualizarUFsDisponiveis();
             mostrarAba('atividade');
-            $ui('#wme-tarefas-status').text("Preencha o nome e selecione UF/Tipo.");
+            atualizarStatusToken();
 
             ['click', 'keydown', 'mousemove', 'touchstart'].forEach(evento => {
                 document.addEventListener(evento, registrarAtividade, { passive: true });
@@ -128,9 +184,12 @@
 
             iniciarControleInatividade();
             verificarAtualizacao();
-
-            console.log("📍 WME Marcador: Tudo pronto e funcionando!");
         }
+    }
+
+    function atualizarStatusToken() {
+        const token = obterTokenEscolas();
+        $ui('#wme-tarefas-token-status').text(token ? 'Token salvo neste navegador.' : 'Nenhum token salvo.');
     }
 
     function criarCamadaMarcadores() {
@@ -165,22 +224,30 @@
                         if (onError) onError(resposta.mensagem);
                     }
                 } catch(e) {
-                    if (onError) onError("Erro ao ler servidor. Olhe o F12!");
+                    if (onError) onError("Erro ao ler servidor.");
                 }
             },
             onerror: function() {
-                if (onError) onError("Erro de conexão. Olhe o F12!");
+                if (onError) onError("Erro de conexão.");
             }
         });
     }
 
     function chamarApiEscolas(metodo, caminho, payload) {
         return new Promise((resolve, reject) => {
+            const token = obterTokenEscolas();
+
+            if (!token) {
+                abrirModalToken();
+                reject(new Error("Informe o Token da API antes de usar Escolas."));
+                return;
+            }
+
             GM_xmlhttpRequest({
                 method: metodo,
                 url: ESCOLAS_API.BASE + caminho,
                 headers: {
-                    "X-API-TOKEN": ESCOLAS_API.TOKEN,
+                    "X-API-TOKEN": token,
                     "Content-Type": "application/json",
                     "Accept": "application/json"
                 },
@@ -323,7 +390,6 @@
 
         if (!nomeUsuario) {
             alert("⚠️ Por favor, digite o seu Nome de Usuário antes de carregar ou editar as tarefas!");
-            $ui('#wme-tarefas-uf').val("");
             return;
         }
 
@@ -464,10 +530,6 @@
             return;
         }
 
-        if (item.tipo === "ESCOLAS") {
-            console.log("📍 Escola atual:", item);
-        }
-
         wmeSdk.Map.setMapCenter({ lonLat: { lon, lat }, zoomLevel: 19 });
         wmeSdk.Map.removeAllFeaturesFromLayer({ layerName: LAYER_NAME });
         wmeSdk.Map.addFeatureToLayer({
@@ -552,7 +614,7 @@
     async function criarPainelUI() {
         const conteudoPainel = `
             <div style="padding: 10px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-                <h4 style="margin-top: 0; margin-bottom: 12px; font-weight: bold; color: #333;">Inspetor de Tarefas</h4>
+                <h4 style="margin-top: 0; margin-bottom: 12px; font-weight: bold;">Inspetor de Tarefas</h4>
                 <div id="wme-update-status" style="margin-bottom: 15px; text-align: center; font-size: 11px;"></div>
 
                 <div style="display: flex; margin-bottom: 14px; border-bottom: 2px solid #e0e0e0;">
@@ -561,6 +623,15 @@
                 </div>
 
                 <div id="wme-aba-atividade">
+                    <div style="margin-bottom: 10px;">
+                        <label style="font-size: 12px; display:block; margin-bottom: 6px; font-weight: 600;">Token da API <span style="color:red;">*</span>:</label>
+                        <div id="wme-tarefas-token-status" style="font-size:11px; color:#666; margin-bottom:6px;">Verificando...</div>
+                        <div style="display:flex; gap:8px;">
+                            <button id="wme-tarefas-btn-token" style="flex:1; background:#2196F3; color:#fff; border:none; padding:8px; border-radius:4px; font-weight:bold;">🔑 Token da API</button>
+                            <button id="wme-tarefas-btn-remover-token" style="flex:1; background:#f44336; color:#fff; border:none; padding:8px; border-radius:4px; font-weight:bold;">Remover</button>
+                        </div>
+                    </div>
+
                     <div style="margin-bottom: 10px;">
                         <label style="font-size: 12px; display:block; margin-bottom: 6px; font-weight: 600;">Nome do Usuário <span style="color:red;">*</span>:</label>
                         <input type="text" id="wme-tarefas-usuario" placeholder="Seu nome (obrigatório)" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ccc;">
@@ -650,6 +721,15 @@
     }
 
     function configurarEventosPainel() {
+        $ui('#wme-tarefas-btn-token').on('click', abrirModalToken);
+
+        $ui('#wme-tarefas-btn-remover-token').on('click', function() {
+            if (!confirm('Remover o token salvo neste navegador?')) return;
+
+            limparTokenEscolas();
+            atualizarStatusToken();
+        });
+
         $ui('#wme-tarefas-tipo').on('change', function() {
             atualizarUFsDisponiveis();
             tentarCarregarTarefas();

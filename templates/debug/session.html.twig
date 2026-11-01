@@ -1,0 +1,23 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Diagnóstico de sessão{% endblock %}
+
+{% block body %}
+<div class="container py-4">
+    <h1>Diagnóstico de sessão e CSRF</h1>
+
+    <ul>
+        <li><strong>Session ID:</strong> <code>{{ sessionId }}</code></li>
+        <li><strong>Session status:</strong> <code>{{ sessionStatus }}</code></li>
+        <li><strong>CSRF token atual:</strong> <code>{{ csrfToken }}</code></li>
+        <li><strong>Token recebido no POST:</strong> <code>{{ postedToken ?: 'nenhum' }}</code></li>
+        <li><strong>CSRF válido:</strong> <code>{{ valid is null ? 'não enviado' : (valid ? 'sim' : 'não') }}</code></li>
+        <li><strong>Cookies recebidos:</strong> <code>{{ cookies|keys|join(', ') ?: 'nenhum' }}</code></li>
+    </ul>
+
+    <form method="post">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+        <button type="submit">Enviar POST de teste</button>
+    </form>
+</div>
+{% endblock %}

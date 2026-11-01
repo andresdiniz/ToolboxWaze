@@ -20,6 +20,55 @@ final class EscolaApiController extends AbstractController
     ) {
     }
 
+    #[Route('/api/escolas/uf/{uf}/proxima', name: 'api_escola_proxima', methods: ['GET'])]
+    public function proximaPorUf(Request $request, string $uf): JsonResponse
+    {
+        $user = $this->requireApiUser();
+        $uf = strtoupper(trim($uf));
+
+        if (!in_array($uf, User::ALL_UFS, true)) {
+            return $this->json(['error' => 'UF inválida.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!$user->canAccessUf($uf)) {
+            return $this->json(['error' => 'Você não tem acesso a esta UF.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $somenteAtualizadas = $request->query->getBoolean('atualizada', false);
+
+        $qb = $this->em->createQueryBuilder();
+        $qb->select('e')
+            ->from(EscolaInep::class, 'e')
+            ->where('e.uf = :uf')
+            ->setParameter('uf', $uf);
+
+        if ($somenteAtualizadas) {
+            $qb->andWhere('e.updatedAt IS NOT NULL')
+                ->orderBy('e.updatedAt', 'DESC');
+        } else {
+            $qb->orderBy('CASE WHEN e.updatedAt IS NULL THEN 0 ELSE 1 END', 'ASC')
+                ->addOrderBy('e.updatedAt', 'ASC')
+                ->addOrderBy('e.escola', 'ASC');
+        }
+
+        $escola = $qb->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        if (!$escola instanceof EscolaInep) {
+            return $this->json([
+                'escola' => null,
+                'message' => $somenteAtualizadas
+                    ? 'Nenhuma escola atualizada encontrada para esta UF.'
+                    : 'Nenhuma escola pendente de atualização encontrada para esta UF.',
+            ]);
+        }
+
+        return $this->json([
+            'escola' => $this->serializeEscola($escola),
+        ]);
+    }
+
     #[Route('/api/escolas/uf/{uf}', name: 'api_escolas_por_uf', methods: ['GET'])]
     public function porUf(string $uf): JsonResponse
     {

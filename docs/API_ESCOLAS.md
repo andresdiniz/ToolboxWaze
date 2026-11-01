@@ -14,7 +14,66 @@ Gere ou gerencie seu token em:
 /profile/api-token
 ```
 
-## Listar escolas por estado
+## Buscar a próxima escola
+
+Retorna **uma escola por requisição**, priorizando escolas que nunca foram atualizadas e, depois, as com atualização mais antiga.
+
+```http
+GET /api/escolas/uf/{UF}/proxima
+```
+
+Exemplo:
+
+```http
+GET /api/escolas/uf/MG/proxima
+```
+
+### Resposta
+
+```json
+{
+  "escola": {
+    "id": 1,
+    "codigo_inep": "12345678",
+    "escola": "Escola Exemplo",
+    "uf": "MG",
+    "municipio": "Belo Horizonte",
+    "endereco": "Rua Exemplo, 123",
+    "telefone": "31999999999",
+    "latitude": "-19.91670000",
+    "longitude": "-43.93450000",
+    "link_waze": null,
+    "permanent_hazard_id": null,
+    "link_area_escolar": null,
+    "updated_at": null
+  }
+}
+```
+
+Quando não houver escola disponível:
+
+```json
+{
+  "escola": null,
+  "message": "Nenhuma escola pendente de atualização encontrada para esta UF."
+}
+```
+
+## Parâmetro `atualizada`
+
+Por padrão, o endpoint retorna uma escola **pendente de atualização**:
+
+```http
+GET /api/escolas/uf/MG/proxima
+```
+
+Para retornar a escola **atualizada mais recentemente**, use:
+
+```http
+GET /api/escolas/uf/MG/proxima?atualizada=true
+```
+
+## Listar todas as escolas do estado
 
 ```http
 GET /api/escolas/uf/{UF}
@@ -25,34 +84,6 @@ Exemplo:
 ```http
 GET /api/escolas/uf/MG
 ```
-
-### Resposta
-
-```json
-{
-  "uf": "MG",
-  "total": 2,
-  "escolas": [
-    {
-      "id": 1,
-      "codigo_inep": "12345678",
-      "escola": "Escola Exemplo",
-      "uf": "MG",
-      "municipio": "Belo Horizonte",
-      "endereco": "Rua Exemplo, 123",
-      "telefone": "31999999999",
-      "latitude": "-19.91670000",
-      "longitude": "-43.93450000",
-      "link_waze": "https://waze.com/pt-BR/editor?env=row&permanentHazards=1134152",
-      "permanent_hazard_id": 1134152,
-      "link_area_escolar": "https://waze.com/pt-BR/editor?env=venue&venue=...",
-      "updated_at": "2026-11-01T18:00:00+00:00"
-    }
-  ]
-}
-```
-
-A resposta inclui todos os dados cadastrados da escola, além de `link_waze`, `permanent_hazard_id` e `link_area_escolar`.
 
 ## Atualizar links
 
@@ -83,21 +114,6 @@ Para limpar um link, envie `null`:
 }
 ```
 
-### Exemplo completo
-
-```http
-PATCH /api/escolas/1
-Content-Type: application/json
-X-API-TOKEN: SEU_TOKEN_DE_API
-```
-
-```json
-{
-  "link_waze": "https://waze.com/pt-BR/editor?env=row&permanentHazards=1134152",
-  "link_area_escolar": "https://waze.com/pt-BR/editor?env=venue&venue=..."
-}
-```
-
 Ao salvar `link_waze`, o sistema extrai automaticamente o valor de `permanentHazards` e grava em `permanent_hazard_id`.
 
 ## Permissões
@@ -113,8 +129,14 @@ Ao salvar `link_waze`, o sistema extrai automaticamente o valor de `permanentHaz
 const API_BASE = 'https://seudominio.com';
 const API_TOKEN = 'SEU_TOKEN_DE_API';
 
-async function buscarEscolas(uf) {
-  const response = await fetch(`${API_BASE}/api/escolas/uf/${uf}`, {
+async function buscarProximaEscola(uf, somenteAtualizadas = false) {
+  const url = new URL(`${API_BASE}/api/escolas/uf/${uf}/proxima`);
+
+  if (somenteAtualizadas) {
+    url.searchParams.set('atualizada', 'true');
+  }
+
+  const response = await fetch(url, {
     headers: {
       'X-API-TOKEN': API_TOKEN,
       'Accept': 'application/json',

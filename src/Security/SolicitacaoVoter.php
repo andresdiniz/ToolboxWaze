@@ -8,6 +8,7 @@ use App\Entity\Solicitacao;
 use App\Entity\User;
 use App\Repository\SolicitacaoTipoResponsavelRepository;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 
 /**
@@ -41,8 +42,12 @@ class SolicitacaoVoter extends Voter
         ], true) && $subject instanceof Solicitacao;
     }
 
-    protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
-    {
+    protected function voteOnAttribute(
+        string $attribute,
+        mixed $subject,
+        TokenInterface $token,
+        ?Vote $vote = null
+    ): bool {
         /** @var Solicitacao $solicitacao */
         $solicitacao = $subject;
 

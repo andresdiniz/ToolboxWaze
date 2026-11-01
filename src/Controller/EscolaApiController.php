@@ -38,6 +38,7 @@ final class EscolaApiController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
         $username = trim((string) ($data['username'] ?? ''));
+        $limite = (int) ($data['limite'] ?? self::RESERVA_LIMITE);
 
         if ($username === '') {
             return $this->json(['error' => 'O campo username é obrigatório.'], Response::HTTP_BAD_REQUEST);
@@ -47,6 +48,8 @@ final class EscolaApiController extends AbstractController
             return $this->json(['error' => 'O username deve ter no máximo 100 caracteres.'], Response::HTTP_BAD_REQUEST);
         }
 
+        $limite = max(1, min($limite, self::RESERVA_LIMITE));
+
         $escolas = $this->em->createQueryBuilder()
             ->select('e')
             ->from(EscolaInep::class, 'e')
@@ -54,7 +57,7 @@ final class EscolaApiController extends AbstractController
             ->andWhere('e.status IS NULL')
             ->setParameter('uf', $uf)
             ->orderBy('e.escola', 'ASC')
-            ->setMaxResults(self::RESERVA_LIMITE)
+            ->setMaxResults($limite)
             ->getQuery()
             ->getResult();
 
@@ -81,6 +84,57 @@ final class EscolaApiController extends AbstractController
             'uf' => $uf,
             'total' => count($escolas),
             'escolas' => array_map($this->serializeEscola(...), $escolas),
+        ]);
+    }
+
+    #[Route('/api/escolas/uf/{uf}/liberar', name: 'api_escolas_liberar', methods: ['POST'])]
+    public function liberar(Request $request, string $uf): JsonResponse
+    {
+        $user = $this->requireApiUser();
+        $uf = strtoupper(trim($uf));
+
+        if (!in_array($uf, User::ALL_UFS, true)) {
+            return $this->json(['error' => 'UF inválida.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if (!$user->canAccessUf($uf)) {
+            return $this->json(['error' => 'Você não tem acesso a esta UF.'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $username = trim((string) ($data['username'] ?? ''));
+
+        if ($username === '') {
+            return $this->json(['error' => 'O campo username é obrigatório.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $liberadas = $this->em->createQueryBuilder()
+            ->select('e')
+            ->from(EscolaInep::class, 'e')
+            ->where('e.uf = :uf')
+            ->andWhere('e.status = :status')
+            ->andWhere('e.reservadoPara = :username')
+            ->setParameter('uf', $uf)
+            ->setParameter('status', EscolaInep::STATUS_RESERVADO)
+            ->setParameter('username', $username)
+            ->getQuery()
+            ->getResult();
+
+        foreach ($liberadas as $escola) {
+            $escola->setStatus(null);
+            $escola->setReservadoPara(null);
+            $escola->setUpdatedAt(new \DateTimeImmutable());
+        }
+
+        $this->em->flush();
+
+        return $this->json([
+            'username' => $username,
+            'uf' => $uf,
+            'liberadas' => count($liberadas),
+            'message' => count($liberadas) > 0
+                ? sprintf('%d escola(s) liberada(s) com sucesso.', count($liberadas))
+                : 'Nenhuma escola reservada encontrada para este username nesta UF.',
         ]);
     }
 

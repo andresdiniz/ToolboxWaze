@@ -12,15 +12,76 @@ Use **reserva em lote de 50 escolas**, e não uma por vez.
 
 **Recomendação:** reservar **50**, salvar no `localStorage` e enviar apenas a ação final de cada escola para a API.
 
-Fluxo:
+## Inatividade de 30 minutos
 
-1. O usuário seleciona `Escolas` e a UF.
-2. O userscript chama `POST /api/escolas/uf/{UF}/reservar`.
-3. A API reserva até 50 escolas e retorna a lista.
-4. O userscript salva a lista em `localStorage`.
-5. Ao navegar entre escolas, o userscript lê do `localStorage`, sem chamar a API.
-6. Ao clicar em **Resolvido**, **Não localizado** ou **Pulado**, envia apenas `PATCH /api/escolas/{id}/status`.
-7. Ao terminar o lote, limpa o cache e reserva outro lote.
+O userscript deve acompanhar a última interação do usuário. Após **30 minutos sem uso**, ele deve:
+
+1. Chamar `POST /api/escolas/uf/{UF}/liberar`.
+2. Liberar apenas as escolas com `status = reservado` e `reservado_para = username`.
+3. Limpar o `localStorage`.
+4. Limpar a lista local e os marcadores do mapa.
+
+Adicione estas constantes:
+
+```js
+const INATIVIDADE_LIMITE_MS = 30 * 60 * 1000; // 30 minutos
+const INATIVIDADE_CHECK_MS = 60 * 1000; // verifica a cada 1 minuto
+
+let ultimaAtividadeEm = Date.now();
+let inatividadeIntervalId = null;
+```
+
+Adicione estas funções:
+
+```js
+function registrarAtividade() {
+    ultimaAtividadeEm = Date.now();
+}
+
+function iniciarControleInatividade() {
+    if (inatividadeIntervalId) return;
+
+    inatividadeIntervalId = setInterval(verificarInatividade, INATIVIDADE_CHECK_MS);
+}
+
+async function verificarInatividade() {
+    const cache = lerCacheEscolas();
+
+    if (!cache || !cache.uf || !cache.username) return;
+
+    const tempoSemUso = Date.now() - ultimaAtividadeEm;
+
+    if (tempoSemUso < INATIVIDADE_LIMITE_MS) return;
+
+    try {
+        await chamarApiEscolas(
+            "POST",
+            `/api/escolas/uf/${cache.uf}/liberar`,
+            { username: cache.username }
+        );
+
+        console.log("📍 WME Marcador: Reserva de escolas liberada por inatividade.");
+    } catch (erro) {
+        console.warn("📍 WME Marcador: Não foi possível liberar a reserva por inatividade:", erro.message);
+    }
+
+    limparCacheEscolas();
+    currentBatch = [];
+    currentIndex = 0;
+    atualizarNavegacao();
+    $ui('#wme-tarefas-status').text("Reserva liberada após 30 minutos sem uso.");
+}
+```
+
+No final da função `init()`, depois de `configurarEventosPainel()`, adicione:
+
+```js
+['click', 'keydown', 'mousemove', 'touchstart'].forEach(evento => {
+    document.addEventListener(evento, registrarAtividade, { passive: true });
+});
+
+iniciarControleInatividade();
+```
 
 ## Configuração
 
@@ -179,7 +240,10 @@ async function carregarTarefasLote() {
                 const resposta = await chamarApiEscolas(
                     "POST",
                     `/api/escolas/uf/${uf}/reservar`,
-                    { username: nomeUsuario }
+                    {
+                        username: nomeUsuario,
+                        limite: ESCOLAS_API.LOTE
+                    }
                 );
 
                 escolas = (resposta.escolas || []).slice(0, ESCOLAS_API.LOTE);
@@ -260,6 +324,8 @@ async function marcarAcao(tipoAcao) {
 
     if (!item) return;
 
+    registrarAtividade();
+
     $ui('#wme-tarefas-status').text("Salvando...");
     $ui('#wme-tarefas-btn-resolvido, #wme-tarefas-btn-naolocalizado').prop('disabled', true);
 
@@ -339,6 +405,8 @@ function irParaLocalAtual() {
         return;
     }
 
+    registrarAtividade();
+
     const [latStr, lonStr] = item.coords.split(',');
     const lat = parseFloat(latStr);
     const lon = parseFloat(lonStr);
@@ -391,6 +459,31 @@ $ui('#wme-tarefas-btn-limpar-cache').on('click', function() {
     atualizarNavegacao();
     $ui('#wme-tarefas-status').text("Reserva local limpa.");
 });
+```
+
+## Endpoint de liberação
+
+```http
+POST /api/escolas/uf/{UF}/liberar
+Content-Type: application/json
+X-API-TOKEN: SEU_TOKEN_DE_API
+```
+
+```json
+{
+  "username": "andresoaresdiniz"
+}
+```
+
+Resposta:
+
+```json
+{
+  "username": "andresoaresdiniz",
+  "uf": "MG",
+  "liberadas": 12,
+  "message": "12 escola(s) liberada(s) com sucesso."
+}
 ```
 
 ## Segurança

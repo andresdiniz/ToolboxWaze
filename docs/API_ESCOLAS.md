@@ -8,9 +8,7 @@ Todas as requisições devem enviar o header:
 X-API-TOKEN: SEU_TOKEN_DE_API
 ```
 
-## Reservar 100 escolas
-
-Reserva até 100 escolas com status `NULL` para um username.
+## Reservar escolas
 
 ```http
 POST /api/escolas/uf/{UF}/reservar
@@ -20,33 +18,44 @@ X-API-TOKEN: SEU_TOKEN_DE_API
 
 ```json
 {
-  "username": "joao.silva"
+  "username": "andresoaresdiniz",
+  "limite": 50
 }
 ```
 
-Exemplo:
+- `limite` é opcional.
+- Padrão: `100`.
+- Máximo: `100`.
+
+A API reserva escolas com `status IS NULL`, define `status = reservado` e `reservado_para = username`.
+
+## Liberar reservas
 
 ```http
-POST /api/escolas/uf/MG/reservar
+POST /api/escolas/uf/{UF}/liberar
+Content-Type: application/json
+X-API-TOKEN: SEU_TOKEN_DE_API
 ```
-
-A resposta retorna as escolas reservadas:
 
 ```json
 {
-  "username": "joao.silva",
+  "username": "andresoaresdiniz"
+}
+```
+
+Libera apenas escolas com:
+
+- `status = reservado`
+- `reservado_para = username`
+
+Resposta:
+
+```json
+{
+  "username": "andresoaresdiniz",
   "uf": "MG",
-  "total": 100,
-  "escolas": [
-    {
-      "id": 1,
-      "escola": "Escola Exemplo",
-      "status": "reservado",
-      "reservado_para": "joao.silva",
-      "link_waze": null,
-      "link_area_escolar": null
-    }
-  ]
+  "liberadas": 12,
+  "message": "12 escola(s) liberada(s) com sucesso."
 }
 ```
 
@@ -61,7 +70,7 @@ X-API-TOKEN: SEU_TOKEN_DE_API
 ```json
 {
   "status": "confirmado",
-  "username": "joao.silva"
+  "username": "andresoaresdiniz"
 }
 ```
 
@@ -70,8 +79,6 @@ Status aceitos:
 - `confirmado`
 - `nao_localizado`
 - `pulado`
-
-A escola só pode ser atualizada pelo mesmo username que a reservou.
 
 ## Atualizar links
 
@@ -91,27 +98,14 @@ X-API-TOKEN: SEU_TOKEN_DE_API
 ## Exemplo JavaScript
 
 ```js
-async function reservarEscolas(uf, username) {
-  const response = await fetch(`${API_BASE}/api/escolas/uf/${uf}/reservar`, {
+async function liberarPorInatividade(uf, username) {
+  const response = await fetch(`${API_BASE}/api/escolas/uf/${uf}/liberar`, {
     method: 'POST',
     headers: {
       'X-API-TOKEN': API_TOKEN,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ username }),
-  });
-
-  return response.json();
-}
-
-async function atualizarStatus(escolaId, status, username) {
-  const response = await fetch(`${API_BASE}/api/escolas/${escolaId}/status`, {
-    method: 'PATCH',
-    headers: {
-      'X-API-TOKEN': API_TOKEN,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ status, username }),
   });
 
   return response.json();
@@ -125,5 +119,3 @@ Após atualizar o projeto, execute:
 ```bash
 php bin/console doctrine:migrations:migrate
 ```
-
-Ou aplique o SQL em `docs/sql/reserva_status_escolas.sql`.

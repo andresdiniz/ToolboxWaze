@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
+
 final class EscolaApiController extends AbstractController
 {
     public function __construct(
@@ -28,25 +29,32 @@ final class EscolaApiController extends AbstractController
         $user = $this->requireApiUser();
         $uf = strtoupper(trim($uf));
 
+
         if ($erro = $this->validarAcessoUf($user, $uf)) {
             return $erro;
         }
 
+
         $data = $this->lerJson($request);
+
 
         if ($data === null) {
             return $this->json(['error' => 'Corpo JSON inválido.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         $username = trim((string) ($data['username'] ?? ''));
+
 
         if ($erro = $this->validarUsername($username, true)) {
             return $erro;
         }
 
+
         $limite = (int) ($data['limite'] ?? EscolaReservaService::LIMITE_MAXIMO);
         $reserva = $this->reservas->reservar($uf, $username, $limite);
         $escolas = $reserva['escolas'];
+
 
         if ($escolas === []) {
             return $this->json([
@@ -58,6 +66,7 @@ final class EscolaApiController extends AbstractController
                 'message' => 'Nenhuma escola disponível para reserva nesta UF.',
             ]);
         }
+
 
         return $this->json([
             'username' => $username,
@@ -78,23 +87,30 @@ final class EscolaApiController extends AbstractController
         $user = $this->requireApiUser();
         $uf = strtoupper(trim($uf));
 
+
         if ($erro = $this->validarAcessoUf($user, $uf)) {
             return $erro;
         }
 
+
         $data = $this->lerJson($request);
+
 
         if ($data === null) {
             return $this->json(['error' => 'Corpo JSON inválido.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         $username = trim((string) ($data['username'] ?? ''));
+
 
         if ($erro = $this->validarUsername($username)) {
             return $erro;
         }
 
+
         $renovadas = $this->reservas->renovar($uf, $username);
+
 
         return $this->json([
             'username' => $username,
@@ -116,23 +132,30 @@ final class EscolaApiController extends AbstractController
         $user = $this->requireApiUser();
         $uf = strtoupper(trim($uf));
 
+
         if ($erro = $this->validarAcessoUf($user, $uf)) {
             return $erro;
         }
 
+
         $data = $this->lerJson($request);
+
 
         if ($data === null) {
             return $this->json(['error' => 'Corpo JSON inválido.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         $username = trim((string) ($data['username'] ?? ''));
+
 
         if ($erro = $this->validarUsername($username)) {
             return $erro;
         }
 
+
         $liberadas = $this->reservas->liberar($uf, $username);
+
 
         return $this->json([
             'username' => $username,
@@ -149,28 +172,36 @@ final class EscolaApiController extends AbstractController
     {
         $user = $this->requireApiUser();
 
+
         if (!$user->hasPermission(User::PERMISSION_ESCOLAS)) {
             return $this->json(['error' => 'Você não tem permissão para atualizar escolas.'], Response::HTTP_FORBIDDEN);
         }
 
+
         $escola = $this->em->find(EscolaInep::class, $id);
+
 
         if (!$escola instanceof EscolaInep) {
             return $this->json(['error' => 'Escola não encontrada.'], Response::HTTP_NOT_FOUND);
         }
 
+
         if (!$user->canAccessUf((string) $escola->getUf())) {
             return $this->json(['error' => 'Você não tem acesso a esta UF.'], Response::HTTP_FORBIDDEN);
         }
 
+
         $data = $this->lerJson($request);
+
 
         if ($data === null) {
             return $this->json(['error' => 'Corpo JSON inválido.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         $status = $data['status'] ?? null;
         $username = trim((string) ($data['username'] ?? ''));
+
 
         if (!is_string($status) || !in_array($status, [EscolaInep::STATUS_CONFIRMADO, EscolaInep::STATUS_NAO_LOCALIZADO, EscolaInep::STATUS_PULADO], true)) {
             return $this->json([
@@ -178,9 +209,11 @@ final class EscolaApiController extends AbstractController
             ], Response::HTTP_BAD_REQUEST);
         }
 
+
         if ($erro = $this->validarUsername($username)) {
             return $erro;
         }
+
 
         if ($escola->getReservadoPara() !== null && $escola->getReservadoPara() !== $username) {
             return $this->json([
@@ -188,12 +221,22 @@ final class EscolaApiController extends AbstractController
             ], Response::HTTP_FORBIDDEN);
         }
 
+
         $escola->setStatus($status);
-        $escola->setReservadoPara($username);
-        $escola->setReservadoEm(null);
         $escola->setUpdatedAt(new \DateTimeImmutable());
 
+
+        if ($status === EscolaInep::STATUS_PULADO) {
+            $escola->setReservadoPara(null);
+            $escola->setReservadoEm(null);
+        } else {
+            $escola->setReservadoPara($username);
+            $escola->setReservadoEm(null);
+        }
+
+
         $this->em->flush();
+
 
         return $this->json([
             'message' => 'Status atualizado com sucesso.',
@@ -207,17 +250,21 @@ final class EscolaApiController extends AbstractController
         $user = $this->requireApiUser();
         $uf = strtoupper(trim($uf));
 
+
         if ($erro = $this->validarAcessoUf($user, $uf)) {
             return $erro;
         }
 
+
         $somenteAtualizadas = $request->query->getBoolean('atualizada', false);
+
 
         $qb = $this->em->createQueryBuilder();
         $qb->select('e')
             ->from(EscolaInep::class, 'e')
             ->where('e.uf = :uf')
             ->setParameter('uf', $uf);
+
 
         if ($somenteAtualizadas) {
             $qb->andWhere('e.updatedAt IS NOT NULL')
@@ -228,9 +275,11 @@ final class EscolaApiController extends AbstractController
                 ->addOrderBy('e.escola', 'ASC');
         }
 
+
         $escola = $qb->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
+
 
         if (!$escola instanceof EscolaInep) {
             return $this->json([
@@ -241,6 +290,7 @@ final class EscolaApiController extends AbstractController
             ]);
         }
 
+
         return $this->json(['escola' => $this->serializeEscola($escola)]);
     }
 
@@ -250,14 +300,17 @@ final class EscolaApiController extends AbstractController
         $user = $this->requireApiUser();
         $uf = strtoupper(trim($uf));
 
+
         if ($erro = $this->validarAcessoUf($user, $uf)) {
             return $erro;
         }
+
 
         $escolas = $this->em->getRepository(EscolaInep::class)->findBy(
             ['uf' => $uf],
             ['escola' => 'ASC']
         );
+
 
         return $this->json([
             'uf' => $uf,
@@ -271,56 +324,72 @@ final class EscolaApiController extends AbstractController
     {
         $user = $this->requireApiUser();
 
+
         if (!$user->hasPermission(User::PERMISSION_ESCOLAS)) {
             return $this->json(['error' => 'Você não tem permissão para atualizar escolas.'], Response::HTTP_FORBIDDEN);
         }
 
+
         $escola = $this->em->find(EscolaInep::class, $id);
+
 
         if (!$escola instanceof EscolaInep) {
             return $this->json(['error' => 'Escola não encontrada.'], Response::HTTP_NOT_FOUND);
         }
 
+
         if (!$user->canAccessUf((string) $escola->getUf())) {
             return $this->json(['error' => 'Você não tem acesso a esta UF.'], Response::HTTP_FORBIDDEN);
         }
 
+
         $data = $this->lerJson($request);
+
 
         if ($data === null) {
             return $this->json(['error' => 'Corpo JSON inválido.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         $alterou = false;
+
 
         if (array_key_exists('link_waze', $data)) {
             $linkWaze = $this->normalizeNullableString($data['link_waze']);
+
 
             if ($linkWaze !== null && !$this->isWazeEditorLink($linkWaze)) {
                 return $this->json(['error' => 'O link_waze deve ser uma URL válida do Waze Map Editor.'], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
+
             $escola->setLinkWaze($linkWaze);
             $alterou = true;
         }
 
+
         if (array_key_exists('link_area_escolar', $data)) {
             $linkArea = $this->normalizeNullableString($data['link_area_escolar']);
+
 
             if ($linkArea !== null && !$this->isWazeLink($linkArea)) {
                 return $this->json(['error' => 'O link_area_escolar deve ser uma URL válida do Waze.'], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
+
             $escola->setLinkAreaEscolar($linkArea);
             $alterou = true;
         }
+
 
         if (!$alterou) {
             return $this->json(['error' => 'Informe ao menos um campo para atualizar: link_waze ou link_area_escolar.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         $escola->setUpdatedAt(new \DateTimeImmutable());
         $this->em->flush();
+
 
         return $this->json([
             'message' => 'Escola atualizada com sucesso.',
@@ -333,9 +402,11 @@ final class EscolaApiController extends AbstractController
         /** @var User|null $user */
         $user = $this->getUser();
 
+
         if (!$user instanceof User) {
             throw $this->createAccessDeniedException('Autenticação por token necessária.');
         }
+
 
         return $user;
     }
@@ -346,9 +417,11 @@ final class EscolaApiController extends AbstractController
             return $this->json(['error' => 'UF inválida.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         if (!$user->canAccessUf($uf)) {
             return $this->json(['error' => 'Você não tem acesso a esta UF.'], Response::HTTP_FORBIDDEN);
         }
+
 
         return null;
     }
@@ -359,26 +432,29 @@ final class EscolaApiController extends AbstractController
             return $this->json(['error' => 'O campo username é obrigatório.'], Response::HTTP_BAD_REQUEST);
         }
 
+
         if ($limitarTamanho && mb_strlen($username) > 100) {
             return $this->json(['error' => 'O username deve ter no máximo 100 caracteres.'], Response::HTTP_BAD_REQUEST);
         }
+
 
         return null;
     }
 
     /**
-     * @return array<string, mixed>|null
-     */
+    * @return array<string, mixed>|null
+    */
     private function lerJson(Request $request): ?array
     {
         $data = json_decode($request->getContent(), true);
+
 
         return is_array($data) ? $data : null;
     }
 
     /**
-     * @return array<string, mixed>
-     */
+    * @return array<string, mixed>
+    */
     private function serializeEscola(EscolaInep $escola): array
     {
         return [
@@ -419,7 +495,9 @@ final class EscolaApiController extends AbstractController
             return null;
         }
 
+
         $value = trim((string) $value);
+
 
         return $value === '' ? null : $value;
     }

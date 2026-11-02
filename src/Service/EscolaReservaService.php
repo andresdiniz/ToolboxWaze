@@ -35,7 +35,7 @@ final class EscolaReservaService
      * Reserva até $limite escolas para o usuário, de forma atômica (lock pessimista dentro de transação).
      *
      * 1. devolve (e renova) as reservas ainda ativas do próprio usuário, útil ao trocar de navegador/PC;
-     * 2. completa com escolas livres ou com reserva expirada de outro usuário.
+     * 2. completa com escolas livres, puladas ou com reserva expirada de outro usuário.
      *
      * @return array{escolas: list<EscolaInep>, retomadas: int, novas: int, expiradas_reaproveitadas: int, expira_em: \DateTimeImmutable}
      */
@@ -74,9 +74,18 @@ final class EscolaReservaService
                     ->select('e')
                     ->from(EscolaInep::class, 'e')
                     ->where('e.uf = :uf')
-                    ->andWhere('(e.status IS NULL OR (e.status = :reservado AND e.reservadoPara <> :username AND (e.reservadoEm IS NULL OR e.reservadoEm < :corte)))')
+                    ->andWhere('(
+                        e.status IS NULL
+                        OR e.status = :pulado
+                        OR (
+                            e.status = :reservado
+                            AND e.reservadoPara <> :username
+                            AND (e.reservadoEm IS NULL OR e.reservadoEm < :corte)
+                        )
+                    )')
                     ->setParameter('uf', $uf)
                     ->setParameter('reservado', EscolaInep::STATUS_RESERVADO)
+                    ->setParameter('pulado', EscolaInep::STATUS_PULADO)
                     ->setParameter('username', $username)
                     ->setParameter('corte', $corte, Types::DATETIME_IMMUTABLE)
                     ->orderBy('e.escola', 'ASC')

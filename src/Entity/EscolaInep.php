@@ -17,6 +17,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'idx_ei_identity_hash',  columns: ['identity_hash'])]
 #[ORM\Index(name: 'idx_ei_status',         columns: ['status'])]
 #[ORM\Index(name: 'idx_ei_reservado_para', columns: ['reservado_para'])]
+#[ORM\Index(name: 'idx_ei_uf_status_reservado_em', columns: ['uf', 'status', 'reservado_em'])]
 class EscolaInep
 {
     public const STATUS_NULL           = null;
@@ -123,6 +124,9 @@ class EscolaInep
 
     #[ORM\Column(name: 'reservado_para', length: 100, nullable: true)]
     private ?string $reservadoPara = null;
+
+    #[ORM\Column(name: 'reservado_em', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $reservadoEm = null;
 
     /** @var Collection<int, EscolaInepComentario> */
     #[ORM\OneToMany(
@@ -251,6 +255,13 @@ class EscolaInep
     public function setReservadoPara(?string $v): self
     {
         $this->reservadoPara = $v !== null ? mb_substr(trim($v), 0, 100) : null;
+        return $this;
+    }
+
+    public function getReservadoEm(): ?\DateTimeImmutable { return $this->reservadoEm; }
+    public function setReservadoEm(?\DateTimeImmutable $v): self
+    {
+        $this->reservadoEm = $v;
         return $this;
     }
 

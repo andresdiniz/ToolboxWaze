@@ -10,6 +10,8 @@ services:
     _defaults:
         autowire: true
         autoconfigure: true
+        bind:
+            string $emailFrom: '%env(string:default::MAILER_FROM_EMAIL)%'
 
     App\:
         resource: '../src/'

@@ -10,7 +10,6 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
-use Symfony\Component\Form\Extension\Core\Type\UrlType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -36,7 +35,7 @@ class RadarManualType extends AbstractType
             ->add('municipio', TextType::class, [
                 'label'       => 'Município',
                 'attr'        => ['class' => 'form-control', 'placeholder' => 'Ex: Conselheiro Lafaiete'],
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
+                'constraints' => [new Assert\NotBlank(), new Assert\Length(max: 255)],
             ])
             ->add('localVerificacao', TextType::class, [
                 'label' => 'Local de Verificação',
@@ -44,7 +43,7 @@ class RadarManualType extends AbstractType
                     'class'       => 'form-control',
                     'placeholder' => 'Ex: BR-040 km 512 - Sentido BH',
                 ],
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 500])],
+                'constraints' => [new Assert\NotBlank(), new Assert\Length(max: 500)],
             ])
 
             // ── Equipamento
@@ -78,7 +77,7 @@ class RadarManualType extends AbstractType
                     'autocomplete' => 'off',
                 ],
                 'constraints' => [
-                    new Assert\Length(['max' => 100]),
+                    new Assert\Length(max: 100),
                 ],
             ])
 
@@ -88,10 +87,11 @@ class RadarManualType extends AbstractType
                 'required'    => false,
                 'attr'        => ['class' => 'form-control', 'placeholder' => 'Ex: 80', 'min' => 10, 'max' => 300],
                 'constraints' => [
-                    new Assert\Range([
-                        'min' => 10, 'max' => 300,
-                        'notInRangeMessage' => 'Velocidade deve ser entre {{ min }} e {{ max }} km/h.',
-                    ]),
+                    new Assert\Range(
+                        min: 10,
+                        max: 300,
+                        notInRangeMessage: 'Velocidade deve ser entre {{ min }} e {{ max }} km/h.',
+                    ),
                 ],
             ])
             ->add('sentido', TextType::class, [
@@ -109,7 +109,7 @@ class RadarManualType extends AbstractType
                     'placeholder' => 'URL ou descrição da fonte (Diretran, notícia, Waze…)',
                     'id'          => 'campo-fonte',
                 ],
-                'constraints' => [new Assert\Length(['max' => 1000])],
+                'constraints' => [new Assert\Length(max: 1000)],
             ])
             ->add('observacoes', TextareaType::class, [
                 'label'    => 'Observações',

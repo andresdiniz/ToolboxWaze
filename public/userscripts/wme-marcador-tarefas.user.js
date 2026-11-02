@@ -1,6 +1,5 @@
 // ==UserScript==
 // @name         WME Marcador de Tarefas
-// @namespace    https://greasyfork.org/pt-BR/users/gabrielcartajena
 // @version      1.8.0
 // @description  Marcador de Tarefas com suporte a Escolas e token pessoal validado
 // @author       Gabriel Cartajena
@@ -13,8 +12,6 @@
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
 // @connect      wazetoolbox.acheireviews.com.br
-// @downloadURL  https://update.greasyfork.org/scripts/587740/WME%20Marcador%20de%20Tarefas.user.js
-// @updateURL    https://update.greasyfork.org/scripts/587740/WME%20Marcador%20de%20Tarefas.meta.js
 // ==/UserScript==
 
 /* global $ */

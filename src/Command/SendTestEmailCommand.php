@@ -82,9 +82,16 @@ HELP);
 
         $to      = $input->getArgument('to');
         $subject = $input->getOption('subject');
-        $from    = $input->getOption('from')
-            ?? $_ENV['MAILER_FROM']
-            ?? ('noreply@' . gethostname());
+        $fromRaw = $input->getOption('from')
+        ?? $_ENV['MAILER_FROM_EMAIL']
+        ?? $_ENV['MAILER_FROM']
+        ?? ('noreply@' . gethostname());
+    
+    if (preg_match('/<([^>]+)>/', $fromRaw, $m)) {
+        $from = $m[1];
+    } else {
+        $from = trim($fromRaw);
+    }
 
         $io->title('ToolboxWaze — Envio de E-mail de Teste');
         $io->definitionList(

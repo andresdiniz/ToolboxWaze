@@ -29,3 +29,10 @@ services:
     App\Security\ApiTokenAuthenticator:
         autowire: true
         autoconfigure: true
+
+    App\Email\Transport\ResendEmailTransport:
+        autowire: true
+        autoconfigure: true
+        bind:
+            string $apiKey: '%env(string:default::RESEND_API_KEY)%'
+            string $from: '%env(string:default::MAILER_FROM_EMAIL)%'

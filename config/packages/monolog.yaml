@@ -2,6 +2,7 @@ monolog:
     channels:
         - deprecation  # Deprecations are logged in the dedicated "deprecation" channel when it exists
         - email_queue  # Canal dedicado para todos os e-mails e fila do Messenger
+        - escolas      # Canal dedicado para reservas, liberações, renovações e expirações
 
 when@dev:
     monolog:
@@ -21,6 +22,14 @@ when@dev:
                 path: "%kernel.logs_dir%/email_queue.log"
                 level: debug
                 channels: [email_queue]
+            # Log dedicado para reservas de escolas
+            escolas:
+                type: rotating_file
+                path: "%kernel.logs_dir%/escolas.log"
+                level: debug
+                max_files: 30
+                channels: [escolas]
+                formatter: monolog.formatter.json
 
 when@test:
     monolog:
@@ -40,6 +49,13 @@ when@test:
                 path: "%kernel.logs_dir%/email_queue.log"
                 level: debug
                 channels: [email_queue]
+            escolas:
+                type: rotating_file
+                path: "%kernel.logs_dir%/escolas.log"
+                level: debug
+                max_files: 30
+                channels: [escolas]
+                formatter: monolog.formatter.json
 
 when@prod:
     monolog:
@@ -71,4 +87,12 @@ when@prod:
                 path: "%kernel.logs_dir%/email_queue.log"
                 level: info
                 channels: [email_queue]
+                formatter: monolog.formatter.json
+            # Em prod: arquivo dedicado para reservas de escolas
+            escolas:
+                type: rotating_file
+                path: "%kernel.logs_dir%/escolas.log"
+                level: info
+                max_files: 30
+                channels: [escolas]
                 formatter: monolog.formatter.json

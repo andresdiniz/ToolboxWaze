@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
@@ -236,8 +237,16 @@ class AuthController extends AbstractController
                         UrlGeneratorInterface::ABSOLUTE_URL
                     );
 
+                    $fromRaw = (string) $this->getParameter('app.mailer_from_full');
+
+                    if (preg_match('/^(.+)\s<([^>]+)>$/', trim($fromRaw), $m)) {
+                        $from = new Address(trim($m[2]), trim($m[1]));
+                    } else {
+                        $from = new Address(trim($fromRaw), 'ToolboxWaze');
+                    }
+
                     $email = (new Email())
-                        ->from($this->getParameter('app.mail_from'))
+                        ->from($from)
                         ->to($user->getEmail())
                         ->subject('[ToolboxWaze] Recuperação de senha')
                         ->html($this->renderView('emails/reset_password.html.twig', [

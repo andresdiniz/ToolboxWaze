@@ -5,6 +5,7 @@ namespace App\MessageHandler;
 use App\Message\NotificarRadaresRecentes;
 use App\Repository\UserRepository;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
@@ -27,6 +28,7 @@ final class NotificarRadaresRecentesHandler
         private readonly Environment     $twig,
         private readonly LoggerInterface $logger,
         private readonly CacheInterface  $cache,
+        #[Autowire('%env(string:default::MAILER_FROM_EMAIL)%')]
         private readonly string          $emailFrom,
     ) {}
 

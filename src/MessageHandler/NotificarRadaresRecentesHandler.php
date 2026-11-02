@@ -29,7 +29,7 @@ final class NotificarRadaresRecentesHandler
         private readonly LoggerInterface $logger,
         private readonly CacheInterface  $cache,
         #[Autowire('%env(string:default::MAILER_FROM_EMAIL)%')]
-        private readonly string          $emailFrom,
+        private readonly string          $emailFrom = '',
     ) {}
 
     public function __invoke(NotificarRadaresRecentes $message): void

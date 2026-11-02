@@ -17,3 +17,15 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
+
+    App\Security\AppAuthenticator:
+        autowire: true
+        autoconfigure: true
+
+    App\Security\GoogleAuthenticator:
+        autowire: true
+        autoconfigure: true
+
+    App\Security\ApiTokenAuthenticator:
+        autowire: true
+        autoconfigure: true

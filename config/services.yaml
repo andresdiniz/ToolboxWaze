@@ -5,3 +5,15 @@ parameters:
     app.mailer_from: '%env(default::MAILER_FROM_EMAIL)%'
     app.mailer_from_full: '%env(string:MAILER_FROM)%'
     app.maptiler_key: '%env(MAPTILER_KEY)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'

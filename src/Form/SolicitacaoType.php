@@ -153,10 +153,10 @@ class SolicitacaoType extends AbstractType
     private function permalinkConstraints(bool $required = true): array
     {
         $constraints = [
-            new Assert\Regex([
-                'pattern' => self::PERMALINK_PATTERN,
-                'message' => 'O permalink deve ser do editor Waze com zoom ≥15. Ex: https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
-            ]),
+            new Assert\Regex(
+                pattern: self::PERMALINK_PATTERN,
+                message: 'O permalink deve ser do editor Waze com zoom ≥15. Ex: https://waze.com/pt-BR/editor?env=row&lat=-20&lon=-43&zoomLevel=15',
+            ),
         ];
         if ($required) {
             array_unshift($constraints, new Assert\NotBlank(message: 'O permalink é obrigatório.'));
@@ -244,10 +244,10 @@ class SolicitacaoType extends AbstractType
                 'help_html' => true,
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\Regex([
-                        'pattern' => '/^(POLYGON|LINESTRING)\s*\(/i',
-                        'message' => 'O polígono deve iniciar com POLYGON(( ou LINESTRING(',
-                    ]),
+                    new Assert\Regex(
+                        pattern: '/^(POLYGON|LINESTRING)\s*\(/i',
+                        message: 'O polígono deve iniciar com POLYGON(( ou LINESTRING(',
+                    ),
                 ],
             ])
             ->add('dados_comunicouIntencao', CheckboxType::class, [
@@ -362,7 +362,7 @@ class SolicitacaoType extends AbstractType
                 'attr'        => ['placeholder' => 'Nick do editor no WME/Discuss'],
                 'constraints' => [
                     new Assert\NotBlank(message: 'Informe o nome de usuário do Gerente a ser removido.'),
-                    new Assert\Length(['max' => 255]),
+                    new Assert\Length(max: 255),
                 ],
             ])
             ->add('dados_cargo', ChoiceType::class, [
@@ -401,12 +401,12 @@ class SolicitacaoType extends AbstractType
                 'help' => 'Informe o motivo pelo qual o Gerente deve ser removido do cargo.',
                 'constraints' => [
                     new Assert\NotBlank(message: 'Preencha a justificativa.'),
-                    new Assert\Length([
-                        'min'        => 20,
-                        'minMessage' => 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 2000,
-                        'maxMessage' => 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
-                    ]),
+                    new Assert\Length(
+                        min: 20,
+                        minMessage: 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
+                        max: 2000,
+                        maxMessage: 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
+                    ),
                 ],
             ])
             ->add('dados_comentarios', TextareaType::class, [
@@ -479,7 +479,7 @@ class SolicitacaoType extends AbstractType
                 'help'   => 'Digite o seu nível de um a cinco.',
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\Range(['min' => 1, 'max' => 5]),
+                    new Assert\Range(min: 1, max: 5),
                 ],
             ])
             ->add('dados_nivelDesejado', TextType::class, [
@@ -489,7 +489,7 @@ class SolicitacaoType extends AbstractType
                 'help'   => 'Digite o nível desejado de dois a seis.',
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\Range(['min' => 2, 'max' => 6]),
+                    new Assert\Range(min: 2, max: 6),
                 ],
             ])
             ->add('dados_ativo', ChoiceType::class, [
@@ -533,12 +533,12 @@ class SolicitacaoType extends AbstractType
                 'help' => 'Explique o que o motiva a buscar um nível mais alto.',
                 'constraints' => [
                     new Assert\NotBlank(message: 'Preencha sua motivação.'),
-                    new Assert\Length([
-                        'min'        => 20,
-                        'minMessage' => 'Sua motivação deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 2000,
-                        'maxMessage' => 'Sua motivação não pode ultrapassar {{ limit }} caracteres.',
-                    ]),
+                    new Assert\Length(
+                        min: 20,
+                        minMessage: 'Sua motivação deve ter pelo menos {{ limit }} caracteres.',
+                        max: 2000,
+                        maxMessage: 'Sua motivação não pode ultrapassar {{ limit }} caracteres.',
+                    ),
                 ],
             ])
             ->add('dados_cumpriuRequisitos', ChoiceType::class, [
@@ -553,7 +553,7 @@ class SolicitacaoType extends AbstractType
                 'help_html' => true,
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\EqualTo(['value' => 'sim', 'message' => 'Você deve cumprir os requisitos antes de solicitar.']),
+                    new Assert\EqualTo(value: 'sim', message: 'Você deve cumprir os requisitos antes de solicitar.'),
                 ],
             ]);
     }
@@ -570,7 +570,7 @@ class SolicitacaoType extends AbstractType
                 'attr'        => ['placeholder' => 'Nick do editor no WME/Discuss'],
                 'constraints' => [
                     new Assert\NotBlank(message: 'Informe o nome de usuário do editor a ser rebaixado.'),
-                    new Assert\Length(['max' => 255]),
+                    new Assert\Length(max: 255),
                 ],
             ])
             ->add('dados_nivelAtual', TextType::class, [
@@ -580,11 +580,11 @@ class SolicitacaoType extends AbstractType
                 'help'   => 'Nível atual do editor que receberá o downgrade.',
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\Range([
-                        'min'               => 2,
-                        'max'               => 6,
-                        'notInRangeMessage' => 'O nível atual deve estar entre 2 e 6.',
-                    ]),
+                    new Assert\Range(
+                        min: 2,
+                        max: 6,
+                        notInRangeMessage: 'O nível atual deve estar entre 2 e 6.',
+                    ),
                 ],
             ])
             ->add('dados_nivelDesejado', TextType::class, [
@@ -594,11 +594,11 @@ class SolicitacaoType extends AbstractType
                 'help'   => 'O nível resultante após o downgrade.',
                 'constraints' => [
                     new Assert\NotBlank(),
-                    new Assert\Range([
-                        'min'               => 1,
-                        'max'               => 5,
-                        'notInRangeMessage' => 'O nível alvo deve estar entre 1 e 5.',
-                    ]),
+                    new Assert\Range(
+                        min: 1,
+                        max: 5,
+                        notInRangeMessage: 'O nível alvo deve estar entre 1 e 5.',
+                    ),
                 ],
             ])
             ->add('dados_motivoDowngrade', ChoiceType::class, [
@@ -628,12 +628,12 @@ class SolicitacaoType extends AbstractType
                 'help' => 'Apresente evidências ou descrição clara da situação que justifica o rebaixamento.',
                 'constraints' => [
                     new Assert\NotBlank(message: 'Preencha a justificativa.'),
-                    new Assert\Length([
-                        'min'        => 30,
-                        'minMessage' => 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 2000,
-                        'maxMessage' => 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
-                    ]),
+                    new Assert\Length(
+                        min: 30,
+                        minMessage: 'A justificativa deve ter pelo menos {{ limit }} caracteres.',
+                        max: 2000,
+                        maxMessage: 'A justificativa não pode ultrapassar {{ limit }} caracteres.',
+                    ),
                 ],
             ])
             ->add('dados_recomendadores', TextType::class, [
@@ -660,7 +660,7 @@ class SolicitacaoType extends AbstractType
             ->add('dados_editorNome', TextType::class, [
                 'label'       => 'Nome de usuário do editor',
                 'mapped'      => false,
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
+                'constraints' => [new Assert\NotBlank(), new Assert\Length(max: 255)],
             ])
             ->add('dados_permalink', TextType::class, [
                 'label'  => 'Permalink (zoom ≥15)',
@@ -687,12 +687,12 @@ class SolicitacaoType extends AbstractType
                 ],
                 'constraints' => [
                     new Assert\NotBlank(message: 'Descreva o problema.'),
-                    new Assert\Length([
-                        'min'        => 20,
-                        'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 2000,
-                        'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
-                    ]),
+                    new Assert\Length(
+                        min: 20,
+                        minMessage: 'A descrição deve ter pelo menos {{ limit }} caracteres.',
+                        max: 2000,
+                        maxMessage: 'A descrição não pode ultrapassar {{ limit }} caracteres.',
+                    ),
                 ],
             ]);
     }
@@ -706,7 +706,7 @@ class SolicitacaoType extends AbstractType
             ->add('dados_nomePosto', TextType::class, [
                 'label'       => 'Nome do posto',
                 'mapped'      => false,
-                'constraints' => [new Assert\NotBlank(), new Assert\Length(['max' => 255])],
+                'constraints' => [new Assert\NotBlank(), new Assert\Length(max: 255)],
             ])
             ->add('dados_bandeira', TextType::class, [
                 'label'    => 'Bandeira',
@@ -738,12 +738,12 @@ class SolicitacaoType extends AbstractType
                 ],
                 'constraints' => [
                     new Assert\NotBlank(message: 'Preencha a descrição.'),
-                    new Assert\Length([
-                        'min'        => 10,
-                        'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 2000,
-                        'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
-                    ]),
+                    new Assert\Length(
+                        min: 10,
+                        minMessage: 'A descrição deve ter pelo menos {{ limit }} caracteres.',
+                        max: 2000,
+                        maxMessage: 'A descrição não pode ultrapassar {{ limit }} caracteres.',
+                    ),
                 ],
             ]);
     }
@@ -779,12 +779,12 @@ class SolicitacaoType extends AbstractType
                 ],
                 'constraints' => [
                     new Assert\NotBlank(message: 'Descreva o segmento.'),
-                    new Assert\Length([
-                        'min'        => 10,
-                        'minMessage' => 'A descrição deve ter pelo menos {{ limit }} caracteres.',
-                        'max'        => 1000,
-                        'maxMessage' => 'A descrição não pode ultrapassar {{ limit }} caracteres.',
-                    ]),
+                    new Assert\Length(
+                        min: 10,
+                        minMessage: 'A descrição deve ter pelo menos {{ limit }} caracteres.',
+                        max: 1000,
+                        maxMessage: 'A descrição não pode ultrapassar {{ limit }} caracteres.',
+                    ),
                 ],
             ]);
     }

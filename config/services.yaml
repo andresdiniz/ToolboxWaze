@@ -29,3 +29,6 @@ services:
     App\Security\ApiTokenAuthenticator:
         autowire: true
         autoconfigure: true
+
+    App\Email\Contract\EmailTransportInterface:
+        alias: 'App\Email\Transport\NullEmailTransport'

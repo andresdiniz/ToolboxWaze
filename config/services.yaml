@@ -3,32 +3,5 @@ parameters:
     app.gtm_id: '%env(string:default::GTM_ID)%'
     app.mail_from: '%env(default::MAILER_FROM_EMAIL)%'
     app.mailer_from: '%env(default::MAILER_FROM_EMAIL)%'
+    app.mailer_from_full: '%env(string:MAILER_FROM)%'
     app.maptiler_key: '%env(MAPTILER_KEY)%'
-
-services:
-    _defaults:
-        autowire: true
-        autoconfigure: true
-        bind:
-            string $emailFrom: '%env(MAILER_FROM_EMAIL)%'
-
-    App\:
-        resource: '../src/'
-        exclude:
-            - '../src/DependencyInjection/'
-            - '../src/Entity/'
-            - '../src/Kernel.php'
-            - '../src/Tests/'
-
-    App\Email\Contract\EmailTransportInterface:
-        alias: App\Email\Transport\ResendEmailTransport
-
-    App\Email\Contract\EmailEventLoggerInterface:
-        alias: App\Email\Logging\MonologEmailEventLogger
-
-    # Usamos o 'bind' para injetar as variáveis escalares, 
-    # mantendo toda a estrutura de autowiring intacta.
-    App\Email\Transport\ResendEmailTransport:
-        bind:
-            $apiKey: '%env(RESEND_API_KEY)%'
-            $from: '%env(MAILER_FROM_EMAIL)%'

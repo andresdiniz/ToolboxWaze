@@ -8,29 +8,21 @@ use App\Entity\RadarMedidor;
 use App\Message\EnviarEmailRadarRecente;
 use App\Repository\RadarMedidorRepository;
 use App\Repository\UserRepository;
+use App\Service\EmailSender;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
-use Symfony\Component\Mime\Address;
-use Symfony\Component\Mime\Email;
 
 /**
  * Processa a fila de notificações de radares recentes.
- *
- * Executado de forma assíncrona pelo Messenger consumer, portanto
- * o ImportRadarCommand retorna imediatamente após o dispatch.
  */
 #[AsMessageHandler]
 final class EnviarEmailRadarRecenteHandler
 {
     public function __construct(
-        private readonly MailerInterface         $mailer,
-        private readonly UserRepository          $userRepo,
-        private readonly RadarMedidorRepository  $radarRepo,
-        private readonly LoggerInterface         $emailQueueLogger,
-        #[Autowire(env: 'MAILER_FROM')] private readonly string $mailerFrom = '',
-        #[Autowire(env: 'APP_BASE_URL')] private readonly string $appBaseUrl  = '',
+        private readonly EmailSender            $emailSender,
+        private readonly UserRepository         $userRepo,
+        private readonly RadarMedidorRepository $radarRepo,
+        private readonly LoggerInterface        $emailQueueLogger,
     ) {}
 
     public function __invoke(EnviarEmailRadarRecente $message): void
@@ -52,7 +44,6 @@ final class EnviarEmailRadarRecenteHandler
                 return;
             }
 
-            // Revalida acesso à UF no momento do envio (pode ter mudado desde o dispatch)
             if (!$user->canAccessUf($message->siglaUf)) {
                 $this->emailQueueLogger->warning(
                     'EnviarEmailRadarRecente: usuário sem acesso à UF — e-mail cancelado',
@@ -61,25 +52,25 @@ final class EnviarEmailRadarRecenteHandler
                 return;
             }
 
-            // Busca os radares para exibir no e-mail
             $radares = $this->resolveRadares($message);
 
-            $email = (new Email())
-                ->from($this->parseFrom())
-                ->to(new Address($user->getEmail(), $user->getName()))
-                ->subject(sprintf(
-                    '[ToolboxWaze] %d novo(s) radar(es) adicionado(s) em %s',
-                    $message->quantidadeNovos,
-                    $message->siglaUf
-                ))
-                ->html($this->buildHtml(
+            $subject = sprintf(
+                '[ToolboxWaze] %d novo(s) radar(es) adicionado(s) em %s',
+                $message->quantidadeNovos,
+                $message->siglaUf
+            );
+
+            $this->emailSender->send(
+                $user->getEmail(),
+                $user->getName(),
+                $subject,
+                $this->buildHtml(
                     $user->getName(),
                     $message->siglaUf,
                     $message->quantidadeNovos,
                     $radares
-                ));
-
-            $this->mailer->send($email);
+                )
+            );
 
             $this->emailQueueLogger->info('EnviarEmailRadarRecente: e-mail enviado', array_merge($context, [
                 'destinatario' => $user->getEmail(),
@@ -96,10 +87,6 @@ final class EnviarEmailRadarRecenteHandler
     }
 
     /**
-     * Resolve a lista de RadarMedidor para exibir no e-mail.
-     * Se $message->radarIds for informado, busca pelos IDs exatos.
-     * Caso contrário, busca os recentes dos últimos 30 dias da UF (max 20).
-     *
      * @return RadarMedidor[]
      */
     private function resolveRadares(EnviarEmailRadarRecente $message): array
@@ -110,7 +97,6 @@ final class EnviarEmailRadarRecenteHandler
             );
         }
 
-        // Fallback: busca recentes da UF (últimos 30 dias), limita a 20 para não poluir o e-mail
         $recentes = $this->radarRepo->findRecentes($message->siglaUf, 30);
         return array_slice($recentes, 0, 20);
     }
@@ -122,7 +108,7 @@ final class EnviarEmailRadarRecenteHandler
     {
         $nome    = htmlspecialchars($nome,    ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $ufSafe  = htmlspecialchars($uf,      ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $baseUrl = rtrim($this->appBaseUrl, '/');
+        $baseUrl = $this->emailSender->baseUrl();
         $urlEstado = $baseUrl . '/radares?uf=' . urlencode($uf);
 
         $tabelaRadares = $this->buildTabelaRadares($radares, $baseUrl);
@@ -166,8 +152,6 @@ final class EnviarEmailRadarRecenteHandler
     }
 
     /**
-     * Gera a tabela HTML com os radares e links individuais.
-     *
      * @param RadarMedidor[] $radares
      */
     private function buildTabelaRadares(array $radares, string $baseUrl): string
@@ -220,16 +204,5 @@ final class EnviarEmailRadarRecenteHandler
             </tbody>
         </table>
         TABLE;
-    }
-
-    private function parseFrom(): Address
-    {
-        $raw = trim($this->mailerFrom);
-
-        if (preg_match('/^(.+?)\s*<([^>]+)>\s*$/', $raw, $m)) {
-            return new Address(trim($m[2]), trim($m[1]));
-        }
-
-        return new Address($raw ?: 'noreply@toolboxwaze.com.br');
     }
 }

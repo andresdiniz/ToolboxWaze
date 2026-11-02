@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Command;
 
+use App\Service\EmailSender;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -13,17 +14,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 
-/**
- * Envia um e-mail de teste para verificar a configuração do Mailer.
- *
- * Uso:
- *   php bin/console app:send-test-email voce@exemplo.com
- *   php bin/console app:send-test-email voce@exemplo.com --from=noreply@seusite.com
- *   php bin/console app:send-test-email voce@exemplo.com --subject="Meu teste"
- */
 #[AsCommand(
     name: 'app:send-test-email',
     description: 'Envia um e-mail de teste para verificar a configuração do Mailer (MAILER_DSN)',
@@ -32,6 +24,7 @@ final class SendTestEmailCommand extends Command
 {
     public function __construct(
         private readonly MailerInterface $mailer,
+        private readonly EmailSender     $emailSender,
     ) {
         parent::__construct();
     }
@@ -48,7 +41,7 @@ final class SendTestEmailCommand extends Command
                 'from',
                 null,
                 InputOption::VALUE_REQUIRED,
-                'Remetente (padrão: lê MAILER_FROM do .env ou usa noreply@localhost)',
+                'Remetente (padrão: MAILER_FROM_EMAIL configurado no EmailSender)',
                 null
             )
             ->addOption(
@@ -56,23 +49,15 @@ final class SendTestEmailCommand extends Command
                 null,
                 InputOption::VALUE_REQUIRED,
                 'Assunto do e-mail de teste',
-                'ToolboxWaze — Teste de E-mail'
+                '[ToolboxWaze] Teste de E-mail'
             )
             ->setHelp(<<<'HELP'
 Envia um e-mail de teste simples usando o transporte configurado em MAILER_DSN.
 
 Exemplos:
 
-  # Envia para seu e-mail pessoal
   php bin/console app:send-test-email voce@gmail.com
-
-  # Especifica remetente e assunto
   php bin/console app:send-test-email voce@gmail.com --from=noreply@meusite.com --subject="Teste OK"
-
-Se o envio falhar, verifique:
-  - MAILER_DSN no .env.local
-  - Credenciais SMTP (host, porta, usuário, senha)
-  - Firewall/porta 465 ou 587 liberada no servidor
 HELP);
     }
 
@@ -80,18 +65,10 @@ HELP);
     {
         $io = new SymfonyStyle($input, $output);
 
-        $to      = $input->getArgument('to');
-        $subject = $input->getOption('subject');
-        $fromRaw = $input->getOption('from')
-        ?? $_ENV['MAILER_FROM_EMAIL']
-        ?? $_ENV['MAILER_FROM']
-        ?? ('noreply@' . gethostname());
-    
-    if (preg_match('/<([^>]+)>/', $fromRaw, $m)) {
-        $from = $m[1];
-    } else {
-        $from = trim($fromRaw);
-    }
+        $to        = $input->getArgument('to');
+        $subject   = $input->getOption('subject');
+        $fromAddr  = $this->emailSender->from();
+        $from      = $input->getOption('from') ?? $fromAddr->getAddress();
 
         $io->title('ToolboxWaze — Envio de E-mail de Teste');
         $io->definitionList(
@@ -104,7 +81,7 @@ HELP);
         $sentAt = new \DateTimeImmutable();
 
         $email = (new Email())
-            ->from(new Address($from, 'ToolboxWaze'))
+            ->from($fromAddr)
             ->to($to)
             ->subject($subject)
             ->text($this->buildTextBody($from, $to, $sentAt))
@@ -132,10 +109,6 @@ HELP);
             return Command::FAILURE;
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Corpo do e-mail
-    // -------------------------------------------------------------------------
 
     private function buildTextBody(string $from, string $to, \DateTimeImmutable $sentAt): string
     {
@@ -214,17 +187,8 @@ HELP);
         HTML;
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    /**
-     * Oculta a senha no DSN para exibição segura no terminal.
-     * smtp://user:SENHA@host:port -> smtp://user:***@host:port
-     */
     private function maskDsn(string $dsn): string
     {
-        // Usa # como delimitador para evitar conflito com as barras do DSN
         return preg_replace('#(://[^:]+:)([^@]+)(@)#', '$1***$3', $dsn) ?? $dsn;
     }
 }

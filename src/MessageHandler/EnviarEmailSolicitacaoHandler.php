@@ -8,27 +8,22 @@ use App\Entity\Solicitacao;
 use App\Message\EnviarEmailSolicitacao;
 use App\Repository\SolicitacaoRepository;
 use App\Repository\UserRepository;
+use App\Service\EmailSender;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
-use Symfony\Component\Mime\Address;
-use Symfony\Component\Mime\Email;
 use Twig\Environment;
 
 #[AsMessageHandler]
 class EnviarEmailSolicitacaoHandler
 {
     public function __construct(
-        private readonly MailerInterface       $mailer,
+        private readonly EmailSender           $emailSender,
         private readonly Environment           $twig,
         private readonly SolicitacaoRepository $solicitacaoRepo,
         private readonly UserRepository        $userRepo,
-        // Canal dedicado: todos os eventos de e-mail gravados em email_queue.log
         #[Autowire(service: 'monolog.logger.email_queue')]
         private readonly LoggerInterface       $emailQueueLogger,
-        #[Autowire('%env(MAILER_FROM)%')]  private readonly string $mailerFrom,
-        #[Autowire('%env(APP_BASE_URL)%')] private readonly string $appBaseUrl,
     ) {}
 
     public function __invoke(EnviarEmailSolicitacao $message): void
@@ -67,28 +62,15 @@ class EnviarEmailSolicitacaoHandler
     // Helpers
     // ------------------------------------------------------------------
 
-    private function fromAddress(): Address
-    {
-        if (preg_match('/^(.+)\s<([^>]+)>$/', trim($this->mailerFrom), $m)) {
-            return new Address(trim($m[2]), trim($m[1]));
-        }
-        return new Address(trim($this->mailerFrom), 'ToolboxWaze');
-    }
-
     private function buildUrl(Solicitacao $s): string
     {
-        return rtrim($this->appBaseUrl, '/') . '/solicitacoes/' . $s->getId();
+        return $this->emailSender->baseUrl() . '/solicitacoes/' . $s->getId();
     }
 
     private function send(string $to, string $toName, string $subject, string $html): void
     {
-        $this->mailer->send(
-            (new Email())
-                ->from($this->fromAddress())
-                ->to(new Address($to, $toName))
-                ->subject($subject)
-                ->html($html)
-        );
+        $this->emailSender->send($to, $toName, $subject, $html);
+
         $this->emailQueueLogger->info('Email enviado', [
             'destinatario' => $to,
             'assunto'      => $subject,
@@ -186,7 +168,6 @@ class EnviarEmailSolicitacaoHandler
         $url = $this->buildUrl($s);
 
         if ($autorId === null) {
-            // Comentário do solicitante → avisa todos os responsáveis
             $responsaveis = $s->getResponsaveis();
 
             if ($responsaveis->isEmpty()) {
@@ -211,7 +192,6 @@ class EnviarEmailSolicitacaoHandler
                 );
             }
         } else {
-            // Comentário de responsável → avisa o solicitante
             $html = $this->twig->render('emails/solicitacao_comentario_solicitante.html.twig', [
                 'solicitacao' => $s,
                 'url'         => $url,
@@ -223,7 +203,6 @@ class EnviarEmailSolicitacaoHandler
                 $html
             );
 
-            // Avisa demais responsáveis (exceto o autor)
             foreach ($s->getResponsaveis() as $r) {
                 if ($r->getId() === $autorId) {
                     continue;

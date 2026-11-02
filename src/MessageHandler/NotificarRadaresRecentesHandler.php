@@ -1,14 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\MessageHandler;
 
 use App\Message\NotificarRadaresRecentes;
 use App\Repository\UserRepository;
+use App\Service\EmailSender;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
-use Symfony\Component\Mime\Email;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Twig\Environment;
@@ -17,19 +17,17 @@ use Twig\Environment;
 final class NotificarRadaresRecentesHandler
 {
     /**
-     * TTL de deduplicação: dentro deste janela de tempo o mesmo
-     * destinatário+UF NÃO recebe um segundo e-mail.
+     * TTL de deduplicação: dentro desta janela o mesmo destinatário+UF
+     * NÃO recebe um segundo e-mail.
      */
     private const DEDUP_TTL = 3600; // 1 hora
 
     public function __construct(
         private readonly UserRepository  $userRepository,
-        private readonly MailerInterface $mailer,
+        private readonly EmailSender     $emailSender,
         private readonly Environment     $twig,
         private readonly LoggerInterface $logger,
         private readonly CacheInterface  $cache,
-        #[Autowire('%env(string:default::MAILER_FROM_EMAIL)%')]
-        private readonly string          $emailFrom = '',
     ) {}
 
     public function __invoke(NotificarRadaresRecentes $message): void
@@ -52,33 +50,10 @@ final class NotificarRadaresRecentesHandler
             return;
         }
 
-        // ── Rate-limit / deduplicação via cache ─────────────────────────
-        $dedupKey = sprintf(
-            'notif_radares_recentes_%d_%s',
-            $message->userId,
-            $message->siglaUf
-        );
-
-        $alreadySent = false;
-        $this->cache->get($dedupKey, function (ItemInterface $item) use (&$alreadySent): bool {
-            $alreadySent = false;
-            $item->expiresAfter(self::DEDUP_TTL);
-            return true; // marca como "enviado"
-        });
-
-        // Se a key já existia no cache, $alreadySent permanece false e
-        // o callback NÃO é chamado — portanto só enviamos quando o cache miss.
-        // Porém a lógica acima sempre grava; usamos hit/miss explícito:
-        // Reimplementação correta com hit detection:
-        $sent = $this->cache->get($dedupKey . '_sent', function (ItemInterface $item) use ($message, $user): bool {
-            // Esse bloco só executa uma vez (cache miss)
-            $item->expiresAfter(self::DEDUP_TTL);
-            return false; // será sobrescrito abaixo após envio bem-sucedido
-        });
-
-        // Chave de controle real
+        // Deduplicação: o callback só roda em cache MISS.
         $lockKey = 'notif_radar_lock_' . $message->userId . '_' . $message->siglaUf;
         $isNew   = false;
+
         $this->cache->get($lockKey, function (ItemInterface $item) use (&$isNew): bool {
             $isNew = true;
             $item->expiresAfter(self::DEDUP_TTL);
@@ -93,7 +68,6 @@ final class NotificarRadaresRecentesHandler
             return;
         }
 
-        // ── Envia ────────────────────────────────────────────────────────
         $html = $this->twig->render('email/radares_recentes.html.twig', [
             'usuario'         => $user,
             'siglaUf'         => $message->siglaUf,
@@ -102,18 +76,15 @@ final class NotificarRadaresRecentesHandler
             'dataImport'      => $message->dataImport,
         ]);
 
-        $email = (new Email())
-            ->from($this->emailFrom)
-            ->to($user->getEmail())
-            ->subject(sprintf(
-                '[RadarBR] %d novo(s) radar(es) adicionado(s) em %s',
-                $message->quantidadeNovos,
-                $message->nomeEstado,
-            ))
-            ->html($html);
+        $subject = sprintf(
+            '[ToolboxWaze] %d novo(s) radar(es) adicionado(s) em %s',
+            $message->quantidadeNovos,
+            $message->nomeEstado,
+        );
 
         try {
-            $this->mailer->send($email);
+            $this->emailSender->send($user->getEmail(), $user->getName(), $subject, $html);
+
             $this->logger->info(
                 'E-mail de radares recentes enviado para {email} (UF: {uf}, qtd: {qtd})',
                 [

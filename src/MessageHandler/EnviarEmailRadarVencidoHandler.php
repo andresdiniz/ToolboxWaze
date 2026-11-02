@@ -7,31 +7,21 @@ namespace App\MessageHandler;
 use App\Message\EnviarEmailRadarVencido;
 use App\Repository\RadarMedidorRepository;
 use App\Repository\UserRepository;
+use App\Service\EmailSender;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
-use Symfony\Component\Mime\Address;
-use Symfony\Component\Mime\Email;
 
 /**
  * Envia aviso de radar vencido (data_fim > 30 dias atrás) para editores.
- *
- * O destinatário é sempre um usuário com ROLE_EDITOR — a seleção
- * de quais editores recebem o aviso é responsabilidade do serviço/command
- * que faz o dispatch (ex: app:notificar-radares-vencidos).
- *
- * Todos os eventos são registrados no canal 'email_queue'.
  */
 #[AsMessageHandler]
 final class EnviarEmailRadarVencidoHandler
 {
     public function __construct(
-        private readonly MailerInterface         $mailer,
-        private readonly RadarMedidorRepository  $radarRepo,
-        private readonly UserRepository          $userRepo,
-        private readonly LoggerInterface         $emailQueueLogger,
-        private readonly string                  $mailerFrom = '',
-        private readonly string                  $appBaseUrl  = '',
+        private readonly EmailSender           $emailSender,
+        private readonly RadarMedidorRepository $radarRepo,
+        private readonly UserRepository        $userRepo,
+        private readonly LoggerInterface       $emailQueueLogger,
     ) {}
 
     public function __invoke(EnviarEmailRadarVencido $message): void
@@ -54,7 +44,6 @@ final class EnviarEmailRadarVencidoHandler
                 return;
             }
 
-            // Garante que só editores recebem esse e-mail
             if (!in_array('ROLE_EDITOR', (array) $editor->getRoles(), true)) {
                 $this->emailQueueLogger->warning('EnviarEmailRadarVencido: destinatário não é ROLE_EDITOR', array_merge($context, [
                     'roles' => $editor->getRoles(),
@@ -62,15 +51,12 @@ final class EnviarEmailRadarVencidoHandler
                 return;
             }
 
-            $from = $this->parseFrom();
-
-            $email = (new Email())
-                ->from($from)
-                ->to(new Address($editor->getEmail(), $editor->getNome() ?? $editor->getEmail()))
-                ->subject('[ToolboxWaze] Radar vencido há mais de 30 dias — ação necessária')
-                ->html($this->buildTemplate($radar, $editor));
-
-            $this->mailer->send($email);
+            $this->emailSender->send(
+                $editor->getEmail(),
+                $editor->getNome() ?? $editor->getEmail(),
+                '[ToolboxWaze] Radar vencido há mais de 30 dias — ação necessária',
+                $this->buildTemplate($radar, $editor)
+            );
 
             $this->emailQueueLogger->info('Email radar_vencido enviado', array_merge($context, [
                 'destinatario' => $editor->getEmail(),
@@ -96,7 +82,7 @@ final class EnviarEmailRadarVencidoHandler
         $dataFim    = (method_exists($radar, 'getDataFim') && $radar->getDataFim())
             ? $radar->getDataFim()->format('d/m/Y')
             : 'não informada';
-        $baseUrl = rtrim($this->appBaseUrl, '/');
+        $baseUrl = $this->emailSender->baseUrl();
 
         return <<<HTML
         <p>Olá, <strong>{$nomeEditor}</strong>!</p>
@@ -106,14 +92,5 @@ final class EnviarEmailRadarVencidoHandler
         <p><a href="{$baseUrl}/admin">Acessar o painel</a></p>
         <p>Esta é uma notificação automática do ToolboxWaze.</p>
         HTML;
-    }
-
-    private function parseFrom(): Address
-    {
-        $raw = trim($this->mailerFrom);
-        if (preg_match('/^(.+?)\s*<([^>]+)>\s*$/', $raw, $m)) {
-            return new Address(trim($m[2]), trim($m[1]));
-        }
-        return new Address($raw ?: 'noreply@toolboxwaze.com.br');
     }
 }

@@ -7,16 +7,14 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Message\EnviarEmailConta;
 use App\Repository\UserRepository;
+use App\Service\EmailSender;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Lazy;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Mime\Address;
-use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -28,7 +26,8 @@ class AuthController extends AbstractController
 {
     public function __construct(
         #[Lazy] private HttpClientInterface $httpClient,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private EmailSender $emailSender,
     ) {
     }
 
@@ -89,33 +88,28 @@ class AuthController extends AbstractController
                 $errors[] = 'Token CSRF inválido.';
             }
 
-            // Sanitiza e normaliza nome
             $name = trim($req->request->getString('name'));
             $name = strip_tags($name);
             $name = mb_substr($name, 0, 120);
 
-            // Sanitiza e normaliza e-mail
             $email = trim($req->request->getString('email'));
             $email = filter_var($email, FILTER_SANITIZE_EMAIL);
-            $email = strtolower($email); // evita duplicatas com diferença de caixa
+            $email = strtolower($email);
 
-            $password     = $req->request->getString('password');
-            $confirm      = $req->request->getString('password2'); // corrigido para 'password2'
+            $password = $req->request->getString('password');
+            $confirm  = $req->request->getString('password2');
 
-            // Sanitiza nickname
             $wazeNickname = $req->request->getString('waze_nickname');
             $wazeNickname = is_string($wazeNickname) ? $wazeNickname : '';
             $wazeNickname = preg_replace('/[^A-Za-z0-9_.-]/', '', $wazeNickname);
             $wazeNickname = mb_substr($wazeNickname, 0, 50);
 
-            // UF selecionadas
             $rawUfs       = $req->request->all('requested_ufs') ?? [];
             $requestedUfs = array_values(array_filter(
                 array_map('strtoupper', (array) $rawUfs),
                 static fn(string $uf): bool => in_array($uf, User::ALL_UFS, true)
             ));
 
-            // Popula valores para reexibição (seguro)
             $formValues = [
                 'name' => $name,
                 'email' => $email,
@@ -123,7 +117,6 @@ class AuthController extends AbstractController
                 'requested_ufs' => $requestedUfs,
             ];
 
-            // Validações (executa apenas se CSRF passou)
             if (empty($errors)) {
                 if (!$name) {
                     $errors[] = 'Nome obrigatório.';
@@ -145,14 +138,12 @@ class AuthController extends AbstractController
                 }
             }
 
-            // Valida nickname no backend (chamada à API do Waze)
             if (empty($errors) && $wazeNickname !== '') {
                 if (!$this->validateWazeNickname($wazeNickname)) {
                     $errors[] = 'Nickname no Waze inválido ou inexistente.';
                 }
             }
 
-            // Se tudo ok, persiste
             if (empty($errors)) {
                 $user = new User();
                 $user->setName($name);
@@ -182,7 +173,7 @@ class AuthController extends AbstractController
 
         return $this->render('auth/register.html.twig', [
             'errors' => $errors,
-            'values' => $formValues, // array seguro, sem senha nem token
+            'values' => $formValues,
         ]);
     }
 
@@ -207,13 +198,11 @@ class AuthController extends AbstractController
         Request $req,
         UserRepository $userRepo,
         EntityManagerInterface $em,
-        MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator,
     ): Response {
         $sent = false;
 
         if ($req->isMethod('POST')) {
-            // CSRF
             if (!$this->isCsrfTokenValid('forgot_password', $req->request->get('_csrf_token'))) {
                 $this->addFlash('danger', 'Token CSRF inválido.');
                 return $this->redirectToRoute('app_forgot_password');
@@ -237,25 +226,18 @@ class AuthController extends AbstractController
                         UrlGeneratorInterface::ABSOLUTE_URL
                     );
 
-                    $fromRaw = (string) $this->getParameter('app.mailer_from_full');
-
-                    if (preg_match('/^(.+)\s<([^>]+)>$/', trim($fromRaw), $m)) {
-                        $from = new Address(trim($m[2]), trim($m[1]));
-                    } else {
-                        $from = new Address(trim($fromRaw), 'ToolboxWaze');
-                    }
-
-                    $email = (new Email())
-                        ->from($from)
-                        ->to($user->getEmail())
-                        ->subject('[ToolboxWaze] Recuperação de senha')
-                        ->html($this->renderView('emails/reset_password.html.twig', [
-                            'user' => $user,
-                            'link' => $link,
-                        ]));
+                    $html = $this->renderView('emails/reset_password.html.twig', [
+                        'user' => $user,
+                        'link' => $link,
+                    ]);
 
                     try {
-                        $mailer->send($email);
+                        $this->emailSender->send(
+                            $user->getEmail(),
+                            null,
+                            '[ToolboxWaze] Recuperação de senha',
+                            $html
+                        );
                     } catch (\Throwable $e) {
                         $this->logger->error('Falha ao enviar e-mail de recuperação: ' . $e->getMessage());
                     }
@@ -276,7 +258,6 @@ class AuthController extends AbstractController
         EntityManagerInterface $em,
         UserPasswordHasherInterface $hasher,
     ): Response {
-        // Valida formato do token (hex 64)
         if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
             $this->addFlash('danger', 'Link inválido.');
             return $this->redirectToRoute('app_forgot_password');
@@ -292,7 +273,6 @@ class AuthController extends AbstractController
         $errors = [];
 
         if ($req->isMethod('POST')) {
-            // CSRF
             if (!$this->isCsrfTokenValid('reset_password', $req->request->get('_csrf_token'))) {
                 $errors[] = 'Token CSRF inválido.';
             }
@@ -326,31 +306,22 @@ class AuthController extends AbstractController
 
     // ──────────────────────── MÉTODOS PRIVADOS ────────────────────────
 
-    /**
-     * Valida se o nickname existe na plataforma Waze (via API do fórum).
-     */
-
     private function validateWazeNickname(string $nickname): bool
-{
-    // O padrão da URL do avatar: /discuss/user_avatar/www.waze.com/{nickname}/24/{id}_2.png
-    // O {id} numérico parece variar por usuário — o endpoint user_actions.json é mais confiável.
-    // Se quiser insistir no avatar, teria que descobrir o ID numérico do usuário antes.
-    // O endpoint user_actions.json (que você já usa) é mais direto p/ validar nickname.
+    {
+        $url = "https://www.waze.com/discuss/user_avatar/www.waze.com/{$nickname}/24/139694_2.png";
 
-    $url = "https://www.waze.com/discuss/user_avatar/www.waze.com/{$nickname}/24/139694_2.png";
+        try {
+            $response = $this->httpClient->request('HEAD', $url, [
+                'headers' => [
+                    'User-Agent' => 'ToolboxWaze/1.0',
+                ],
+                'timeout' => 10,
+            ]);
 
-    try {
-        $response = $this->httpClient->request('HEAD', $url, [
-            'headers' => [
-                'User-Agent' => 'ToolboxWaze/1.0',
-            ],
-            'timeout' => 10,
-        ]);
-
-        return $response->getStatusCode() === 200;
-    } catch (\Throwable $e) {
-        $this->logger->error('Erro ao validar avatar Waze: ' . $e->getMessage());
-        return false;
+            return $response->getStatusCode() === 200;
+        } catch (\Throwable $e) {
+            $this->logger->error('Erro ao validar avatar Waze: ' . $e->getMessage());
+            return false;
+        }
     }
-}
 }

@@ -138,7 +138,7 @@ class EnviarEmailSolicitacaoHandler
         ]);
         $this->send(
             $responsavel->getEmail(),
-            $responsavel->getNome() ?? $responsavel->getEmail(),
+            $responsavel->getName() ?? $responsavel->getEmail(),
             sprintf('[ToolboxWaze] Nova pendência: %s (#%d)', $s->getTipoLabel(), $s->getId()),
             $html
         );
@@ -205,7 +205,7 @@ class EnviarEmailSolicitacaoHandler
                 ]);
                 $this->send(
                     $r->getEmail(),
-                    $r->getNome() ?? $r->getEmail(),
+                    $r->getName() ?? $r->getEmail(),
                     '[ToolboxWaze] Novo comentário em #' . $s->getId(),
                     $html
                 );
@@ -235,7 +235,7 @@ class EnviarEmailSolicitacaoHandler
                 ]);
                 $this->send(
                     $r->getEmail(),
-                    $r->getNome() ?? $r->getEmail(),
+                    $r->getName() ?? $r->getEmail(),
                     '[ToolboxWaze] Novo comentário em #' . $s->getId(),
                     $html2
                 );

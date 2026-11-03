@@ -9,29 +9,13 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
-/**
- * Medidor de velocidade RBMLQ/INMETRO.
- *
- * Tabela: radar_medidor
- * Colunas incluem todos os campos das migrations:
- *   - Version20260516130000 : criação da tabela
- *   - Version20260517...    : sigla_uf, data_ultima_verificacao, inserted_by
- *   - Version20260522...    : data_verificacao_efetiva
- *   - Version20260524...    : link_waze
- */
 #[ORM\Entity(repositoryClass: RadarMedidorRepository::class)]
 #[ORM\Table(name: 'radar_medidor')]
-#[ORM\Index(name: 'idx_radar_uf',                         columns: ['uf'])]
-#[ORM\Index(name: 'idx_radar_municipio',                  columns: ['municipio'])]
-#[ORM\Index(name: 'idx_radar_cnpj',                       columns: ['cnpj_empresa'])]
-#[ORM\Index(name: 'idx_radar_num_serie',                  columns: ['numero_serie'])]
-#[ORM\Index(name: 'idx_radar_identity',                   columns: ['identity_hash'])]
-#[ORM\Index(name: 'idx_radar_data_verificacao_efetiva',   columns: ['data_verificacao_efetiva'])]
 class RadarMedidor
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
-    #[ORM\Column(type: 'bigint', options: ['unsigned' => true])]
+    #[ORM\Column]
     private ?int $id = null;
 
     /** Sigla do estado (UF) */
@@ -85,10 +69,17 @@ class RadarMedidor
     private ?string $dataValidade = null;
 
     /**
+     * Data de validade convertida para DATE.
+     * Mantida separadamente para filtros e comparações no banco.
+     */
+    #[ORM\Column(name: 'data_validade_date', type: 'date', nullable: true)]
+    private ?\DateTimeInterface $dataValidadeDate = null;
+
+    /**
      * Data de verificação efetiva (calculada na importação):
-     *   1. data_ultima_verificacao se preenchida
-     *   2. data_validade - 1 ano
-     *   3. NULL
+     * 1. data_ultima_verificacao se preenchida
+     * 2. data_validade - 1 ano
+     * 3. NULL
      */
     #[ORM\Column(name: 'data_verificacao_efetiva', type: 'string', length: 20, nullable: true)]
     private ?string $dataVerificacaoEfetiva = null;
@@ -131,94 +122,496 @@ class RadarMedidor
     private ?string $insertedBy = null;
 
     /**
-     * URL do radar no Waze (aba REFERENCIA.UF da planilha Google Sheets).
-     * Preenchida pelo app:import-radares etapa 2.
+     * URL do radar no Waze.
      */
     #[ORM\Column(name: 'link_waze', type: 'string', length: 500, nullable: true)]
     private ?string $linkWaze = null;
 
+    /**
+     * ID do radar que absorveu este registro.
+     * NULL significa que este radar não foi mesclado.
+     */
+    #[ORM\Column(name: 'merged_into_id', type: 'bigint', nullable: true, options: ['unsigned' => true])]
+    private ?int $mergedIntoId = null;
+
+    /**
+     * Data/hora em que este radar foi mesclado.
+     */
+    #[ORM\Column(name: 'merged_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $mergedAt = null;
+
+    /**
+     * Usuário que realizou a mesclagem.
+     */
+    #[ORM\Column(name: 'merged_by', type: 'string', length: 180, nullable: true)]
+    private ?string $mergedBy = null;
+
     /** @var Collection<int, RadarFaixa> */
-    #[ORM\OneToMany(targetEntity: RadarFaixa::class, mappedBy: 'radarMedidor', cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(
+        targetEntity: RadarFaixa::class,
+        mappedBy: 'radarMedidor',
+        cascade: ['persist', 'remove']
+    )]
     private Collection $faixas;
 
     public function __construct()
     {
         $this->importedAt = new \DateTimeImmutable();
-        $this->faixas     = new ArrayCollection();
+        $this->faixas = new ArrayCollection();
     }
 
-    // ── Getters ──────────────────────────────────────────────────────────────
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
 
-    public function getId(): ?int                          { return $this->id; }
-    public function getUf(): string                        { return $this->uf; }
-    public function getSiglaUf(): ?string                  { return $this->siglaUf; }
-    public function getMunicipio(): ?string                { return $this->municipio; }
-    public function getLogradouro(): ?string               { return $this->logradouro; }
-    public function getCep(): ?string                      { return $this->cep; }
-    public function getNomeEmpresa(): ?string              { return $this->nomeEmpresa; }
-    public function getCnpjEmpresa(): ?string              { return $this->cnpjEmpresa; }
-    public function getTipoMedidor(): ?string              { return $this->tipoMedidor; }
-    public function getMarcaMedidor(): ?string             { return $this->marcaMedidor; }
-    public function getModeloMedidor(): ?string            { return $this->modeloMedidor; }
-    public function getNumeroSerie(): ?string              { return $this->numeroSerie; }
-    public function getCapacidade(): ?string               { return $this->capacidade; }
-    public function getSituacao(): ?string                 { return $this->situacao; }
-    public function getDataVerificacao(): ?string          { return $this->dataVerificacao; }
-    public function getDataUltimaVerificacao(): ?string    { return $this->dataUltimaVerificacao; }
-    public function getDataValidade(): ?string             { return $this->dataValidade; }
-    public function getDataVerificacaoEfetiva(): ?string   { return $this->dataVerificacaoEfetiva; }
-    public function getDataLacre(): ?string                { return $this->dataLacre; }
-    public function getLacre(): ?string                    { return $this->lacre; }
-    public function getNumeroCertificado(): ?string        { return $this->numeroCertificado; }
-    public function getOrgaoVerificador(): ?string         { return $this->orgaoVerificador; }
-    public function getLatitude(): ?string                 { return $this->latitude; }
-    public function getLongitude(): ?string                { return $this->longitude; }
-    public function getRowHash(): string                   { return $this->rowHash; }
-    public function getIdentityHash(): ?string             { return $this->identityHash; }
-    public function getRawData(): ?array                   { return $this->rawData; }
-    public function getImportedAt(): \DateTimeImmutable    { return $this->importedAt; }
-    public function getUpdatedAt(): ?\DateTimeImmutable    { return $this->updatedAt; }
-    public function getInsertedBy(): ?string               { return $this->insertedBy; }
-    public function getLinkWaze(): ?string                 { return $this->linkWaze; }
+    public function getUf(): string
+    {
+        return $this->uf;
+    }
+
+    public function setUf(string $uf): static
+    {
+        $this->uf = strtoupper($uf);
+
+        return $this;
+    }
+
+    public function getSiglaUf(): ?string
+    {
+        return $this->siglaUf;
+    }
+
+    public function setSiglaUf(?string $siglaUf): static
+    {
+        $this->siglaUf = $siglaUf !== null ? strtoupper($siglaUf) : null;
+
+        return $this;
+    }
+
+    public function getMunicipio(): ?string
+    {
+        return $this->municipio;
+    }
+
+    public function setMunicipio(?string $municipio): static
+    {
+        $this->municipio = $municipio;
+
+        return $this;
+    }
+
+    public function getLogradouro(): ?string
+    {
+        return $this->logradouro;
+    }
+
+    public function setLogradouro(?string $logradouro): static
+    {
+        $this->logradouro = $logradouro;
+
+        return $this;
+    }
+
+    public function getCep(): ?string
+    {
+        return $this->cep;
+    }
+
+    public function setCep(?string $cep): static
+    {
+        $this->cep = $cep;
+
+        return $this;
+    }
+
+    public function getNomeEmpresa(): ?string
+    {
+        return $this->nomeEmpresa;
+    }
+
+    public function setNomeEmpresa(?string $nomeEmpresa): static
+    {
+        $this->nomeEmpresa = $nomeEmpresa;
+
+        return $this;
+    }
+
+    public function getCnpjEmpresa(): ?string
+    {
+        return $this->cnpjEmpresa;
+    }
+
+    public function setCnpjEmpresa(?string $cnpjEmpresa): static
+    {
+        $this->cnpjEmpresa = $cnpjEmpresa;
+
+        return $this;
+    }
+
+    public function getTipoMedidor(): ?string
+    {
+        return $this->tipoMedidor;
+    }
+
+    public function setTipoMedidor(?string $tipoMedidor): static
+    {
+        $this->tipoMedidor = $tipoMedidor;
+
+        return $this;
+    }
+
+    public function getMarcaMedidor(): ?string
+    {
+        return $this->marcaMedidor;
+    }
+
+    public function setMarcaMedidor(?string $marcaMedidor): static
+    {
+        $this->marcaMedidor = $marcaMedidor;
+
+        return $this;
+    }
+
+    public function getModeloMedidor(): ?string
+    {
+        return $this->modeloMedidor;
+    }
+
+    public function setModeloMedidor(?string $modeloMedidor): static
+    {
+        $this->modeloMedidor = $modeloMedidor;
+
+        return $this;
+    }
+
+    public function getNumeroSerie(): ?string
+    {
+        return $this->numeroSerie;
+    }
+
+    public function setNumeroSerie(?string $numeroSerie): static
+    {
+        $this->numeroSerie = $numeroSerie;
+
+        return $this;
+    }
+
+    public function getCapacidade(): ?string
+    {
+        return $this->capacidade;
+    }
+
+    public function setCapacidade(?string $capacidade): static
+    {
+        $this->capacidade = $capacidade;
+
+        return $this;
+    }
+
+    public function getSituacao(): ?string
+    {
+        return $this->situacao;
+    }
+
+    public function setSituacao(?string $situacao): static
+    {
+        $this->situacao = $situacao;
+
+        return $this;
+    }
+
+    public function getDataVerificacao(): ?string
+    {
+        return $this->dataVerificacao;
+    }
+
+    public function setDataVerificacao(?string $dataVerificacao): static
+    {
+        $this->dataVerificacao = $dataVerificacao;
+
+        return $this;
+    }
+
+    public function getDataUltimaVerificacao(): ?string
+    {
+        return $this->dataUltimaVerificacao;
+    }
+
+    public function setDataUltimaVerificacao(?string $dataUltimaVerificacao): static
+    {
+        $this->dataUltimaVerificacao = $dataUltimaVerificacao;
+
+        return $this;
+    }
+
+    public function getDataValidade(): ?string
+    {
+        return $this->dataValidade;
+    }
+
+    public function setDataValidade(?string $dataValidade): static
+    {
+        $this->dataValidade = $dataValidade;
+
+        return $this;
+    }
+
+    public function getDataValidadeDate(): ?\DateTimeInterface
+    {
+        return $this->dataValidadeDate;
+    }
+
+    public function setDataValidadeDate(?\DateTimeInterface $dataValidadeDate): static
+    {
+        $this->dataValidadeDate = $dataValidadeDate;
+
+        return $this;
+    }
+
+    public function getDataVerificacaoEfetiva(): ?string
+    {
+        return $this->dataVerificacaoEfetiva;
+    }
+
+    public function setDataVerificacaoEfetiva(?string $dataVerificacaoEfetiva): static
+    {
+        $this->dataVerificacaoEfetiva = $dataVerificacaoEfetiva;
+
+        return $this;
+    }
+
+    public function getDataLacre(): ?string
+    {
+        return $this->dataLacre;
+    }
+
+    public function setDataLacre(?string $dataLacre): static
+    {
+        $this->dataLacre = $dataLacre;
+
+        return $this;
+    }
+
+    public function getLacre(): ?string
+    {
+        return $this->lacre;
+    }
+
+    public function setLacre(?string $lacre): static
+    {
+        $this->lacre = $lacre;
+
+        return $this;
+    }
+
+    public function getNumeroCertificado(): ?string
+    {
+        return $this->numeroCertificado;
+    }
+
+    public function setNumeroCertificado(?string $numeroCertificado): static
+    {
+        $this->numeroCertificado = $numeroCertificado;
+
+        return $this;
+    }
+
+    public function getOrgaoVerificador(): ?string
+    {
+        return $this->orgaoVerificador;
+    }
+
+    public function setOrgaoVerificador(?string $orgaoVerificador): static
+    {
+        $this->orgaoVerificador = $orgaoVerificador;
+
+        return $this;
+    }
+
+    public function getLatitude(): ?string
+    {
+        return $this->latitude;
+    }
+
+    public function setLatitude(?string $latitude): static
+    {
+        $this->latitude = $latitude;
+
+        return $this;
+    }
+
+    public function getLongitude(): ?string
+    {
+        return $this->longitude;
+    }
+
+    public function setLongitude(?string $longitude): static
+    {
+        $this->longitude = $longitude;
+
+        return $this;
+    }
+
+    public function getRowHash(): string
+    {
+        return $this->rowHash;
+    }
+
+    public function setRowHash(string $rowHash): static
+    {
+        $this->rowHash = $rowHash;
+
+        return $this;
+    }
+
+    public function getIdentityHash(): ?string
+    {
+        return $this->identityHash;
+    }
+
+    public function setIdentityHash(?string $identityHash): static
+    {
+        $this->identityHash = $identityHash;
+
+        return $this;
+    }
+
+    public function getRawData(): ?array
+    {
+        return $this->rawData;
+    }
+
+    public function setRawData(?array $rawData): static
+    {
+        $this->rawData = $rawData;
+
+        return $this;
+    }
+
+    public function getImportedAt(): \DateTimeImmutable
+    {
+        return $this->importedAt;
+    }
+
+    public function setImportedAt(\DateTimeImmutable $importedAt): static
+    {
+        $this->importedAt = $importedAt;
+
+        return $this;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeImmutable
+    {
+        return $this->updatedAt;
+    }
+
+    public function setUpdatedAt(?\DateTimeImmutable $updatedAt): static
+    {
+        $this->updatedAt = $updatedAt;
+
+        return $this;
+    }
+
+    public function getInsertedBy(): ?string
+    {
+        return $this->insertedBy;
+    }
+
+    public function setInsertedBy(?string $insertedBy): static
+    {
+        $this->insertedBy = $insertedBy;
+
+        return $this;
+    }
+
+    public function getLinkWaze(): ?string
+    {
+        return $this->linkWaze;
+    }
+
+    public function setLinkWaze(?string $linkWaze): static
+    {
+        $this->linkWaze = $linkWaze ?: null;
+
+        return $this;
+    }
+
+    public function getMergedIntoId(): ?int
+    {
+        return $this->mergedIntoId;
+    }
+
+    public function setMergedIntoId(?int $mergedIntoId): static
+    {
+        $this->mergedIntoId = $mergedIntoId;
+
+        return $this;
+    }
+
+    public function isMerged(): bool
+    {
+        return $this->mergedIntoId !== null;
+    }
+
+    public function getMergedAt(): ?\DateTimeImmutable
+    {
+        return $this->mergedAt;
+    }
+
+    public function setMergedAt(?\DateTimeImmutable $mergedAt): static
+    {
+        $this->mergedAt = $mergedAt;
+
+        return $this;
+    }
+
+    public function getMergedBy(): ?string
+    {
+        return $this->mergedBy;
+    }
+
+    public function setMergedBy(?string $mergedBy): static
+    {
+        $this->mergedBy = $mergedBy;
+
+        return $this;
+    }
 
     /** @return Collection<int, RadarFaixa> */
-    public function getFaixas(): Collection { return $this->faixas; }
+    public function getFaixas(): Collection
+    {
+        return $this->faixas;
+    }
 
-    // ── Setters ──────────────────────────────────────────────────────────────
+    public function addFaixa(RadarFaixa $faixa): static
+    {
+        if (!$this->faixas->contains($faixa)) {
+            $this->faixas->add($faixa);
+            $faixa->setRadarMedidor($this);
+        }
 
-    public function setUf(string $v): static                           { $this->uf = strtoupper($v); return $this; }
-    public function setSiglaUf(?string $v): static                     { $this->siglaUf = $v ? strtoupper($v) : null; return $this; }
-    public function setMunicipio(?string $v): static                   { $this->municipio = $v; return $this; }
-    public function setLogradouro(?string $v): static                  { $this->logradouro = $v; return $this; }
-    public function setCep(?string $v): static                         { $this->cep = $v; return $this; }
-    public function setNomeEmpresa(?string $v): static                 { $this->nomeEmpresa = $v; return $this; }
-    public function setCnpjEmpresa(?string $v): static                 { $this->cnpjEmpresa = $v; return $this; }
-    public function setTipoMedidor(?string $v): static                 { $this->tipoMedidor = $v; return $this; }
-    public function setMarcaMedidor(?string $v): static                { $this->marcaMedidor = $v; return $this; }
-    public function setModeloMedidor(?string $v): static               { $this->modeloMedidor = $v; return $this; }
-    public function setNumeroSerie(?string $v): static                 { $this->numeroSerie = $v; return $this; }
-    public function setCapacidade(?string $v): static                  { $this->capacidade = $v; return $this; }
-    public function setSituacao(?string $v): static                    { $this->situacao = $v; return $this; }
-    public function setDataVerificacao(?string $v): static             { $this->dataVerificacao = $v; return $this; }
-    public function setDataUltimaVerificacao(?string $v): static       { $this->dataUltimaVerificacao = $v; return $this; }
-    public function setDataValidade(?string $v): static                { $this->dataValidade = $v; return $this; }
-    public function setDataVerificacaoEfetiva(?string $v): static      { $this->dataVerificacaoEfetiva = $v; return $this; }
-    public function setDataLacre(?string $v): static                   { $this->dataLacre = $v; return $this; }
-    public function setLacre(?string $v): static                       { $this->lacre = $v; return $this; }
-    public function setNumeroCertificado(?string $v): static           { $this->numeroCertificado = $v; return $this; }
-    public function setOrgaoVerificador(?string $v): static            { $this->orgaoVerificador = $v; return $this; }
-    public function setLatitude(?string $v): static                    { $this->latitude = $v; return $this; }
-    public function setLongitude(?string $v): static                   { $this->longitude = $v; return $this; }
-    public function setRowHash(string $v): static                      { $this->rowHash = $v; return $this; }
-    public function setIdentityHash(?string $v): static                { $this->identityHash = $v; return $this; }
-    public function setRawData(?array $v): static                      { $this->rawData = $v; return $this; }
-    public function setImportedAt(\DateTimeImmutable $v): static       { $this->importedAt = $v; return $this; }
-    public function setUpdatedAt(?\DateTimeImmutable $v): static       { $this->updatedAt = $v; return $this; }
-    public function setInsertedBy(?string $v): static                  { $this->insertedBy = $v; return $this; }
-    public function setLinkWaze(?string $v): static                    { $this->linkWaze = $v ?: null; return $this; }
+        return $this;
+    }
+
+    public function removeFaixa(RadarFaixa $faixa): static
+    {
+        if ($this->faixas->removeElement($faixa)) {
+            if ($faixa->getRadarMedidor() === $this) {
+                $faixa->setRadarMedidor(null);
+            }
+        }
+
+        return $this;
+    }
 
     public function __toString(): string
     {
-        return sprintf('%s — %s (%s)', $this->uf, $this->municipio ?? '?', $this->tipoMedidor ?? '?');
+        return sprintf(
+            '%s — %s (%s)',
+            $this->uf,
+            $this->municipio ?? '?',
+            $this->tipoMedidor ?? '?'
+        );
     }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ToolboxWaze - Importador CNES 1.4.
+"""ToolboxWaze - Importador CNES 2.0.
 
 Python 3.10+
 Instalacao: python -m pip install pymysql
@@ -16,7 +16,7 @@ import sys
 import threading
 import traceback
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 UFS = set(
@@ -89,528 +89,330 @@ def preparar_config(valores):
     return cfg
 
 
-def ler_csv(caminho, stop):
-    bruto = Path(caminho).read_bytes()
 
-    for encoding in ('utf-8-sig', 'cp1252', 'latin-1'):
+import codecs
+import hashlib
+import itertools
+import sqlite3
+import tempfile
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+CORE = ('nome_fantasia','ativo','uf','municipio','logradouro','telefone','latitude','longitude')
+LIMITES = {'nome_fantasia':255,'uf':2,'municipio':255,'logradouro':500,'telefone':50}
+QUANT = Decimal('0.00000001')
+
+def chave(value):
+    return ''.join(c for c in unicodedata.normalize('NFKD',str(value).strip()) if not unicodedata.combining(c)).upper().replace('_',' ')
+
+def clean(value):
+    value = '' if value is None else unicodedata.normalize('NFC',str(value)).strip()
+    return '' if chave(value) in VAZIOS else value
+
+def mapa(dados):
+    return {chave(k):clean(v) for k,v in dados.items()}
+
+def json_txt(value):
+    return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False)
+
+def coords(dados):
+    d = mapa(dados)
+    lat,lon = d.get('LATITUDE',''),d.get('LONGITUDE','')
+    if bool(lat) != bool(lon): raise ValueError('Informe latitude e longitude juntas.')
+    if not lat:
+        loc = d.get('LOCATION','')
+        if not loc: return None,None
+        parts = re.split(r'[\s;]+',loc.strip())
+        if len(parts) != 2:
+            match = re.fullmatch(r'\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*',loc)
+            if not match: raise ValueError('Location: esperado latitude e longitude.')
+            parts = list(match.groups())
+        lat,lon = parts
+    try: lat,lon = Decimal(str(lat).replace(',','.')),Decimal(str(lon).replace(',','.'))
+    except InvalidOperation as exc: raise ValueError('Coordenadas não numéricas.') from exc
+    if not lat.is_finite() or not lon.is_finite() or abs(lat)>90 or abs(lon)>180: raise ValueError('Coordenadas fora da faixa válida.')
+    if lat == 0 or lon == 0: return None,None
+    return tuple(format(v.quantize(QUANT,rounding=ROUND_HALF_UP),'.8f') for v in (lat,lon))
+
+def projetar(original,correcoes=None):
+    d = mapa(original); cor = mapa(correcoes or {})
+    aliases = {'NOME FANTASIA':'NOME FANTASIA','ATIVO':'STATUS DO ESTABELECIMENTO','MUNICIPIO':'MUNICIPIO','ENDERECO':'LOGRADOURO'}
+    cor = {aliases.get(k,k):v for k,v in cor.items()}
+    if 'LOCATION' in cor and 'LATITUDE' not in cor and 'LONGITUDE' not in cor:
+        d.pop('LATITUDE',None); d.pop('LONGITUDE',None)
+    d.update(cor)
+    uf = d.get('UF','').upper(); municipio = re.sub(r'\s+',' ',d.get('MUNICIPIO','')).strip()
+    if uf not in UFS: raise ValueError('UF inválida ou ausente.')
+    if not municipio: raise ValueError('Município ausente.')
+    situacao = chave(d.get('STATUS DO ESTABELECIMENTO',''))
+    if situacao in {'ATIVO','ATIVA','1','TRUE','SIM'}: ativo=1
+    elif situacao in {'INATIVO','INATIVA','DESATIVADO','DESATIVADA','0','FALSE','NAO'}: ativo=0
+    else: raise ValueError('Situação CNES desconhecida; ATIVO não será presumido.')
+    fantasia = d.get('NOME FANTASIA') or d.get('RAZAO SOCIAL') or 'Estabelecimento CNES '+d.get('CNES','')
+    latitude,longitude = coords(d)
+    result = {'nome_fantasia':re.sub(r'\s+',' ',fantasia),'ativo':ativo,'uf':uf,'municipio':municipio,
+        'logradouro':re.sub(r'\s+',' ',d.get('LOGRADOURO','')).strip() or None,
+        'telefone':re.sub(r'\s+',' ',d.get('TELEFONE','')).strip() or None,'latitude':latitude,'longitude':longitude}
+    for field,limit in LIMITES.items():
+        if result[field] is not None and len(result[field])>limit: raise ValueError(f'{field}: máximo {limit} caracteres, sem truncamento silencioso.')
+    return result
+
+def batches(iterable,size):
+    it=iter(iterable)
+    while batch:=list(itertools.islice(it,size)): yield batch
+
+def ler_csv(caminho,stop):
+    encoding=None
+    for enc in ('utf-8-sig','cp1252','latin-1'):
         try:
-            texto = bruto.decode(encoding)
-            break
-        except UnicodeDecodeError:
-            continue
-    else:
-        raise ValueError('Nao foi possivel identificar o encoding do arquivo.')
+            decoder=codecs.getincrementaldecoder(enc)(errors='strict')
+            with open(caminho,'rb') as f:
+                while block:=f.read(1024*1024):
+                    if stop.is_set(): raise Cancelado('Validação cancelada; nada gravado.')
+                    decoder.decode(block,final=False)
+                decoder.decode(b'',final=True)
+            encoding=enc; break
+        except UnicodeDecodeError: continue
+    if not encoding: raise ValueError('Encoding desconhecido.')
+    registros={}; erros=[]; duplicates=0
+    csv.field_size_limit(4*1024*1024)
+    with open(caminho,encoding=encoding,newline='') as f:
+        first=f.readline()
+        if not first.strip(): raise ValueError('Arquivo vazio ou cabeçalho ausente.')
+        sep=max(('\t',';',','),key=lambda s:len(next(csv.reader([first],delimiter=s))))
+        f.seek(0); reader=csv.reader(f,delimiter=sep,strict=True)
+        headers=[unicodedata.normalize('NFC',x.strip()) for x in next(reader)]
+        idx=[i for i,k in enumerate(headers) if k]; keys=[chave(headers[i]) for i in idx]
+        if not idx or len(keys)!=len(set(keys)): raise ValueError('Cabeçalho vazio ou duplicado.')
+        required={'CNES','UF','MUNICIPIO','STATUS DO ESTABELECIMENTO'}
+        if not required.issubset(keys): raise ValueError('Colunas ausentes: '+', '.join(sorted(required-set(keys))))
+        cnes_key=headers[idx[keys.index('CNES')]]
+        for row in reader:
+            if stop.is_set(): raise Cancelado('Validação cancelada; nada gravado.')
+            if not any(x.strip() for x in row): continue
+            try:
+                if len(row)<=max(idx): raise ValueError('Linha incompleta nos campos nomeados.')
+                if any(v.strip() for i,v in enumerate(row) if i>=len(headers) or not headers[i]): raise ValueError('Conteúdo em coluna excedente/sem nome.')
+                data={headers[i]:clean(row[i]) for i in idx}
+                cnes=data[cnes_key]
+                if not re.fullmatch(r'\d{1,7}',cnes): raise ValueError('CNES deve ter de 1 a 7 dígitos.')
+                cnes=cnes.zfill(7); data[cnes_key]=cnes
+                projected=projetar(data)
+                comp=mapa(data).get('COMPETENCIA','')
+                if comp and not COMP.fullmatch(comp): raise ValueError('Competência inválida; esperado AAAA/MM.')
+                if cnes in registros:
+                    if registros[cnes]!=data: raise ValueError('CNES duplicado com conteúdo divergente: '+cnes)
+                    duplicates+=1
+                registros[cnes]=data
+            except (ValueError,InvalidOperation) as exc:
+                erros.append(f'Linha física {reader.line_num}: {exc}')
+                if len(erros)>=30: break
+    if erros: raise ValueError('\n'.join(erros)+'\nNada gravado no MySQL.')
+    if not registros: raise ValueError('Nenhum registro válido.')
+    return registros,encoding,sep,len(idx),sum(not mapa(d).get('NOME FANTASIA') for d in registros.values())
 
-    if not texto.strip():
-        raise ValueError('Arquivo vazio.')
+def fetch_rows(cursor):
+    rows=cursor.fetchall()
+    if not rows or isinstance(rows[0],dict): return rows
+    names=[d[0] for d in cursor.description]
+    return [dict(zip(names,row)) for row in rows]
 
-    separador = max(
-        ('\t', ';', ','),
-        key=lambda caractere: texto.splitlines()[0].count(caractere)
-    )
-
-    if not texto.splitlines()[0].count(separador):
-        raise ValueError('Separador nao identificado.')
-
-    reader = csv.reader(
-        io.StringIO(texto),
-        delimiter=separador,
-        strict=True
-    )
-
-    cabecalho = [
-        unicodedata.normalize('NFC', coluna.strip())
-        for coluna in next(reader)
-    ]
-
-    indices = [
-        indice
-        for indice, coluna in enumerate(cabecalho)
-        if coluna
-    ]
-
-    nomes = [cabecalho[indice] for indice in indices]
-
-    if len(nomes) != len(set(nomes)):
-        raise ValueError('Cabecalhos duplicados.')
-
-    obrigatorias = {
-        'CNES',
-        'UF',
-        'NOME FANTASIA',
-        'MUNICÍPIO',
-        'STATUS DO ESTABELECIMENTO',
-    }
-
-    if not obrigatorias.issubset(nomes):
-        faltando = sorted(obrigatorias - set(nomes))
-        raise ValueError(
-            'Colunas ausentes: ' + ', '.join(faltando)
-        )
-
-    registros = {}
-    erros = []
-
-    for linha in reader:
-        if stop.is_set():
-            raise Cancelado('Validacao cancelada. Nada gravado.')
-
-        if not any(valor.strip() for valor in linha):
-            continue
-
-        try:
-            if len(linha) <= max(indices):
-                raise ValueError('Linha incompleta.')
-
-            if any(
-                valor.strip()
-                for indice, valor in enumerate(linha)
-                if indice not in indices
-            ):
-                raise ValueError(
-                    'Conteudo em coluna excedente ou sem nome.'
-                )
-
-            dados = {
-                cabecalho[indice]: linha[indice].strip()
-                for indice in indices
-            }
-
-            dados = {
-                chave: (
-                    ''
-                    if valor.upper() in VAZIOS
-                    else valor
-                )
-                for chave, valor in dados.items()
-            }
-
-            if not re.fullmatch(r'\d{1,7}', dados['CNES']):
-                raise ValueError('CNES invalido.')
-
-            dados['CNES'] = dados['CNES'].zfill(7)
-            dados['UF'] = dados['UF'].upper()
-
-            if dados['UF'] not in UFS:
-                raise ValueError('UF invalida.')
-
-            if dados.get('location'):
-                partes = re.split(
-                    r'[\s;,]+',
-                    dados['location'].strip()
-                )
-
-                if len(partes) != 2:
-                    raise ValueError(
-                        'Location deve conter latitude e longitude.'
-                    )
-
-                latitude, longitude = map(float, partes)
-
-                if not (
-                    -90 <= latitude <= 90
-                    and -180 <= longitude <= 180
-                ):
-                    raise ValueError('Coordenadas invalidas.')
-
-                dados['location'] = (
-                    f'{latitude:.8f} {longitude:.8f}'
-                )
-
-            cnes = dados['CNES']
-
-            if cnes in registros and registros[cnes] != dados:
-                raise ValueError(
-                    f'CNES duplicado com dados divergentes: {cnes}'
-                )
-
-            registros[cnes] = dados
-
-        except (ValueError, OverflowError) as erro:
-            erros.append(
-                f'Linha {reader.line_num}: {erro}'
-            )
-
-    if erros:
-        raise ValueError(
-            '\n'.join(erros[:20])
-            + f'\nTotal: {len(erros)} erros. Nada gravado.'
-        )
-
-    if not registros:
-        raise ValueError('Nenhum registro valido.')
-
-    sem_nome = sum(
-        not registro.get('NOME FANTASIA')
-        for registro in registros.values()
-    )
-
-    return registros, encoding, separador, len(nomes), sem_nome
-
-
-def coluna_existe(cursor, tabela, coluna):
-    cursor.execute(
-        '''
-        SELECT COUNT(*)
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = %s
-          AND COLUMN_NAME = %s
-        ''',
-        (tabela, coluna)
-    )
-
-    return int(cursor.fetchone()[0]) > 0
-
-
-def indice_existe(cursor, tabela, indice):
-    cursor.execute(
-        '''
-        SELECT COUNT(DISTINCT INDEX_NAME)
-        FROM information_schema.STATISTICS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = %s
-          AND INDEX_NAME = %s
-        ''',
-        (tabela, indice)
-    )
-
-    return int(cursor.fetchone()[0]) > 0
-
+def schema_cols(conn):
+    with conn.cursor() as c:
+        c.execute('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s',(TABELA,))
+        return {r['COLUMN_NAME'] for r in fetch_rows(c)}
 
 def garantir_estrutura(conn):
-    """Cria somente estrutura ausente. Nao remove nem altera colunas existentes."""
-
-    with conn.cursor() as cursor:
-        cursor.execute(
-            '''
-            SELECT COUNT(*)
-            FROM information_schema.TABLES
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = %s
-            ''',
-            (TABELA,)
-        )
-
-        if int(cursor.fetchone()[0]) == 0:
-            cursor.execute(
-                f'''
-                CREATE TABLE {TABELA} (
-                    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-                    cnes VARCHAR(7) NOT NULL,
-                    dados_originais JSON NOT NULL,
-                    correcoes JSON NOT NULL,
-                    importado_em DATETIME NOT NULL,
-                    editado_em DATETIME DEFAULT NULL,
-                    editado_por VARCHAR(180) DEFAULT NULL,
-                    versao INT UNSIGNED NOT NULL DEFAULT 1,
-                    PRIMARY KEY (id),
-                    UNIQUE KEY UNIQ_ESTABELECIMENTO_CNES (cnes)
-                )
-                ENGINE=InnoDB
-                DEFAULT CHARSET=utf8mb4
-                COLLATE=utf8mb4_unicode_ci
-                '''
-            )
-            return
-
-        colunas = {
-            'cnes': 'VARCHAR(7) NOT NULL',
-            'dados_originais': 'JSON NOT NULL',
-            'correcoes': "JSON NOT NULL DEFAULT (JSON_OBJECT())",
-            'importado_em': 'DATETIME NOT NULL',
-            'editado_em': 'DATETIME DEFAULT NULL',
-            'editado_por': 'VARCHAR(180) DEFAULT NULL',
-            'versao': 'INT UNSIGNED NOT NULL DEFAULT 1',
-        }
-
-        for coluna, definicao in colunas.items():
-            if not coluna_existe(cursor, TABELA, coluna):
-                cursor.execute(
-                    f'ALTER TABLE {TABELA} '
-                    f'ADD COLUMN {coluna} {definicao}'
-                )
-
-        if not indice_existe(
-            cursor,
-            TABELA,
-            'UNIQ_ESTABELECIMENTO_CNES'
-        ):
-            cursor.execute(
-                f'ALTER TABLE {TABELA} '
-                f'ADD UNIQUE KEY UNIQ_ESTABELECIMENTO_CNES (cnes)'
-            )
-
+    cols=schema_cols(conn)
+    if not cols:
+        with conn.cursor() as c:
+            c.execute(f'''CREATE TABLE {TABELA} (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,cnes VARCHAR(10) NOT NULL,
+                nome_fantasia VARCHAR(255) NULL,ativo TINYINT NOT NULL DEFAULT 1,uf VARCHAR(2) NULL,
+                municipio VARCHAR(255) NULL,logradouro VARCHAR(500) NULL,telefone VARCHAR(50) NULL,
+                latitude DECIMAL(12,8) NULL,longitude DECIMAL(12,8) NULL,link_waze VARCHAR(1000) NULL,
+                row_hash VARCHAR(64) NOT NULL,imported_at DATETIME NOT NULL,updated_at DATETIME NULL,
+                status VARCHAR(20) NULL,reservado_para VARCHAR(100) NULL,reservado_em DATETIME NULL,
+                dados_originais LONGTEXT NOT NULL,correcoes LONGTEXT NOT NULL,importado_em DATETIME NOT NULL,
+                editado_em DATETIME NULL,editado_por VARCHAR(180) NULL,versao INT UNSIGNED NOT NULL DEFAULT 1,
+                UNIQUE KEY uniq_cnes(cnes),KEY idx_uf_municipio(uf,municipio),KEY idx_status(status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci''')
+        cols=schema_cols(conn)
+    return cols
 
 def conferir_estrutura(conn):
-    garantir_estrutura(conn)
+    cols=garantir_estrutura(conn)
+    required={'id','cnes','row_hash','imported_at','updated_at','dados_originais','correcoes',*CORE}
+    if required-cols: raise ValueError('Tabela incompleta. Faltam: '+', '.join(sorted(required-cols))+'. Não foi executado ALTER automático.')
+    with conn.cursor() as c:
+        c.execute('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s',(TABELA,))
+        rows=fetch_rows(c)
+        if not rows or rows[0]['ENGINE'].upper()!='INNODB': raise ValueError('Tabela deve ser InnoDB.')
+        c.execute(f'SHOW INDEX FROM {TABELA}'); indexes={}
+        for row in fetch_rows(c):
+            if int(row['Non_unique'])==0: indexes.setdefault(row['Key_name'],[]).append((int(row['Seq_in_index']),row['Column_name']))
+        if not any([col for _,col in sorted(parts)]==['cnes'] for parts in indexes.values()): raise ValueError('Falta índice UNIQUE somente em cnes; o nome do índice não importa.')
+    with conn.cursor() as c:
+        c.execute(f"SELECT cnes FROM {TABELA} WHERE cnes IS NULL OR cnes NOT REGEXP '^[0-9]{{7}}$' LIMIT 1")
+        if c.fetchone(): raise ValueError('Há CNES existentes sem 7 dígitos. Audite a identidade antes de importar para não criar duplicados com zeros à esquerda.')
+    conn.rollback(); return cols
 
-    with conn.cursor() as cursor:
-        cursor.execute(
-            f'''
-            SELECT id, cnes, dados_originais, correcoes,
-                   importado_em, editado_em, editado_por, versao
-            FROM {TABELA}
-            LIMIT 0
-            '''
-        )
-        cursor.fetchall()
+def dbdate(value):
+    if isinstance(value,datetime): return value.strftime('%Y-%m-%d %H:%M:%S')
+    if value is None: return None
+    try: return datetime.strptime(str(value)[:19],'%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
+    except ValueError: return None
 
-        cursor.execute(
-            '''
-            SELECT ENGINE
-            FROM information_schema.TABLES
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = %s
-            ''',
-            (TABELA,)
-        )
+def normal(field,value):
+    if field in ('dados_originais','correcoes'): return objeto(value,field=='correcoes')
+    if field in ('latitude','longitude'): return None if value in (None,'') else format(Decimal(str(value)).quantize(QUANT),'.8f')
+    if field in ('imported_at','updated_at','importado_em'): return dbdate(value)
+    if field in ('ativo','versao'): return int(value)
+    return value
 
-        resultado = cursor.fetchone()
+def planejar(old,incoming,atualizar,cols,agora):
+    original=objeto(old['dados_originais']) if old else incoming
+    cor=objeto(old['correcoes'],True) if old else {}
+    source_changed=False
+    if old and atualizar and incoming!=original:
+        before=mapa(original).get('COMPETENCIA',''); after=mapa(incoming).get('COMPETENCIA','')
+        if before and (not COMP.fullmatch(before) or not COMP.fullmatch(after)): raise ValueError('Competência inválida; atualização da fonte bloqueada.')
+        if before and after<before: raise ValueError('Arquivo mais antigo que a fonte no banco. Use reparo sem atualizar fonte.')
+        original=incoming; source_changed=True
+    values=projetar(original,cor)
+    if old:
+        try: baseline=projetar(objeto(old['dados_originais']))
+        except ValueError: baseline=None
+        if baseline and (dbdate(old.get('editado_em')) is not None or (old.get('nome_fantasia') and old.get('uf') and old.get('municipio'))):
+            correction_keys=mapa(cor)
+            names={'nome_fantasia':'NOME FANTASIA','ativo':'STATUS DO ESTABELECIMENTO','uf':'UF','municipio':'MUNICIPIO','logradouro':'LOGRADOURO','telefone':'TELEFONE','latitude':'LATITUDE','longitude':'LONGITUDE'}
+            marked=dbdate(old.get('editado_em')) is not None
+            for field in CORE:
+                has_correction=names[field] in correction_keys or (field=='ativo' and 'ATIVO' in correction_keys) or (field in ('latitude','longitude') and 'LOCATION' in correction_keys)
+                if has_correction: continue
+                current=old.get(field)
+                if current in (None,'') and not marked: continue
+                if normal(field,current)!=normal(field,baseline[field]): values[field]=current
+    if values['uf'] is None or str(values['uf']).strip().upper() not in UFS:
+        raise ValueError('UF estruturada/manual inválida; corrija o registro explicitamente.')
+    values['uf']=str(values['uf']).strip().upper()
+    if not values['municipio'] or not str(values['municipio']).strip():
+        raise ValueError('Município estruturado/manual ausente; corrija o registro explicitamente.')
+    if int(values['ativo']) not in (0,1):
+        raise ValueError('Situação estruturada/manual deve ser 0 ou 1.')
+    values['latitude'],values['longitude']=coords({'latitude':values['latitude'],'longitude':values['longitude']})
+    content=json_txt(original)
+    values.update(dados_originais=content,row_hash=hashlib.sha256(content.encode('utf-8')).hexdigest())
+    values['imported_at']=(dbdate(old.get('imported_at')) or dbdate(old.get('importado_em')) or agora) if old else agora
+    if 'importado_em' in cols: values['importado_em']=agora if source_changed or not old else (dbdate(old.get('importado_em')) or values['imported_at'])
+    if old and all(normal(k,old.get(k))==normal(k,v) for k,v in values.items()): return 'ignorados',None
+    values['updated_at']=agora if old else None
+    if 'versao' in cols: values['versao']=int(old.get('versao') or 1)+1 if old else 1
+    if not old: values.update(cnes=mapa(incoming)['CNES'],correcoes='{}')
+    return ('atualizados' if old else 'inseridos'),values
 
-        if not resultado or str(resultado[0]).upper() != 'INNODB':
-            raise ValueError('Tabela precisa usar InnoDB.')
-
-        cursor.execute(
-            f'''
-            SHOW INDEX FROM {TABELA}
-            WHERE Key_name = %s
-            ''',
-            ('UNIQ_ESTABELECIMENTO_CNES',)
-        )
-
-        if not cursor.fetchone():
-            raise ValueError('Indice UNIQUE em cnes nao encontrado.')
-
-    conn.rollback()
-
-
-def importar(conn, registros, atualizar, stop, emit):
-    conferir_estrutura(conn)
-    emit('log', 'Estrutura e indice UNIQUE conferidos.')
-
-    estatisticas = {
-        'inseridos': 0,
-        'atualizados': 0,
-        'ignorados': 0,
-    }
-
-    esperados = {}
-    commit_iniciado = False
-
-    try:
-        conn.begin()
-
-        with conn.cursor() as cursor:
-            total = len(registros)
-
-            for posicao, (cnes, dados) in enumerate(
-                registros.items(),
-                start=1
-            ):
-                if stop.is_set():
-                    raise Cancelado('Cancelado antes do COMMIT.')
-
-                cursor.execute(
-                    f'''
-                    SELECT id, dados_originais, correcoes
-                    FROM {TABELA}
-                    WHERE cnes = %s
-                    FOR UPDATE
-                    ''',
-                    (cnes,)
-                )
-
-                anterior = cursor.fetchone()
-                conteudo = json.dumps(
-                    dados,
-                    ensure_ascii=False,
-                    allow_nan=False
-                )
-
-                if anterior is None:
-                    cursor.execute(
-                        f'''
-                        INSERT INTO {TABELA}
-                        (
-                            cnes,
-                            dados_originais,
-                            correcoes,
-                            importado_em,
-                            versao
-                        )
-                        VALUES
-                        (%s, %s, %s, UTC_TIMESTAMP(), 1)
-                        ''',
-                        (cnes, conteudo, '{}')
-                    )
-
-                    esperados[cnes] = (dados, {})
-                    estatisticas['inseridos'] += 1
-                    acao = 'INSERCAO PENDENTE'
-
-                elif not atualizar:
-                    estatisticas['ignorados'] += 1
-                    acao = 'IGNORADO'
-
-                else:
-                    original = objeto(anterior[1])
-                    correcoes = objeto(anterior[2], True)
-
-                    if original == dados:
-                        estatisticas['ignorados'] += 1
-                        acao = 'SEM MUDANCA'
-
-                    else:
-                        competencia_antiga = str(
-                            original.get('COMPETÊNCIA', '')
-                        )
-                        competencia_nova = str(
-                            dados.get('COMPETÊNCIA', '')
-                        )
-
-                        if not (
-                            COMP.fullmatch(competencia_antiga)
-                            and COMP.fullmatch(competencia_nova)
-                        ):
-                            raise ValueError(
-                                f'CNES {cnes}: competencia invalida; '
-                                'esperado AAAA/MM.'
-                            )
-
-                        if competencia_nova < competencia_antiga:
-                            raise ValueError(
-                                f'CNES {cnes}: competencia '
-                                f'{competencia_nova} anterior a '
-                                f'{competencia_antiga}.'
-                            )
-
-                        cursor.execute(
-                            f'''
-                            UPDATE {TABELA}
-                            SET dados_originais = %s,
-                                importado_em = UTC_TIMESTAMP(),
-                                versao = versao + 1
-                            WHERE id = %s
-                            ''',
-                            (conteudo, anterior[0])
-                        )
-
-                        esperados[cnes] = (dados, correcoes)
-                        estatisticas['atualizados'] += 1
-                        acao = 'ATUALIZACAO PENDENTE'
-
-                if posicao <= 2000:
-                    emit(
-                        'linha',
-                        (
-                            cnes,
-                            nome(dados),
-                            dados['UF'],
-                            dados['MUNICÍPIO'],
-                            acao
-                        )
-                    )
-
-                if posicao % 100 == 0 or posicao == total:
-                    emit(
-                        'progresso',
-                        (
-                            posicao,
-                            total,
-                            dict(estatisticas)
-                        )
-                    )
-
-        if stop.is_set():
-            raise Cancelado('Cancelado antes do COMMIT.')
-
-        emit(
-            'log',
-            'Enviando COMMIT. Nao feche o programa.'
-        )
-
-        commit_iniciado = True
-        conn.commit()
-
-    except BaseException as erro:
-        if commit_iniciado:
-            raise ResultadoIncerto(
-                'Erro durante COMMIT: resultado incerto. '
-                'Confira o banco antes de repetir.'
-            ) from erro
-
-        try:
-            conn.rollback()
-            emit(
-                'log',
-                'ROLLBACK concluido: gravacoes desta execucao desfeitas.'
-            )
-        except Exception:
-            emit(
-                'log',
-                'ROLLBACK nao confirmado; confira o banco.'
-            )
-
-        raise
-
-    emit(
-        'log',
-        'COMMIT aceito. Conferindo registros gravados...'
-    )
-
-    try:
-        codigos = list(esperados)
-
-        with conn.cursor() as cursor:
-            for inicio in range(0, len(codigos), 200):
-                lote = codigos[inicio:inicio + 200]
-                placeholders = ','.join(['%s'] * len(lote))
-
-                cursor.execute(
-                    f'''
-                    SELECT cnes, dados_originais, correcoes
-                    FROM {TABELA}
-                    WHERE cnes IN ({placeholders})
-                    ''',
-                    lote
-                )
-
-                encontrados = {
-                    str(cnes): (
-                        objeto(dados),
-                        objeto(correcoes, True)
-                    )
-                    for cnes, dados, correcoes in cursor.fetchall()
-                }
-
-                for cnes in lote:
-                    if encontrados.get(cnes) != esperados[cnes]:
-                        raise ValueError(
-                            'Releitura divergente/ausente no CNES '
-                            + cnes
-                        )
-
-                if inicio % 10000 == 0 or inicio + 200 >= len(codigos):
-                    emit(
-                        'log',
-                        'Conferencia: '
-                        f'{min(inicio + 200, len(codigos))}'
-                        f'/{len(codigos)}.'
-                    )
-
+def ler_banco(conn,stop,emit):
+    conferir_estrutura(conn); registros={}; last=0
+    while True:
+        if stop.is_set(): raise Cancelado('Leitura de reparo cancelada; nada gravado.')
+        with conn.cursor() as c:
+            c.execute(f'SELECT id,cnes,dados_originais FROM {TABELA} WHERE id>%s ORDER BY id LIMIT 2000',(last,)); rows=fetch_rows(c)
         conn.rollback()
+        if not rows: break
+        for row in rows:
+            cnes=str(row['cnes'])
+            if not re.fullmatch(r'\d{7}',cnes): raise ValueError(f'CNES existente inválido no ID {row["id"]}; não será renomeado automaticamente.')
+            registros[cnes]=objeto(row['dados_originais']); last=int(row['id'])
+        emit('log',f'Preparados para reparo: {len(registros)} registros.')
+    if not registros: raise ValueError('Tabela vazia.')
+    return registros
 
-    except Exception as erro:
-        raise ResultadoIncerto(
-            'COMMIT aceito, mas conferencia incompleta: '
-            + str(erro)
-            + '. Nao presuma rollback.'
-        ) from erro
-
-    estatisticas['conferidos'] = len(esperados)
-
-    return estatisticas
+def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
+    size=int(tamanho_lote or os.getenv('CNES_BATCH_SIZE','500'))
+    if not 1<=size<=2000: raise ValueError('Lote precisa estar entre 1 e 2000.')
+    cols=conferir_estrutura(conn)
+    write_cols=list(CORE)+['dados_originais','row_hash','imported_at','updated_at']+[k for k in ('importado_em','versao') if k in cols]
+    types={'nome_fantasia':'VARCHAR(255)','ativo':'TINYINT','uf':'VARCHAR(2)','municipio':'VARCHAR(255)','logradouro':'VARCHAR(500)',
+        'telefone':'VARCHAR(50)','latitude':'DECIMAL(12,8)','longitude':'DECIMAL(12,8)','dados_originais':'LONGTEXT',
+        'row_hash':'VARCHAR(64)','imported_at':'DATETIME','updated_at':'DATETIME','importado_em':'DATETIME','versao':'INT UNSIGNED'}
+    stats={'inseridos':0,'atualizados':0,'ignorados':0}; lock=None; committing=False; committed=False
+    emit('log',f'Lotes de {size}; INSERT múltiplo e UPDATE por tabela temporária. Sem SELECT por registro.')
+    with tempfile.TemporaryDirectory(prefix='cnes_verificacao_') as temp:
+        expected=sqlite3.connect(str(Path(temp)/'verificacao.sqlite'))
+        expected.execute('CREATE TABLE esperado(cnes TEXT PRIMARY KEY,conteudo TEXT NOT NULL)')
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT DATABASE(),@@max_allowed_packet'); row=c.fetchone(); info=list(row.values()) if isinstance(row,dict) else row
+                packet=int(info[1]); lock='cnes_'+hashlib.sha256(str(info[0]).encode()).hexdigest()[:40]
+                c.execute('SELECT GET_LOCK(%s,0)',(lock,)); row=c.fetchone(); ok=next(iter(row.values())) if isinstance(row,dict) else row[0]
+                if ok!=1: lock=None; raise ValueError('Outro importador está ativo neste banco.')
+                c.execute('DROP TEMPORARY TABLE IF EXISTS tw_cnes_stage')
+                definitions=','.join(f'`{col}` {types[col]} NULL' for col in write_cols)
+                c.execute(f'CREATE TEMPORARY TABLE tw_cnes_stage(row_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,{definitions}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4')
+            conn.rollback(); conn.begin(); processed=0
+            for codes in batches(sorted(registros),size):
+                if stop.is_set(): raise Cancelado('Cancelado antes do COMMIT.')
+                marks=','.join(['%s']*len(codes)); agora=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+                with conn.cursor() as c:
+                    c.max_stmt_length=max(4096,min(1024*1024,packet//2))
+                    c.execute(f'SELECT * FROM {TABELA} WHERE cnes IN ({marks}) ORDER BY cnes FOR UPDATE',codes)
+                    existing={str(r['cnes']):r for r in fetch_rows(c)}
+                    inserts=[]; updates=[]; insert_cols=['cnes']+write_cols+['correcoes']
+                    for cnes in codes:
+                        old=existing.get(cnes); data=registros[cnes]
+                        try: action,values=planejar(old,data,atualizar,cols,agora)
+                        except (ValueError,TypeError,InvalidOperation) as exc: raise ValueError(f'CNES {cnes}: {exc}') from exc
+                        stats[action]+=1; processed+=1
+                        if values is not None:
+                            if len(values['dados_originais'].encode('utf-8')) > packet//2:
+                                raise ValueError(f'CNES {cnes}: JSON muito grande para max_allowed_packet do servidor.')
+                            verification={k:normal(k,v) for k,v in values.items()}
+                            verification.update(cnes=cnes,correcoes=objeto(old['correcoes'],True) if old else {})
+                            expected.execute('INSERT OR REPLACE INTO esperado VALUES (?,?)',(cnes,json_txt(verification)))
+                            if old: updates.append((old['id'],)+tuple(values[k] for k in write_cols))
+                            else: inserts.append(tuple(values[k] for k in insert_cols))
+                        if processed<=2000:
+                            display=values or old
+                            emit('linha',(cnes,display.get('nome_fantasia') or nome(data),display.get('uf') or '—',display.get('municipio') or '—','GRAVACAO PENDENTE' if values is not None else 'SEM MUDANÇA'))
+                    if inserts:
+                        fields=','.join('`'+k+'`' for k in insert_cols); params=','.join(['%s']*len(insert_cols))
+                        c.executemany(f'INSERT INTO {TABELA}({fields}) VALUES ({params})',inserts)
+                    if updates:
+                        c.execute('DELETE FROM tw_cnes_stage')
+                        fields=','.join(['row_id']+['`'+k+'`' for k in write_cols]); params=','.join(['%s']*(1+len(write_cols)))
+                        c.executemany(f'INSERT INTO tw_cnes_stage({fields}) VALUES ({params})',updates)
+                        sets=','.join(f't.`{k}`=s.`{k}`' for k in write_cols)
+                        c.execute(f'UPDATE {TABELA} t JOIN tw_cnes_stage s ON s.row_id=t.id SET {sets}')
+                expected.commit(); emit('progresso',(processed,len(registros),dict(stats)))
+            if stop.is_set(): raise Cancelado('Cancelado antes do COMMIT.')
+            emit('log','Enviando COMMIT único. Não feche o programa.'); committing=True; conn.commit(); committed=True
+            emit('log','COMMIT aceito. Conferindo colunas, JSON e correções em lotes...')
+            checked=0
+            for batch in batches(expected.execute('SELECT cnes,conteudo FROM esperado ORDER BY cnes'),size):
+                codes=[r[0] for r in batch]; marks=','.join(['%s']*len(codes))
+                with conn.cursor() as c:
+                    c.execute(f'SELECT * FROM {TABELA} WHERE cnes IN ({marks})',codes); actual={str(r['cnes']):r for r in fetch_rows(c)}
+                conn.rollback()
+                for cnes,content in batch:
+                    if cnes not in actual: raise ValueError('Registro ausente após COMMIT: '+cnes)
+                    for field,value in json.loads(content).items():
+                        if normal(field,actual[cnes].get(field))!=value: raise ValueError(f'CNES {cnes}: campo {field} divergente após COMMIT; confira edição concorrente.')
+                    checked+=1
+                emit('log',f'Conferidos após COMMIT: {checked}.')
+            stats['conferidos']=checked; return stats
+        except BaseException as exc:
+            if committing:
+                prefix='COMMIT aceito, conferência incompleta' if committed else 'Falha durante COMMIT: resultado incerto'
+                raise ResultadoIncerto(prefix+'. Confira o banco antes de repetir. '+str(exc)) from exc
+            try: conn.rollback(); emit('log','ROLLBACK confirmado: alterações de dados desfeitas. Criação da tabela, se houve, não é desfeita.')
+            except Exception: emit('log','ROLLBACK não confirmado; confira o banco.')
+            raise
+        finally:
+            expected.close()
+            if lock:
+                try:
+                    with conn.cursor() as c: c.execute('SELECT RELEASE_LOCK(%s)',(lock,))
+                    conn.rollback()
+                except Exception: pass
 
 
 def executar_interface():
@@ -621,11 +423,11 @@ def executar_interface():
         def __init__(self):
             super().__init__()
 
-            self.title('ToolboxWaze - Importador CNES 1.4')
+            self.title('ToolboxWaze - Importador CNES 2.0')
             self.geometry('1150x800')
             self.minsize(850, 620)
 
-            self.eventos = queue.Queue()
+            self.eventos = queue.Queue(maxsize=5000)
             self.stop = threading.Event()
             self.executando = False
             self.campos = {}
@@ -642,7 +444,7 @@ def executar_interface():
 
             ttk.Label(
                 base,
-                text='Estabelecimentos de saude - CNES 1.4',
+                text='Estabelecimentos de saude - CNES 2.0',
                 font=('Segoe UI', 16, 'bold')
             ).pack(anchor='w')
 
@@ -651,7 +453,7 @@ def executar_interface():
                 text=(
                     'Nome fantasia vazio permitido | '
                     'A senha nao e apagada apos validar o arquivo | '
-                    'Estrutura ausente e criada automaticamente'
+                    'Colunas de busca preenchidas | Lotes de 500 | Reparo do JSON existente'
                 )
             ).pack(anchor='w', pady=(5, 12))
 
@@ -683,15 +485,15 @@ def executar_interface():
             caixa.pack(fill='x', pady=12)
 
             padroes = {
-                'host': os.getenv('DB_HOST', '212.85.3.243'),
+                'host': os.getenv('DB_HOST', 'localhost'),
                 'port': os.getenv('DB_PORT', '3306'),
                 'user': os.getenv(
                     'DB_USER',
-                    'u629736858_wazetoolbox'
+                    ''
                 ),
                 'database': os.getenv(
                     'DB_NAME',
-                    'u629736858_wazetoolbox'
+                    ''
                 ),
                 'password': '',
                 'ssl_ca': os.getenv('DB_SSL_CA', ''),
@@ -779,7 +581,7 @@ def executar_interface():
                 base,
                 text=(
                     'Atualizar fonte de CNES existentes '
-                    '(preserva correcoes manuais)'
+                    '(preserva correções; desmarcado ainda repara colunas)'
                 ),
                 variable=self.atualizar
             ).pack(anchor='w', pady=8)
@@ -790,6 +592,7 @@ def executar_interface():
             for titulo, gravar in (
                 ('Validar arquivo', False),
                 ('Importar e conferir salvamento', True),
+                ('Reparar colunas do banco (JSON)', 'reparar'),
             ):
                 ttk.Button(
                     acoes,
@@ -937,7 +740,7 @@ def executar_interface():
 
             caminho = self.caminho.get().strip()
 
-            if not Path(caminho).is_file():
+            if gravar != 'reparar' and not Path(caminho).is_file():
                 messagebox.showerror(
                     'Arquivo',
                     'Selecione um arquivo valido.',
@@ -1006,145 +809,63 @@ def executar_interface():
 
         def worker(self, caminho, configuracao, atualizar, gravar):
             conn = None
-
-            emit = lambda evento, valor: self.eventos.put(
-                (evento, valor)
-            )
-
+            emit = lambda evento, valor: self.eventos.put((evento, valor))
             try:
-                emit('log', 'Validando arquivo...')
-
-                (
-                    registros,
-                    encoding,
-                    separador,
-                    campos,
-                    sem_nome
-                ) = ler_csv(caminho, self.stop)
-
-                emit(
-                    'log',
-                    f'{len(registros)} CNES unicos; '
-                    f'{campos} campos; '
-                    f'encoding={encoding}; '
-                    f'separador={separador!r}.'
-                )
-
-                emit(
-                    'log',
-                    f'{sem_nome} registros sem nome fantasia: '
-                    'aceitos e preservados.'
-                )
-
+                if gravar != 'reparar':
+                    emit('log', 'Validando arquivo sem dividir tabs dentro de aspas...')
+                    registros, encoding, separador, campos, sem_nome = ler_csv(caminho, self.stop)
+                    emit('log', f'{len(registros)} CNES únicos; {campos} campos; encoding={encoding}; separador={separador!r}.')
+                    emit('log', f'{sem_nome} sem nome fantasia; será usada razão social ou CNES na coluna de exibição.')
+                    for cnes, dados in itertools.islice(registros.items(), 2000):
+                        p = projetar(dados)
+                        emit('linha', (cnes,p['nome_fantasia'],p['uf'],p['municipio'],'VALIDADO'))
+                    if not gravar:
+                        emit('validado', 'Arquivo validado. Nenhuma conexão ou gravação. A senha foi mantida no campo.')
+                        return
                 if self.stop.is_set():
-                    raise Cancelado(
-                        'Cancelado antes da conexao.'
-                    )
-
-                if not gravar:
-                    emit(
-                        'validado',
-                        'Arquivo validado. Nenhuma conexao ou gravacao. '
-                        'A senha foi mantida no campo.'
-                    )
-                    return
-
-                if not configuracao.get('password'):
-                    raise ValueError(
-                        'Senha nao capturada. '
-                        'Digite novamente e reinicie a importacao.'
-                    )
-
+                    raise Cancelado('Cancelado antes da conexão.')
                 try:
                     import pymysql
-                except ImportError:
-                    raise ValueError(
-                        'Instale: python -m pip install pymysql'
-                    )
-
+                except ImportError as exc:
+                    raise ValueError('Instale: python -m pip install pymysql') from exc
+                if not configuracao.get('password'):
+                    raise ValueError('Preencha a senha MySQL.')
                 ca = configuracao.pop('ssl_ca', '')
-
-                configuracao.update(
-                    charset='utf8mb4',
-                    autocommit=False,
-                    connect_timeout=20,
-                    read_timeout=120,
-                    write_timeout=120
-                )
-
+                configuracao.update(charset='utf8mb4',autocommit=False,connect_timeout=20,read_timeout=180,write_timeout=180)
                 if ca:
-                    configuracao.update(
-                        ssl_ca=ca,
-                        ssl_verify_cert=True,
-                        ssl_verify_identity=True
-                    )
-
-                emit(
-                    'log',
-                    'Conectando ao MySQL com senha preenchida...'
-                )
-
+                    configuracao.update(ssl_ca=ca,ssl_verify_cert=True,ssl_verify_identity=True)
+                emit('log', 'Conectando ao MySQL. Senha não será registrada.')
                 conn = pymysql.connect(**configuracao)
-
                 with conn.cursor() as cursor:
-                    cursor.execute(
-                        'SELECT DATABASE(), @@hostname'
-                    )
+                    cursor.execute('SELECT DATABASE(), @@hostname')
                     banco, servidor = cursor.fetchone()
-
                 conn.rollback()
-
                 if banco != configuracao['database']:
-                    raise ValueError(
-                        'Banco conectado difere do informado.'
-                    )
-
-                emit(
-                    'log',
-                    f'Conectado: banco={banco}; servidor={servidor}.'
-                )
-
-                resultado = importar(
-                    conn,
-                    registros,
-                    atualizar,
-                    self.stop,
-                    emit
-                )
-
-                emit(
-                    'sucesso',
-                    (
-                        'CONCLUIDO: '
-                        f"{resultado['inseridos']} inseridos; "
-                        f"{resultado['atualizados']} atualizados; "
-                        f"{resultado['ignorados']} ignorados; "
-                        f"{resultado['conferidos']} gravacoes "
-                        'relidas apos COMMIT.'
-                    )
-                )
-
+                    raise ValueError('Banco conectado difere do informado.')
+                emit('log', f'Conectado: banco={banco}; servidor={servidor}.')
+                if gravar == 'reparar':
+                    emit('log', 'Reparo: reconstruindo colunas com dados_originais + correcoes já existentes.')
+                    registros = ler_banco(conn, self.stop, emit)
+                    atualizar = False
+                else:
+                    self.eventos.put(('limpar_preview', None))
+                resultado = importar(conn, registros, atualizar, self.stop, emit)
+                emit('sucesso', f"CONCLUÍDO: {resultado['inseridos']} inseridos; {resultado['atualizados']} atualizados/reparados; {resultado['ignorados']} sem mudança; {resultado['conferidos']} gravações relidas após COMMIT.")
             except Exception as erro:
                 texto = str(erro)
                 senha = configuracao.get('password', '')
-
                 if senha:
-                    texto = texto.replace(
-                        senha,
-                        '[SENHA OCULTA]'
-                    )
-
+                    texto = texto.replace(senha, '[SENHA OCULTA]')
                 emit('erro', texto)
-
             finally:
                 if conn is not None:
                     try:
                         conn.close()
                     except Exception:
                         pass
-
                 configuracao.pop('password', None)
                 emit('fim', None)
+
 
         def processar(self):
             for _ in range(300):
@@ -1153,7 +874,10 @@ def executar_interface():
                 except queue.Empty:
                     break
 
-                if evento == 'linha':
+                if evento == 'limpar_preview':
+                    self.arvore.delete(*self.arvore.get_children())
+
+                elif evento == 'linha':
                     self.arvore.insert(
                         '',
                         'end',
@@ -1236,37 +960,80 @@ def executar_interface():
     print('Janela encerrada.', flush=True)
 
 
+
+
+
 def main():
-    print(
-        f'Arquivo: {Path(__file__).resolve()}',
-        flush=True
-    )
-
-    print(
-        f'Python: {sys.executable}',
-        flush=True
-    )
-
-    try:
-        executar_interface()
-        return 0
-
-    except Exception:
-        texto = traceback.format_exc()
-        print(texto, file=sys.stderr, flush=True)
-
+    import argparse
+    parser = argparse.ArgumentParser(description='Importador CNES 2.0: GUI, validação ou reparo de colunas estruturadas.')
+    parser.add_argument('--arquivo')
+    parser.add_argument('--importar', action='store_true')
+    parser.add_argument('--reparar-banco', action='store_true')
+    parser.add_argument('--atualizar', action='store_true')
+    parser.add_argument('--lote', type=int, default=500)
+    parser.add_argument('--confirmar', action='store_true', help='Confirma a escrita sem pergunta interativa. Exige backup prévio.')
+    args = parser.parse_args()
+    if not any((args.arquivo,args.importar,args.reparar_banco)):
         try:
-            Path(__file__).with_name(
-                'importador_saude_erro.log'
-            ).write_text(
-                texto,
-                encoding='utf-8'
-            )
-        except OSError:
-            pass
-
+            executar_interface()
+            return 0
+        except Exception:
+            texto = traceback.format_exc()
+            print(texto,file=sys.stderr)
+            try:
+                Path(__file__).with_name('importador_saude_erro.log').write_text(texto,encoding='utf-8')
+            except OSError:
+                pass
+            return 1
+    if args.importar and args.reparar_banco:
+        parser.error('Escolha importar arquivo OU reparar banco.')
+    if not args.reparar_banco and not args.arquivo:
+        parser.error('Informe --arquivo ou --reparar-banco.')
+    if not 1 <= args.lote <= 2000:
+        parser.error('--lote deve estar entre 1 e 2000.')
+    stop = threading.Event()
+    conn = None
+    cfg = {}
+    def emit(event, value):
+        if event == 'linha':
+            return
+        print(f'{event}: {value}', flush=True)
+    try:
+        if args.arquivo:
+            registros, encoding, sep, fields, sem_nome = ler_csv(args.arquivo,stop)
+            emit('validado',f'{len(registros)} CNES; {fields} campos; {encoding}; separador={sep!r}; sem fantasia={sem_nome}.')
+        if not args.importar and not args.reparar_banco:
+            return 0
+        import getpass
+        cfg = preparar_config({'host':os.getenv('DB_HOST','localhost'),'port':os.getenv('DB_PORT','3306'),
+            'user':os.getenv('DB_USER',''),'database':os.getenv('DB_NAME',''),
+            'password':os.getenv('DB_PASSWORD') or getpass.getpass('Senha MySQL: '),'ssl_ca':os.getenv('DB_SSL_CA','')})
+        if not args.confirmar and input(f"Banco {cfg['database']} em {cfg['host']}; tabela {TABELA}. Backup realizado? Digite IMPORTAR: ") != 'IMPORTAR':
+            return 1
+        import pymysql
+        ca = cfg.pop('ssl_ca','')
+        cfg.update(charset='utf8mb4',autocommit=False,connect_timeout=20,read_timeout=180,write_timeout=180)
+        if ca:
+            cfg.update(ssl_ca=ca,ssl_verify_cert=True,ssl_verify_identity=True)
+        conn = pymysql.connect(**cfg)
+        if args.reparar_banco:
+            registros = ler_banco(conn,stop,emit)
+        stats = importar(conn,registros,args.atualizar and not args.reparar_banco,stop,emit,args.lote)
+        emit('sucesso',stats)
+        return 0
+    except KeyboardInterrupt:
+        print('Interrompido. Se o COMMIT já havia iniciado, confira o banco antes de repetir.',file=sys.stderr)
+        return 130
+    except Exception as exc:
+        message=str(exc)
+        if cfg.get('password'):
+            message=message.replace(cfg['password'],'[SENHA OCULTA]')
+        print(message,file=sys.stderr)
         return 1
-
+    finally:
+        if conn:
+            conn.close()
+        cfg.pop('password',None)
 
 if __name__ == '__main__':
     sys.exit(main())

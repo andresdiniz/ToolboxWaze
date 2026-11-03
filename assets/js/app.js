@@ -148,8 +148,8 @@
                     a.setAttribute('role', 'option');
 
                     const badge = document.createElement('span');
-                    badge.className = 'search-item-type ' + (r.tipo === 'radar' ? 'radar' : (r.tipo === 'escola' ? 'escola' : 'posto'));
-                    badge.textContent = r.tipo === 'radar' ? 'Radar' : (r.tipo === 'escola' ? 'Escola' : 'Posto');
+                    badge.className = 'search-item-type ' + (r.tipo === 'radar' ? 'radar' : (r.tipo === 'escola' ? 'escola' : (r.tipo === 'saude' ? 'saude' : 'posto')));
+                    badge.textContent = r.tipo === 'radar' ? 'Radar' : (r.tipo === 'escola' ? 'Escola' : (r.tipo === 'saude' ? 'Saúde' : 'Posto'));
 
                     const label = document.createElement('span');
                     label.className = 'search-item-label';

@@ -31,10 +31,10 @@ final class BuscaController extends AbstractController
         $this->denyAccessUnlessGranted('IS_AUTHENTICATED_REMEMBERED');
 
         $q    = trim((string) $req->query->get('q', ''));
-        $tipo = trim((string) $req->query->get('tipo', ''));   // radar|posto|escola|''
+        $tipo = trim((string) $req->query->get('tipo', ''));   // radar|posto|escola|saude|''
         $uf   = trim((string) $req->query->get('uf', ''));
 
-        $results = ['radares' => [], 'postos' => [], 'escolas' => []];
+        $results = ['radares' => [], 'postos' => [], 'escolas' => [], 'saude' => []];
 
         if (strlen($q) >= 2) {
             $like = '%' . str_replace(['%', '_', '\\'], ['\\%', '\\_', '\\\\'], $q) . '%';
@@ -52,6 +52,9 @@ final class BuscaController extends AbstractController
             if ($tipo === '' || $tipo === 'escola') {
                 $results['escolas'] = $this->searchEscolas($like, $uf, $allowedUfs);
             }
+            if (($tipo === '' || $tipo === 'saude') && $user?->hasPermission(User::PERMISSION_SAUDE)) {
+                $results['saude'] = $this->searchSaude($like, $uf, $allowedUfs);
+            }
         }
 
         $ufs = array_column(
@@ -64,6 +67,9 @@ final class BuscaController extends AbstractController
                  UNION
                  SELECT DISTINCT CONVERT(uf USING utf8mb4) COLLATE utf8mb4_unicode_ci
                  FROM escola_inep WHERE uf IS NOT NULL
+                 UNION
+                 SELECT DISTINCT CONVERT(uf USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                 FROM estabelecimento_saude WHERE uf IS NOT NULL
                  ORDER BY uf"
             ),
             'uf'
@@ -123,6 +129,17 @@ final class BuscaController extends AbstractController
             ];
         }
 
+        // 2 estabelecimentos de saúde (somente quem tem a permissão)
+        if ($user?->hasPermission(User::PERMISSION_SAUDE)) {
+            foreach ($this->searchSaude($like, '', $allowedUfs, 2) as $s) {
+                $items[] = [
+                    'tipo'  => 'saude',
+                    'label' => '[' . $s['uf'] . '] ' . $s['nome_fantasia'],
+                    'url'   => '/saude/' . $s['id'],
+                ];
+            }
+        }
+
         return $this->json($items);
     }
 
@@ -170,6 +187,21 @@ final class BuscaController extends AbstractController
              FROM escola_inep
              WHERE ' . implode(' AND ', $where) . '
              ORDER BY uf, escola LIMIT ' . $limit,
+            $params
+        );
+    }
+
+    private function searchSaude(string $like, string $uf, ?array $allowedUfs, int $limit = self::LIMIT): array
+    {
+        [$where, $params] = $this->baseUfWhere('uf', $uf, $allowedUfs);
+        $where[] = '(nome_fantasia LIKE ? OR cnes LIKE ? OR municipio LIKE ?)';
+        array_push($params, $like, $like, $like);
+
+        return $this->db->fetchAllAssociative(
+            'SELECT id, uf, municipio, nome_fantasia, cnes, ativo
+             FROM estabelecimento_saude
+             WHERE ' . implode(' AND ', $where) . '
+             ORDER BY uf, nome_fantasia LIMIT ' . $limit,
             $params
         );
     }

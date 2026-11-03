@@ -91,6 +91,11 @@ class DashboardDataProvider
         return $this->cache->getCached('escola_kpis', fn() => $this->dashService->getEscolaKpis(), 3600);
     }
 
+    public function getSaudeKpis(): array
+    {
+        return $this->cache->getCached('saude_kpis', fn() => $this->dashService->getSaudeKpis(), 3600);
+    }
+
     public function getSolicitacaoKpis(): array
     {
         return $this->cache->getCached('solic_kpis', fn() => $this->dashService->getSolicitacaoKpis(), 300);

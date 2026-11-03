@@ -1,14 +1,191 @@
 {% extends 'base.html.twig' %}
-{% block title %}Estabelecimentos de saúde — CNES{% endblock %}
-{% block stylesheets %}{{ parent() }}{% include 'saude/_estilos.html.twig' %}{% endblock %}
-{% block body %}<div class="saude-page">
-<header class="s-header"><div><h1><i class="bi bi-hospital"></i> Estabelecimentos de saúde</h1><p class="s-muted">Base CNES · {{ total|number_format(0, ',', '.') }} registros no filtro</p></div></header>
-<form class="s-card s-filters" method="get" action="{{ path('saude_index') }}">
-<div><label for="s-q">Buscar nome, CNES ou outros dados</label><input id="s-q" name="q" value="{{ q }}" maxlength="120"></div>
-<div><label for="s-uf">Estado</label><select id="s-uf" name="uf"><option value="">Todas as UFs permitidas</option>{% for estado in ufs %}<option value="{{ estado }}" {{ estado == uf ? 'selected' : '' }}>{{ estado }}</option>{% endfor %}</select></div>
-<button class="s-btn" type="submit">Filtrar</button><a class="s-btn" href="{{ path('saude_index') }}">Limpar</a></form>
-<div class="s-card s-scroll"><table><thead><tr><th>CNES</th><th>Estabelecimento</th><th>Localização</th><th>Situação</th><th>Telefone</th><th>Ação</th></tr></thead><tbody>
-{% for item in itens %}<tr><td>{{ item.cnes }}</td><td>{{ item.dados['NOME FANTASIA'] ?? '—' }}<div class="s-muted">{{ item.dados['TIPO DO ESTABELECIMENTO'] ?? '' }}</div></td><td>{{ item.dados['MUNICÍPIO'] ?? '' }} / {{ item.dados.UF ?? '' }}</td><td><span class="s-badge">{{ item.dados['STATUS DO ESTABELECIMENTO']|default('Não informado', true) }}</span></td><td>{{ item.dados.TELEFONE|default('—', true) }}</td><td><a class="s-btn" href="{{ path('saude_show', {id:item.id}) }}">Detalhes</a></td></tr>
-{% else %}<tr><td colspan="6">Nenhum estabelecimento encontrado para suas UFs e filtros.</td></tr>{% endfor %}</tbody></table></div>
-<nav class="s-header" aria-label="Paginação">{% if pagina > 1 %}<a class="s-btn" href="{{ path('saude_index', {q:q,uf:uf,pagina:pagina-1}) }}">Anterior</a>{% endif %}<span>Página {{ pagina }} de {{ paginas }}</span>{% if pagina < paginas %}<a class="s-btn" href="{{ path('saude_index', {q:q,uf:uf,pagina:pagina+1}) }}">Próxima</a>{% endif %}</nav>
-</div>{% endblock %}
+
+{% block title %}Estabelecimentos de Saúde{% endblock %}
+
+{% block body %}
+<div class="container-fluid py-3">
+
+  {# ── Cabeçalho ── #}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 class="mb-0">🏥 Estabelecimentos de Saúde</h4>
+      {% if stats is not null %}
+        <small class="text-muted">
+          {{ stats.total|number_format(0, ',', '.') }} estabelecimentos ·
+          {{ stats.ativos|number_format(0, ',', '.') }} ativos ·
+          {{ stats.estados }} estados ·
+          {{ stats.municipios|number_format(0, ',', '.') }} municípios
+        </small>
+      {% else %}
+        <small class="text-muted">{{ total|number_format(0, ',', '.') }} resultado(s)</small>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Filtros ── #}
+  <form method="GET" action="{{ path('saude_index') }}" class="row g-2 mb-3" id="form-filtros">
+    <div class="col-12 col-md-3">
+      <input type="text" name="busca" value="{{ filters.busca }}"
+             class="form-control form-control-sm"
+             placeholder="Buscar nome, CNES, rua ou município…">
+    </div>
+    <div class="col-6 col-md-1">
+      <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">Estado</option>
+        {% for uf in ufs %}
+          <option value="{{ uf }}" {% if filters.uf == uf %}selected{% endif %}>{{ uf }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <input type="text" name="municipio" value="{{ filters.municipio }}"
+             class="form-control form-control-sm"
+             placeholder="Cidade…">
+    </div>
+    <div class="col-6 col-md-2">
+      <select name="situacao" class="form-select form-select-sm">
+        <option value="">Situação</option>
+        <option value="ativo"     {% if filters.situacao == 'ativo' %}selected{% endif %}>✅ Ativos</option>
+        <option value="inativo"   {% if filters.situacao == 'inativo' %}selected{% endif %}>🔴 Inativos</option>
+        <option value="sem_link"  {% if filters.situacao == 'sem_link' %}selected{% endif %}>🔗 Sem link</option>
+        <option value="com_link"  {% if filters.situacao == 'com_link' %}selected{% endif %}>✔ Com link</option>
+        <option value="sem_coord" {% if filters.situacao == 'sem_coord' %}selected{% endif %}>📍 Sem coordenadas</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <select name="fluxo" class="form-select form-select-sm">
+        <option value="">Andamento</option>
+        <option value="pendente"       {% if filters.fluxo == 'pendente' %}selected{% endif %}>Pendente</option>
+        <option value="reservado"      {% if filters.fluxo == 'reservado' %}selected{% endif %}>Reservado</option>
+        <option value="confirmado"     {% if filters.fluxo == 'confirmado' %}selected{% endif %}>Confirmado</option>
+        <option value="nao_localizado" {% if filters.fluxo == 'nao_localizado' %}selected{% endif %}>Não localizado</option>
+        <option value="pulado"         {% if filters.fluxo == 'pulado' %}selected{% endif %}>Pulado</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-2 d-flex gap-1">
+      <button type="submit" class="btn btn-primary btn-sm flex-grow-1">🔍 Filtrar</button>
+      {% if filters.busca or filters.uf or filters.municipio or filters.situacao or filters.fluxo %}
+        <a href="{{ path('saude_index') }}" class="btn btn-outline-secondary btn-sm" title="Limpar filtros">✕</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {# Tags de filtros ativos #}
+  {% set activeFilters = [] %}
+  {% if filters.busca %}{% set activeFilters = activeFilters|merge([{label: 'Busca', value: filters.busca, key: 'busca'}]) %}{% endif %}
+  {% if filters.uf %}{% set activeFilters = activeFilters|merge([{label: 'Estado', value: filters.uf, key: 'uf'}]) %}{% endif %}
+  {% if filters.municipio %}{% set activeFilters = activeFilters|merge([{label: 'Cidade', value: filters.municipio, key: 'municipio'}]) %}{% endif %}
+  {% if filters.situacao %}{% set activeFilters = activeFilters|merge([{label: 'Situação', value: filters.situacao, key: 'situacao'}]) %}{% endif %}
+  {% if filters.fluxo %}{% set activeFilters = activeFilters|merge([{label: 'Andamento', value: filters.fluxo, key: 'fluxo'}]) %}{% endif %}
+  {% if activeFilters|length > 0 %}
+  <div class="d-flex flex-wrap gap-1 mb-2">
+    {% for f in activeFilters %}
+      <span class="badge border" style="background:var(--color-surface-2,#f8f9fa);color:var(--color-text,#212529);border-color:#dee2e6 !important">
+        {{ f.label }}: <strong>{{ f.value }}</strong>
+        <a href="{{ path('saude_index', filters|merge({(f.key): '', page: 1})) }}" class="text-danger ms-1">×</a>
+      </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── Tabela ── #}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Estabelecimento</th>
+          <th>CNES</th>
+          <th>UF</th>
+          <th>Município</th>
+          <th>Rua</th>
+          <th>Telefone</th>
+          <th>Situação</th>
+          <th>Andamento</th>
+          <th>Waze</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="fw-semibold">{{ row.nome_fantasia ?: '—' }}</td>
+            <td><code>{{ row.cnes }}</code></td>
+            <td>{{ row.uf }}</td>
+            <td>{{ row.municipio }}</td>
+            <td><small>{{ row.logradouro }}</small></td>
+            <td><small>{{ row.telefone }}</small></td>
+            <td>
+              {% if row.ativo %}
+                <span class="badge bg-success">Ativo</span>
+              {% else %}
+                <span class="badge bg-danger">Inativo</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.status == 'confirmado' %}<span class="badge bg-success">Confirmado</span>
+              {% elseif row.status == 'reservado' %}<span class="badge bg-info text-dark" title="{{ row.reservado_para }}">Reservado</span>
+              {% elseif row.status == 'nao_localizado' %}<span class="badge bg-warning text-dark">Não localizado</span>
+              {% elseif row.status == 'pulado' %}<span class="badge bg-secondary">Pulado</span>
+              {% else %}<span class="text-muted small">Pendente</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if row.link_waze %}
+                <a href="{{ row.link_waze }}" target="_blank" rel="noopener" title="Abrir no Editor Waze"
+                   class="badge bg-primary text-decoration-none">🗺 Editor</a>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ path('saude_show', {id: row.id}) }}"
+                 class="btn btn-outline-primary btn-sm">👁</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-4">Nenhum estabelecimento encontrado.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# ── Paginação ── #}
+  {% if pages > 1 %}
+    <nav class="mt-3">
+      <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
+        {% if page > 1 %}
+          <li class="page-item">
+            <a class="page-link" href="{{ path('saude_index', filters|merge({page: page - 1})) }}">&#8249;</a>
+          </li>
+        {% endif %}
+        {% set start = (page - 2) > 1 ? (page - 2) : 1 %}
+        {% set end   = (page + 2) < pages ? (page + 2) : pages %}
+        {% if start > 1 %}
+          <li class="page-item"><a class="page-link" href="{{ path('saude_index', filters|merge({page: 1})) }}">1</a></li>
+          {% if start > 2 %}<li class="page-item disabled"><span class="page-link">&hellip;</span></li>{% endif %}
+        {% endif %}
+        {% for p in start..end %}
+          <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="{{ path('saude_index', filters|merge({page: p})) }}">{{ p }}</a>
+          </li>
+        {% endfor %}
+        {% if end < pages %}
+          {% if end < pages - 1 %}<li class="page-item disabled"><span class="page-link">&hellip;</span></li>{% endif %}
+          <li class="page-item"><a class="page-link" href="{{ path('saude_index', filters|merge({page: pages})) }}">{{ pages }}</a></li>
+        {% endif %}
+        {% if page < pages %}
+          <li class="page-item">
+            <a class="page-link" href="{{ path('saude_index', filters|merge({page: page + 1})) }}">&#8250;</a>
+          </li>
+        {% endif %}
+      </ul>
+    </nav>
+    <p class="text-center text-muted small mt-1">
+      Página {{ page }} de {{ pages }} — {{ total|number_format(0, ',', '.') }} estabelecimentos
+    </p>
+  {% endif %}
+
+</div>
+{% endblock %}

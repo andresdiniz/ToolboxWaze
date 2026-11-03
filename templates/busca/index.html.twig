@@ -22,6 +22,9 @@
             <option value="radar"  {{ tipo == 'radar'  ? 'selected' }}>Radar</option>
             <option value="posto"  {{ tipo == 'posto'  ? 'selected' }}>Posto</option>
             <option value="escola" {{ tipo == 'escola' ? 'selected' }}>Escola</option>
+            {% if app.user and app.user.hasPermission('PERM_SAUDE') %}
+            <option value="saude"  {{ tipo == 'saude'  ? 'selected' }}>Saúde</option>
+            {% endif %}
           </select>
         </div>
         <div class="col-md-3">
@@ -45,7 +48,7 @@
   </form>
 
   {% if q|length >= 2 %}
-    {% set total = radares|length + postos|length + escolas|length %}
+    {% set total = radares|length + postos|length + escolas|length + saude|length %}
     <p class="text-muted small mb-3">
       <strong>{{ total }}</strong> resultado(s) para <strong>"{{ q }}"</strong>
       {% if tipo %} · tipo: <strong>{{ tipo }}</strong>{% endif %}
@@ -127,7 +130,31 @@
   </div>
   {% endif %}
 
-  {% if q|length >= 2 and not radares and not postos and not escolas %}
+  {# ── Saúde ── #}
+  {% if saude %}
+  <h6 class="text-uppercase text-muted fw-semibold small mb-2">Saúde ({{ saude|length }})</h6>
+  <div class="card mb-4">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light"><tr><th>UF</th><th>Município</th><th>Nome</th><th>Situação</th><th>CNES</th><th></th></tr></thead>
+        <tbody>
+        {% for s in saude %}
+          <tr>
+            <td><span class="badge bg-secondary">{{ s.uf }}</span></td>
+            <td class="small">{{ s.municipio }}</td>
+            <td class="small">{{ s.nome_fantasia }}</td>
+            <td>{% if s.ativo %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</td>
+            <td class="small text-muted">{{ s.cnes }}</td>
+            <td><a href="{{ path('saude_show', {id: s.id}) }}" class="btn btn-sm btn-outline-primary py-0 px-2">Ver</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if q|length >= 2 and not radares and not postos and not escolas and not saude %}
   <div class="text-center text-muted py-5">
     <svg width="48" height="48" fill="currentColor" viewBox="0 0 16 16" class="d-block mx-auto mb-3 opacity-25">
       <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11"/>

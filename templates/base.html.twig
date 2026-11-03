@@ -112,6 +112,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/radares' %}active{% endif %}" href="{{ path('radar_index') }}"><i class="bi bi-broadcast me-1"></i> Radares</a></li>
                 <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/postos' %}active{% endif %}" href="{{ path('posto_index') }}"><i class="bi bi-fuel-pump me-1"></i> Postos</a></li>
                 <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/escolas' %}active{% endif %}" href="{{ path('escola_inep_index') }}"><i class="bi bi-building me-1"></i> Escolas</a></li>
+                {% if app.user and app.user.hasPermission('PERM_SAUDE') %}
+                <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/saude' %}active{% endif %}" href="{{ path('saude_index') }}"><i class="bi bi-hospital me-1"></i> Saúde</a></li>
+                {% endif %}
                 <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/solicitacoes' %}active{% endif %}" href="{{ path('solicitacao_hub') }}"><i class="bi bi-inbox me-1"></i> Solicitações</a></li>
                 <li class="nav-item"><a class="nav-link {% if app.request.pathInfo starts with '/cobertura' %}active{% endif %}" href="{{ path('cobertura_radar') }}" title="Cobertura Waze"><i class="bi bi-globe me-1"></i> Cobertura</a></li>
 

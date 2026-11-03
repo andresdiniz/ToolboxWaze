@@ -1,0 +1,221 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ item.nomeFantasia ?: item.cnes }} — Saúde{% endblock %}
+
+{% block stylesheets %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="">
+<style>
+#saude-map {
+    height: 280px;
+    border-radius: 0 0 .375rem .375rem;
+    z-index: 0;
+}
+</style>
+{% endblock %}
+
+{% block body %}
+{% set hasCoords = item.latitude is not null and item.latitude != '' and item.latitude != '0.00000000'
+                  and item.longitude is not null and item.longitude != '' and item.longitude != '0.00000000' %}
+
+<div class="container py-3"
+     id="saude-data"
+     data-lat="{% if hasCoords %}{{ item.latitude }}{% endif %}"
+     data-lon="{% if hasCoords %}{{ item.longitude }}{% endif %}"
+     data-maptiler-key="{{ maptiler_key|default('')|e('html_attr') }}"
+     data-nome="{{ item.nomeFantasia|default('')|e('html_attr') }}"
+     data-municipio="{{ item.municipio|default('')|e('html_attr') }}"
+     data-uf="{{ item.uf|default('')|e('html_attr') }}">
+
+  <div class="mb-3">
+    <a href="{{ path('saude_index', voltarParams) }}" class="btn btn-sm btn-outline-secondary">← Voltar</a>
+  </div>
+
+  {# ── Cabeçalho ── #}
+  <div class="d-flex align-items-start gap-3 mb-4">
+    <div class="flex-grow-1">
+      <h4 class="mb-1">{{ item.nomeFantasia ?: 'Sem nome informado' }}</h4>
+      <small class="text-muted">CNES: <code>{{ item.cnes }}</code></small>
+      {% if item.ativo %}
+        <span class="badge bg-success ms-2">Ativo</span>
+      {% else %}
+        <span class="badge bg-danger ms-2">Inativo</span>
+      {% endif %}
+      {% if item.status == 'confirmado' %}<span class="badge bg-success ms-1">Confirmado</span>
+      {% elseif item.status == 'reservado' %}<span class="badge bg-info text-dark ms-1">Reservado{% if item.reservadoPara %} · {{ item.reservadoPara }}{% endif %}</span>
+      {% elseif item.status == 'nao_localizado' %}<span class="badge bg-warning text-dark ms-1">Não localizado</span>
+      {% elseif item.status == 'pulado' %}<span class="badge bg-secondary ms-1">Pulado</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+
+    {# ── Dados CNES ── #}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">📋 Dados CNES</div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><th class="ps-3" style="width:40%">UF</th><td>{{ item.uf }}</td></tr>
+              <tr><th class="ps-3">Município</th><td>{{ item.municipio }}</td></tr>
+              <tr><th class="ps-3">Rua</th><td>{{ item.logradouro ?: '—' }}</td></tr>
+              <tr>
+                <th class="ps-3">Telefone</th>
+                <td>
+                  {% if item.telefone %}
+                    <a href="tel:{{ item.telefone|replace({'(': '', ')': '', ' ': '', '-': ''}) }}" class="text-decoration-none">{{ item.telefone }}</a>
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              <tr><th class="ps-3">Situação</th><td>{{ item.ativo ? 'Ativo' : 'Inativo' }}</td></tr>
+              {% if hasCoords %}
+              <tr>
+                <th class="ps-3">Coordenadas</th>
+                <td>
+                  <a id="coords-link"
+                     href="https://www.google.com/maps?q={{ item.latitude }},{{ item.longitude }}"
+                     data-lat-val="{{ item.latitude }}"
+                     data-lon-val="{{ item.longitude }}"
+                     target="_blank" rel="noopener" class="text-decoration-none">
+                    {{ item.latitude }}, {{ item.longitude }} 🗺
+                  </a>
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    {# ── Link Waze + mapa ── #}
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+          🗺 Link Waze
+          {% if app.user %}
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLinkSaude">
+              ✏️ Editar
+            </button>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <div class="fw-semibold mb-1">🏥 Place do estabelecimento</div>
+          {% if item.linkWaze %}
+            <a href="{{ item.linkWaze }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
+              Abrir no Editor Waze
+            </a>
+          {% else %}
+            <span class="text-muted fst-italic">Não cadastrado</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card mt-3" id="card-mapa" style="display:none">
+        <div class="card-header fw-semibold">🗺 Localização no Mapa</div>
+        <div id="saude-map"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# ── Modal edição do link ── #}
+{% if app.user %}
+<div class="modal fade" id="modalLinkSaude" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ path('saude_link_save', {id: item.id}) }}">
+        <div class="modal-header">
+          <h5 class="modal-title">✏️ Editar link Waze</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label fw-semibold">🏥 Place no Waze Map Editor</label>
+          <input type="url" name="link_waze" class="form-control"
+                 value="{{ item.linkWaze }}"
+                 placeholder="https://waze.com/pt-BR/editor?env=row&venues=XXXXXXX">
+          <div class="form-text">Deixe em branco para remover o link.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block javascripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin=""></script>
+<script>
+(function () {
+  // ── Link coordenadas: WME no desktop, geo: no mobile ──
+  var coordLink = document.getElementById('coords-link');
+  if (coordLink) {
+    var lat = coordLink.dataset.latVal;
+    var lon = coordLink.dataset.lonVal;
+    var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      coordLink.href = 'geo:' + lat + ',' + lon + '?q=' + lat + ',' + lon;
+      coordLink.removeAttribute('target');
+    } else {
+      coordLink.href = 'https://www.waze.com/pt-BR/editor?env=row&lat=' + lat + '&lon=' + lon + '&zoom=17';
+    }
+  }
+
+  // ── Mapa Leaflet ──
+  var el   = document.getElementById('saude-data');
+  var dLat = parseFloat(el.dataset.lat);
+  var dLon = parseFloat(el.dataset.lon);
+
+  if (el.dataset.lat === '' || el.dataset.lon === '' || isNaN(dLat) || isNaN(dLon)) return;
+  if (Math.abs(dLat) > 90 || Math.abs(dLon) > 180) return;
+
+  document.getElementById('card-mapa').style.display = '';
+
+  var mapDiv      = document.getElementById('saude-map');
+  var mapTilerKey = (el.dataset.maptilerKey || '').trim();
+
+  if (!mapTilerKey || typeof window.L === 'undefined') {
+    mapDiv.textContent = !mapTilerKey
+      ? 'Mapa indisponível: configure MAPTILER_KEY no ambiente da aplicação.'
+      : 'Não foi possível carregar a biblioteca de mapas. Atualize a página.';
+    mapDiv.classList.add('p-3', 'text-warning');
+    return;
+  }
+
+  setTimeout(function () {
+    if (!mapDiv.isConnected) return;
+    var map = L.map('saude-map', { scrollWheelZoom: false }).setView([dLat, dLon], 17);
+
+    L.tileLayer('https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=' + encodeURIComponent(mapTilerKey), {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener">MapTiler</a>',
+      maxZoom: 19,
+      crossOrigin: true
+    }).addTo(map);
+
+    map.invalidateSize();
+
+    var icon = L.divIcon({
+      className: '',
+      html: '<div style="font-size:28px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))">🏥</div>',
+      iconAnchor: [14, 28],
+      popupAnchor: [0, -28]
+    });
+
+    var popup = document.createElement('div');
+    var strong = document.createElement('strong');
+    strong.textContent = el.dataset.nome;
+    popup.appendChild(strong);
+    popup.appendChild(document.createElement('br'));
+    popup.appendChild(document.createTextNode(el.dataset.municipio + ' — ' + el.dataset.uf));
+
+    L.marker([dLat, dLon], { icon: icon }).addTo(map).bindPopup(popup).openPopup();
+  }, 50);
+}());
+</script>
+{% endblock %}

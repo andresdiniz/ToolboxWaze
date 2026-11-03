@@ -23,6 +23,20 @@ final class DashboardService
         }
     }
 
+    public function getSaudeKpis(): array
+    {
+        try {
+            $row = $this->db->fetchAssociative(
+                'SELECT COUNT(*) AS total, COALESCE(SUM(ativo = 1), 0) AS ativos, COUNT(DISTINCT uf) AS estados
+                 FROM estabelecimento_saude'
+            );
+
+            return $row ?: ['total' => 0, 'ativos' => 0, 'estados' => 0];
+        } catch (\Throwable) {
+            return ['total' => 0, 'ativos' => 0, 'estados' => 0];
+        }
+    }
+
     public function getEstadosAtivos(): int
     {
         return (int) $this->db->fetchOne('SELECT COUNT(DISTINCT sigla_uf) FROM radar_medidor');

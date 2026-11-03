@@ -44,6 +44,11 @@
                     <i class="bi bi-building me-1"></i>Escolas
                 </a>
             {% endif %}
+            {% if showSaude %}
+                <a href="{{ path('saude_index') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-hospital me-1"></i>Saúde
+                </a>
+            {% endif %}
             {% if showSolicitacao %}
                 <a href="{{ path('solicitacao_hub') }}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-inbox me-1"></i>Solicitações
@@ -180,6 +185,18 @@
                 }
             ]) %}
         {% endif %}
+        {% if showSaude %}
+            {% set kpiitems = kpiitems|merge([
+                {
+                    label: 'Saúde',
+                    icon: 'bi-hospital',
+                    value: saudeKpis.total ?? 0,
+                    color: 'danger',
+                    subtitle: (saudeKpis.ativos ?? 0) ~ ' ativos',
+                    key: 'saudetotal'
+                }
+            ]) %}
+        {% endif %}
         {% if showSolicitacao %}
             {% set kpiitems = kpiitems|merge([
                 {
@@ -290,7 +307,7 @@
     {% endif %}
 
     {# POSTOS / ESCOLAS (se showPosto / showEscola) #}
-    {% if showPosto or showEscola %}
+    {% if showPosto or showEscola or showSaude %}
         <div class="row g-3 mb-4">
             {% if showPosto %}
                 <div class="col-12 col-xl-6">
@@ -363,6 +380,41 @@
                                     <div class="p-2 rounded bg-primary bg-opacity-10 text-center">
                                         <div class="small text-primary">Estados</div>
                                         <div class="fw-bold fs-5 text-primary count-up" data-key="escolasestados" data-target="{{ escolaKpis.estados ?? 0 }}">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if showSaude %}
+                <div class="col-12 col-xl-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                            <span class="fw-semibold">
+                                <i class="bi bi-hospital me-1 text-danger"></i>Estabelecimentos de Saúde
+                            </span>
+                            <a href="{{ path('saude_index') }}" class="btn btn-sm btn-outline-secondary">Ver lista</a>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-4">
+                                    <div class="p-2 rounded bg-body-secondary text-center">
+                                        <div class="small text-muted">Total</div>
+                                        <div class="fw-bold fs-5 count-up" data-key="saudetotal" data-target="{{ saudeKpis.total ?? 0 }}">0</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-2 rounded bg-success bg-opacity-10 text-center">
+                                        <div class="small text-success">Ativos</div>
+                                        <div class="fw-bold fs-5 text-success count-up" data-key="saudeativos" data-target="{{ saudeKpis.ativos ?? 0 }}">0</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-2 rounded bg-primary bg-opacity-10 text-center">
+                                        <div class="small text-primary">Estados</div>
+                                        <div class="fw-bold fs-5 text-primary count-up" data-key="saudeestados" data-target="{{ saudeKpis.estados ?? 0 }}">0</div>
                                     </div>
                                 </div>
                             </div>

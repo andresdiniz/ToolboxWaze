@@ -36,6 +36,7 @@ final class DashboardController extends AbstractController
         $showRadar = $user->hasPermission(User::PERMISSION_RADARES);
         $showPosto = $user->hasPermission(User::PERMISSION_POSTOS);
         $showEscola = $user->hasPermission(User::PERMISSION_ESCOLAS);
+        $showSaude = $user->hasPermission(User::PERMISSION_SAUDE);
         // Solicitações: apenas administradores (ou crie a constante)
         $showSolicitacao = $isAdmin; // ou $user->hasPermission(User::PERMISSION_SOLICITACOES) se criada
 
@@ -51,6 +52,7 @@ final class DashboardController extends AbstractController
         $postoAtividade = $showPosto ? $this->dataProvider->getPostoAtividade($allowedUfs) : null;
 
         $escolaKpis = $showEscola ? $this->dataProvider->getEscolaKpis() : null;
+        $saudeKpis = $showSaude ? $this->dataProvider->getSaudeKpis() : null;
         
         $solicKpis = $showSolicitacao ? $this->dataProvider->getSolicitacaoKpis() : null;
         $solicDiarias = $showSolicitacao ? $this->dataProvider->getSolicitacoesDiarias() : null;
@@ -68,6 +70,7 @@ final class DashboardController extends AbstractController
             'postoKpis' => $postoKpis,
             'postoAtividade' => $postoAtividade,
             'escolaKpis' => $escolaKpis,
+            'saudeKpis' => $saudeKpis,
             'solicKpis' => $solicKpis,
             'solicDiarias' => $solicDiarias,
             'estadosAtivos' => $estadosAtivos,
@@ -77,6 +80,7 @@ final class DashboardController extends AbstractController
             'showRadar' => $showRadar,
             'showPosto' => $showPosto,
             'showEscola' => $showEscola,
+            'showSaude' => $showSaude,
             'showSolicitacao' => $showSolicitacao,
         ]);
     }
@@ -95,6 +99,7 @@ final class DashboardController extends AbstractController
         $showRadar = $user->hasPermission(User::PERMISSION_RADARES);
         $showPosto = $user->hasPermission(User::PERMISSION_POSTOS);
         $showEscola = $user->hasPermission(User::PERMISSION_ESCOLAS);
+        $showSaude = $user->hasPermission(User::PERMISSION_SAUDE);
         $showSolicitacao = $isAdmin;
 
         $data = [];
@@ -113,6 +118,12 @@ final class DashboardController extends AbstractController
             $escolaKpis = $this->dataProvider->getEscolaKpis();
             $data['escolas_total']    = $escolaKpis['total'] ?? 0;
             $data['escolas_estados']  = $escolaKpis['estados'] ?? 0;
+        }
+        if ($showSaude) {
+            $saudeKpis = $this->dataProvider->getSaudeKpis();
+            $data['saude_total']      = $saudeKpis['total'] ?? 0;
+            $data['saude_ativos']     = $saudeKpis['ativos'] ?? 0;
+            $data['saude_estados']    = $saudeKpis['estados'] ?? 0;
         }
         if ($showSolicitacao) {
             $solicKpis = $this->dataProvider->getSolicitacaoKpis();

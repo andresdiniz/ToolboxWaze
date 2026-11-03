@@ -1,0 +1,10 @@
+{% extends 'base.html.twig' %}
+{% block title %}Editar {{ registro.nome }}{% endblock %}
+{% block stylesheets %}{{ parent() }}{% include 'saude/_estilos.html.twig' %}{% endblock %}
+{% block body %}<div class="saude-page"><header class="s-header"><div><h1>Editar estabelecimento</h1><p class="s-muted">CNES {{ registro.cnes }} · Correções manuais não substituem o arquivo original.</p></div></header>
+{% if erros %}<div class="s-card" role="alert"><ul>{% for erro in erros %}<li class="s-error">{{ erro }}</li>{% endfor %}</ul></div>{% endif %}
+<form method="post" action="{{ path('saude_edit', {id:registro.id}) }}" class="s-card">
+<input type="hidden" name="_token" value="{{ csrf_token('saude_edit_' ~ registro.id) }}"><input type="hidden" name="versao" value="{{ registro.versao }}">
+<div class="s-fields">{% for campo, valor in dados %}<div><label for="s-field-{{ loop.index }}">{{ campo }}</label>{% if campo in bloqueados %}<input id="s-field-{{ loop.index }}" value="{{ valor }}" disabled>{% else %}<textarea id="s-field-{{ loop.index }}" name="campos[{{ campo }}]" maxlength="10000">{{ valor }}</textarea>{% endif %}<div class="s-original">Original: {{ registro.dadosOriginais[campo]|default('Não informado', true) }}</div></div>{% endfor %}</div>
+<p class="s-muted mt-3">Datas: DD/MM/AAAA. Location: latitude e longitude separadas por espaço. Para remover uma correção, copie o valor original no campo; quando o original estiver vazio, deixe vazio.</p>
+<button type="submit" class="s-btn">Salvar alterações</button> <a class="s-btn" href="{{ path('saude_show', {id:registro.id}) }}">Cancelar</a></form></div>{% endblock %}

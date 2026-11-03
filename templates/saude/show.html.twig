@@ -1,0 +1,7 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ registro.nome }} — CNES{% endblock %}
+{% block stylesheets %}{{ parent() }}{% include 'saude/_estilos.html.twig' %}{% endblock %}
+{% block body %}<div class="saude-page"><header class="s-header"><div><h1>{{ registro.nome }}</h1><p class="s-muted">CNES {{ registro.cnes }} · {{ registro.uf }}</p></div><div><a class="s-btn" href="{{ path('saude_index', {uf:registro.uf}) }}">Voltar</a> {% if is_granted('ROLE_ADMIN') %}<a class="s-btn" href="{{ path('saude_edit', {id:registro.id}) }}">Editar dados</a>{% endif %}</div></header>
+<div class="s-card s-scroll"><table><tbody>{% for campo, valor in dados %}<tr><th scope="row">{{ campo }}</th><td>{{ valor|default('Não informado', true)|nl2br }}{% if registro.correcoes[campo] is defined %}<div class="s-original">Correção manual · Original: {{ registro.dadosOriginais[campo]|default('Não informado', true) }}</div>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<p class="s-muted">Última importação: {{ registro.importadoEm|date('d/m/Y H:i') }}{% if registro.editadoEm %} · Edição: {{ registro.editadoEm|date('d/m/Y H:i') }} · ID do editor: {{ registro.editadoPor }}{% endif %}</p>
+</div>{% endblock %}

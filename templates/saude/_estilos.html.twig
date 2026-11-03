@@ -1,0 +1,19 @@
+<style>
+.saude-page{--s-bg:#fff;--s-alt:#f3f7f8;--s-line:#dae3e7;--s-text:#243843;--s-muted:#586c78;--s-accent:#01696f;color:var(--s-text)}
+[data-theme="dark"] .saude-page{--s-bg:#17282f;--s-alt:#102128;--s-line:#354d58;--s-text:#edf5f8;--s-muted:#b3c5ce;--s-accent:#83dce1}
+.saude-page .s-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;margin:20px 0}
+.saude-page h1{font-size:1.7rem;color:var(--s-text)}.saude-page h2{font-size:1.1rem}
+.saude-page .s-muted{color:var(--s-muted)}.saude-page .s-card{background:var(--s-bg);border:1px solid var(--s-line);border-radius:14px;padding:20px;margin-bottom:20px}
+.saude-page .s-scroll{overflow-x:auto}.saude-page table{width:100%;border-collapse:collapse;color:var(--s-text)}
+.saude-page th,.saude-page td{padding:13px;border-bottom:1px solid var(--s-line);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.saude-page th{background:var(--s-alt)}.saude-page a{color:var(--s-accent)}
+.saude-page .s-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.saude-page label{display:block;font-size:.85rem;font-weight:600;margin-bottom:7px}
+.saude-page input,.saude-page textarea,.saude-page select{width:100%;padding:10px;border:1px solid var(--s-line);border-radius:8px;background:var(--s-alt);color:var(--s-text)}
+.saude-page textarea{min-height:85px;resize:vertical}.saude-page input:focus,.saude-page textarea:focus{outline:2px solid var(--s-accent);outline-offset:2px}
+.saude-page .s-btn{display:inline-block;background:var(--s-alt);color:var(--s-accent);border:1px solid var(--s-line);border-radius:8px;padding:9px 14px;text-decoration:none;font:inherit;cursor:pointer}
+.saude-page .s-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end}.saude-page .s-filters>div{flex:1;min-width:130px}
+.saude-page .s-badge{display:inline-block;background:var(--s-alt);padding:4px 8px;border-radius:6px;font-size:.8rem}
+.saude-page .s-original{font-size:.78rem;color:var(--s-muted);margin-top:6px;white-space:pre-wrap}.saude-page .s-error{color:#ef8497}
+@media(max-width:650px){.saude-page .s-fields{grid-template-columns:1fr}.saude-page .s-card{padding:14px}.saude-page th,.saude-page td{padding:10px}}
+</style>

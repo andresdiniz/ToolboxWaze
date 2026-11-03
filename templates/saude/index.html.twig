@@ -1,0 +1,14 @@
+{% extends 'base.html.twig' %}
+{% block title %}Estabelecimentos de saúde — CNES{% endblock %}
+{% block stylesheets %}{{ parent() }}{% include 'saude/_estilos.html.twig' %}{% endblock %}
+{% block body %}<div class="saude-page">
+<header class="s-header"><div><h1><i class="bi bi-hospital"></i> Estabelecimentos de saúde</h1><p class="s-muted">Base CNES · {{ total|number_format(0, ',', '.') }} registros no filtro</p></div></header>
+<form class="s-card s-filters" method="get" action="{{ path('saude_index') }}">
+<div><label for="s-q">Buscar nome, CNES ou outros dados</label><input id="s-q" name="q" value="{{ q }}" maxlength="120"></div>
+<div><label for="s-uf">Estado</label><select id="s-uf" name="uf"><option value="">Todas as UFs permitidas</option>{% for estado in ufs %}<option value="{{ estado }}" {{ estado == uf ? 'selected' : '' }}>{{ estado }}</option>{% endfor %}</select></div>
+<button class="s-btn" type="submit">Filtrar</button><a class="s-btn" href="{{ path('saude_index') }}">Limpar</a></form>
+<div class="s-card s-scroll"><table><thead><tr><th>CNES</th><th>Estabelecimento</th><th>Localização</th><th>Situação</th><th>Telefone</th><th>Ação</th></tr></thead><tbody>
+{% for item in itens %}<tr><td>{{ item.cnes }}</td><td>{{ item.dados['NOME FANTASIA'] ?? '—' }}<div class="s-muted">{{ item.dados['TIPO DO ESTABELECIMENTO'] ?? '' }}</div></td><td>{{ item.dados['MUNICÍPIO'] ?? '' }} / {{ item.dados.UF ?? '' }}</td><td><span class="s-badge">{{ item.dados['STATUS DO ESTABELECIMENTO']|default('Não informado', true) }}</span></td><td>{{ item.dados.TELEFONE|default('—', true) }}</td><td><a class="s-btn" href="{{ path('saude_show', {id:item.id}) }}">Detalhes</a></td></tr>
+{% else %}<tr><td colspan="6">Nenhum estabelecimento encontrado para suas UFs e filtros.</td></tr>{% endfor %}</tbody></table></div>
+<nav class="s-header" aria-label="Paginação">{% if pagina > 1 %}<a class="s-btn" href="{{ path('saude_index', {q:q,uf:uf,pagina:pagina-1}) }}">Anterior</a>{% endif %}<span>Página {{ pagina }} de {{ paginas }}</span>{% if pagina < paginas %}<a class="s-btn" href="{{ path('saude_index', {q:q,uf:uf,pagina:pagina+1}) }}">Próxima</a>{% endif %}</nav>
+</div>{% endblock %}

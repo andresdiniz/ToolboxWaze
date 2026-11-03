@@ -45,10 +45,10 @@ except ImportError:
 
 # ── Configuração do banco ───────────────────────────────────────────────────────────────
 DB_CONFIG = dict(
-    host="localhost",
+    host="212.85.3.243",
     port=3306,
     user="u629736858_wazetoolbox",
-    password="SUA_SENHA_AQUI",
+    password="@Ndre2026.",
     database="u629736858_wazetoolbox",
     charset="utf8mb4",
     autocommit=False,

@@ -1,0 +1,492 @@
+<section
+    id="cobertura-verificacao"
+    class="cv-panel"
+    data-ranking-url="{{ path('cobertura_ranking_dados') }}"
+    data-trechos-url="{{ path('cobertura_trechos_dados') }}"
+>
+    <header class="cv-header">
+        <h2>Verificação e contribuições</h2>
+        <p>
+            Consulte vínculos locais, registre sua conferência no WME
+            e acompanhe as primeiras confirmações do mês.
+        </p>
+    </header>
+
+    <div class="cv-toolbar">
+        <button type="button" data-cv-tab="pendentes">
+            Radares prioritários
+        </button>
+
+        <button type="button" data-cv-tab="trechos">
+            Trechos
+        </button>
+
+        <button type="button" data-cv-tab="ranking">
+            Ranking do mês
+        </button>
+    </div>
+
+    <p id="cv-feedback" role="status" aria-live="polite"></p>
+
+    <div data-cv-view="pendentes">
+        <p class="cv-help">
+            Esta lista usa os radares prioritários sem vínculo.
+            Depois de cadastrar o vínculo na tela existente do radar,
+            consulte e confirme abaixo.
+        </p>
+
+        <div class="cv-table-wrap">
+            <table class="cv-table">
+                <thead>
+                    <tr>
+                        <th>Radar</th>
+                        <th>Localização</th>
+                        <th>Conferência</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                {% for radar in semWaze %}
+                    <tr
+                        data-cv-radar
+                        data-consultar="{{ path(
+                            'cobertura_radar_consultar',
+                            {id: radar.id}
+                        ) }}"
+                        data-confirmar="{{ path(
+                            'cobertura_radar_confirmar',
+                            {id: radar.id}
+                        ) }}"
+                        data-token-consulta="{{ csrf_token(
+                            'cobertura_consultar_' ~ radar.id
+                        ) }}"
+                        data-token-confirmacao="{{ csrf_token(
+                            'cobertura_confirmar_' ~ radar.id
+                        ) }}"
+                    >
+                        <td>#{{ radar.id }}</td>
+
+                        <td>
+                            {{ radar.municipio }}
+                            / {{ radar.sigla_uf }}
+                            <small>{{ radar.logradouro }}</small>
+                        </td>
+
+                        <td>
+                            <div class="cv-actions">
+                                <button type="button" data-cv-consultar>
+                                    Consultar vínculo
+                                </button>
+
+                                <button
+                                    type="button"
+                                    data-cv-registrar="confirmado"
+                                >
+                                    Confirmar
+                                </button>
+
+                                <button
+                                    type="button"
+                                    data-cv-registrar="divergente"
+                                >
+                                    Divergência
+                                </button>
+                            </div>
+
+                            <small data-cv-resultado></small>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3">
+                            Nenhum radar prioritário nesta lista.
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div data-cv-view="trechos" hidden>
+        <div id="cv-trechos"></div>
+    </div>
+
+    <div data-cv-view="ranking" hidden>
+        <p class="cv-help">
+            Uma primeira confirmação por radar.
+            Somente confirmações atualmente válidas são contabilizadas.
+        </p>
+        <div id="cv-ranking"></div>
+    </div>
+</section>
+
+<style>
+.cv-panel {
+    --cv-bg: #fff;
+    --cv-alt: #f3f7f8;
+    --cv-text: #21343e;
+    --cv-muted: #586f7b;
+    --cv-line: #d7e2e7;
+    --cv-accent: #01696f;
+
+    margin-top: 28px;
+    padding: 24px;
+    border: 1px solid var(--cv-line);
+    border-radius: 16px;
+    background: var(--cv-bg);
+    color: var(--cv-text);
+}
+
+[data-theme="dark"] .cv-panel {
+    --cv-bg: #17272d;
+    --cv-alt: #102128;
+    --cv-text: #edf5f7;
+    --cv-muted: #b1c6cf;
+    --cv-line: #35505c;
+    --cv-accent: #82dce1;
+}
+
+.cv-panel [hidden] {
+    display: none !important;
+}
+
+.cv-header h2 {
+    margin: 0 0 8px;
+    font-size: 1.3rem;
+}
+
+.cv-header p,
+.cv-help {
+    color: var(--cv-muted);
+    line-height: 1.6;
+}
+
+.cv-toolbar,
+.cv-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cv-toolbar {
+    margin: 20px 0;
+}
+
+.cv-panel button {
+    padding: 9px 13px;
+    border: 1px solid var(--cv-line);
+    border-radius: 8px;
+    background: var(--cv-alt);
+    color: var(--cv-text);
+    font: inherit;
+    font-size: .85rem;
+    cursor: pointer;
+}
+
+.cv-panel button:hover,
+.cv-panel button[aria-pressed="true"] {
+    border-color: var(--cv-accent);
+    color: var(--cv-accent);
+}
+
+.cv-panel button:focus-visible {
+    outline: 3px solid var(--cv-accent);
+    outline-offset: 3px;
+}
+
+.cv-panel button:disabled {
+    opacity: .5;
+    cursor: wait;
+}
+
+.cv-table-wrap {
+    overflow-x: auto;
+}
+
+.cv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .88rem;
+}
+
+.cv-table th,
+.cv-table td {
+    padding: 14px 10px;
+    border-bottom: 1px solid var(--cv-line);
+    text-align: left;
+    vertical-align: top;
+}
+
+.cv-table th {
+    background: var(--cv-alt);
+}
+
+.cv-table small {
+    display: block;
+    margin-top: 7px;
+    color: var(--cv-muted);
+    overflow-wrap: anywhere;
+}
+
+.cv-trecho {
+    margin-bottom: 12px;
+    padding: 16px;
+    border: 1px solid var(--cv-line);
+    border-radius: 10px;
+    background: var(--cv-alt);
+}
+
+.cv-trecho p {
+    margin: 8px 0 0;
+}
+
+#cv-feedback {
+    min-height: 24px;
+    color: var(--cv-accent);
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 576px) {
+    .cv-panel {
+        padding: 15px;
+    }
+
+    .cv-toolbar button {
+        flex: 1 1 100%;
+    }
+
+    .cv-table {
+        min-width: 540px;
+    }
+}
+</style>
+
+<script>
+(() => {
+    const root = document.getElementById('cobertura-verificacao');
+
+    if (!root || root.dataset.initialized) return;
+    root.dataset.initialized = '1';
+
+    const feedback = root.querySelector('#cv-feedback');
+
+    function mensagem(texto) {
+        feedback.textContent = texto;
+    }
+
+    async function requisicao(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            ...options,
+            headers: {
+                Accept: 'application/json',
+                ...options.headers
+            }
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+
+        if (!contentType.includes('application/json')) {
+            throw new Error(
+                `Resposta não JSON (HTTP ${response.status}). ` +
+                'Verifique a sessão e os logs da aplicação.'
+            );
+        }
+
+        const data = await response.json();
+
+        if (!response.ok || data.sucesso === false) {
+            throw new Error(
+                data.message || data.mensagem ||
+                `Falha na operação (HTTP ${response.status}).`
+            );
+        }
+
+        return data.dados;
+    }
+
+    function elemento(tag, texto, classe) {
+        const node = document.createElement(tag);
+        if (texto !== undefined) node.textContent = texto;
+        if (classe) node.className = classe;
+        return node;
+    }
+
+    async function carregarRanking() {
+        const destino = root.querySelector('#cv-ranking');
+        destino.textContent = 'Carregando ranking…';
+
+        try {
+            const dados = await requisicao(root.dataset.rankingUrl);
+            destino.replaceChildren();
+
+            if (!dados.itens.length) {
+                destino.textContent = 'Nenhuma confirmação neste período.';
+                return;
+            }
+
+            const wrapper = elemento('div', undefined, 'cv-table-wrap');
+            const tabela = elemento('table', undefined, 'cv-table');
+            const head = document.createElement('thead');
+            const linha = document.createElement('tr');
+
+            ['Posição', 'Editor', 'Confirmações'].forEach(label => {
+                linha.append(elemento('th', label));
+            });
+
+            head.append(linha);
+            tabela.append(head);
+
+            const body = document.createElement('tbody');
+
+            dados.itens.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.append(
+                    elemento('td', String(item.posicao)),
+                    elemento('td', item.editor),
+                    elemento('td', String(item.confirmacoes))
+                );
+                body.append(tr);
+            });
+
+            tabela.append(body);
+            wrapper.append(tabela);
+            destino.append(wrapper);
+
+            destino.append(elemento(
+                'p',
+                `Exibindo ${dados.itens.length} de ${dados.total} editores.`,
+                'cv-help'
+            ));
+        } catch (error) {
+            destino.textContent = error.message;
+        }
+    }
+
+    async function carregarTrechos() {
+        const destino = root.querySelector('#cv-trechos');
+        destino.textContent = 'Carregando trechos…';
+
+        try {
+            const dados = await requisicao(root.dataset.trechosUrl);
+            destino.replaceChildren();
+
+            if (!dados.itens.length) {
+                destino.textContent = 'Nenhum trecho cadastrado para suas UFs.';
+                return;
+            }
+
+            dados.itens.forEach(item => {
+                const card = elemento('article', undefined, 'cv-trecho');
+
+                card.append(
+                    elemento('h3', `${item.nome} · ${item.uf}`),
+                    elemento(
+                        'p',
+                        `${item.confirmados}/${item.total} confirmados ` +
+                        `(${item.percentual}%) · ` +
+                        `${item.divergentes} divergentes · ` +
+                        `${item.pendentes} pendentes`
+                    )
+                );
+
+                destino.append(card);
+            });
+        } catch (error) {
+            destino.textContent = error.message;
+        }
+    }
+
+    root.querySelectorAll('[data-cv-tab]').forEach(button => {
+        button.addEventListener('click', () => {
+            const aba = button.dataset.cvTab;
+
+            root.querySelectorAll('[data-cv-view]').forEach(view => {
+                view.hidden = view.dataset.cvView !== aba;
+            });
+
+            root.querySelectorAll('[data-cv-tab]').forEach(tab => {
+                tab.setAttribute(
+                    'aria-pressed',
+                    String(tab === button)
+                );
+            });
+
+            if (aba === 'ranking') carregarRanking();
+            if (aba === 'trechos') carregarTrechos();
+        });
+    });
+
+    root.querySelector('[data-cv-tab="pendentes"]')
+        .setAttribute('aria-pressed', 'true');
+
+    root.querySelectorAll('[data-cv-radar]').forEach(row => {
+        row.addEventListener('click', async event => {
+            const button = event.target.closest('button');
+            if (!button) return;
+
+            const saida = row.querySelector('[data-cv-resultado]');
+            const consultar = button.hasAttribute('data-cv-consultar');
+            const resultado = button.dataset.cvRegistrar;
+
+            if (!consultar && !resultado) return;
+
+            let observacao = '';
+
+            if (!consultar) {
+                if (resultado === 'confirmado') {
+                    if (!window.confirm(
+                        'Você conferiu o objeto no WME e confirma ' +
+                        'que corresponde a este radar?'
+                    )) return;
+                }
+
+                const texto = window.prompt(
+                    resultado === 'divergente'
+                        ? 'Descreva a divergência encontrada:'
+                        : 'Observação da conferência (opcional):',
+                    ''
+                );
+
+                if (texto === null) return;
+                observacao = texto.trim();
+
+                if (resultado === 'divergente' && !observacao) {
+                    mensagem('Descreva a divergência antes de registrar.');
+                    return;
+                }
+            }
+
+            button.disabled = true;
+            saida.textContent = 'Processando…';
+
+            try {
+                const dados = await requisicao(
+                    consultar ? row.dataset.consultar : row.dataset.confirmar,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': consultar
+                                ? row.dataset.tokenConsulta
+                                : row.dataset.tokenConfirmacao
+                        },
+                        body: JSON.stringify(
+                            consultar ? {} : { resultado, observacao }
+                        )
+                    }
+                );
+
+                saida.textContent = dados.mensagem;
+                mensagem(dados.mensagem);
+            } catch (error) {
+                saida.textContent = error.message;
+                mensagem(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+})();
+</script>

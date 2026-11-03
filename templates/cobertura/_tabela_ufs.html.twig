@@ -1,0 +1,119 @@
+<section class="cov-section">
+    <header class="cov-section-header">
+        <div>
+            <h2>Cobertura por estado</h2>
+            <p>
+                Percentual de registros com vínculo Waze cadastrado.
+                Selecione uma UF para abrir a listagem.
+            </p>
+        </div>
+
+        <span class="cov-count">
+            {{ porUf|length }} UF(s)
+        </span>
+    </header>
+
+    <div class="cov-table-wrap">
+        <table class="cov-table">
+            <caption class="visually-hidden">
+                Cobertura de vínculos Waze por estado
+            </caption>
+
+            <thead>
+                <tr>
+                    <th scope="col">Estado</th>
+                    <th scope="col" class="cov-number">Total</th>
+                    <th scope="col" class="cov-number">Com vínculo</th>
+                    <th scope="col" class="cov-number">Sem vínculo</th>
+                    <th scope="col">Cobertura</th>
+                </tr>
+            </thead>
+
+            <tbody>
+            {% for r in porUf %}
+                {% set pctOriginal = r.pct|default(0) %}
+                {% set pct = pctOriginal < 0
+                    ? 0
+                    : (pctOriginal > 100 ? 100 : pctOriginal) %}
+
+                {% set status = pct < 25
+                    ? 'critical'
+                    : (pct < 75 ? 'partial' : 'good') %}
+
+                {% set statusLabel = pct < 25
+                    ? 'Crítica'
+                    : (pct < 75 ? 'Parcial' : 'Boa') %}
+
+                <tr>
+                    <td>
+                        {% if r.uf %}
+                            <a
+                                href="{{ path(rotaLista, {uf: r.uf}) }}"
+                                aria-label="Ver registros de {{ r.uf }}"
+                            >
+                                <span class="cov-uf">{{ r.uf }}</span>
+                            </a>
+                        {% else %}
+                            <span class="cov-secondary">Sem UF</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="cov-number">
+                        {{ r.total|default(0)|number_format(0, ',', '.') }}
+                    </td>
+
+                    <td class="cov-number cov-good">
+                        {{ r.com_waze|default(0)|number_format(0, ',', '.') }}
+                    </td>
+
+                    <td class="cov-number cov-bad">
+                        {{ r.sem_waze|default(0)|number_format(0, ',', '.') }}
+                    </td>
+
+                    <td class="cov-progress-cell">
+                        <div class="cov-progress-meta">
+                            <span class="cov-status {{ status }}">
+                                {{ statusLabel }}
+                            </span>
+
+                            <span>
+                                {{ pct|number_format(1, ',', '.') }}%
+                            </span>
+                        </div>
+
+                        <div
+                            class="cov-progress {{ status }}"
+                            role="progressbar"
+                            aria-label="Cobertura de {{ r.uf|default('UF não informada') }}"
+                            aria-valuenow="{{ pct }}"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                        >
+                            <span style="width: {{ pct }}%"></span>
+                        </div>
+                    </td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="5">
+                        <div class="cov-empty">
+                            <i class="bi bi-map" aria-hidden="true"></i>
+                            <p>
+                                Nenhum dado de cobertura disponível
+                                para seu escopo de acesso.
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <footer class="cov-footer">
+        Crítica: abaixo de 25%.
+        Parcial: de 25% a menos de 75%.
+        Boa: a partir de 75%.
+        Vínculo cadastrado não equivale a verificação do objeto no Waze.
+    </footer>
+</section>

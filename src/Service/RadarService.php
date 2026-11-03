@@ -72,6 +72,100 @@ final class RadarService
         });
     }
 
+    /**
+     * Normaliza datas vindas do banco para formatos previsíveis usados nos templates.
+     *
+     * - data_validade               => d/m/Y (exibição)
+     * - data_validade_iso           => Y-m-d (comparação)
+     * - data_ultima_verificacao     => d/m/Y (exibição)
+     * - data_verificacao_efetiva    => d/m/Y (exibição)
+     */
+    private function normalizeRadarRow(array $row): array
+    {
+        $dateFields = [
+            'data_validade',
+            'data_ultima_verificacao',
+            'data_verificacao_efetiva',
+        ];
+
+        foreach ($dateFields as $field) {
+            if (!array_key_exists($field, $row) || $row[$field] === null || $row[$field] === '') {
+                $row[$field] = null;
+                continue;
+            }
+
+            $row[$field] = $this->normalizeDisplayDate($row[$field]);
+        }
+
+        if (!array_key_exists('data_validade_iso', $row) || $row['data_validade_iso'] === null || $row['data_validade_iso'] === '') {
+            $row['data_validade_iso'] = null;
+        } else {
+            $row['data_validade_iso'] = $this->normalizeIsoDate($row['data_validade_iso']);
+        }
+
+        return $row;
+    }
+
+    /**
+     * Converte DateTimeInterface, Y-m-d ou d/m/Y para d/m/Y.
+     */
+    private function normalizeDisplayDate(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('d/m/Y');
+        }
+
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $value)) {
+            $date = \DateTimeImmutable::createFromFormat('Y-m-d', $value);
+
+            return $date ? $date->format('d/m/Y') : $value;
+        }
+
+        if (preg_match('#^\d{2}/\d{2}/\d{4}$#', $value)) {
+            return $value;
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $value);
+
+        return $date ? $date->format('d/m/Y') : $value;
+    }
+
+    /**
+     * Converte DateTimeInterface, Y-m-d ou d/m/Y para Y-m-d.
+     */
+    private function normalizeIsoDate(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $value)) {
+            return $value;
+        }
+
+        if (preg_match('#^\d{2}/\d{2}/\d{4}$#', $value)) {
+            $date = \DateTimeImmutable::createFromFormat('d/m/Y', $value);
+
+            return $date ? $date->format('Y-m-d') : null;
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $value);
+
+        return $date ? $date->format('Y-m-d') : null;
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // Leitura
     // ───────────────────────────────────────────────────────────────────────
@@ -89,7 +183,7 @@ final class RadarService
             throw new \RuntimeException("Radar #{$id} não encontrado.", 404);
         }
 
-        return $radar;
+        return $this->normalizeRadarRow($radar);
     }
 
     /**
@@ -234,7 +328,8 @@ final class RadarService
                 $params[] = $hoje;
             })(),
             'recentes30' => (function () use (&$where, &$params, $ha30, $hoje) {
-                $where[]  = 'r.data_verificacao_efetiva >= ? AND r.data_verificacao_efetiva <= ?';
+                $where[]  = "STR_TO_DATE(r.data_verificacao_efetiva, '%d/%m/%Y') >= ?
+                             AND STR_TO_DATE(r.data_verificacao_efetiva, '%d/%m/%Y') <= ?";
                 $params[] = $ha30;
                 $params[] = $hoje;
             })(),
@@ -253,7 +348,14 @@ final class RadarService
 
         $countQuery = "SELECT COUNT(*) FROM radar_medidor r WHERE $wc";
 
-        return $this->paginator->paginate($dataQuery, $countQuery, $params, $page, $perPage);
+        $paginated = $this->paginator->paginate($dataQuery, $countQuery, $params, $page, $perPage);
+
+        $paginated['rows'] = array_map(
+            fn(array $row): array => $this->normalizeRadarRow($row),
+            $paginated['rows']
+        );
+
+        return $paginated;
     }
 
     /**
@@ -423,7 +525,6 @@ final class RadarService
      */
     private function hasTableColumn(string $table, string $column): bool
     {
-        // Os nomes usados aqui são constantes internas do service.
         return (bool) $this->db->fetchOne(
             'SELECT COUNT(*) FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE()
@@ -470,7 +571,6 @@ final class RadarService
                 'changed_at'         => $agora,
             ];
 
-            // As colunas de histórico também podem não existir em instalações antigas.
             if (
                 $this->hasTableColumn('radar_waze_link_log', 'hazard_id_anterior')
                 && $this->hasTableColumn('radar_waze_link_log', 'hazard_id_novo')

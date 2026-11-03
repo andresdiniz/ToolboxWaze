@@ -19,6 +19,7 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
+            - '../src/Controller/SaudeController (1).php'
 
     App\Security\AppAuthenticator:
         autowire: true

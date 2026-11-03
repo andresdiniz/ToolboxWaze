@@ -1,10 +1,10 @@
-{% extends 'base.html.twig' %}
-{% block title %}Editar {{ registro.nome }}{% endblock %}
-{% block stylesheets %}{{ parent() }}{% include 'saude/_estilos.html.twig' %}{% endblock %}
-{% block body %}<div class="saude-page"><header class="s-header"><div><h1>Editar estabelecimento</h1><p class="s-muted">CNES {{ registro.cnes }} · Correções manuais não substituem o arquivo original.</p></div></header>
-{% if erros %}<div class="s-card" role="alert"><ul>{% for erro in erros %}<li class="s-error">{{ erro }}</li>{% endfor %}</ul></div>{% endif %}
-<form method="post" action="{{ path('saude_edit', {id:registro.id}) }}" class="s-card">
-<input type="hidden" name="_token" value="{{ csrf_token('saude_edit_' ~ registro.id) }}"><input type="hidden" name="versao" value="{{ registro.versao }}">
-<div class="s-fields">{% for campo, valor in dados %}<div><label for="s-field-{{ loop.index }}">{{ campo }}</label>{% if campo in bloqueados %}<input id="s-field-{{ loop.index }}" value="{{ valor }}" disabled>{% else %}<textarea id="s-field-{{ loop.index }}" name="campos[{{ campo }}]" maxlength="10000">{{ valor }}</textarea>{% endif %}<div class="s-original">Original: {{ registro.dadosOriginais[campo]|default('Não informado', true) }}</div></div>{% endfor %}</div>
-<p class="s-muted mt-3">Datas: DD/MM/AAAA. Location: latitude e longitude separadas por espaço. Para remover uma correção, copie o valor original no campo; quando o original estiver vazio, deixe vazio.</p>
-<button type="submit" class="s-btn">Salvar alterações</button> <a class="s-btn" href="{{ path('saude_show', {id:registro.id}) }}">Cancelar</a></form></div>{% endblock %}
+{% extends 'saude/layout.html.twig' %}
+{% block title %}Editar {{ item.nomeFantasia ?: item.cnes }} — Saúde{% endblock %}
+{% block body %}<div class="saude-page"><header class="s-header"><div><h1>Editar estabelecimento</h1><p class="text-muted">CNES {{ item.cnes }} · {{ item.uf }}. Identidade e andamento não são alterados neste formulário.</p></div></header>
+<div class="alert alert-info small">Edição administrativa dos campos existentes. Não há histórico de valores originais neste modelo; uma futura importação pode atualizar estes dados.</div>
+{% if errors %}<div class="alert alert-danger" role="alert"><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+<form method="post" action="{{ path('saude_edit',{id:item.id}) }}" class="s-card"><input type="hidden" name="_token" value="{{ csrf_token('saude_edit_' ~ item.id) }}"><input type="hidden" name="revision" value="{{ revision }}">
+<div class="s-grid">{% for key,label in {nomeFantasia:'Nome fantasia',municipio:'Município',logradouro:'Endereço',telefone:'Telefone',latitude:'Latitude',longitude:'Longitude',linkWaze:'Link Waze'} %}<div><label for="edit-{{ key }}">{{ label }}</label><input id="edit-{{ key }}" name="{{ key }}" class="form-control" type="{{ key == 'linkWaze' ? 'url' : 'text' }}" value="{{ values[key] }}" {% if key == 'nomeFantasia' %}required maxlength="255"{% elseif key == 'municipio' %}maxlength="255"{% elseif key == 'logradouro' %}maxlength="500"{% elseif key == 'telefone' %}maxlength="50"{% elseif key == 'linkWaze' %}maxlength="1000"{% else %}inputmode="decimal" aria-describedby="coords-help"{% endif %}></div>{% endfor %}
+<div><label for="edit-ativo">Situação no CNES</label><select id="edit-ativo" name="ativo" class="form-select"><option value="1" {{ values.ativo == '1' ? 'selected' : '' }}>Ativo</option><option value="0" {{ values.ativo == '0' ? 'selected' : '' }}>Inativo</option></select></div></div>
+<p id="coords-help" class="text-muted small mt-3">Coordenadas em graus decimais com ponto. Informe ambas ou deixe ambas vazias. Zero é tratado como coordenada ausente neste módulo.</p>
+<div class="s-actions"><button class="btn btn-primary">Salvar alterações</button><a class="btn btn-outline-secondary" href="{{ path('saude_show',{id:item.id}) }}">Cancelar</a></div></form></div>{% endblock %}

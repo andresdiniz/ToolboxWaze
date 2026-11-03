@@ -1,0 +1,3 @@
+{% set labels = {reservado:'Reservado',confirmado:'Confirmado',nao_localizado:'Não localizado',pulado:'Pulado'} %}
+{% set colors = {reservado:'bg-info text-dark',confirmado:'bg-success',nao_localizado:'bg-warning text-dark',pulado:'bg-secondary'} %}
+<span class="badge {{ colors[status|default('')] ?? 'bg-secondary' }}">{{ labels[status|default('')] ?? 'Pendente' }}</span>

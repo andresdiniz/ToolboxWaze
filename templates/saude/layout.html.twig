@@ -1,0 +1,7 @@
+{% extends 'base.html.twig' %}
+{% block stylesheets %}{{ parent() }}{% include 'saude/_estilos.html.twig' %}{% endblock %}
+{% block javascripts %}
+{{ parent() }}
+{% block saude_map_scripts %}{% endblock %}
+<script src="{{ asset('js/saude.js') }}" defer></script>
+{% endblock %}

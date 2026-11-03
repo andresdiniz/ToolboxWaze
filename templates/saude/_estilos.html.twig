@@ -1,19 +1,4 @@
 <style>
-.saude-page{--s-bg:#fff;--s-alt:#f3f7f8;--s-line:#dae3e7;--s-text:#243843;--s-muted:#586c78;--s-accent:#01696f;color:var(--s-text)}
-[data-theme="dark"] .saude-page{--s-bg:#17282f;--s-alt:#102128;--s-line:#354d58;--s-text:#edf5f8;--s-muted:#b3c5ce;--s-accent:#83dce1}
-.saude-page .s-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;margin:20px 0}
-.saude-page h1{font-size:1.7rem;color:var(--s-text)}.saude-page h2{font-size:1.1rem}
-.saude-page .s-muted{color:var(--s-muted)}.saude-page .s-card{background:var(--s-bg);border:1px solid var(--s-line);border-radius:14px;padding:20px;margin-bottom:20px}
-.saude-page .s-scroll{overflow-x:auto}.saude-page table{width:100%;border-collapse:collapse;color:var(--s-text)}
-.saude-page th,.saude-page td{padding:13px;border-bottom:1px solid var(--s-line);text-align:left;vertical-align:top;overflow-wrap:anywhere}
-.saude-page th{background:var(--s-alt)}.saude-page a{color:var(--s-accent)}
-.saude-page .s-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
-.saude-page label{display:block;font-size:.85rem;font-weight:600;margin-bottom:7px}
-.saude-page input,.saude-page textarea,.saude-page select{width:100%;padding:10px;border:1px solid var(--s-line);border-radius:8px;background:var(--s-alt);color:var(--s-text)}
-.saude-page textarea{min-height:85px;resize:vertical}.saude-page input:focus,.saude-page textarea:focus{outline:2px solid var(--s-accent);outline-offset:2px}
-.saude-page .s-btn{display:inline-block;background:var(--s-alt);color:var(--s-accent);border:1px solid var(--s-line);border-radius:8px;padding:9px 14px;text-decoration:none;font:inherit;cursor:pointer}
-.saude-page .s-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end}.saude-page .s-filters>div{flex:1;min-width:130px}
-.saude-page .s-badge{display:inline-block;background:var(--s-alt);padding:4px 8px;border-radius:6px;font-size:.8rem}
-.saude-page .s-original{font-size:.78rem;color:var(--s-muted);margin-top:6px;white-space:pre-wrap}.saude-page .s-error{color:#ef8497}
-@media(max-width:650px){.saude-page .s-fields{grid-template-columns:1fr}.saude-page .s-card{padding:14px}.saude-page th,.saude-page td{padding:10px}}
+.saude-page{color:var(--color-text);overflow-wrap:anywhere}.saude-page .s-header{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}.saude-page h1{font-size:1.5rem;margin:0}.saude-page h2{font-size:1rem}.saude-page .s-card{background:var(--color-surface,#fff);border:1px solid var(--color-border,#dae3e7);border-radius:12px;padding:1rem;margin-bottom:1rem}.saude-page .s-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.saude-page label{font-size:.85rem;font-weight:600}.saude-page .s-actions{display:flex;gap:.5rem;flex-wrap:wrap}.saude-page .s-actions a,.saude-page .s-actions button{font-size:.85rem}.saude-page #saude-map{height:300px;border-radius:8px;z-index:0}.saude-page dt{font-weight:500;font-size:.85rem;color:var(--color-text-muted,#657580)}.saude-page dd{margin-bottom:.9rem}.saude-page .s-metadata{font-size:.85rem}.saude-page code{overflow-wrap:anywhere}.saude-page .s-filter-tags{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}.saude-page .s-filter-tags a{border:1px solid var(--color-border,#dae3e7);border-radius:6px;padding:.25rem .5rem;text-decoration:none}.saude-page .s-table th{white-space:nowrap}.saude-page .s-table td{vertical-align:middle}.saude-page .s-table .s-name{min-width:190px}.saude-page .s-table .s-address{max-width:240px}.saude-page input:focus-visible,.saude-page select:focus-visible,.saude-page a:focus-visible,.saude-page button:focus-visible{outline:2px solid var(--tw,#01696f);outline-offset:3px}
+@media(max-width:767px){.saude-page .s-grid{grid-template-columns:1fr}.saude-page .s-table thead{display:none}.saude-page .s-table,.saude-page .s-table tbody{display:block}.saude-page .s-table tr{display:block;border:1px solid var(--color-border,#dae3e7);border-radius:10px;padding:.5rem;margin-bottom:1rem}.saude-page .s-table td{display:grid;grid-template-columns:100px minmax(0,1fr);gap:.5rem;border:0!important;max-width:none!important;min-width:0!important}.saude-page .s-table td:before{content:attr(data-label);font-weight:600}.saude-page .s-table td[colspan]{display:block}}
 </style>

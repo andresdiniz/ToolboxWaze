@@ -7,7 +7,9 @@ namespace App\Controller;
 use App\Controller\Trait\AccessControlTrait;
 use App\Entity\EstabelecimentoSaude;
 use App\Entity\User;
+use App\Service\SaudeReservaService;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -24,224 +26,213 @@ class SaudeController extends AbstractController
 {
     use AccessControlTrait;
 
-    private const PER_PAGE    = 50;
-    private const CACHE_TTL   = 3600; // 1 h — listas de filtros
-    private const CACHE_STATS = 300;  // 5 min — stats e COUNT global
-    private const CACHE_COUNT = 60;   // 1 min — COUNT com filtros ativos
+    private const PER_PAGE = 50;
+    private const COORD_SQL = '(e.latitude IS NOT NULL AND e.longitude IS NOT NULL AND e.latitude <> 0 AND e.longitude <> 0 AND e.latitude BETWEEN -90 AND 90 AND e.longitude BETWEEN -180 AND 180)';
 
     public function __construct(
         private readonly Connection $db,
         private readonly EntityManagerInterface $em,
         #[Autowire(service: 'cache.app')]
         private readonly CacheInterface $cache,
-    ) {
-    }
+    ) {}
 
     #[Route('', name: 'saude_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
         $this->requirePermission(User::PERMISSION_SAUDE);
-
-        $page      = max(1, (int) $request->query->get('page', 1));
-        $busca     = trim((string) $request->query->get('busca', ''));
-        $uf        = trim((string) $request->query->get('uf', ''));
-        $municipio = trim((string) $request->query->get('municipio', ''));
-        $situacao  = trim((string) $request->query->get('situacao', ''));
-        $fluxo     = trim((string) $request->query->get('fluxo', ''));
-
-        $request->getSession()->set('saude_filtros', [
-            'busca'     => $busca,
-            'uf'        => $uf,
-            'municipio' => $municipio,
-            'situacao'  => $situacao,
-            'fluxo'     => $fluxo,
-            'page'      => $page,
-        ]);
-
-        $where  = ['1=1'];
-        $params = [];
-
-        $ufRestriction = $this->enforceUfsOnQuery('e.uf');
-        if ($ufRestriction['clause'] !== '') {
-            $where[] = $ufRestriction['clause'];
-            $params  = array_merge($params, $ufRestriction['params']);
+        $filters = [];
+        foreach (['busca', 'uf', 'municipio', 'situacao', 'fluxo', 'link', 'coordenadas'] as $key) {
+            $filters[$key] = trim($request->query->getString($key));
         }
-
-        if ($busca !== '') {
-            $where[]  = '(e.nome_fantasia LIKE ? OR e.cnes LIKE ? OR e.municipio LIKE ? OR e.logradouro LIKE ?)';
-            $params[] = "%$busca%";
-            $params[] = "%$busca%";
-            $params[] = "%$busca%";
-            $params[] = "%$busca%";
+        $filters['busca'] = $filters['busca'] ?: trim($request->query->getString('q'));
+        $filters['uf'] = strtoupper($filters['uf']);
+        // Compatibilidade com URLs dos filtros anteriores.
+        if (in_array($filters['situacao'], ['com_link', 'sem_link'], true)) {
+            $filters['link'] = $filters['link'] ?: $filters['situacao'];
+            $filters['situacao'] = '';
+        } elseif ($filters['situacao'] === 'sem_coord') {
+            $filters['coordenadas'] = $filters['coordenadas'] ?: 'sem_coord';
+            $filters['situacao'] = '';
         }
-        if ($uf !== '') {
-            $this->requireUfAccess($uf);
-            $where[]  = 'e.uf = ?';
-            $params[] = $uf;
+        foreach (['situacao' => ['ativo', 'inativo'], 'fluxo' => array_merge(['pendente'], EstabelecimentoSaude::ALL_STATUS), 'link' => ['com_link', 'sem_link'], 'coordenadas' => ['com_coord', 'sem_coord']] as $key => $valid) {
+            if ($filters[$key] !== '' && !in_array($filters[$key], $valid, true)) $filters[$key] = '';
         }
-        if ($municipio !== '') {
-            $where[]  = 'e.municipio LIKE ?';
-            $params[] = "%$municipio%";
+        if ($filters['uf'] !== '') {
+            if (!in_array($filters['uf'], User::ALL_UFS, true)) throw $this->createNotFoundException('UF inválida.');
+            $this->requireUfAccess($filters['uf']);
         }
-
-        match ($situacao) {
-            'ativo'    => ($where[] = 'e.ativo = 1'),
-            'inativo'  => ($where[] = 'e.ativo = 0'),
-            'sem_link' => ($where[] = "(e.link_waze IS NULL OR e.link_waze = '')"),
-            'com_link' => ($where[] = "(e.link_waze IS NOT NULL AND e.link_waze != '')"),
-            'sem_coord' => ($where[] = '(e.latitude IS NULL OR e.longitude IS NULL)'),
-            default    => null,
-        };
-
-        if ($fluxo === 'pendente') {
-            $where[] = 'e.status IS NULL';
-        } elseif (in_array($fluxo, EstabelecimentoSaude::ALL_STATUS, true)) {
-            $where[]  = 'e.status = ?';
-            $params[] = $fluxo;
+        $restriction = $this->enforceUfsOnQuery('e.uf');
+        $where = [$restriction['clause'] ?: '1=1'];
+        $params = $restriction['params'];
+        if ($filters['busca'] !== '') {
+            $where[] = '(e.nome_fantasia LIKE ? OR e.cnes LIKE ? OR e.municipio LIKE ? OR e.logradouro LIKE ?)';
+            array_push($params, ...array_fill(0, 4, '%' . $filters['busca'] . '%'));
         }
-
-        $whereClause = implode(' AND ', $where);
-        $hasFilters  = ($busca !== '' || $uf !== '' || $municipio !== '' || $situacao !== '' || $fluxo !== '');
-
-        $countCacheKey = $hasFilters
-            ? 'saude_count_' . md5($whereClause . serialize($params))
-            : 'saude_count_global';
-        $countTtl = $hasFilters ? self::CACHE_COUNT : self::CACHE_STATS;
-
-        $total = (int) $this->cache->get($countCacheKey, function (ItemInterface $item) use ($whereClause, $params, $countTtl): int {
-            $item->expiresAfter($countTtl);
-
-            return (int) $this->db->fetchOne("SELECT COUNT(*) FROM estabelecimento_saude e WHERE $whereClause", $params);
-        });
-
-        $pages  = max(1, (int) ceil($total / self::PER_PAGE));
-        $page   = min($page, $pages);
-        $offset = (int) (($page - 1) * self::PER_PAGE);
-        $limit  = (int) self::PER_PAGE;
-
-        $rows = $this->db->fetchAllAssociative(
-            "SELECT e.id, e.cnes, e.nome_fantasia, e.ativo, e.uf, e.municipio, e.logradouro,
-                    e.telefone, e.latitude, e.longitude, e.link_waze, e.status, e.reservado_para
-             FROM estabelecimento_saude e
-             WHERE $whereClause
-             ORDER BY e.nome_fantasia
-             LIMIT {$offset}, {$limit}",
-            $params
-        );
-
-        $allowedUfs = $this->allowedUfsForView();
-
-        $stats = null;
-        if (!$hasFilters && $allowedUfs === null) {
-            $stats = $this->cache->get('saude_stats_global', function (ItemInterface $item): array|false {
-                $item->expiresAfter(self::CACHE_STATS);
-
-                return $this->db->fetchAssociative(
-                    'SELECT COUNT(*)                                  AS total,
-                            COALESCE(SUM(e.ativo = 1), 0)             AS ativos,
-                            COUNT(DISTINCT e.uf)                      AS estados,
-                            COUNT(DISTINCT CONCAT(e.uf, e.municipio)) AS municipios
-                     FROM estabelecimento_saude e'
-                );
-            }) ?: null;
-        }
-
-        $ufsCacheKey = $allowedUfs !== null
-            ? 'saude_ufs_' . md5(implode(',', $allowedUfs))
-            : 'saude_ufs_all';
-
-        $ufs = $this->cache->get($ufsCacheKey, function (ItemInterface $item) use ($allowedUfs): array {
-            $item->expiresAfter(self::CACHE_TTL);
-
-            if ($allowedUfs !== null) {
-                if ($allowedUfs === []) {
-                    return [];
-                }
-
-                $ph = implode(',', array_fill(0, count($allowedUfs), '?'));
-
-                return array_column($this->db->fetchAllAssociative(
-                    "SELECT DISTINCT uf FROM estabelecimento_saude WHERE uf IS NOT NULL AND uf IN ($ph) ORDER BY uf",
-                    $allowedUfs
-                ), 'uf');
+        foreach (['uf', 'municipio'] as $key) {
+            if ($filters[$key] !== '') {
+                $where[] = $key === 'uf' ? 'e.uf = ?' : 'e.municipio LIKE ?';
+                $params[] = $key === 'uf' ? $filters[$key] : '%' . $filters[$key] . '%';
             }
-
-            return array_column($this->db->fetchAllAssociative(
-                'SELECT DISTINCT uf FROM estabelecimento_saude WHERE uf IS NOT NULL ORDER BY uf'
-            ), 'uf');
+        }
+        if ($filters['situacao'] !== '') $where[] = 'e.ativo = ' . ($filters['situacao'] === 'ativo' ? '1' : '0');
+        if ($filters['link'] === 'sem_link') $where[] = "(e.link_waze IS NULL OR TRIM(e.link_waze) = '')";
+        if ($filters['link'] === 'com_link') $where[] = "(e.link_waze IS NOT NULL AND TRIM(e.link_waze) <> '')";
+        if ($filters['coordenadas'] === 'com_coord') $where[] = self::COORD_SQL;
+        if ($filters['coordenadas'] === 'sem_coord') $where[] = 'NOT ' . self::COORD_SQL;
+        if ($filters['fluxo'] === 'pendente') $where[] = 'e.status IS NULL';
+        elseif ($filters['fluxo'] !== '') { $where[] = 'e.status = ?'; $params[] = $filters['fluxo']; }
+        $sql = implode(' AND ', $where);
+        $total = (int) $this->cache->get('saude_count_v2_' . hash('sha256', $sql . serialize($params)), function (ItemInterface $entry) use ($sql, $params): int {
+            $entry->expiresAfter(60);
+            return (int) $this->db->fetchOne("SELECT COUNT(*) FROM estabelecimento_saude e WHERE $sql", $params);
         });
-
-        return $this->render('saude/index.html.twig', [
-            'rows'       => $rows,
-            'page'       => $page,
-            'pages'      => $pages,
-            'total'      => $total,
-            'perPage'    => self::PER_PAGE,
-            'stats'      => $stats,
-            'ufs'        => $ufs,
-            'allowedUfs' => $allowedUfs,
-            'filters'    => [
-                'busca'     => $busca,
-                'uf'        => $uf,
-                'municipio' => $municipio,
-                'situacao'  => $situacao,
-                'fluxo'     => $fluxo,
-            ],
-        ]);
+        $pages = max(1, (int) ceil($total / self::PER_PAGE));
+        $page = min($pages, max(1, $request->query->getInt('page', $request->query->getInt('pagina', 1))));
+        $offset = ($page - 1) * self::PER_PAGE;
+        $rows = $this->db->fetchAllAssociative("SELECT e.* FROM estabelecimento_saude e WHERE $sql ORDER BY e.nome_fantasia, e.id LIMIT " . self::PER_PAGE . " OFFSET $offset", $params);
+        foreach ($rows as &$row) $row['has_coords'] = $this->coords($row['latitude'], $row['longitude']) !== null;
+        unset($row);
+        $allowedUfs = $this->allowedUfsForView();
+        $ufs = $this->cache->get('saude_ufs_v2_' . hash('sha256', serialize($allowedUfs)), function (ItemInterface $entry) use ($allowedUfs): array {
+            $entry->expiresAfter(3600);
+            if ($allowedUfs === []) return [];
+            $params = $allowedUfs ?? [];
+            $sql = 'SELECT DISTINCT uf FROM estabelecimento_saude WHERE uf IS NOT NULL';
+            if ($allowedUfs !== null) $sql .= ' AND uf IN (' . implode(',', array_fill(0, count($params), '?')) . ')';
+            return array_column($this->db->fetchAllAssociative($sql . ' ORDER BY uf', $params), 'uf');
+        });
+        $stats = null;
+        if (array_filter($filters, static fn(string $v): bool => $v !== '') === [] && $allowedUfs === null) {
+            $stats = $this->cache->get('saude_stats_global', function (ItemInterface $entry): array {
+                $entry->expiresAfter(300);
+                return $this->db->fetchAssociative('SELECT COUNT(*) AS total, COALESCE(SUM(ativo = 1), 0) AS ativos, COUNT(DISTINCT uf) AS estados, COUNT(DISTINCT uf, municipio) AS municipios FROM estabelecimento_saude') ?: [];
+            });
+        }
+        $request->getSession()->set('saude_filtros', $filters + ['page' => $page]);
+        return $this->render('saude/index.html.twig', compact('rows', 'filters', 'total', 'pages', 'page', 'ufs', 'allowedUfs', 'stats') + ['perPage' => self::PER_PAGE]);
     }
 
     #[Route('/{id}', name: 'saude_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_SAUDE);
-
-        $item = $this->em->find(EstabelecimentoSaude::class, $id);
-
-        if (!$item instanceof EstabelecimentoSaude) {
-            throw $this->createNotFoundException("Estabelecimento #{$id} não encontrado.");
-        }
-
-        $this->requireUfAccess($item->getUf());
-
-        return $this->render('saude/show.html.twig', [
-            'item'         => $item,
-            'voltarParams' => $request->getSession()->get('saude_filtros', []),
-        ]);
+        return $this->detail($this->load($id), $request);
     }
 
     #[Route('/{id}/link', name: 'saude_link_save', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function linkSave(int $id, Request $request): Response
     {
-        $this->requirePermission(User::PERMISSION_SAUDE);
-
-        $item = $this->em->find(EstabelecimentoSaude::class, $id);
-
-        if (!$item instanceof EstabelecimentoSaude) {
-            throw $this->createNotFoundException();
-        }
-
-        $this->requireUfAccess($item->getUf());
-
-        $link = trim((string) $request->request->get('link_waze', '')) ?: null;
-
-        if ($link !== null && (filter_var($link, FILTER_VALIDATE_URL) === false
-            || !preg_match('/^https?:\/\/([a-z0-9-]+\.)?waze\.com\//i', $link))) {
-            $this->addFlash('warning', 'O link deve ser uma URL válida do Waze.');
-
-            return $this->redirectToRoute('saude_show', ['id' => $id]);
-        }
-
+        $item = $this->load($id);
+        $this->checkToken($request, 'saude_link_' . $id);
+        $link = trim($request->request->getString('link_waze')) ?: null;
+        if (!$this->validLink($link)) return $this->detail($item, $request, $link, ['Informe uma URL Waze válida com até 1.000 caracteres.'], 422);
         if ($link !== $item->getLinkWaze()) {
-            $item->setLinkWaze($link);
-            $item->setUpdatedAt(new \DateTimeImmutable());
+            $item->setLinkWaze($link)->setUpdatedAt(new \DateTimeImmutable());
             $this->em->flush();
-
             $this->cache->delete('saude_stats_global');
-            $this->cache->delete('saude_count_global');
         }
-
         $this->addFlash('success', 'Link atualizado com sucesso.');
-
         return $this->redirectToRoute('saude_show', ['id' => $id]);
+    }
+
+    #[Route('/{id}/editar', name: 'saude_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function edit(int $id, Request $request): Response
+    {
+        $item = $this->load($id);
+        $values = $this->values($item);
+        $revision = $this->revision($item);
+        $errors = [];
+        $responseCode = 200;
+        if ($request->isMethod('POST')) {
+            $this->checkToken($request, 'saude_edit_' . $id);
+            foreach (array_keys($values) as $key) $values[$key] = trim($request->request->getString($key));
+            foreach (['nomeFantasia' => 255, 'municipio' => 255, 'logradouro' => 500, 'telefone' => 50, 'linkWaze' => 1000] as $key => $max) {
+                if (mb_strlen($values[$key]) > $max) $errors[] = $key . ': tamanho máximo ' . $max . '.';
+            }
+            if ($values['nomeFantasia'] === '') $errors[] = 'Informe o nome fantasia.';
+            if (!in_array($values['ativo'], ['0', '1'], true)) $errors[] = 'Situação CNES inválida.';
+            if (!$this->validLink($values['linkWaze'] ?: null)) $errors[] = 'Informe uma URL válida do Waze.';
+            $bothEmpty = $values['latitude'] === '' && $values['longitude'] === '';
+            if (!$bothEmpty && $this->coords($values['latitude'], $values['longitude']) === null) $errors[] = 'Informe ambas as coordenadas válidas e diferentes de zero, ou deixe ambas vazias.';
+            if ($errors === []) {
+                $saved = $this->em->wrapInTransaction(function () use ($item, $request, $values, $bothEmpty): bool {
+                    $this->em->refresh($item, LockMode::PESSIMISTIC_WRITE);
+                    if (!hash_equals($this->revision($item), $request->request->getString('revision'))) return false;
+                    $item->setNomeFantasia($values['nomeFantasia'])->setMunicipio($values['municipio'] ?: null)
+                        ->setLogradouro($values['logradouro'] ?: null)->setTelefone($values['telefone'] ?: null)
+                        ->setLinkWaze($values['linkWaze'] ?: null)->setAtivo($values['ativo'] === '1')
+                        ->setLatitude($bothEmpty ? null : sprintf('%.8F', (float) $values['latitude']))
+                        ->setLongitude($bothEmpty ? null : sprintf('%.8F', (float) $values['longitude']))
+                        ->setUpdatedAt(new \DateTimeImmutable());
+                    return true;
+                });
+                if ($saved) {
+                    $this->cache->delete('saude_stats_global');
+                    $this->addFlash('success', 'Estabelecimento atualizado.');
+                    return $this->redirectToRoute('saude_show', ['id' => $id]);
+                }
+                $errors[] = 'O registro mudou durante a edição. Reabra a página antes de salvar; seus valores estão abaixo para consulta.';
+                $responseCode = 409;
+            } else $responseCode = 422;
+        }
+        return $this->render('saude/edit.html.twig', compact('item', 'values', 'revision', 'errors'), new Response('', $responseCode));
+    }
+
+    private function load(int $id): EstabelecimentoSaude
+    {
+        $this->requirePermission(User::PERMISSION_SAUDE);
+        $item = $this->em->find(EstabelecimentoSaude::class, $id);
+        if (!$item instanceof EstabelecimentoSaude) throw $this->createNotFoundException('Estabelecimento não encontrado.');
+        $this->requireUfAccess($item->getUf());
+        return $item;
+    }
+
+    private function detail(EstabelecimentoSaude $item, Request $request, ?string $linkValue = null, array $errors = [], int $code = 200): Response
+    {
+        $coords = $this->coords($item->getLatitude(), $item->getLongitude());
+        $reservationExpires = $item->getStatus() === EstabelecimentoSaude::STATUS_RESERVADO
+            ? $item->getReservadoEm()?->modify('+' . SaudeReservaService::TTL_MINUTOS . ' minutes') : null;
+        $reservationExpired = $item->getStatus() === EstabelecimentoSaude::STATUS_RESERVADO
+            && ($reservationExpires === null || $reservationExpires < new \DateTimeImmutable());
+        return $this->render('saude/show.html.twig', compact('item', 'coords', 'reservationExpires', 'reservationExpired', 'errors') + [
+            'linkValue' => $errors === [] ? $item->getLinkWaze() : $linkValue,
+            'voltarParams' => $request->getSession()->get('saude_filtros', []),
+        ], new Response('', $code));
+    }
+
+    private function coords(mixed $lat, mixed $lon): ?array
+    {
+        if (!is_numeric($lat) || !is_numeric($lon)) return null;
+        $lat = (float) $lat; $lon = (float) $lon;
+        return is_finite($lat) && is_finite($lon) && abs($lat) <= 90 && abs($lon) <= 180 && $lat != 0 && $lon != 0 ? [$lat, $lon] : null;
+    }
+
+    private function validLink(?string $link): bool
+    {
+        if ($link === null) return true;
+        $host = strtolower((string) parse_url($link, PHP_URL_HOST));
+        return mb_strlen($link) <= 1000 && filter_var($link, FILTER_VALIDATE_URL) !== false
+            && in_array(strtolower((string) parse_url($link, PHP_URL_SCHEME)), ['https', 'http'], true)
+            && ($host === 'waze.com' || str_ends_with($host, '.waze.com'));
+    }
+
+    private function checkToken(Request $request, string $id): void
+    {
+        if (!$this->isCsrfTokenValid($id, $request->request->getString('_token'))) throw $this->createAccessDeniedException('Token inválido. Recarregue a página.');
+    }
+
+    private function values(EstabelecimentoSaude $item): array
+    {
+        return ['nomeFantasia' => $item->getNomeFantasia() ?? '', 'municipio' => $item->getMunicipio() ?? '',
+            'logradouro' => $item->getLogradouro() ?? '', 'telefone' => $item->getTelefone() ?? '',
+            'latitude' => $item->getLatitude() ?? '', 'longitude' => $item->getLongitude() ?? '',
+            'linkWaze' => $item->getLinkWaze() ?? '', 'ativo' => $item->isAtivo() ? '1' : '0'];
+    }
+
+    private function revision(EstabelecimentoSaude $item): string
+    {
+        return hash('sha256', serialize([$this->values($item), $item->getCnes(), $item->getUf(), $item->getStatus(),
+            $item->getReservadoPara(), $item->getReservadoEm()?->format('Y-m-d H:i:s.u'), $item->getRowHash(),
+            $item->getUpdatedAt()?->format('Y-m-d H:i:s.u')]));
     }
 }

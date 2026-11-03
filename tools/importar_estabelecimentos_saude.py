@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ToolboxWaze - Importador CNES 2.0.
+"""ToolboxWaze - Importador CNES 2.1.
 
 Python 3.10+
 Instalacao: python -m pip install pymysql
@@ -15,6 +15,7 @@ import re
 import sys
 import threading
 import traceback
+import time
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,6 +91,72 @@ def preparar_config(valores):
 
 
 
+
+def mensagem_conexao(erro):
+    codigo = erro.args[0] if getattr(erro, 'args', ()) else None
+    original = str(erro)
+    if codigo == 1045:
+        return (
+            'MySQL 1045: autenticação recusada pelo servidor. Uma senha foi enviada, '
+            'mas isso não confirma que ela esteja correta.\n'
+            'Confira: host remoto MySQL (não o endereço do site), usuário do banco, '
+            'senha MySQL e autorização do IP de origem em MySQL remoto. '
+            'Não use a senha do painel da hospedagem.\n' + original
+        )
+    if codigo == 1044:
+        return 'MySQL 1044: o usuário não tem acesso ao banco selecionado.\n' + original
+    if codigo == 1049:
+        return 'MySQL 1049: o banco informado não foi encontrado no servidor.\n' + original
+    if codigo in (2003, 2005):
+        return 'Não foi possível alcançar o host/porta MySQL. Confira DNS, porta e regras de acesso remoto.\n' + original
+    return original
+
+
+def conectar_mysql(configuracao):
+    try:
+        import pymysql
+    except ImportError as exc:
+        raise ValueError('Instale: python -m pip install pymysql') from exc
+    cfg = dict(configuracao)
+    ca = cfg.pop('ssl_ca', '')
+    if not cfg.get('password'):
+        raise ValueError('Preencha a senha MySQL.')
+    cfg.update(charset='utf8mb4', autocommit=False, connect_timeout=20,
+               read_timeout=180, write_timeout=180)
+    if ca:
+        cfg.update(ssl_ca=ca, ssl_verify_cert=True, ssl_verify_identity=True)
+    conn = None
+    try:
+        conn = pymysql.connect(**cfg)
+        with conn.cursor() as cursor:
+            cursor.execute('SELECT DATABASE(), CURRENT_USER(), USER(), @@hostname')
+            row = cursor.fetchone()
+            banco, conta, origem, servidor = list(row.values()) if isinstance(row, dict) else row
+        conn.rollback()
+        if banco != configuracao['database']:
+            raise ValueError('Banco conectado difere do informado.')
+        return conn, {'banco': banco, 'conta': conta, 'origem': origem, 'servidor': servidor}
+    except Exception as exc:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        message = mensagem_conexao(exc)
+        password = cfg.get('password', '')
+        if password:
+            message = message.replace(password, '[SENHA OCULTA]')
+        raise ValueError(message) from None
+    finally:
+        cfg.pop('password', None)
+
+
+def relatar_etapa(emit, fase, atual=None, total=None, unidade='', detalhe=''):
+    if emit:
+        emit('etapa', dict(fase=fase, atual=atual, total=total,
+                           unidade=unidade, detalhe=detalhe))
+
+
 import codecs
 import hashlib
 import itertools
@@ -160,19 +227,27 @@ def batches(iterable,size):
     it=iter(iterable)
     while batch:=list(itertools.islice(it,size)): yield batch
 
-def ler_csv(caminho,stop):
+def ler_csv(caminho,stop,emit=None):
+    total_bytes = os.path.getsize(caminho)
+    ultimo_aviso = 0.0
     encoding=None
     for enc in ('utf-8-sig','cp1252','latin-1'):
         try:
+            relatar_etapa(emit, 'Detectando encoding: ' + enc, 0, total_bytes, 'bytes')
             decoder=codecs.getincrementaldecoder(enc)(errors='strict')
             with open(caminho,'rb') as f:
                 while block:=f.read(1024*1024):
                     if stop.is_set(): raise Cancelado('Validação cancelada; nada gravado.')
                     decoder.decode(block,final=False)
+                    agora = time.monotonic()
+                    if agora - ultimo_aviso >= 0.2:
+                        relatar_etapa(emit, 'Detectando encoding: ' + enc, f.tell(), total_bytes, 'bytes')
+                        ultimo_aviso = agora
                 decoder.decode(b'',final=True)
             encoding=enc; break
         except UnicodeDecodeError: continue
     if not encoding: raise ValueError('Encoding desconhecido.')
+    relatar_etapa(emit, 'Validando CSV/TSV', 0, total_bytes, 'bytes', 'Progresso aproximado pela leitura do arquivo.')
     registros={}; erros=[]; duplicates=0
     csv.field_size_limit(4*1024*1024)
     with open(caminho,encoding=encoding,newline='') as f:
@@ -187,6 +262,10 @@ def ler_csv(caminho,stop):
         if not required.issubset(keys): raise ValueError('Colunas ausentes: '+', '.join(sorted(required-set(keys))))
         cnes_key=headers[idx[keys.index('CNES')]]
         for row in reader:
+            agora = time.monotonic()
+            if agora - ultimo_aviso >= 0.2:
+                relatar_etapa(emit, 'Validando CSV/TSV', min(f.buffer.tell(), max(0, total_bytes-1)), total_bytes, 'bytes', f'{len(registros):,} CNES válidos; linha física {reader.line_num}. Leitura aproximada; validação ainda em andamento.')
+                ultimo_aviso = agora
             if stop.is_set(): raise Cancelado('Validação cancelada; nada gravado.')
             if not any(x.strip() for x in row): continue
             try:
@@ -208,7 +287,14 @@ def ler_csv(caminho,stop):
                 if len(erros)>=30: break
     if erros: raise ValueError('\n'.join(erros)+'\nNada gravado no MySQL.')
     if not registros: raise ValueError('Nenhum registro válido.')
-    return registros,encoding,sep,len(idx),sum(not mapa(d).get('NOME FANTASIA') for d in registros.values())
+    relatar_etapa(emit, 'Preparando resumo da validação', detalhe=f'{len(registros):,} CNES validados.')
+    sem_nome = 0
+    for i, data in enumerate(registros.values(), 1):
+        if stop.is_set(): raise Cancelado('Validação cancelada; nada gravado.')
+        sem_nome += not mapa(data).get('NOME FANTASIA')
+        if i % 5000 == 0:
+            relatar_etapa(emit, 'Preparando resumo da validação', i, len(registros), 'registros')
+    return registros,encoding,sep,len(idx),sem_nome
 
 def fetch_rows(cursor):
     rows=cursor.fetchall()
@@ -311,6 +397,7 @@ def planejar(old,incoming,atualizar,cols,agora):
     return ('atualizados' if old else 'inseridos'),values
 
 def ler_banco(conn,stop,emit):
+    relatar_etapa(emit, 'Lendo JSON existente para reparo')
     conferir_estrutura(conn); registros={}; last=0
     while True:
         if stop.is_set(): raise Cancelado('Leitura de reparo cancelada; nada gravado.')
@@ -322,13 +409,14 @@ def ler_banco(conn,stop,emit):
             cnes=str(row['cnes'])
             if not re.fullmatch(r'\d{7}',cnes): raise ValueError(f'CNES existente inválido no ID {row["id"]}; não será renomeado automaticamente.')
             registros[cnes]=objeto(row['dados_originais']); last=int(row['id'])
-        emit('log',f'Preparados para reparo: {len(registros)} registros.')
+        relatar_etapa(emit, 'Lendo JSON existente para reparo', detalhe=f'{len(registros):,} registros preparados.')
     if not registros: raise ValueError('Tabela vazia.')
     return registros
 
 def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
     size=int(tamanho_lote or os.getenv('CNES_BATCH_SIZE','500'))
     if not 1<=size<=2000: raise ValueError('Lote precisa estar entre 1 e 2000.')
+    relatar_etapa(emit, 'Conferindo estrutura do banco')
     cols=conferir_estrutura(conn)
     write_cols=list(CORE)+['dados_originais','row_hash','imported_at','updated_at']+[k for k in ('importado_em','versao') if k in cols]
     types={'nome_fantasia':'VARCHAR(255)','ativo':'TINYINT','uf':'VARCHAR(2)','municipio':'VARCHAR(255)','logradouro':'VARCHAR(500)',
@@ -349,6 +437,7 @@ def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
                 definitions=','.join(f'`{col}` {types[col]} NULL' for col in write_cols)
                 c.execute(f'CREATE TEMPORARY TABLE tw_cnes_stage(row_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,{definitions}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4')
             conn.rollback(); conn.begin(); processed=0
+            relatar_etapa(emit, 'Gravando lotes (sem COMMIT)', 0, len(registros), 'registros')
             for codes in batches(sorted(registros),size):
                 if stop.is_set(): raise Cancelado('Cancelado antes do COMMIT.')
                 marks=','.join(['%s']*len(codes)); agora=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -384,9 +473,12 @@ def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
                         c.execute(f'UPDATE {TABELA} t JOIN tw_cnes_stage s ON s.row_id=t.id SET {sets}')
                 expected.commit(); emit('progresso',(processed,len(registros),dict(stats)))
             if stop.is_set(): raise Cancelado('Cancelado antes do COMMIT.')
+            relatar_etapa(emit, 'COMMIT em andamento', detalhe='Aguarde a resposta do servidor. Não feche o programa.')
             emit('log','Enviando COMMIT único. Não feche o programa.'); committing=True; conn.commit(); committed=True
             emit('log','COMMIT aceito. Conferindo colunas, JSON e correções em lotes...')
             checked=0
+            total_conferencia = stats['inseridos'] + stats['atualizados']
+            relatar_etapa(emit, 'Conferência após COMMIT', 0, total_conferencia, 'registros')
             for batch in batches(expected.execute('SELECT cnes,conteudo FROM esperado ORDER BY cnes'),size):
                 codes=[r[0] for r in batch]; marks=','.join(['%s']*len(codes))
                 with conn.cursor() as c:
@@ -397,12 +489,14 @@ def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
                     for field,value in json.loads(content).items():
                         if normal(field,actual[cnes].get(field))!=value: raise ValueError(f'CNES {cnes}: campo {field} divergente após COMMIT; confira edição concorrente.')
                     checked+=1
-                emit('log',f'Conferidos após COMMIT: {checked}.')
+                relatar_etapa(emit, 'Conferência após COMMIT', checked, total_conferencia, 'registros')
             stats['conferidos']=checked; return stats
         except BaseException as exc:
             if committing:
+                relatar_etapa(emit, 'Resultado requer conferência manual')
                 prefix='COMMIT aceito, conferência incompleta' if committed else 'Falha durante COMMIT: resultado incerto'
                 raise ResultadoIncerto(prefix+'. Confira o banco antes de repetir. '+str(exc)) from exc
+            relatar_etapa(emit, 'Desfazendo transação (ROLLBACK)')
             try: conn.rollback(); emit('log','ROLLBACK confirmado: alterações de dados desfeitas. Criação da tabela, se houve, não é desfeita.')
             except Exception: emit('log','ROLLBACK não confirmado; confira o banco.')
             raise
@@ -423,7 +517,7 @@ def executar_interface():
         def __init__(self):
             super().__init__()
 
-            self.title('ToolboxWaze - Importador CNES 2.0')
+            self.title('ToolboxWaze - Importador CNES 2.1')
             self.geometry('1150x800')
             self.minsize(850, 620)
 
@@ -431,6 +525,10 @@ def executar_interface():
             self.stop = threading.Event()
             self.executando = False
             self.campos = {}
+            self.entradas = {}
+            self._fase = None
+            self._inicio_fase = time.monotonic()
+            self._inicio_trabalho = time.monotonic()
             self.controles = []
 
             self.montar()
@@ -542,6 +640,7 @@ def executar_interface():
                 )
 
                 self.campos[chave] = variavel
+                self.entradas[chave] = entrada
                 self.controles.append(entrada)
 
             caixa.columnconfigure(1, weight=1)
@@ -549,9 +648,7 @@ def executar_interface():
 
             self.mostrar_senha = tk.BooleanVar(value=False)
 
-            entrada_senha = self.controles[
-                2 + list(padroes).index('password')
-            ]
+            entrada_senha = self.entradas['password']
 
             ttk.Checkbutton(
                 base,
@@ -589,16 +686,19 @@ def executar_interface():
             acoes = ttk.Frame(base)
             acoes.pack(fill='x')
 
-            for titulo, gravar in (
+            for indice, (titulo, gravar) in enumerate((
+                ('Testar conexão MySQL', 'testar'),
                 ('Validar arquivo', False),
                 ('Importar e conferir salvamento', True),
                 ('Reparar colunas do banco (JSON)', 'reparar'),
-            ):
-                ttk.Button(
+            )):
+                botao_acao = ttk.Button(
                     acoes,
                     text=titulo,
                     command=lambda g=gravar: self.iniciar(g)
-                ).pack(side='left', padx=4)
+                )
+                botao_acao.grid(row=indice // 2, column=indice % 2, sticky='ew', padx=4, pady=3)
+                self.controles.append(botao_acao)
 
             self.botao_cancelar = ttk.Button(
                 acoes,
@@ -606,13 +706,17 @@ def executar_interface():
                 command=self.cancelar,
                 state='disabled'
             )
-            self.botao_cancelar.pack(side='left', padx=4)
+            self.botao_cancelar.grid(row=0, column=2, rowspan=2, padx=4)
+            acoes.columnconfigure(0, weight=1)
+            acoes.columnconfigure(1, weight=1)
 
             self.progresso = ttk.Progressbar(
                 base,
                 maximum=100
             )
             self.progresso.pack(fill='x', pady=10)
+            self.tempo = ttk.Label(base, text='Barra por etapa; 100% dos lotes não significa COMMIT confirmado.')
+            self.tempo.pack(anchor='w')
 
             self.status = ttk.Label(
                 base,
@@ -740,7 +844,7 @@ def executar_interface():
 
             caminho = self.caminho.get().strip()
 
-            if gravar != 'reparar' and not Path(caminho).is_file():
+            if gravar not in ('reparar', 'testar') and not Path(caminho).is_file():
                 messagebox.showerror(
                     'Arquivo',
                     'Selecione um arquivo valido.',
@@ -766,22 +870,23 @@ def executar_interface():
                     )
                     return
 
-                confirmado = messagebox.askyesno(
-                    'Confirmar',
-                    (
-                        'Backup realizado?\n\n'
-                        f"Host: {configuracao['host']}:"
-                        f"{configuracao['port']}\n"
-                        f"Banco: {configuracao['database']}\n"
-                        f'Tabela: {TABELA}\n'
-                        'Senha capturada: SIM (conteudo oculto)\n\n'
-                        'Continuar?'
-                    ),
-                    parent=self
-                )
+                if gravar != 'testar':
+                    confirmado = messagebox.askyesno(
+                        'Confirmar',
+                        (
+                            'Backup realizado?\n\n'
+                            f"Host: {configuracao['host']}:"
+                            f"{configuracao['port']}\n"
+                            f"Banco: {configuracao['database']}\n"
+                            f'Tabela: {TABELA}\n'
+                            'Senha capturada: SIM (conteudo oculto)\n\n'
+                            'Continuar?'
+                        ),
+                        parent=self
+                    )
 
-                if not confirmado:
-                    return
+                    if not confirmado:
+                        return
 
                 self.escrever(
                     'Senha capturada: SIM. '
@@ -790,7 +895,10 @@ def executar_interface():
 
             self.executando = True
             self.stop.clear()
-            self.progresso['value'] = 0
+            self.progresso.stop()
+            self.progresso.configure(mode='determinate', value=0)
+            self._fase = None
+            self._inicio_trabalho = time.monotonic()
             self.arvore.delete(
                 *self.arvore.get_children()
             )
@@ -811,44 +919,42 @@ def executar_interface():
             conn = None
             emit = lambda evento, valor: self.eventos.put((evento, valor))
             try:
+                if gravar:
+                    relatar_etapa(emit, 'Testando conexão MySQL', detalhe='Somente autenticação e SELECT de diagnóstico; sem gravar dados.')
+                    emit('log', f"Testando host={configuracao['host']}:{configuracao['port']}; usuário={configuracao['user']}; banco={configuracao['database']}. Senha não será registrada.")
+                    conn, info = conectar_mysql(configuracao)
+                    emit('log', f"Conexão autenticada: banco={info['banco']}; conta={info['conta']}; origem={info['origem']}; servidor={info['servidor']}.")
+                    if gravar == 'testar':
+                        emit('validado', 'Teste de conexão aprovado. Nenhuma gravação ou criação de tabela foi feita. A senha permanece no campo.')
+                        return
+                    if gravar != 'reparar':
+                        conn.close()
+                        conn = None
+                        emit('log', 'Acesso confirmado antes da leitura do arquivo. A conexão será reaberta para importar.')
                 if gravar != 'reparar':
-                    emit('log', 'Validando arquivo sem dividir tabs dentro de aspas...')
-                    registros, encoding, separador, campos, sem_nome = ler_csv(caminho, self.stop)
+                    emit('log', 'Validando arquivo, preservando separadores dentro de aspas...')
+                    registros, encoding, separador, campos, sem_nome = ler_csv(caminho, self.stop, emit)
                     emit('log', f'{len(registros)} CNES únicos; {campos} campos; encoding={encoding}; separador={separador!r}.')
                     emit('log', f'{sem_nome} sem nome fantasia; será usada razão social ou CNES na coluna de exibição.')
+                    relatar_etapa(emit, 'Preparando pré-visualização', detalhe='Até 2.000 registros, sem limitar a importação.')
                     for cnes, dados in itertools.islice(registros.items(), 2000):
+                        if self.stop.is_set(): raise Cancelado('Cancelado antes da importação.')
                         p = projetar(dados)
                         emit('linha', (cnes,p['nome_fantasia'],p['uf'],p['municipio'],'VALIDADO'))
                     if not gravar:
                         emit('validado', 'Arquivo validado. Nenhuma conexão ou gravação. A senha foi mantida no campo.')
                         return
                 if self.stop.is_set():
-                    raise Cancelado('Cancelado antes da conexão.')
-                try:
-                    import pymysql
-                except ImportError as exc:
-                    raise ValueError('Instale: python -m pip install pymysql') from exc
-                if not configuracao.get('password'):
-                    raise ValueError('Preencha a senha MySQL.')
-                ca = configuracao.pop('ssl_ca', '')
-                configuracao.update(charset='utf8mb4',autocommit=False,connect_timeout=20,read_timeout=180,write_timeout=180)
-                if ca:
-                    configuracao.update(ssl_ca=ca,ssl_verify_cert=True,ssl_verify_identity=True)
-                emit('log', 'Conectando ao MySQL. Senha não será registrada.')
-                conn = pymysql.connect(**configuracao)
-                with conn.cursor() as cursor:
-                    cursor.execute('SELECT DATABASE(), @@hostname')
-                    banco, servidor = cursor.fetchone()
-                conn.rollback()
-                if banco != configuracao['database']:
-                    raise ValueError('Banco conectado difere do informado.')
-                emit('log', f'Conectado: banco={banco}; servidor={servidor}.')
+                    raise Cancelado('Cancelado antes da gravação.')
+                if conn is None:
+                    relatar_etapa(emit, 'Reabrindo conexão MySQL')
+                    conn, info = conectar_mysql(configuracao)
                 if gravar == 'reparar':
                     emit('log', 'Reparo: reconstruindo colunas com dados_originais + correcoes já existentes.')
                     registros = ler_banco(conn, self.stop, emit)
                     atualizar = False
                 else:
-                    self.eventos.put(('limpar_preview', None))
+                    emit('limpar_preview', None)
                 resultado = importar(conn, registros, atualizar, self.stop, emit)
                 emit('sucesso', f"CONCLUÍDO: {resultado['inseridos']} inseridos; {resultado['atualizados']} atualizados/reparados; {resultado['ignorados']} sem mudança; {resultado['conferidos']} gravações relidas após COMMIT.")
             except Exception as erro:
@@ -866,6 +972,33 @@ def executar_interface():
                 configuracao.pop('password', None)
                 emit('fim', None)
 
+        def exibir_etapa(self, info):
+            fase = info['fase']
+            atual, total = info.get('atual'), info.get('total')
+            if fase != self._fase:
+                self._fase = fase
+                self._inicio_fase = time.monotonic()
+                self.progresso.stop()
+                self.progresso.configure(mode='determinate', value=0)
+            elapsed = time.monotonic() - self._inicio_fase
+            if total is None or total <= 0 or atual is None:
+                if str(self.progresso.cget('mode')) != 'indeterminate':
+                    self.progresso.configure(mode='indeterminate', value=0)
+                    self.progresso.start(15)
+                self.status.configure(text=f"{fase} | {info.get('detalhe', '')}")
+                detail = 'Duração restante ainda não estimável.'
+            else:
+                self.progresso.stop()
+                pct = min(100, max(0, atual / total * 100))
+                self.progresso.configure(mode='determinate', value=pct)
+                speed = atual / elapsed if elapsed > 0 else 0
+                unit = info.get('unidade', '')
+                eta = max(0, (total-atual)/speed) if speed > 0 else None
+                detail = f'{speed:,.0f} {unit}/s'
+                if eta is not None:
+                    detail += f' | estimativa nesta etapa: {int(eta)//60:02d}:{int(eta)%60:02d}'
+                self.status.configure(text=f"{fase}: {pct:.1f}% | {atual:,}/{total:,} {unit} | {info.get('detalhe', '')}")
+            self.tempo.configure(text=f'Tempo nesta etapa: {int(elapsed)//60:02d}:{int(elapsed)%60:02d} | {detail}')
 
         def processar(self):
             for _ in range(300):
@@ -884,22 +1017,13 @@ def executar_interface():
                         values=valor
                     )
 
+                elif evento == 'etapa':
+                    self.exibir_etapa(valor)
+
                 elif evento == 'progresso':
                     posicao, total, estatisticas = valor
-
-                    self.progresso['value'] = (
-                        posicao / total * 100
-                    )
-
-                    self.status.configure(
-                        text=(
-                            f'{posicao}/{total} | '
-                            f"Novos: {estatisticas['inseridos']} | "
-                            'Atualizados: '
-                            f"{estatisticas['atualizados']} | "
-                            'Aguardando COMMIT e conferencia.'
-                        )
-                    )
+                    self.exibir_etapa(dict(fase='Gravando lotes (sem COMMIT)', atual=posicao, total=total, unidade='registros',
+                        detalhe=f"Novos: {estatisticas['inseridos']} | Atualizados: {estatisticas['atualizados']} | Sem mudança: {estatisticas['ignorados']} | COMMIT e conferência pendentes."))
 
                 elif evento in (
                     'log',
@@ -910,7 +1034,13 @@ def executar_interface():
                     self.escrever(valor)
 
                     if evento != 'log':
+                        self.progresso.stop()
+                        self.progresso.configure(mode='determinate')
+                        if evento in ('sucesso', 'validado'):
+                            self.progresso['value'] = 100
                         self.status.configure(text=valor)
+                        seconds = int(time.monotonic()-self._inicio_trabalho)
+                        self.tempo.configure(text=f'Tempo total: {seconds//60:02d}:{seconds%60:02d}. Resultado: {evento}.')
 
                     if evento in ('sucesso', 'erro'):
                         for item in self.arvore.get_children():
@@ -933,6 +1063,7 @@ def executar_interface():
                                 )
 
                 elif evento == 'fim':
+                    self.progresso.stop()
                     self.executando = False
                     self.bloquear(False)
 
@@ -965,7 +1096,7 @@ def executar_interface():
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description='Importador CNES 2.0: GUI, validação ou reparo de colunas estruturadas.')
+    parser = argparse.ArgumentParser(description='Importador CNES 2.1: GUI, validação ou reparo de colunas estruturadas.')
     parser.add_argument('--arquivo')
     parser.add_argument('--importar', action='store_true')
     parser.add_argument('--reparar-banco', action='store_true')
@@ -1011,11 +1142,8 @@ def main():
         if not args.confirmar and input(f"Banco {cfg['database']} em {cfg['host']}; tabela {TABELA}. Backup realizado? Digite IMPORTAR: ") != 'IMPORTAR':
             return 1
         import pymysql
-        ca = cfg.pop('ssl_ca','')
-        cfg.update(charset='utf8mb4',autocommit=False,connect_timeout=20,read_timeout=180,write_timeout=180)
-        if ca:
-            cfg.update(ssl_ca=ca,ssl_verify_cert=True,ssl_verify_identity=True)
-        conn = pymysql.connect(**cfg)
+        conn, info = conectar_mysql(cfg)
+        emit('conexao', f"Banco={info['banco']}; conta={info['conta']}; origem={info['origem']}.")
         if args.reparar_banco:
             registros = ler_banco(conn,stop,emit)
         stats = importar(conn,registros,args.atualizar and not args.reparar_banco,stop,emit,args.lote)

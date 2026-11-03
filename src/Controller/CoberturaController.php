@@ -21,6 +21,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_USER')]
 final class CoberturaController extends AbstractController
 {
+    use AccessControlTrait;
+
     public function __construct(
         private readonly RadarStatsService $radarStats,
         private readonly PostoStatsService $postoStats,

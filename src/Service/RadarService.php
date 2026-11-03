@@ -73,97 +73,66 @@ final class RadarService
     }
 
     /**
-     * Normaliza datas vindas do banco para formatos previsíveis usados nos templates.
-     *
-     * - data_validade               => d/m/Y (exibição)
-     * - data_validade_iso           => Y-m-d (comparação)
-     * - data_ultima_verificacao     => d/m/Y (exibição)
-     * - data_verificacao_efetiva    => d/m/Y (exibição)
+     * A data exibida e a comparada devem representar o mesmo dia.
+     * Prefere a data original válida; usa o ISO apenas como fallback.
      */
     private function normalizeRadarRow(array $row): array
     {
-        $dateFields = [
-            'data_validade',
-            'data_ultima_verificacao',
-            'data_verificacao_efetiva',
-        ];
+        $validade = $this->parseRadarDate($row['data_validade'] ?? null)
+            ?? $this->parseRadarDate($row['data_validade_iso'] ?? null);
 
-        foreach ($dateFields as $field) {
-            if (!array_key_exists($field, $row) || $row[$field] === null || $row[$field] === '') {
-                $row[$field] = null;
-                continue;
+        $row['data_validade'] = $validade?->format('d/m/Y');
+        $row['data_validade_iso'] = $validade?->format('Y-m-d');
+
+        foreach (['data_ultima_verificacao', 'data_verificacao_efetiva'] as $field) {
+            if (array_key_exists($field, $row)) {
+                $row[$field] = $this->normalizeDisplayDate($row[$field]);
             }
-
-            $row[$field] = $this->normalizeDisplayDate($row[$field]);
-        }
-
-        if (!array_key_exists('data_validade_iso', $row) || $row['data_validade_iso'] === null || $row['data_validade_iso'] === '') {
-            $row['data_validade_iso'] = null;
-        } else {
-            $row['data_validade_iso'] = $this->normalizeIsoDate($row['data_validade_iso']);
         }
 
         return $row;
     }
 
     /**
-     * Converte DateTimeInterface, Y-m-d ou d/m/Y para d/m/Y.
+     * Rejeita datas zeradas, anos inválidos e rollover de calendário.
      */
-    private function normalizeDisplayDate(mixed $value): ?string
+    private function parseRadarDate(mixed $value): ?\DateTimeImmutable
     {
         if ($value instanceof \DateTimeInterface) {
-            return $value->format('d/m/Y');
+            $value = $value->format('Y-m-d');
         }
 
-        $value = trim((string) $value);
-
-        if ($value === '') {
+        if (!is_string($value) || trim($value) === '') {
             return null;
         }
 
-        if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $value)) {
-            $date = \DateTimeImmutable::createFromFormat('Y-m-d', $value);
+        $value = trim($value);
 
-            return $date ? $date->format('d/m/Y') : $value;
+        foreach (['d/m/Y', 'Y-m-d', 'Y-m-d H:i:s', 'Y-m-d H:i:s.u'] as $format) {
+            $date = \DateTimeImmutable::createFromFormat('!' . $format, $value);
+            $errors = \DateTimeImmutable::getLastErrors();
+
+            if ($date === false || ($errors !== false
+                && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+                continue;
+            }
+
+            if ($date->format($format) === $value && (int) $date->format('Y') >= 1) {
+                return $date->setTime(0, 0);
+            }
         }
 
-        if (preg_match('#^\d{2}/\d{2}/\d{4}$#', $value)) {
-            return $value;
-        }
-
-        $date = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $value);
-
-        return $date ? $date->format('d/m/Y') : $value;
+        return null;
     }
 
-    /**
-     * Converte DateTimeInterface, Y-m-d ou d/m/Y para Y-m-d.
-     */
+    private function normalizeDisplayDate(mixed $value): ?string
+    {
+        return $this->parseRadarDate($value)?->format('d/m/Y');
+    }
+
     private function normalizeIsoDate(mixed $value): ?string
     {
-        if ($value instanceof \DateTimeInterface) {
-            return $value->format('Y-m-d');
-        }
-
-        $value = trim((string) $value);
-
-        if ($value === '') {
-            return null;
-        }
-
-        if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $value)) {
-            return $value;
-        }
-
-        if (preg_match('#^\d{2}/\d{2}/\d{4}$#', $value)) {
-            $date = \DateTimeImmutable::createFromFormat('d/m/Y', $value);
-
-            return $date ? $date->format('Y-m-d') : null;
-        }
-
-        $date = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $value);
-
-        return $date ? $date->format('Y-m-d') : null;
+        return $this->parseRadarDate($value)?->format('Y-m-d');
     }
 
     // ───────────────────────────────────────────────────────────────────────

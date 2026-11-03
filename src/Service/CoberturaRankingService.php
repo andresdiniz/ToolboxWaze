@@ -37,7 +37,7 @@ final class CoberturaRankingService
         $ufs = array_values(array_filter(User::ALL_UFS, $user->canAccessUf(...)));
         if ($uf !== '') $ufs = [$uf];
         $selecionados = $tipo === '' ? array_keys($tipos) : [$tipo];
-        $key = 'cobertura_multi_v1_' . hash('sha256', serialize([$this->db->getDatabase(), $selecionados, $ufs]));
+        $key = 'cobertura_multi_v2_' . hash('sha256', serialize([$this->db->getDatabase(), $selecionados, $ufs]));
         $data = $this->cache->get($key, function (ItemInterface $entry) use ($selecionados, $ufs): array {
             $entry->expiresAfter(120);
             return $this->consultar($selecionados, $ufs);
@@ -116,7 +116,22 @@ final class CoberturaRankingService
                     $editorKey = "CONCAT('user:', $actor)";
                     $editorName = "COALESCE(NULLIF(TRIM(u.waze_nickname), ''), CONCAT('Editor #', $actor))"; $origin = 'Conta do sistema';
                 }
-                $parts[] = "SELECT $editorKey AS editor_key, $editorName AS editor, '$origin' AS origem, CONCAT(UPPER(TRIM($ufCol)), ':', $id) AS local_id, '$action' AS acao FROM $join WHERE $scope AND $condition AND $actor IS NOT NULL";
+                // Todas as expressões são internas. Uniformiza ANTES do UNION,
+                // inclusive literais, nomes e chaves vindos de tabelas diferentes.
+                // A collation binária não funde identidades distintas por acentos.
+                $expressions = [
+                    'editor_key' => $editorKey,
+                    'editor' => $editorName,
+                    'origem' => "'$origin'",
+                    'local_id' => "CONCAT(UPPER(TRIM($ufCol)), ':', $id)",
+                    'acao' => "'$action'",
+                ];
+                $projection = [];
+                foreach ($expressions as $alias => $expression) {
+                    $projection[] = "CONVERT(($expression) USING utf8mb4) COLLATE utf8mb4_bin AS $alias";
+                }
+                $parts[] = 'SELECT ' . implode(', ', $projection)
+                    . " FROM $join WHERE $scope AND $condition AND $actor IS NOT NULL";
                 array_push($params, ...$ufs);
             }
             if ($parts === []) continue;

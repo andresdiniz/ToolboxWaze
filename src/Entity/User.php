@@ -23,6 +23,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const PERMISSION_RADARES      = 'PERM_RADARES';
     public const PERMISSION_ESCOLAS      = 'PERM_ESCOLAS';
     public const PERMISSION_POSTOS       = 'PERM_POSTOS';
+    public const PERMISSION_SAUDE        = 'PERM_SAUDE';
     public const PERMISSION_EXPORT       = 'PERM_EXPORT';
     public const PERMISSION_SOLICITACOES = 'PERM_SOLICITACOES'; // NOVA
 
@@ -30,6 +31,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         self::PERMISSION_RADARES      => 'Radares',
         self::PERMISSION_ESCOLAS      => 'Escolas',
         self::PERMISSION_POSTOS       => 'Postos',
+        self::PERMISSION_SAUDE        => 'Saúde',
         self::PERMISSION_EXPORT       => 'Exportação',
         self::PERMISSION_SOLICITACOES => 'Solicitações',
     ];

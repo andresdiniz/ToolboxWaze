@@ -128,6 +128,18 @@ class EscolaInep
     #[ORM\Column(name: 'reservado_em', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $reservadoEm = null;
 
+    /**
+     * Último snapshot do Place do WME enviado pelo script ao confirmar
+     * (dados normalizados e validados pelo controller).
+     *
+     * @var array<string, mixed>|null
+     */
+    #[ORM\Column(name: 'waze_snapshot', type: 'json', nullable: true)]
+    private ?array $wazeSnapshot = null;
+
+    #[ORM\Column(name: 'waze_snapshot_em', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $wazeSnapshotEm = null;
+
     /** @var Collection<int, EscolaInepComentario> */
     #[ORM\OneToMany(
         targetEntity: EscolaInepComentario::class,
@@ -264,6 +276,15 @@ class EscolaInep
         $this->reservadoEm = $v;
         return $this;
     }
+
+    /** @return array<string, mixed>|null */
+    public function getWazeSnapshot(): ?array { return $this->wazeSnapshot; }
+
+    /** @param array<string, mixed>|null $v */
+    public function setWazeSnapshot(?array $v): self { $this->wazeSnapshot = $v; return $this; }
+
+    public function getWazeSnapshotEm(): ?\DateTimeImmutable { return $this->wazeSnapshotEm; }
+    public function setWazeSnapshotEm(?\DateTimeImmutable $v): self { $this->wazeSnapshotEm = $v; return $this; }
 
     /** @return Collection<int, EscolaInepComentario> */
     public function getComentarios(): Collection { return $this->comentarios; }

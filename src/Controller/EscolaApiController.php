@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\EscolaInep;
 use App\Entity\User;
 use App\Service\EscolaReservaService;
+use App\Service\WazeSnapshotNormalizer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -272,8 +273,29 @@ final class EscolaApiController extends AbstractController
             );
         }
 
+        // Valida o snapshot do Place antes de alterar qualquer coisa.
+        $snapshot = null;
+
+        if (
+            $status === EscolaInep::STATUS_CONFIRMADO
+            && array_key_exists('waze', $data)
+        ) {
+            try {
+                $snapshot = WazeSnapshotNormalizer::normalizar(
+                    $data['waze']
+                );
+            } catch (\InvalidArgumentException $e) {
+                return $this->json(
+                    ['error' => $e->getMessage()],
+                    Response::HTTP_UNPROCESSABLE_ENTITY
+                );
+            }
+        }
+
+        $agora = new \DateTimeImmutable();
+
         $escola->setStatus($status);
-        $escola->setUpdatedAt(new \DateTimeImmutable());
+        $escola->setUpdatedAt($agora);
 
         if ($status === EscolaInep::STATUS_PULADO) {
             $escola->setReservadoPara(null);
@@ -283,10 +305,17 @@ final class EscolaApiController extends AbstractController
             $escola->setReservadoEm(null);
         }
 
+        if ($snapshot !== null) {
+            $escola->setWazeSnapshot($snapshot);
+            $escola->setWazeSnapshotEm($agora);
+        }
+
         $this->em->flush();
 
         return $this->json([
             'message' => 'Status atualizado com sucesso.',
+            // Só é true depois do flush: o snapshot realmente foi gravado.
+            'waze_persistido' => $snapshot !== null,
             'escola' => $this->serializeEscola($escola),
         ]);
     }
@@ -649,6 +678,9 @@ final class EscolaApiController extends AbstractController
                 $escola->getImportedAt()->format(DATE_ATOM),
             'updated_at' =>
                 $escola->getUpdatedAt()?->format(DATE_ATOM),
+
+            'waze_snapshot_em' =>
+                $escola->getWazeSnapshotEm()?->format(DATE_ATOM),
         ];
     }
 

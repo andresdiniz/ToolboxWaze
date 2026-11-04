@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\EstabelecimentoSaude;
 use App\Entity\User;
 use App\Service\SaudeReservaService;
+use App\Service\WazeSnapshotNormalizer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -261,8 +262,21 @@ final class SaudeApiController extends AbstractController
             return $this->json(['error' => 'Este estabelecimento está reservado para outro usuário.'], Response::HTTP_FORBIDDEN);
         }
 
+        // Valida o snapshot do Place antes de alterar qualquer coisa.
+        $snapshot = null;
+
+        if ($status === EstabelecimentoSaude::STATUS_CONFIRMADO && array_key_exists('waze', $data)) {
+            try {
+                $snapshot = WazeSnapshotNormalizer::normalizar($data['waze']);
+            } catch (\InvalidArgumentException $e) {
+                return $this->json(['error' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        }
+
+        $agora = new \DateTimeImmutable();
+
         $item->setStatus($status);
-        $item->setUpdatedAt(new \DateTimeImmutable());
+        $item->setUpdatedAt($agora);
 
         if ($status === EstabelecimentoSaude::STATUS_PULADO) {
             $item->setReservadoPara(null);
@@ -272,11 +286,18 @@ final class SaudeApiController extends AbstractController
             $item->setReservadoEm(null);
         }
 
+        if ($snapshot !== null) {
+            $item->setWazeSnapshot($snapshot);
+            $item->setWazeSnapshotEm($agora);
+        }
+
         $this->em->flush();
 
         return $this->json([
-            'message' => 'Status atualizado com sucesso.',
-            'unidade' => $this->serialize($item),
+            'message'         => 'Status atualizado com sucesso.',
+            // Só é true depois do flush: o snapshot realmente foi gravado.
+            'waze_persistido' => $snapshot !== null,
+            'unidade'         => $this->serialize($item),
         ]);
     }
 
@@ -390,21 +411,22 @@ final class SaudeApiController extends AbstractController
     private function serialize(EstabelecimentoSaude $e): array
     {
         return [
-            'id'             => $e->getId(),
-            'cnes'           => $e->getCnes(),
-            'nome'           => $e->getNomeFantasia(),
-            'ativo'          => $e->isAtivo(),
-            'uf'             => $e->getUf(),
-            'municipio'      => $e->getMunicipio(),
-            'logradouro'     => $e->getLogradouro(),
-            'telefone'       => $e->getTelefone(),
-            'latitude'       => $e->getLatitude(),
-            'longitude'      => $e->getLongitude(),
-            'link_waze'      => $e->getLinkWaze(),
-            'status'         => $e->getStatus(),
-            'reservado_para' => $e->getReservadoPara(),
-            'reservado_em'   => $e->getReservadoEm()?->format(DATE_ATOM),
-            'updated_at'     => $e->getUpdatedAt()?->format(DATE_ATOM),
+            'id'               => $e->getId(),
+            'cnes'             => $e->getCnes(),
+            'nome'             => $e->getNomeFantasia(),
+            'ativo'            => $e->isAtivo(),
+            'uf'               => $e->getUf(),
+            'municipio'        => $e->getMunicipio(),
+            'logradouro'       => $e->getLogradouro(),
+            'telefone'         => $e->getTelefone(),
+            'latitude'         => $e->getLatitude(),
+            'longitude'        => $e->getLongitude(),
+            'link_waze'        => $e->getLinkWaze(),
+            'status'           => $e->getStatus(),
+            'reservado_para'   => $e->getReservadoPara(),
+            'reservado_em'     => $e->getReservadoEm()?->format(DATE_ATOM),
+            'updated_at'       => $e->getUpdatedAt()?->format(DATE_ATOM),
+            'waze_snapshot_em' => $e->getWazeSnapshotEm()?->format(DATE_ATOM),
         ];
     }
 

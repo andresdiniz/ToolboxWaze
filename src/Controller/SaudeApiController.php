@@ -192,7 +192,8 @@ final class SaudeApiController extends AbstractController
      * - disponiveis: quantos itens ainda podem ser reservados com todos os filtros aplicados.
      */
     #[Route('/api/saude/uf/{uf}/filtros', name: 'api_saude_filtros', methods: ['GET'])]
-    public function filtros(Request $request, string $uf): JsonResponse
+    #[Route('/api/saude/uf/{uf}/filtros/{tipo}', name: 'api_saude_filtros_tipo', methods: ['GET'])]
+    public function filtros(Request $request, string $uf, ?string $tipo = null): JsonResponse
     {
         $user = $this->requireApiUser();
         $uf   = strtoupper(trim($uf));
@@ -202,14 +203,16 @@ final class SaudeApiController extends AbstractController
         }
 
         try {
-            $filtros = SaudeFiltro::normalizar($request->query->all());
+            $filtros = SaudeFiltro::normalizar(
+                $tipo !== null ? ['tipo' => rawurldecode($tipo)] + $request->query->all() : $request->query->all()
+            );
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
         $limite = (new \DateTimeImmutable())->modify(sprintf('-%d minutes', SaudeReservaService::TTL_MINUTOS));
 
-        $base = function (bool $ignorarMunicipio) use ($uf, $filtros, $limite): \Doctrine\ORM\QueryBuilder {
+        $base = function (string ...$ignorar) use ($uf, $filtros, $limite): \Doctrine\ORM\QueryBuilder {
             $qb = $this->em->createQueryBuilder()
                 ->from(EstabelecimentoSaude::class, 'e')
                 ->where('e.uf = :uf')
@@ -218,30 +221,37 @@ final class SaudeApiController extends AbstractController
                 ->setParameter('reservado', EstabelecimentoSaude::STATUS_RESERVADO)
                 ->setParameter('limite', $limite);
 
-            SaudeFiltro::aplicar($qb, $filtros, 'e', $ignorarMunicipio);
+            SaudeFiltro::aplicar($qb, $filtros, 'e', $ignorar);
 
             return $qb;
         };
 
-        $disponiveis = (int) $base(false)->select('COUNT(e.id)')->getQuery()->getSingleScalarResult();
+        $disponiveis = (int) $base()->select('COUNT(e.id)')->getQuery()->getSingleScalarResult();
 
-        $linhas = $base(true)
-            ->select('e.municipio AS nome', 'COUNT(e.id) AS total')
-            ->andWhere('e.municipio IS NOT NULL')
-            ->groupBy('e.municipio')
-            ->orderBy('e.municipio', 'ASC')
-            ->setMaxResults(1000)
-            ->getQuery()
-            ->getArrayResult();
+        // Facetas: cada lista considera os OUTROS filtros, para o usuário sempre ver opções com resultado.
+        $facetas = [];
+
+        foreach (['municipio' => 'municipio', 'tipo' => 'tipo'] as $chave => $campo) {
+            $facetas[$chave] = array_map(
+                static fn (array $l): array => ['nome' => (string) $l['nome'], 'total' => (int) $l['total']],
+                $base($chave)
+                    ->select("e.$campo AS nome", 'COUNT(e.id) AS total')
+                    ->andWhere("e.$campo IS NOT NULL")
+                    ->andWhere("TRIM(e.$campo) <> ''")
+                    ->groupBy("e.$campo")
+                    ->orderBy("e.$campo", 'ASC')
+                    ->setMaxResults(1000)
+                    ->getQuery()
+                    ->getArrayResult()
+            );
+        }
 
         return $this->json([
             'uf'          => $uf,
             'filtros'     => $filtros,
             'disponiveis' => $disponiveis,
-            'municipios'  => array_map(
-                static fn (array $l): array => ['nome' => (string) $l['nome'], 'total' => (int) $l['total']],
-                $linhas
-            ),
+            'tipos'       => $facetas['tipo'],
+            'municipios'  => $facetas['municipio'],
         ]);
     }
 
@@ -519,6 +529,7 @@ final class SaudeApiController extends AbstractController
             'ativo'            => $e->isAtivo(),
             'uf'               => $e->getUf(),
             'municipio'        => $e->getMunicipio(),
+            'tipo'             => $e->getTipo(),
             'logradouro'       => $e->getLogradouro(),
             'telefone'         => $e->getTelefone(),
             'latitude'         => $e->getLatitude(),

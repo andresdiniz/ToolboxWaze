@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Tarefas Pendentes
-// @version      3.5.0
-// @description  Marcador de Tarefas (lombadas, semáforos, faixas, escolas, saúde...) com WME SDK, token pessoal validado, ranking, filtros de Saúde (município, link, situação, busca), seleção automática do Place, comparação fonte × WME e fluxo de confirmação simplificado
+// @version      3.6.0
+// @description  Marcador de Tarefas (lombadas, semáforos, faixas, escolas, saúde...) com WME SDK, token pessoal validado, ranking, filtros de Saúde (tipo e município), seleção automática do Place, comparação fonte × WME e fluxo de confirmação simplificado
 // @author       Andre Soares Diniz
 // @match        https://www.waze.com/editor*
 // @match        https://www.waze.com/*/editor*
@@ -73,19 +73,13 @@
 
     // Filtros da Saúde (enviados à API em /reservar e /filtros).
     const FILTROS_PADRAO = {
-        municipio: '',
-        link: '',
-        ativo: '1',
-        coordenadas: 'com_coord',
-        busca: ''
+        tipo: '',
+        municipio: ''
     };
 
     const FILTRO_IDS = {
-        municipio: 'wmt-f-municipio',
-        link: 'wmt-f-link',
-        ativo: 'wmt-f-ativo',
-        coordenadas: 'wmt-f-coordenadas',
-        busca: 'wmt-f-busca'
+        tipo: 'wmt-f-tipo',
+        municipio: 'wmt-f-municipio'
     };
 
     const UFS_BRASIL = [
@@ -159,11 +153,8 @@
         'wmt-btn-limpar',
         'wmt-btn-token',
         'wmt-btn-remover-token',
+        'wmt-f-tipo',
         'wmt-f-municipio',
-        'wmt-f-link',
-        'wmt-f-ativo',
-        'wmt-f-coordenadas',
-        'wmt-f-busca',
         'wmt-f-limpar'
     ];
 
@@ -181,7 +172,7 @@
         venueEventsBound: false,
         venueRefreshTimer: null,
         selecaoTimer: null,
-        facetas: { municipios: [], disponiveis: null },
+        facetas: { tipos: [], municipios: [], disponiveis: null },
         facetaSeq: 0,
         ultimoResultado: null,
         abaAtiva: 'atividade',
@@ -1676,7 +1667,7 @@
                 const existe = Array.from(campo.options).some(o => o.value === valor);
 
                 if (!existe) {
-                    if (chave === 'municipio' && valor) {
+                    if ((chave === 'municipio' || chave === 'tipo') && valor) {
                         campo.add(new Option(valor, valor));
                     } else {
                         valor = FILTROS_PADRAO[chave];
@@ -1705,31 +1696,15 @@
         const filtros = lerFiltrosUi();
         const partes = [];
 
+        if (filtros.tipo) {
+            partes.push(filtros.tipo);
+        }
+
         if (filtros.municipio) {
             partes.push(filtros.municipio);
         }
 
-        if (filtros.link === 'sem_link') {
-            partes.push('sem link');
-        } else if (filtros.link === 'com_link') {
-            partes.push('com link');
-        }
-
-        if (filtros.ativo === '0') {
-            partes.push('inativos');
-        } else if (filtros.ativo === 'todos') {
-            partes.push('ativos e inativos');
-        }
-
-        if (!filtros.coordenadas) {
-            partes.push('inclui sem coordenadas');
-        }
-
-        if (filtros.busca) {
-            partes.push(`“${filtros.busca}”`);
-        }
-
-        const base = partes.length ? partes.join(' · ') : 'Todos os pendentes';
+        const base = partes.length ? partes.join(' · ') : 'Todos os tipos e municípios';
 
         return state.facetas.disponiveis !== null
             ? `${base} · ${state.facetas.disponiveis} disponíveis`
@@ -1751,26 +1726,37 @@
         }
     }
 
-    function preencherMunicipios() {
-        const select = ui('wmt-f-municipio');
+    function preencherOpcoes(idCampo, rotuloTodos, lista) {
+        const select = ui(idCampo);
 
         if (!select) {
             return;
         }
 
         const atual = select.value;
-        const lista = state.facetas.municipios;
 
-        let html = '<option value="">Todos os municípios</option>' + lista
-            .map(m => `<option value="${esc(m.nome)}">${esc(m.nome)} (${esc(m.total)})</option>`)
+        let html = `<option value="">${esc(rotuloTodos)}</option>` + lista
+            .map(o => `<option value="${esc(o.nome)}">${esc(o.nome)} (${esc(o.total)})</option>`)
             .join('');
 
-        if (atual && !lista.some(m => m.nome === atual)) {
+        if (atual && !lista.some(o => o.nome.toLowerCase() === atual.toLowerCase())) {
             html += `<option value="${esc(atual)}">${esc(atual)} (0)</option>`;
         }
 
         select.innerHTML = html;
-        select.value = atual;
+
+        // Casa sem diferenciar maiúsculas (a API compara o tipo sem diferenciar).
+        const igual = Array.from(select.options).find(o => o.value.toLowerCase() === atual.toLowerCase());
+
+        select.value = igual ? igual.value : '';
+    }
+
+    function preencherMunicipios() {
+        preencherOpcoes('wmt-f-municipio', 'Todos os municípios', state.facetas.municipios);
+    }
+
+    function preencherTipos() {
+        preencherOpcoes('wmt-f-tipo', 'Todos os tipos', state.facetas.tipos);
     }
 
     /** Pede à API as opções de filtro (municípios e contagem) para a seleção atual. */
@@ -1779,7 +1765,7 @@
         const uf = ui('wmt-uf').value;
 
         if (!tipo || tipo.api !== 'saude' || !uf || !obterToken()) {
-            state.facetas = { municipios: [], disponiveis: null };
+            state.facetas = { tipos: [], municipios: [], disponiveis: null };
             atualizarResumoFiltros();
             return;
         }
@@ -1809,10 +1795,12 @@
             const disponiveis = Number(resposta.disponiveis);
 
             state.facetas = {
+                tipos: Array.isArray(resposta.tipos) ? resposta.tipos : [],
                 municipios: Array.isArray(resposta.municipios) ? resposta.municipios : [],
                 disponiveis: Number.isFinite(disponiveis) ? disponiveis : null
             };
 
+            preencherTipos();
             preencherMunicipios();
         } catch (erro) {
             if (sequencia !== state.facetaSeq) {
@@ -1933,33 +1921,15 @@
                     </summary>
 
                     <div class="wmt-config-corpo">
+                        <label for="wmt-f-tipo">Tipo de estabelecimento:</label>
+                        <select id="wmt-f-tipo">
+                            <option value="">Todos os tipos</option>
+                        </select>
+
                         <label for="wmt-f-municipio">Município:</label>
                         <select id="wmt-f-municipio">
                             <option value="">Todos os municípios</option>
                         </select>
-
-                        <label for="wmt-f-link">Link do Waze:</label>
-                        <select id="wmt-f-link">
-                            <option value="">Todos</option>
-                            <option value="sem_link">Sem link (a vincular)</option>
-                            <option value="com_link">Com link (a conferir)</option>
-                        </select>
-
-                        <label for="wmt-f-ativo">Situação no CNES:</label>
-                        <select id="wmt-f-ativo">
-                            <option value="1">Somente ativos</option>
-                            <option value="0">Somente inativos</option>
-                            <option value="todos">Ativos e inativos</option>
-                        </select>
-
-                        <label for="wmt-f-coordenadas">Coordenadas:</label>
-                        <select id="wmt-f-coordenadas">
-                            <option value="com_coord">Somente com coordenadas</option>
-                            <option value="">Todos</option>
-                        </select>
-
-                        <label for="wmt-f-busca">Buscar (nome, CNES ou rua):</label>
-                        <input type="search" id="wmt-f-busca" placeholder="Ex.: UPA, 2096250, Rua A" autocomplete="off" maxlength="100">
 
                         <div id="wmt-f-contagem" class="wmt-filtros-contagem" role="status"></div>
 
@@ -2181,11 +2151,8 @@
             'wmt-uf',
             'wmt-tipo',
             'wmt-usuario',
+            'wmt-f-tipo',
             'wmt-f-municipio',
-            'wmt-f-link',
-            'wmt-f-ativo',
-            'wmt-f-coordenadas',
-            'wmt-f-busca',
             'wmt-f-limpar'
         ].forEach(id => {
             const campo = ui(id);
@@ -3552,7 +3519,7 @@
             tipo: 'SAUDE',
             nome: estabelecimento.nome || estabelecimento.nome_fantasia,
             cnes: estabelecimento.cnes,
-            categoria: estabelecimento.tipo_estabelecimento,
+            categoria: estabelecimento.tipo ?? estabelecimento.tipo_estabelecimento ?? null,
             telefone: estabelecimento.telefone ?? estabelecimento.phone ?? null,
             ativo: normalizarAtivo(estabelecimento.ativo),
             situacao: normalizarAtivo(estabelecimento.ativo) === true ? 'Ativo' : (normalizarAtivo(estabelecimento.ativo) === false ? 'Inativo' : 'Não informado pela API'),

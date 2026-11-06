@@ -12,6 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(name: 'uniq_es_cnes', columns: ['cnes'])]
 #[ORM\Index(name: 'idx_es_uf_municipio', columns: ['uf', 'municipio'])]
 #[ORM\Index(name: 'idx_es_status', columns: ['status'])]
+#[ORM\Index(name: 'idx_es_uf_tipo', columns: ['uf', 'tipo'])]
 #[ORM\Index(name: 'idx_es_reservado_para', columns: ['reservado_para'])]
 #[ORM\Index(name: 'idx_es_uf_ativo_status_reservado_em', columns: ['uf', 'ativo', 'status', 'reservado_em'])]
 class EstabelecimentoSaude
@@ -49,6 +50,13 @@ class EstabelecimentoSaude
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $municipio = null;
+
+    /**
+     * Tipo do estabelecimento (ex.: UPA, UBS, Hospital). Principal filtro do script do WME.
+     * Se a coluna do seu banco tiver outro nome, ajuste só o `name:` abaixo.
+     */
+    #[ORM\Column(name: 'tipo', length: 255, nullable: true)]
+    private ?string $tipo = null;
 
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $logradouro = null;
@@ -116,6 +124,9 @@ class EstabelecimentoSaude
 
     public function getMunicipio(): ?string { return $this->municipio; }
     public function setMunicipio(?string $v): self { $this->municipio = $v; return $this; }
+
+    public function getTipo(): ?string { return $this->tipo; }
+    public function setTipo(?string $v): self { $this->tipo = $v; return $this; }
 
     public function getLogradouro(): ?string { return $this->logradouro; }
     public function setLogradouro(?string $v): self { $this->logradouro = $v; return $this; }

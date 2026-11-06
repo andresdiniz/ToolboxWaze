@@ -15,14 +15,30 @@ final class CoberturaContribuicaoService
     {
         return $this->db->createSchemaManager()->tablesExist(['cobertura_contribuicao']);
     }
+    private const CAMPOS_VINCULO = ['linkWaze','linkAreaEscolar','wazeLink','waze_link','link_waze','link_area_escolar'];
+
+    /** Converte qualquer valor de campo alterado em texto comparável (datas, bool, null, objetos). */
+    private static function texto(mixed $valor): string
+    {
+        return match (true) {
+            $valor === null => '',
+            $valor instanceof \DateTimeInterface => $valor->format('Y-m-d H:i:s'),
+            is_bool($valor) => $valor ? '1' : '0',
+            is_scalar($valor) || $valor instanceof \Stringable => trim((string) $valor),
+            default => '', // arrays/objetos (ex.: JSON de snapshot) nunca são status nem vínculo
+        };
+    }
+
     public static function acao(string $campo, mixed $antes, mixed $depois): ?string
     {
-        $antes = trim((string) ($antes ?? '')); $depois = trim((string) ($depois ?? ''));
+        // Só status e vínculo geram contribuição; qualquer outro campo (datas de reserva, etc.) é ignorado
+        // antes de converter valores, para nunca quebrar o salvamento da entidade.
+        if ($campo !== 'status' && !in_array($campo, self::CAMPOS_VINCULO, true)) return null;
+        $antes = self::texto($antes); $depois = self::texto($depois);
         if ($antes === $depois) return null;
         if ($campo === 'status') return match ($depois) {
             'confirmado' => 'confirmacao', 'nao_localizado' => 'nao_localizado', 'pulado' => 'pulado', default => null,
         };
-        if (!in_array($campo, ['linkWaze','linkAreaEscolar','wazeLink','waze_link','link_waze','link_area_escolar'], true)) return null;
         return $depois === '' ? 'remocao_vinculo' : ($antes === '' ? 'cadastro_vinculo' : 'manutencao_vinculo');
     }
     public function registrar(array $evento): bool

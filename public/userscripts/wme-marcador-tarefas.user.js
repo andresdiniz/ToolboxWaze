@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Tarefas Pendentes
-// @version      3.6.0
+// @version      3.7.1
 // @description  Marcador de Tarefas (lombadas, semáforos, faixas, escolas, saúde...) com WME SDK, token pessoal validado, ranking, filtros de Saúde (tipo e município), seleção automática do Place, comparação fonte × WME e fluxo de confirmação simplificado
 // @author       Andre Soares Diniz
 // @match        https://www.waze.com/editor*
@@ -1996,35 +1996,47 @@
     async function criarPainel() {
         const container = document.createElement('div');
         container.id = 'wmt-container';
-        container.className = 'wmt';
-        container.innerHTML = htmlPainel();
-
-        try {
-            const { tabLabel, tabPane } = await state.sdk.Sidebar.registerScriptTab();
-
-            tabLabel.innerHTML = (
-                '<span title="Marcador de Tarefas" style="font-size:15px;">📍</span>'
-            );
-
-            tabPane.appendChild(container);
-        } catch (erro) {
-            console.warn(
-                LOG,
-                'Não foi possível registrar a aba pelo SDK; usando painel alternativo.',
-                erro
-            );
-
-            const hospedeiro = document.querySelector('#user-info');
-
-            if (hospedeiro) {
-                hospedeiro.appendChild(container);
-            } else {
-                container.classList.add('wmt-flutuante');
-                document.body.appendChild(container);
-            }
-        }
-
+        container.className = 'wmt wmt-flutuante';
+        container.innerHTML = '<div id="wmt-window-bar" style="display:flex;justify-content:space-between;align-items:center;cursor:move;padding:8px;border-bottom:1px solid #888">' +
+            '<strong>Tarefas — painel independente</strong><button type="button" id="wmt-window-toggle" class="wmt-neutro">Recolher</button></div>' +
+            '<div id="wmt-window-content">' + htmlPainel() + '</div>';
+        Object.assign(container.style, {top:'75px',right:'15px',bottom:'auto',width:'360px',maxWidth:'95vw',maxHeight:'85vh',overflowY:'auto',zIndex:'10000'});
+        document.body.appendChild(container);
         state.painel = container;
+        const content = container.querySelector('#wmt-window-content');
+        container.querySelector('#wmt-window-toggle').onclick = e => {
+            content.hidden = !content.hidden;
+            e.target.textContent = content.hidden ? 'Expandir' : 'Recolher';
+        };
+        const bar = container.querySelector('#wmt-window-bar');
+        let drag = null;
+        bar.addEventListener('pointerdown', e => {
+            if (e.target.closest('button') || e.button !== 0) return;
+            const r = container.getBoundingClientRect();
+            drag = {x:e.clientX-r.left,y:e.clientY-r.top};
+            bar.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+        bar.addEventListener('pointermove', e => {
+            if (!drag) return;
+            container.style.left = Math.max(0, Math.min(innerWidth-container.offsetWidth,e.clientX-drag.x))+'px';
+            container.style.top = Math.max(0, Math.min(innerHeight-45,e.clientY-drag.y))+'px';
+            container.style.right = 'auto';
+        });
+        bar.addEventListener('pointerup', () => {drag=null;});
+        bar.addEventListener('pointercancel', () => {drag=null;});
+        container.addEventListener('click', async e => {
+            if (!e.target.closest('[data-wmt-copy]')) return;
+            const item = state.lote[state.indice];
+            const venue = item?.venues?.encontrados.find(v => v.id === item.venues.escolha);
+            if (!venue) return;
+            const texto = diferencasVisiveis(item, venue).map(l => l.campo+': '+l.fonte).join('\n');
+            try {await navigator.clipboard.writeText(texto); setStatus('Diferenças copiadas. Cole manualmente no Place.', 'ok');}
+            catch (erro) {setStatus('Não foi possível copiar: '+erro.message, 'erro');}
+        });
+        const style = document.createElement('style');
+        style.textContent = '#wmt-container .wmt-cmp-linha small{opacity:1;color:var(--wmt-text,#e8eaed)} #wmt-container[data-tema="claro"]{background:#fff;color:#1f2328}';
+        document.head.appendChild(style);
     }
 
     function popularUFs() {
@@ -2561,38 +2573,43 @@
         return `<div class="wmt-cmp-compacta"><b>${esc(linha.campo)}:</b><span>${esc(valor)}</span></div>`;
     }
 
+    function normalizarNomeComparacao(valor) {
+        return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+    }
+
+    function nomeApresentacao(valor) {
+        const siglas = new Set(['UBS', 'UPA', 'SUS', 'SAMU', 'APAE', 'CMEI', 'EMEI']);
+        return String(valor || '').trim().replace(/\s+/g, ' ').split(' ').map((p, i) => {
+            if (siglas.has(p.toUpperCase())) return p.toUpperCase();
+            p = p.toLocaleLowerCase('pt-BR');
+            return i && /^(de|da|do|das|dos|e|em|na|no)$/.test(p) ? p : p.replace(/(^|[-'])\p{L}/gu, c => c.toLocaleUpperCase('pt-BR'));
+        }).join(' ');
+    }
+
+    function telefoneCanonico(valor) {
+        let n = String(valor || '').replace(/\D/g, '').replace(/^0+/, '');
+        if (/^55\d{10,11}$/.test(n)) n = n.slice(2);
+        return n;
+    }
+
+    function diferencasVisiveis(item, venue) {
+        const nome = item.tipo === 'ESCOLAS' ? item.escola : item.nome;
+        return montarComparacao(item, venue).filter(l => {
+            if (!l.fonte || ['Situação', 'Categoria'].includes(l.campo)) return false;
+            if (l.campo === 'Nome') return normalizarNomeComparacao(nome) !== normalizarNomeComparacao(venue.nome);
+            if (l.campo === 'Telefone') return compararTelefones(item.telefone, venue.telefone).resultado !== 'igual'
+                && telefoneCanonico(item.telefone) !== telefoneCanonico(venue.telefone);
+            return ['diferente', 'parecido', 'ausente_wme'].includes(l.resultado);
+        }).map(l => l.campo === 'Nome' ? {...l, fonte: nomeApresentacao(nome)} : l);
+    }
+
     function htmlComparacao(item, venue) {
-        const linhas = montarComparacao(item, venue);
-        const divergentes = linhas.filter(l => l.resultado === 'diferente');
-        const conferir = linhas.filter(l => ['parecido', 'ausente_fonte', 'ausente_wme'].includes(l.resultado));
-        const comAlerta = linhas.filter(l => divergentes.includes(l) || conferir.includes(l));
-        const semAlerta = linhas.filter(l => !comAlerta.includes(l));
-        const iguaisAberto = Boolean(item.venues && item.venues.cmpIguaisAberto);
-        const chip = (classe, texto) => `<span class="wmt-chip wmt-chip-${classe}">${esc(texto)}</span>`;
-        const resumo = [];
-
-        if (divergentes.length) {
-            resumo.push(chip('diferente', `${divergentes.length} ${divergentes.length === 1 ? 'divergência' : 'divergências'}`));
-        }
-
-        if (conferir.length) {
-            resumo.push(chip('parecido', `${conferir.length} a conferir`));
-        }
-
-        if (!divergentes.length && !conferir.length) {
-            resumo.push(chip('igual', 'Sem divergências'));
-        }
-
-        return '<div class="wmt-cmp"><div class="wmt-cmp-titulo">Fonte × WME</div>' +
-            `<div class="wmt-cmp-resumo">${resumo.join('')}</div>` +
-            comAlerta.map(htmlLinhaComparacao).join('') +
-            (semAlerta.length
-                ? `<details class="wmt-cmp-iguais" data-cmp-iguais ${iguaisAberto ? 'open' : ''}>` +
-                  `<summary>Sem alerta (${semAlerta.length}): ${esc(semAlerta.map(l => l.campo).join(', '))}</summary>` +
-                  semAlerta.map(htmlLinhaCompacta).join('') +
-                  '</details>'
-                : '') +
-            '</div><small>A comparação é só um auxílio: nome parecido não prova que é o mesmo estabelecimento.</small>';
+        const linhas = diferencasVisiveis(item, venue);
+        return '<div class="wmt-cmp"><div class="wmt-cmp-titulo">Diferenças fonte × WME</div>' +
+            (linhas.length ? linhas.map(htmlLinhaComparacao).join('') +
+                '<button type="button" class="wmt-primario wmt-full" data-wmt-copy>Copiar somente diferenças</button>' :
+                '<p>Sem diferenças nos campos comparáveis.</p>') + '</div>';
     }
 
     function apiVenuesSdk() {

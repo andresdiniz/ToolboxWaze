@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         WME Tarefas Pendentes
-// @version      3.7.1
+// @version      3.8.0
 // @description  Marcador de Tarefas (lombadas, semáforos, faixas, escolas, saúde...) com WME SDK, token pessoal validado, ranking, filtros de Saúde (tipo e município), seleção automática do Place, comparação fonte × WME e fluxo de confirmação simplificado
 // @author       Andre Soares Diniz
 // @match        https://www.waze.com/editor*
@@ -9,6 +9,7 @@
 // @match        https://beta.waze.com/*/editor*
 // @exclude      https://www.waze.com/user/editor*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setClipboard
 // @grant        GM_info
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -19,7 +20,7 @@
 // @connect      wazetoolbox.acheireviews.com.br
 // ==/UserScript==
 
-/* global GM_info, GM_xmlhttpRequest, GM_getValue, GM_setValue, GM_deleteValue, unsafeWindow */
+/* global GM_setClipboard, GM_info, GM_xmlhttpRequest, GM_getValue, GM_setValue, GM_deleteValue, unsafeWindow */
 
 (function () {
     'use strict';
@@ -1993,51 +1994,152 @@
         `;
     }
 
-    async function criarPainel() {
-        const container = document.createElement('div');
-        container.id = 'wmt-container';
-        container.className = 'wmt wmt-flutuante';
-        container.innerHTML = '<div id="wmt-window-bar" style="display:flex;justify-content:space-between;align-items:center;cursor:move;padding:8px;border-bottom:1px solid #888">' +
-            '<strong>Tarefas — painel independente</strong><button type="button" id="wmt-window-toggle" class="wmt-neutro">Recolher</button></div>' +
-            '<div id="wmt-window-content">' + htmlPainel() + '</div>';
-        Object.assign(container.style, {top:'75px',right:'15px',bottom:'auto',width:'360px',maxWidth:'95vw',maxHeight:'85vh',overflowY:'auto',zIndex:'10000'});
-        document.body.appendChild(container);
-        state.painel = container;
-        const content = container.querySelector('#wmt-window-content');
-        container.querySelector('#wmt-window-toggle').onclick = e => {
-            content.hidden = !content.hidden;
-            e.target.textContent = content.hidden ? 'Expandir' : 'Recolher';
-        };
-        const bar = container.querySelector('#wmt-window-bar');
-        let drag = null;
-        bar.addEventListener('pointerdown', e => {
-            if (e.target.closest('button') || e.button !== 0) return;
-            const r = container.getBoundingClientRect();
-            drag = {x:e.clientX-r.left,y:e.clientY-r.top};
-            bar.setPointerCapture(e.pointerId);
-            e.preventDefault();
-        });
-        bar.addEventListener('pointermove', e => {
-            if (!drag) return;
-            container.style.left = Math.max(0, Math.min(innerWidth-container.offsetWidth,e.clientX-drag.x))+'px';
-            container.style.top = Math.max(0, Math.min(innerHeight-45,e.clientY-drag.y))+'px';
-            container.style.right = 'auto';
-        });
-        bar.addEventListener('pointerup', () => {drag=null;});
-        bar.addEventListener('pointercancel', () => {drag=null;});
-        container.addEventListener('click', async e => {
-            if (!e.target.closest('[data-wmt-copy]')) return;
-            const item = state.lote[state.indice];
-            const venue = item?.venues?.encontrados.find(v => v.id === item.venues.escolha);
-            if (!venue) return;
-            const texto = diferencasVisiveis(item, venue).map(l => l.campo+': '+l.fonte).join('\n');
-            try {await navigator.clipboard.writeText(texto); setStatus('Diferenças copiadas. Cole manualmente no Place.', 'ok');}
-            catch (erro) {setStatus('Não foi possível copiar: '+erro.message, 'erro');}
-        });
-        const style = document.createElement('style');
-        style.textContent = '#wmt-container .wmt-cmp-linha small{opacity:1;color:var(--wmt-text,#e8eaed)} #wmt-container[data-tema="claro"]{background:#fff;color:#1f2328}';
-        document.head.appendChild(style);
+    let wmtEditando = false;
+
+    async function wmtCopiar(texto) {
+        if(!texto)throw new Error('Nenhum dado disponível para copiar.');
+        if(typeof GM_setClipboard==='function'){
+            try{GM_setClipboard(texto,'text');return;}catch(e){console.warn(LOG,e);}
+        }
+        if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(texto);return;}catch(e){console.warn(LOG,e);}}
+        const t=document.createElement('textarea');t.value=texto;t.style.cssText='position:fixed;top:0;left:0;z-index:1000000;';document.body.appendChild(t);
+        t.focus();t.select();let ok=false;try{ok=document.execCommand('copy');}finally{t.remove();}
+        if(!ok){window.prompt('A cópia automática foi bloqueada. Selecione e copie:',texto);throw new Error('Cópia automática bloqueada; texto disponibilizado para cópia manual.');}
     }
+
+    function wmtDialogo(titulo,conteudo) {
+        if(document.getElementById('wmt-edit-modal'))throw new Error('Feche a janela de edição já aberta.');
+        const overlay=document.createElement('div');overlay.id='wmt-edit-modal';overlay.className='wmt-overlay';
+        overlay.innerHTML='<div class="wmt-modal" role="dialog" aria-modal="true"><h3>'+esc(titulo)+'</h3>'+conteudo+'<div class="wmt-modal-status" data-msg role="status"></div><div class="wmt-modal-botoes"><button type="button" class="wmt-sucesso" data-ok>Confirmar</button><button type="button" class="wmt-neutro" data-cancel>Cancelar</button></div></div>';
+        document.body.appendChild(overlay);overlay.querySelector('[data-cancel]').onclick=()=>{if(!wmtEditando)overlay.remove();};return overlay;
+    }
+
+    function wmtCoordenadas(item) {
+        const parts=String(item.coords||'').split(',').map(t=>t.trim());
+        if(parts.length!==2||parts.some(t=>!t))throw new Error('Tarefa sem coordenadas válidas.');
+        const [lat,lon]=parts.map(Number);
+        if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)throw new Error('Coordenadas inválidas.');
+        return {lat,lon};
+    }
+
+    async function wmtAplicar(item) {
+        const id=item.venues?.escolha;
+        if(!id||id===VENUE.NENHUM)throw new Error('Selecione um Place para aplicar os dados.');
+        const venue=await lerVenue(String(id));if(!venue)throw new Error('Place indisponível. Releia os dados.');
+        const dif=linhasValidacao(item,venue), nome=nomeTitulo(item.tipo==='ESCOLAS'?item.escola:item.nome);
+        const telefone=String(item.telefone||'').trim();
+        const campos=[];
+        if(dif.some(l=>l.campo==='Nome')&&nome)campos.push({key:'name',label:'Nome',value:nome,antes:venue.nome});
+        if(dif.some(l=>l.campo==='Telefone')&&wmtTelefones(telefone).length)campos.push({key:'phone',label:'Telefone',value:telefone,antes:venue.telefone});
+        const modal=wmtDialogo('Aplicar dados no Place '+id,
+            '<p>Revise o alvo: '+esc(venue.nome||'Sem nome')+'. Marque os campos autorizados. Nada será salvo automaticamente.</p>'+
+            campos.map(c=>'<label style="display:block;margin:10px 0"><input type="checkbox" data-field="'+c.key+'"> '+esc(c.label)+': '+esc(c.antes||'(vazio)')+' → '+esc(c.value)+'</label>').join('')+
+            '<p>Endereço e município: use “Copiar texto” e revise manualmente no WME. Rua e cidade exigem os IDs do modelo; o script não cria associações por aproximação.</p>');
+        modal.querySelector('[data-ok]').onclick=async()=>{
+            const msg=modal.querySelector('[data-msg]'),button=modal.querySelector('[data-ok]');
+            try{
+                if(wmtEditando) return;
+                if(state.lote[state.indice]!==item||String(item.venues?.escolha)!==String(id))throw new Error('A tarefa ou o Place mudou. Feche esta janela e tente novamente.');
+                const args={venueId:String(id)};
+                campos.forEach(c=>{if(modal.querySelector('[data-field="'+c.key+'"]').checked)args[c.key]=c.value;});
+                if(Object.keys(args).length===1)throw new Error('Marque ao menos um campo para aplicar.');
+                if(state.sdk.Editing.isEditingAllowed&&!state.sdk.Editing.isEditingAllowed())throw new Error('O WME não permite edição neste momento.');
+                const atual=await lerVenue(String(id));
+                if(!atual)throw new Error('Place indisponível.');
+                if(('name'in args&&atual.nome!==venue.nome)||('phone'in args&&atual.telefone!==venue.telefone))throw new Error('Os dados do Place mudaram. Reabra a revisão.');
+                wmtEditando=true;button.disabled=true;
+                await Promise.resolve(apiVenuesSdk().updateVenue(args));
+                modal.remove();await atualizarVenuesAtual(false);
+                setStatus('Dados aplicados no Place. Revise no WME e salve manualmente.','ok');
+            }catch(e){msg.textContent=e.message;setStatus(e.message,'erro');}
+            finally{wmtEditando=false;button.disabled=false;}
+        };
+    }
+
+    async function wmtCriar(item) {
+        const api=apiVenuesSdk();
+        if(typeof api.addVenue!=='function'||typeof api.updateVenue!=='function')throw new Error('SDK sem suporte à criação/edição de Place.');
+        if(item.wmtCriado){
+            const existente=await lerVenue(item.wmtCriado);
+            if(existente)throw new Error('Já foi criado um Place nesta tarefa: '+item.wmtCriado+'. Revise e salve esse Place; não crie outro.');
+        }
+        const ids=idsSelecionadosSdk();
+        if(ids.length)throw new Error('Já existe um Place selecionado. Use “Usar Place selecionado” ou remova a seleção antes de criar outro.');
+        const coords=wmtCoordenadas(item), nome=nomeTitulo(item.tipo==='ESCOLAS'?item.escola:item.nome);
+        if(!nome)throw new Error('A fonte não fornece nome para criar o Place.');
+        const categorias=await Promise.resolve(api.getAllVenueCategories());
+        if(!Array.isArray(categorias)||!categorias.length)throw new Error('Não foi possível obter categorias do SDK.');
+        const carregados=typeof api.getAll==='function'?await Promise.resolve(api.getAll()):[];
+        const proximos=(Array.isArray(carregados)?carregados:[]).filter(v=>{
+            const c=coordenadasVenue(v);if(!c)return false;
+            const d=Math.hypot((c.lat-coords.lat)*111320,(c.lon-coords.lon)*111320*Math.cos(coords.lat*Math.PI/180));return d<100;
+        });
+        const modal=wmtDialogo('Criar Place no WME',
+            '<p>Será criado um Place de ponto nas coordenadas da tarefa. A posição não é uma confirmação da entrada do estabelecimento.</p>'+
+            '<p>Nome: '+esc(nome)+'<br>Coordenadas: '+esc(coords.lat+', '+coords.lon)+'</p>'+
+            '<label>Categoria</label><select data-category style="width:100%;padding:8px"><option value="">Selecione a categoria correta</option>'+
+            categorias.map((c,i)=>'<option value="'+i+'">'+esc(c.localizedName||String(c.id))+'</option>').join('')+'</select>'+
+            '<p>'+proximos.length+' Place(s) de ponto carregado(s) a menos de 100 m. Áreas e objetos não carregados não entram nesta contagem.</p>'+
+            (proximos.length?'<ul>'+proximos.slice(0,10).map(v=>'<li>'+esc(v.name||'Sem nome')+' — '+esc(v.id)+'</li>').join('')+'</ul>':'')+
+            '<label style="display:block;margin:10px 0"><input type="checkbox" data-reviewed> Conferi o mapa e não há Place duplicado. Autorizo criar neste ponto.</label>'+
+            '<p>Nome e telefone válido serão preenchidos. Endereço e município serão revisados manualmente. O script não salva as edições.</p>');
+        modal.querySelector('[data-ok]').textContent='Criar Place';
+        modal.querySelector('[data-ok]').onclick=async()=>{
+            const msg=modal.querySelector('[data-msg]'),button=modal.querySelector('[data-ok]');let criado=null;
+            try{
+                if(wmtEditando)return;
+                if(state.lote[state.indice]!==item)throw new Error('A tarefa mudou. Reabra a criação.');
+                if(item.wmtCriado)throw new Error('Esta tarefa já tem criação pendente. Revise o Place '+item.wmtCriado+'.');
+                if(idsSelecionadosSdk().length)throw new Error('Um Place foi selecionado. Feche esta janela e revise a seleção.');
+                const escolha=modal.querySelector('[data-category]').value;
+                if(escolha==='')throw new Error('Escolha a categoria.');
+                if(!modal.querySelector('[data-reviewed]').checked)throw new Error('Confirme a revisão de duplicidade e posição.');
+                if(state.sdk.Editing.isEditingAllowed&&!state.sdk.Editing.isEditingAllowed())throw new Error('Edição indisponível no WME.');
+                wmtEditando=true;button.disabled=true;
+                criado=String(await Promise.resolve(api.addVenue({category:categorias[Number(escolha)].id,geometry:{type:'Point',coordinates:[coords.lon,coords.lat]}})));
+                item.wmtCriado=criado;
+                const args={venueId:criado,name:nome};if(wmtTelefones(item.telefone).length)args.phone=String(item.telefone).trim();
+                await Promise.resolve(api.updateVenue(args));
+                item.venues.extras=[...new Set([...(item.venues.extras||[]),criado])];item.venues.escolha=criado;item.venues.selecaoManual=true;
+                try{state.sdk.Editing.setSelection({selection:{objectType:'venue',ids:[criado]}});}catch(e){console.warn(LOG,'Place criado; falha ao selecionar',e);}
+                modal.remove();await atualizarVenuesAtual(false);
+                setStatus('Place criado e preenchido no WME. Revise endereço, posição e categoria; salve manualmente antes de confirmar a tarefa.','ok');
+            }catch(e){msg.textContent=(criado?'Place '+criado+' foi criado, mas houve falha posterior. Não repita a criação: ':'')+e.message;setStatus(msg.textContent,'erro');}
+            finally{wmtEditando=false;button.disabled=false;}
+        };
+    }
+
+    async function wmtAcaoPainel(evento) {
+        const button=evento.target.closest('[data-wmt-tool]');if(!button)return;
+        const item=state.lote[state.indice];if(!item?.venues)return;
+        if(state.salvando||state.carregando||wmtEditando)return;
+        try{
+            const action=button.dataset.wmtTool;
+            if(action==='create'){await wmtCriar(item);return;}
+            const venue=item.venues.encontrados.find(v=>String(v.id)===String(item.venues.escolha));
+            if(!venue)throw new Error('Escolha um Place antes de continuar.');
+            if(action==='apply'){await wmtAplicar(item);return;}
+            if(action==='copy'){
+                const texto=linhasValidacao(item,venue).map(l=>l.campo+': '+(l.campo==='Nome'?nomeTitulo(l.fonte):l.fonte)).join('\n');
+                await wmtCopiar(texto);setStatus('Texto copiado para a área de transferência. Para alterar o Place, use “Aplicar no Place”.','ok');
+            }
+        }catch(e){console.error(LOG,e);setStatus(e.message,'erro');}
+    }
+
+    async function criarPainel() {
+        const container=document.createElement('div');container.id='wmt-container';container.className='wmt wmt-flutuante';
+        container.innerHTML='<div id="wmt-drag" style="display:flex;align-items:center;justify-content:space-between;cursor:move;padding:8px;border-bottom:1px solid #888"><strong>Tarefas — painel independente</strong><button type="button" id="wmt-collapse" class="wmt-neutro">Recolher</button></div><div id="wmt-body">'+htmlPainel()+'</div>';
+        Object.assign(container.style,{top:'75px',right:'15px',bottom:'auto',width:'370px',maxWidth:'95vw',maxHeight:'85vh',overflowY:'auto',zIndex:'10000'});
+        document.body.appendChild(container);state.painel=container;
+        const body=container.querySelector('#wmt-body');container.querySelector('#wmt-collapse').onclick=e=>{body.hidden=!body.hidden;e.target.textContent=body.hidden?'Expandir':'Recolher';};
+        const bar=container.querySelector('#wmt-drag');let drag=null;bar.style.touchAction='none';
+        bar.addEventListener('pointerdown',e=>{if(e.target.closest('button')||e.button!==0)return;const r=container.getBoundingClientRect();drag={x:e.clientX-r.left,y:e.clientY-r.top};bar.setPointerCapture(e.pointerId);e.preventDefault();});
+        bar.addEventListener('pointermove',e=>{if(!drag)return;container.style.left=Math.max(0,Math.min(innerWidth-container.offsetWidth,e.clientX-drag.x))+'px';container.style.top=Math.max(0,Math.min(innerHeight-45,e.clientY-drag.y))+'px';container.style.right='auto';});
+        ['pointerup','pointercancel','lostpointercapture'].forEach(n=>bar.addEventListener(n,()=>{drag=null;}));
+        container.addEventListener('click',wmtAcaoPainel);
+        const css=document.createElement('style');css.textContent='#wmt-container .wmt-cmp-linha small{opacity:1;color:var(--wmt-text,#e8eaed)}';document.head.appendChild(css);
+    }
+
 
     function popularUFs() {
         const select = ui('wmt-uf');
@@ -2414,33 +2516,23 @@
         return null;
     }
 
-    function compararTelefones(fonte, wme) {
-        const listaFonte = extrairTelefones(fonte);
-        const listaWme = extrairTelefones(wme);
-
-        if (!listaFonte.length && !listaWme.length) {
-            return { resultado: 'nao_comparavel', detalhe: 'Sem telefone nos dois lados.' };
-        }
-        if (!listaFonte.length) return { resultado: 'ausente_fonte' };
-        if (!listaWme.length) return { resultado: 'ausente_wme' };
-
-        const temCorrespondente = (lista, alvo) => lista.some(n => telefonesCorrespondem(n, alvo));
-        const todosWmeNaFonte = listaWme.every(n => temCorrespondente(listaFonte, n));
-        const todosFonteNoWme = listaFonte.every(n => temCorrespondente(listaWme, n));
-
-        if (todosWmeNaFonte && todosFonteNoWme) {
-            const soSufixo = listaWme.some(n => listaFonte.some(m => telefonesCorrespondem(n, m) === 'sufixo'));
-            return soSufixo
-                ? { resultado: 'igual', detalhe: 'Um dos lados está sem DDD ou código do país.' }
-                : { resultado: 'igual' };
-        }
-
-        const algumEmComum = listaWme.some(n => temCorrespondente(listaFonte, n));
-        return {
-            resultado: 'diferente',
-            detalhe: algumEmComum ? 'Há um número em comum, mas as listas não coincidem.' : undefined
-        };
+    function wmtTelefone(valor) {
+        let n=String(valor||'').replace(/\D/g,'').replace(/^0+/,'');
+        if(/^55\d{10,11}$/.test(n))n=n.slice(2);return n;
     }
+    function wmtTelefones(valor) {
+        return [...new Set(String(valor||'').split(/[\/;,|]|\s+e\s+|\s+ou\s+/i).map(wmtTelefone).filter(n=>/^\d{8,11}$/.test(n)))].sort();
+    }
+    function compararTelefones(fonte,wme) {
+        const f=wmtTelefones(fonte),w=wmtTelefones(wme);
+        if(!f.length&&!w.length)return {resultado:'nao_comparavel'};
+        if(!f.length)return {resultado:'ausente_fonte'};
+        if(!w.length)return {resultado:'ausente_wme'};
+        if(JSON.stringify(f)===JSON.stringify(w))return {resultado:'igual'};
+        const parcial=f.some(a=>w.some(b=>a!==b&&([8,9].includes(a.length)||[8,9].includes(b.length))&&(a.endsWith(b)||b.endsWith(a))));
+        return {resultado:parcial?'parecido':'diferente',detalhe:parcial?'Número local coincide; confira DDD e lista.':'Números diferentes após normalização.'};
+    }
+
 
     function normalizarNumero(valor) {
         const texto = textoLimitado(valor, 50);
@@ -2476,38 +2568,46 @@
         return rua ? { rua, numero } : null;
     }
 
-    function compararEndereco(item, venue) {
-        const fonte = dividirEnderecoFonte(item.endereco);
-        const sdk = venue.enderecoSdk || {};
-        const ruaWme = textoLimitado(sdk.rua, 255);
-
-        if (!fonte && !ruaWme) return { resultado: 'nao_comparavel', detalhe: 'Sem endereço nos dois lados.' };
-        if (!fonte) return { resultado: 'ausente_fonte' };
-        if (!ruaWme) return { resultado: 'ausente_wme' };
-
-        const rua = compararTextos(fonte.rua, ruaWme, { expandir: true });
-        const numeroFonte = normalizarNumero(fonte.numero);
-        const numeroWme = normalizarNumero(sdk.numero);
-
-        if (rua.resultado === 'diferente') {
-            return { resultado: 'diferente', detalhe: 'Rua diferente.' };
-        }
-
-        if (numeroFonte && numeroWme && numeroFonte !== numeroWme) {
-            return {
-                resultado: 'diferente',
-                detalhe: `Número divergente: ${fonte.numero} (fonte) × ${sdk.numero} (WME).`
-            };
-        }
-
-        if (rua.resultado === 'parecido') {
-            return { resultado: 'parecido', detalhe: 'Rua parecida, não idêntica.' };
-        }
-
-        return numeroFonte && numeroWme
-            ? { resultado: 'igual' }
-            : { resultado: 'igual', detalhe: 'Número não comparável (ausente em um dos lados).' };
+    function wmtEnderecoTexto(valor) {
+        return String(valor??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[º°ª]/g,'').replace(/\s+/g,' ').trim();
     }
+    function wmtNumeroEndereco(valor) {
+        const t=wmtEnderecoTexto(valor).replace(/^(?:numero|num\.?|n\.?)\s*[:.]?\s*/,'');
+        if(!t)return {tipo:'ausente',valor:null};
+        if(/^(?:s\s*\/?\s*n|sem\s+numero)$/.test(t))return {tipo:'sem_numero',valor:'sn'};
+        const m=t.match(/^(\d+)\s*[-/]?\s*([a-z]?)$/);
+        return m?{tipo:'numero',valor:m[1].replace(/^0+(?=\d)/,'')+m[2]}:{tipo:'nao_comparavel',valor:t};
+    }
+    function wmtRuaEndereco(valor) {
+        const a={r:'rua',av:'avenida',avda:'avenida',pca:'praca',pc:'praca',tv:'travessa',trav:'travessa',rod:'rodovia',est:'estrada',estr:'estrada',al:'alameda',lgo:'largo',dr:'doutor',dra:'doutora',prof:'professor',profa:'professora',cel:'coronel',gen:'general',sta:'santa',sto:'santo'};
+        return wmtEnderecoTexto(valor).replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).map(t=>a[t]||t).join(' ');
+    }
+    function wmtSepararEndereco(valor) {
+        const bruto=String(valor??'').replace(/\s+/g,' ').trim();if(!bruto)return null;
+        const token='(?:\\d{1,7}(?:\\s*[-/]?\\s*[a-z])?|s\\s*\\/?\\s*n|sem\\s+n[uú]mero)';
+        const partes=bruto.split(/[,;]/).map(p=>p.trim()).filter(Boolean);
+        let rua=partes[0]||'',numero=null;
+        const marcado=rua.match(new RegExp('^(.*?)\\s+(?:n[º°o.]?|n[uú]mero|num\\.?)\\s*[:.]?\\s*('+token+')(?=\\s*(?:$|[-–—]))','i'));
+        const separado=rua.match(new RegExp('^(.*?)\\s+[-–—]\\s*('+token+')(?=\\s*(?:$|[-–—]))','i'));
+        const sn=rua.match(/^(.*?)\s+(s\s*\/?\s*n|sem\s+n[uú]mero)$/i);
+        if(marcado||separado||sn){const m=marcado||separado||sn;rua=m[1].trim();numero=m[2].trim();}
+        else if(partes.length>1){const m=partes[1].match(new RegExp('^(?:(?:n[º°o.]?|n[uú]mero|num\\.?)\\s*[:.]?\\s*)?('+token+')(?=\\s*(?:$|[-–—]))','i'));if(m)numero=m[1].trim();}
+        return rua?{rua,numero,ambiguo:!numero&&/\d\s*$/.test(rua)}:null;
+    }
+    function compararEndereco(item,venue) {
+        const f=wmtSepararEndereco(item.endereco),w=venue.enderecoSdk||{},ruaW=String(w.rua||'').trim();
+        if(!f&&!ruaW)return {resultado:'nao_comparavel'};
+        if(!f)return {resultado:'ausente_fonte'};
+        if(!ruaW)return {resultado:'ausente_wme',detalhe:'Rua ausente no endereço estruturado do WME.'};
+        if(wmtRuaEndereco(f.rua)!==wmtRuaEndereco(ruaW))return {resultado:f.ambiguo?'conferir':'diferente',detalhe:f.ambiguo?'Separação ambígua entre rua e número.':`Rua: ${f.rua} × ${ruaW}.`};
+        const nf=wmtNumeroEndereco(f.numero),nw=wmtNumeroEndereco(w.numero);
+        if(nf.tipo==='nao_comparavel'||nw.tipo==='nao_comparavel')return {resultado:'conferir',detalhe:'Formato de número não reconhecido.'};
+        if(nf.tipo==='ausente')return {resultado:'conferir',detalhe:'Rua coincide, mas falta número na fonte. Não apagar o número do WME.'};
+        if(nw.tipo==='ausente')return {resultado:'ausente_wme',detalhe:'Número ausente no WME.'};
+        if(nf.tipo!==nw.tipo||nf.valor!==nw.valor)return {resultado:'diferente',detalhe:`Número: ${f.numero} × ${w.numero}.`};
+        return {resultado:'igual',detalhe:'Rua e número equivalentes; complementos não validados.'};
+    }
+
 
     function linhaComparacao(campo, fonte, wme, resultado) {
         return {
@@ -2517,6 +2617,22 @@
             resultado: resultado.resultado,
             detalhe: resultado.detalhe || ''
         };
+    }
+
+    function wmtNome(valor) {return semAcento(String(valor||'')).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+    function nomeTitulo(valor) {
+        const siglas=new Set(['UBS','UPA','SUS','SAMU','APAE','CMEI','EMEI','ESF','PSF']);
+        return String(valor||'').trim().replace(/\s+/g,' ').split(' ').map((p,i)=>{
+            if(siglas.has(p.toUpperCase()))return p.toUpperCase();p=p.toLocaleLowerCase('pt-BR');
+            return i&&/^(de|da|do|das|dos|e|em|na|no)$/.test(p)?p:p.replace(/(^|[-'])\p{L}/gu,c=>c.toLocaleUpperCase('pt-BR'));
+        }).join(' ');
+    }
+    function compararNomesValidacao(a,b) {
+        if(!String(a||'').trim()&&!String(b||'').trim())return {resultado:'nao_comparavel'};
+        if(!String(a||'').trim())return {resultado:'ausente_fonte'};
+        if(!String(b||'').trim())return {resultado:'ausente_wme'};
+        if(wmtNome(a)===wmtNome(b))return {resultado:'igual'};
+        const r=compararTextos(a,b);return {resultado:r.resultado==='igual'?'parecido':r.resultado};
     }
 
     function montarComparacao(item, venue) {
@@ -2534,7 +2650,7 @@
         if (!textoLimitado(categoriaWme, 300)) categoria = { resultado: 'ausente_wme' };
 
         return [
-            linhaComparacao('Nome', nomeFonte, venue.nome, compararTextos(nomeFonte, venue.nome)),
+            linhaComparacao('Nome', nomeFonte, venue.nome, compararNomesValidacao(nomeFonte, venue.nome)),
             linhaComparacao('Telefone', item.telefone, venue.telefone, compararTelefones(item.telefone, venue.telefone)),
             linhaComparacao('Endereço', item.endereco, venue.endereco, compararEndereco(item, venue)),
             linhaComparacao('Município', item.municipio, cidadeWme, compararTextos(item.municipio, cidadeWme)),
@@ -2573,44 +2689,15 @@
         return `<div class="wmt-cmp-compacta"><b>${esc(linha.campo)}:</b><span>${esc(valor)}</span></div>`;
     }
 
-    function normalizarNomeComparacao(valor) {
-        return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+    function linhasValidacao(item,venue) {
+        return montarComparacao(item,venue).filter(l=>!['Categoria','Situação'].includes(l.campo)&&['diferente','parecido','ausente_wme','conferir'].includes(l.resultado)&&l.fonte);
+    }
+    function htmlComparacao(item,venue) {
+        const linhas=linhasValidacao(item,venue);
+        return '<div class="wmt-cmp"><div class="wmt-cmp-titulo">Validação fonte × WME</div>'+(linhas.length?linhas.map(htmlLinhaComparacao).join('')+
+        '<div class="wmt-row"><button type="button" class="wmt-neutro" data-wmt-tool="copy">Copiar texto</button><button type="button" class="wmt-primario" data-wmt-tool="apply">Aplicar no Place…</button></div>':'<p>Sem divergências nos campos comparáveis. Dados ausentes não confirmam igualdade.</p>')+'</div>';
     }
 
-    function nomeApresentacao(valor) {
-        const siglas = new Set(['UBS', 'UPA', 'SUS', 'SAMU', 'APAE', 'CMEI', 'EMEI']);
-        return String(valor || '').trim().replace(/\s+/g, ' ').split(' ').map((p, i) => {
-            if (siglas.has(p.toUpperCase())) return p.toUpperCase();
-            p = p.toLocaleLowerCase('pt-BR');
-            return i && /^(de|da|do|das|dos|e|em|na|no)$/.test(p) ? p : p.replace(/(^|[-'])\p{L}/gu, c => c.toLocaleUpperCase('pt-BR'));
-        }).join(' ');
-    }
-
-    function telefoneCanonico(valor) {
-        let n = String(valor || '').replace(/\D/g, '').replace(/^0+/, '');
-        if (/^55\d{10,11}$/.test(n)) n = n.slice(2);
-        return n;
-    }
-
-    function diferencasVisiveis(item, venue) {
-        const nome = item.tipo === 'ESCOLAS' ? item.escola : item.nome;
-        return montarComparacao(item, venue).filter(l => {
-            if (!l.fonte || ['Situação', 'Categoria'].includes(l.campo)) return false;
-            if (l.campo === 'Nome') return normalizarNomeComparacao(nome) !== normalizarNomeComparacao(venue.nome);
-            if (l.campo === 'Telefone') return compararTelefones(item.telefone, venue.telefone).resultado !== 'igual'
-                && telefoneCanonico(item.telefone) !== telefoneCanonico(venue.telefone);
-            return ['diferente', 'parecido', 'ausente_wme'].includes(l.resultado);
-        }).map(l => l.campo === 'Nome' ? {...l, fonte: nomeApresentacao(nome)} : l);
-    }
-
-    function htmlComparacao(item, venue) {
-        const linhas = diferencasVisiveis(item, venue);
-        return '<div class="wmt-cmp"><div class="wmt-cmp-titulo">Diferenças fonte × WME</div>' +
-            (linhas.length ? linhas.map(htmlLinhaComparacao).join('') +
-                '<button type="button" class="wmt-primario wmt-full" data-wmt-copy>Copiar somente diferenças</button>' :
-                '<p>Sem diferenças nos campos comparáveis.</p>') + '</div>';
-    }
 
     function apiVenuesSdk() {
         const api = state.sdk?.DataModel?.Venues;
@@ -2780,6 +2867,9 @@
         html += '<div class="wmt-row" style="margin-top:8px">' +
             `<button type="button" class="wmt-neutro wmt-btn-mini" data-venue-action="selecao" ${disabled?'disabled':''}>Usar Place selecionado</button>` +
             `<button type="button" class="wmt-neutro wmt-btn-mini" data-venue-action="atualizar" ${disabled?'disabled':''}>Reler dados</button></div>`;
+        if (!venues.escolha || venues.escolha===VENUE.NENHUM || !venues.encontrados.length) {
+            html += '<button type="button" class="wmt-primario wmt-full" data-wmt-tool="create">Criar Place no WME…</button>';
+        }
         if (venues.erro) html += `<div role="alert" class="wmt-erro-texto">${esc(venues.erro)}</div>`;
         if (venues.carregando) html += '<p role="status">Aguardando o Place carregar no modelo do WME…</p>';
         else if (!venues.ids.length) html += '<p>Sem Place vinculado. <b>Clique no Place correto no mapa</b>: ele é usado automaticamente. (Um Permanent Hazard não é um Place.)</p>';
@@ -2809,7 +2899,7 @@
 
         if (venues.encontrados.length) {
             html += `<label style="display:flex;gap:6px;align-items:start;margin-top:10px"><input type="checkbox" data-venue-register-link ${venues.registrarLink?'checked':''} ${disabled?'disabled':''}><span>Registrar o link deste Place no ToolboxWaze ao confirmar (${item.tipo==='ESCOLAS'?'campo Place escolar; preserva o hazard':'campo link Waze'}).</span></label>`;
-            html += '<small>O script não altera o mapa nem salva edições do WME. O snapshot do Place vai junto com a confirmação.</small>';
+            html += '<small>Criar/aplicar altera o mapa localmente após sua confirmação. Salve manualmente no WME antes de enviar o snapshot.</small>';
         }
         elemento.innerHTML=html; elemento.style.display='block';
     }

@@ -35,9 +35,14 @@ final class SaudeReservaService
      * 1. devolve (e renova) as reservas ainda ativas do próprio usuário;
      * 2. completa com livres, pulados ou com reserva expirada de outro usuário.
      *
+     * $filtros (ver SaudeFiltro::normalizar) restringe tanto as retomadas quanto as novas reservas.
+     * Sem o filtro "ativo", só estabelecimentos ativos entram (comportamento anterior).
+     *
+     * @param array<string, ?string> $filtros
+     *
      * @return array{itens: list<EstabelecimentoSaude>, retomadas: int, novas: int, expiradas_reaproveitadas: int, expira_em: \DateTimeImmutable}
      */
-    public function reservar(string $uf, string $username, int $limite, int $ttlMinutos = self::TTL_MINUTOS): array
+    public function reservar(string $uf, string $username, int $limite, int $ttlMinutos = self::TTL_MINUTOS, array $filtros = []): array
     {
         $inicio = hrtime(true);
         $limite = max(1, min($limite, self::LIMITE_MAXIMO));
@@ -45,9 +50,8 @@ final class SaudeReservaService
         $corte  = $agora->modify(sprintf('-%d minutes', $ttlMinutos));
 
         /** @var array{itens: list<EstabelecimentoSaude>, retomadas: int, novas: int, expiradas_reaproveitadas: int} $resultado */
-        $resultado = $this->em->wrapInTransaction(function () use ($uf, $username, $limite, $agora, $corte): array {
-            /** @var list<EstabelecimentoSaude> $proprias */
-            $proprias = $this->em->createQueryBuilder()
+        $resultado = $this->em->wrapInTransaction(function () use ($uf, $username, $limite, $agora, $corte, $filtros): array {
+            $qbProprias = $this->em->createQueryBuilder()
                 ->select('e')
                 ->from(EstabelecimentoSaude::class, 'e')
                 ->where('e.uf = :uf')
@@ -57,7 +61,12 @@ final class SaudeReservaService
                 ->setParameter('reservado', EstabelecimentoSaude::STATUS_RESERVADO)
                 ->setParameter('username', $username)
                 ->orderBy('e.nomeFantasia', 'ASC')
-                ->setMaxResults($limite)
+                ->setMaxResults($limite);
+
+            SaudeFiltro::aplicar($qbProprias, $filtros);
+
+            /** @var list<EstabelecimentoSaude> $proprias */
+            $proprias = $qbProprias
                 ->getQuery()
                 ->setLockMode(LockMode::PESSIMISTIC_WRITE)
                 ->getResult();
@@ -67,11 +76,10 @@ final class SaudeReservaService
             $faltam      = $limite - count($proprias);
 
             if ($faltam > 0) {
-                $disponiveis = $this->em->createQueryBuilder()
+                $qbDisponiveis = $this->em->createQueryBuilder()
                     ->select('e')
                     ->from(EstabelecimentoSaude::class, 'e')
                     ->where('e.uf = :uf')
-                    ->andWhere('e.ativo = true')
                     ->andWhere('(
                         e.status IS NULL
                         OR e.status = :pulado
@@ -87,7 +95,15 @@ final class SaudeReservaService
                     ->setParameter('username', $username)
                     ->setParameter('corte', $corte, Types::DATETIME_IMMUTABLE)
                     ->orderBy('e.nomeFantasia', 'ASC')
-                    ->setMaxResults($faltam)
+                    ->setMaxResults($faltam);
+
+                if (($filtros['ativo'] ?? null) === null) {
+                    $qbDisponiveis->andWhere('e.ativo = true');
+                }
+
+                SaudeFiltro::aplicar($qbDisponiveis, $filtros);
+
+                $disponiveis = $qbDisponiveis
                     ->getQuery()
                     ->setLockMode(LockMode::PESSIMISTIC_WRITE)
                     ->getResult();
@@ -124,6 +140,7 @@ final class SaudeReservaService
             'uf'                       => $uf,
             'username'                 => $username,
             'limite'                   => $limite,
+            'filtros'                  => array_filter($filtros, static fn (?string $v): bool => $v !== null && $v !== ''),
             'total'                    => count($resultado['itens']),
             'retomadas'                => $resultado['retomadas'],
             'novas'                    => $resultado['novas'],

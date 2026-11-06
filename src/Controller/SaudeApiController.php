@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Entity\EstabelecimentoSaude;
 use App\Entity\User;
+use App\Service\SaudeFiltro;
 use App\Service\SaudeReservaService;
 use App\Service\WazeSnapshotNormalizer;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,23 +45,22 @@ final class SaudeApiController extends AbstractController
             ->setParameter('uf', $uf)
             ->orderBy('e.nomeFantasia', 'ASC');
 
-        $municipio = trim((string) $request->query->get('municipio', ''));
-
-        if ($municipio !== '') {
-            $qb->andWhere('e.municipio = :municipio')->setParameter('municipio', $municipio);
+        try {
+            $filtros = SaudeFiltro::normalizar($request->query->all());
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
-        if ($request->query->has('ativo')) {
-            $qb->andWhere('e.ativo = :ativo')->setParameter('ativo', $request->query->getBoolean('ativo'));
-        }
+        SaudeFiltro::aplicar($qb, $filtros);
 
         /** @var list<EstabelecimentoSaude> $itens */
         $itens = $qb->getQuery()->getResult();
 
         return $this->json([
-            'uf'       => $uf,
-            'total'    => count($itens),
-            'unidades' => array_map($this->serialize(...), $itens),
+            'uf'               => $uf,
+            'filtros_aplicados' => $filtros,
+            'total'            => count($itens),
+            'unidades'         => array_map($this->serialize(...), $itens),
         ]);
     }
 
@@ -76,6 +76,12 @@ final class SaudeApiController extends AbstractController
 
         $somenteAtualizadas = $request->query->getBoolean('atualizada', false);
 
+        try {
+            $filtros = SaudeFiltro::normalizar($request->query->all());
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
         $qb = $this->em->createQueryBuilder()
             ->select('e')
             ->from(EstabelecimentoSaude::class, 'e')
@@ -86,10 +92,15 @@ final class SaudeApiController extends AbstractController
             $qb->andWhere('e.status IS NOT NULL')
                 ->orderBy('e.updatedAt', 'DESC');
         } else {
-            $qb->andWhere('e.ativo = true')
-                ->andWhere('e.status IS NULL')
+            if ($filtros['ativo'] === null) {
+                $qb->andWhere('e.ativo = true');
+            }
+
+            $qb->andWhere('e.status IS NULL')
                 ->orderBy('e.nomeFantasia', 'ASC');
         }
+
+        SaudeFiltro::aplicar($qb, $filtros);
 
         $item = $qb->setMaxResults(1)->getQuery()->getOneOrNullResult();
 
@@ -127,24 +138,44 @@ final class SaudeApiController extends AbstractController
             return $erro;
         }
 
+        try {
+            $filtros = SaudeFiltro::normalizar($data['filtros'] ?? []);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Segurança: se o serviço ainda não aceita filtros, não reserva (evitaria reservar itens fora do filtro em silêncio).
+        if (!SaudeFiltro::vazio($filtros) && !$this->servicoAceitaFiltros()) {
+            return $this->json(
+                ['error' => 'O serviço de reserva ainda não aplica filtros. Atualize SaudeReservaService::reservar().'],
+                Response::HTTP_NOT_IMPLEMENTED
+            );
+        }
+
         $limite  = (int) ($data['limite'] ?? SaudeReservaService::LIMITE_MAXIMO);
-        $reserva = $this->reservas->reservar($uf, $username, $limite);
+        $reserva = SaudeFiltro::vazio($filtros)
+            ? $this->reservas->reservar($uf, $username, $limite)
+            : $this->reservas->reservar($uf, $username, $limite, filtros: $filtros);
         $itens   = $reserva['itens'];
 
         if ($itens === []) {
             return $this->json([
-                'username'    => $username,
-                'uf'          => $uf,
-                'total'       => 0,
-                'unidades'    => [],
-                'ttl_minutos' => SaudeReservaService::TTL_MINUTOS,
-                'message'     => 'Nenhum estabelecimento disponível para reserva nesta UF.',
+                'username'          => $username,
+                'uf'                => $uf,
+                'filtros_aplicados' => $filtros,
+                'total'             => 0,
+                'unidades'          => [],
+                'ttl_minutos'       => SaudeReservaService::TTL_MINUTOS,
+                'message'           => SaudeFiltro::vazio($filtros)
+                    ? 'Nenhum estabelecimento disponível para reserva nesta UF.'
+                    : 'Nenhum estabelecimento disponível para reserva com estes filtros.',
             ]);
         }
 
         return $this->json([
             'username'                 => $username,
             'uf'                       => $uf,
+            'filtros_aplicados'        => $filtros,
             'total'                    => count($itens),
             'retomadas'                => $reserva['retomadas'],
             'novas'                    => $reserva['novas'],
@@ -152,6 +183,65 @@ final class SaudeApiController extends AbstractController
             'ttl_minutos'              => SaudeReservaService::TTL_MINUTOS,
             'expira_em'                => $reserva['expira_em']->format(DATE_ATOM),
             'unidades'                 => array_map($this->serialize(...), $itens),
+        ]);
+    }
+
+    /**
+     * Opções de filtro para o painel do WME, respondendo à seleção atual.
+     * - municipios: municípios com itens disponíveis, considerando os OUTROS filtros (faceta);
+     * - disponiveis: quantos itens ainda podem ser reservados com todos os filtros aplicados.
+     */
+    #[Route('/api/saude/uf/{uf}/filtros', name: 'api_saude_filtros', methods: ['GET'])]
+    public function filtros(Request $request, string $uf): JsonResponse
+    {
+        $user = $this->requireApiUser();
+        $uf   = strtoupper(trim($uf));
+
+        if ($erro = $this->validarAcesso($user, $uf)) {
+            return $erro;
+        }
+
+        try {
+            $filtros = SaudeFiltro::normalizar($request->query->all());
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+
+        $limite = (new \DateTimeImmutable())->modify(sprintf('-%d minutes', SaudeReservaService::TTL_MINUTOS));
+
+        $base = function (bool $ignorarMunicipio) use ($uf, $filtros, $limite): \Doctrine\ORM\QueryBuilder {
+            $qb = $this->em->createQueryBuilder()
+                ->from(EstabelecimentoSaude::class, 'e')
+                ->where('e.uf = :uf')
+                ->andWhere('(e.status IS NULL OR (e.status = :reservado AND (e.reservadoEm IS NULL OR e.reservadoEm < :limite)))')
+                ->setParameter('uf', $uf)
+                ->setParameter('reservado', EstabelecimentoSaude::STATUS_RESERVADO)
+                ->setParameter('limite', $limite);
+
+            SaudeFiltro::aplicar($qb, $filtros, 'e', $ignorarMunicipio);
+
+            return $qb;
+        };
+
+        $disponiveis = (int) $base(false)->select('COUNT(e.id)')->getQuery()->getSingleScalarResult();
+
+        $linhas = $base(true)
+            ->select('e.municipio AS nome', 'COUNT(e.id) AS total')
+            ->andWhere('e.municipio IS NOT NULL')
+            ->groupBy('e.municipio')
+            ->orderBy('e.municipio', 'ASC')
+            ->setMaxResults(1000)
+            ->getQuery()
+            ->getArrayResult();
+
+        return $this->json([
+            'uf'          => $uf,
+            'filtros'     => $filtros,
+            'disponiveis' => $disponiveis,
+            'municipios'  => array_map(
+                static fn (array $l): array => ['nome' => (string) $l['nome'], 'total' => (int) $l['total']],
+                $linhas
+            ),
         ]);
     }
 
@@ -336,6 +426,18 @@ final class SaudeApiController extends AbstractController
             'message' => 'Estabelecimento atualizado com sucesso.',
             'unidade' => $this->serialize($item),
         ]);
+    }
+
+    /** true quando SaudeReservaService::reservar() já declara o parâmetro $filtros. */
+    private function servicoAceitaFiltros(): bool
+    {
+        foreach ((new \ReflectionMethod($this->reservas, 'reservar'))->getParameters() as $parametro) {
+            if ($parametro->getName() === 'filtros') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function requireApiUser(): User

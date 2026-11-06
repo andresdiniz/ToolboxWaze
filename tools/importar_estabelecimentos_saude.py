@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ToolboxWaze - Importador CNES 2.1.
+"""ToolboxWaze - Importador CNES 2.2.
 
 Python 3.10+
 Instalacao: python -m pip install pymysql
+
+Novidade 2.2: coluna `tipo` (tipo do estabelecimento) lida do CSV e gravada em coluna propria.
+Se o nome da coluna no seu CSV nao for reconhecido, defina a variavel de ambiente
+CNES_COLUNA_TIPO com o nome exato do cabecalho antes de abrir o programa.
 """
 
 import csv
@@ -164,9 +168,16 @@ import sqlite3
 import tempfile
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-CORE = ('nome_fantasia','ativo','uf','municipio','logradouro','telefone','latitude','longitude')
-LIMITES = {'nome_fantasia':255,'uf':2,'municipio':255,'logradouro':500,'telefone':50}
+CORE = ('nome_fantasia','ativo','uf','municipio','tipo','logradouro','telefone','latitude','longitude')
+LIMITES = {'nome_fantasia':255,'uf':2,'municipio':255,'tipo':255,'logradouro':500,'telefone':50}
 QUANT = Decimal('0.00000001')
+
+# Cabecalhos aceitos para o tipo do estabelecimento (ja normalizados por chave(): sem acento, maiusculo).
+TIPO_CANDIDATAS = (
+    'TIPO', 'TIPO DO ESTABELECIMENTO', 'TIPO ESTABELECIMENTO', 'TIPO DE ESTABELECIMENTO',
+    'TIPO DA UNIDADE', 'TIPO DE UNIDADE', 'TIPO UNIDADE', 'TIPO NOVO DO ESTABELECIMENTO',
+    'DESCRICAO TIPO ESTABELECIMENTO', 'DESCRICAO DO TIPO DE ESTABELECIMENTO',
+)
 
 def chave(value):
     return ''.join(c for c in unicodedata.normalize('NFKD',str(value).strip()) if not unicodedata.combining(c)).upper().replace('_',' ')
@@ -177,6 +188,21 @@ def clean(value):
 
 def mapa(dados):
     return {chave(k):clean(v) for k,v in dados.items()}
+
+def escolher_tipo(chaves):
+    """Nome (normalizado) da coluna de tipo entre as chaves dadas, ou None."""
+    chaves = set(chaves)
+    forcada = chave(os.getenv('CNES_COLUNA_TIPO', ''))
+    if forcada:
+        return forcada if forcada in chaves else None
+    return next((c for c in TIPO_CANDIDATAS if c in chaves), None)
+
+def valor_tipo(d):
+    """Tipo do estabelecimento a partir de um dict ja normalizado por mapa()."""
+    coluna = escolher_tipo(d.keys())
+    if not coluna:
+        return None
+    return re.sub(r'\s+',' ',d.get(coluna,'')).strip() or None
 
 def json_txt(value):
     return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False)
@@ -217,6 +243,7 @@ def projetar(original,correcoes=None):
     fantasia = d.get('NOME FANTASIA') or d.get('RAZAO SOCIAL') or 'Estabelecimento CNES '+d.get('CNES','')
     latitude,longitude = coords(d)
     result = {'nome_fantasia':re.sub(r'\s+',' ',fantasia),'ativo':ativo,'uf':uf,'municipio':municipio,
+        'tipo':valor_tipo(d),
         'logradouro':re.sub(r'\s+',' ',d.get('LOGRADOURO','')).strip() or None,
         'telefone':re.sub(r'\s+',' ',d.get('TELEFONE','')).strip() or None,'latitude':latitude,'longitude':longitude}
     for field,limit in LIMITES.items():
@@ -260,6 +287,14 @@ def ler_csv(caminho,stop,emit=None):
         if not idx or len(keys)!=len(set(keys)): raise ValueError('Cabeçalho vazio ou duplicado.')
         required={'CNES','UF','MUNICIPIO','STATUS DO ESTABELECIMENTO'}
         if not required.issubset(keys): raise ValueError('Colunas ausentes: '+', '.join(sorted(required-set(keys))))
+        col_tipo=escolher_tipo(keys)
+        if emit:
+            if col_tipo:
+                emit('log',f'Coluna de tipo do estabelecimento: "{headers[idx[keys.index(col_tipo)]]}".')
+            else:
+                possiveis=[headers[i] for i,k in zip(idx,keys) if 'TIPO' in k]
+                emit('log','ATENÇÃO: coluna de tipo não identificada; o tipo ficará vazio. Colunas com "TIPO" no arquivo: '
+                     +(', '.join(possiveis) or 'nenhuma')+'. Defina CNES_COLUNA_TIPO com o nome exato do cabeçalho e repita.')
         cnes_key=headers[idx[keys.index('CNES')]]
         for row in reader:
             agora = time.monotonic()
@@ -314,15 +349,30 @@ def garantir_estrutura(conn):
             c.execute(f'''CREATE TABLE {TABELA} (
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,cnes VARCHAR(10) NOT NULL,
                 nome_fantasia VARCHAR(255) NULL,ativo TINYINT NOT NULL DEFAULT 1,uf VARCHAR(2) NULL,
-                municipio VARCHAR(255) NULL,logradouro VARCHAR(500) NULL,telefone VARCHAR(50) NULL,
+                municipio VARCHAR(255) NULL,tipo VARCHAR(255) NULL,logradouro VARCHAR(500) NULL,telefone VARCHAR(50) NULL,
                 latitude DECIMAL(12,8) NULL,longitude DECIMAL(12,8) NULL,link_waze VARCHAR(1000) NULL,
                 row_hash VARCHAR(64) NOT NULL,imported_at DATETIME NOT NULL,updated_at DATETIME NULL,
                 status VARCHAR(20) NULL,reservado_para VARCHAR(100) NULL,reservado_em DATETIME NULL,
                 dados_originais LONGTEXT NOT NULL,correcoes LONGTEXT NOT NULL,importado_em DATETIME NOT NULL,
                 editado_em DATETIME NULL,editado_por VARCHAR(180) NULL,versao INT UNSIGNED NOT NULL DEFAULT 1,
-                UNIQUE KEY uniq_cnes(cnes),KEY idx_uf_municipio(uf,municipio),KEY idx_status(status)
+                UNIQUE KEY uniq_cnes(cnes),KEY idx_uf_municipio(uf,municipio),KEY idx_es_uf_tipo(uf,tipo),KEY idx_status(status)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci''')
         cols=schema_cols(conn)
+    else:
+        # Unicas colunas adicionadas automaticamente (todas NULAVEIS, sem perda de dados):
+        # tipo do estabelecimento e o JSON da fonte/correcoes usado para preservar edicoes.
+        novas={'tipo':'VARCHAR(255) NULL','dados_originais':'LONGTEXT NULL','correcoes':'LONGTEXT NULL'}
+        faltam=[k for k in novas if k not in cols]
+        if faltam:
+            with conn.cursor() as c:
+                for k in faltam:
+                    c.execute(f'ALTER TABLE {TABELA} ADD COLUMN {k} {novas[k]}')
+                if 'tipo' in faltam:
+                    try:
+                        c.execute(f'CREATE INDEX idx_es_uf_tipo ON {TABELA} (uf,tipo)')
+                    except Exception as exc:
+                        if (exc.args[0] if getattr(exc,'args',()) else None) != 1061: raise
+            cols=schema_cols(conn)
     return cols
 
 def conferir_estrutura(conn):
@@ -349,15 +399,18 @@ def dbdate(value):
     except ValueError: return None
 
 def normal(field,value):
-    if field in ('dados_originais','correcoes'): return objeto(value,field=='correcoes')
+    if field=='correcoes': return {} if value in (None,'') else objeto(value,True)
+    if field=='dados_originais': return None if value in (None,'') else objeto(value)
     if field in ('latitude','longitude'): return None if value in (None,'') else format(Decimal(str(value)).quantize(QUANT),'.8f')
     if field in ('imported_at','updated_at','importado_em'): return dbdate(value)
     if field in ('ativo','versao'): return int(value)
     return value
 
 def planejar(old,incoming,atualizar,cols,agora):
-    original=objeto(old['dados_originais']) if old else incoming
-    cor=objeto(old['correcoes'],True) if old else {}
+    # Linha legada = existe no banco mas ainda sem JSON da fonte (criada antes do JSON existir).
+    legado=bool(old) and not old.get('dados_originais')
+    original=incoming if (not old or legado) else objeto(old['dados_originais'])
+    cor={} if (not old or legado) else normal('correcoes',old.get('correcoes'))
     source_changed=False
     if old and atualizar and incoming!=original:
         before=mapa(original).get('COMPETENCIA',''); after=mapa(incoming).get('COMPETENCIA','')
@@ -365,14 +418,23 @@ def planejar(old,incoming,atualizar,cols,agora):
         if before and after<before: raise ValueError('Arquivo mais antigo que a fonte no banco. Use reparo sem atualizar fonte.')
         original=incoming; source_changed=True
     values=projetar(original,cor)
-    if old:
+    if legado:
+        # Adota o arquivo como fonte, mas NUNCA sobrescreve o que ja esta preenchido no banco
+        # (podem ser edicoes manuais). So o tipo vem sempre da fonte.
+        for field in CORE:
+            if field=='tipo': continue
+            if old.get(field) not in (None,''): values[field]=old[field]
+    if old and not legado:
         try: baseline=projetar(objeto(old['dados_originais']))
         except ValueError: baseline=None
         if baseline and (dbdate(old.get('editado_em')) is not None or (old.get('nome_fantasia') and old.get('uf') and old.get('municipio'))):
             correction_keys=mapa(cor)
-            names={'nome_fantasia':'NOME FANTASIA','ativo':'STATUS DO ESTABELECIMENTO','uf':'UF','municipio':'MUNICIPIO','logradouro':'LOGRADOURO','telefone':'TELEFONE','latitude':'LATITUDE','longitude':'LONGITUDE'}
+            names={'nome_fantasia':'NOME FANTASIA','ativo':'STATUS DO ESTABELECIMENTO','uf':'UF','municipio':'MUNICIPIO','tipo':'TIPO','logradouro':'LOGRADOURO','telefone':'TELEFONE','latitude':'LATITUDE','longitude':'LONGITUDE'}
             marked=dbdate(old.get('editado_em')) is not None
             for field in CORE:
+                # O tipo sempre vem da fonte (ou de correção explícita): nunca é preservado do banco,
+                # senão o reparo não conseguiria preencher a coluna recém-criada.
+                if field=='tipo': continue
                 has_correction=names[field] in correction_keys or (field=='ativo' and 'ATIVO' in correction_keys) or (field in ('latitude','longitude') and 'LOCATION' in correction_keys)
                 if has_correction: continue
                 current=old.get(field)
@@ -398,7 +460,7 @@ def planejar(old,incoming,atualizar,cols,agora):
 
 def ler_banco(conn,stop,emit):
     relatar_etapa(emit, 'Lendo JSON existente para reparo')
-    conferir_estrutura(conn); registros={}; last=0
+    conferir_estrutura(conn); registros={}; last=0; sem_json=0
     while True:
         if stop.is_set(): raise Cancelado('Leitura de reparo cancelada; nada gravado.')
         with conn.cursor() as c:
@@ -408,9 +470,19 @@ def ler_banco(conn,stop,emit):
         for row in rows:
             cnes=str(row['cnes'])
             if not re.fullmatch(r'\d{7}',cnes): raise ValueError(f'CNES existente inválido no ID {row["id"]}; não será renomeado automaticamente.')
-            registros[cnes]=objeto(row['dados_originais']); last=int(row['id'])
+            last=int(row['id'])
+            if not row['dados_originais']:
+                sem_json+=1; continue
+            registros[cnes]=objeto(row['dados_originais'])
         relatar_etapa(emit, 'Lendo JSON existente para reparo', detalhe=f'{len(registros):,} registros preparados.')
-    if not registros: raise ValueError('Tabela vazia.')
+    if sem_json: emit('log',f'{sem_json:,} registros do banco ainda não têm JSON da fonte; o reparo não os alcança. Use "Importar" com o CSV para preenchê-los.')
+    if not registros: raise ValueError('Nenhum registro com JSON da fonte para reparar. Use "Importar e conferir salvamento" com o CSV.')
+    com_tipo=sum(1 for d in registros.values() if valor_tipo(mapa(d)))
+    emit('log',f'Tipo do estabelecimento encontrado em {com_tipo:,} de {len(registros):,} registros do JSON.')
+    if com_tipo==0:
+        possiveis=sorted({k for d in itertools.islice(registros.values(),200) for k in d if 'TIPO' in chave(k)})
+        emit('log','ATENÇÃO: nenhuma coluna de tipo reconhecida no JSON. Colunas com "TIPO": '+(', '.join(possiveis) or 'nenhuma')
+             +'. Defina CNES_COLUNA_TIPO com o nome exato e repita o reparo.')
     return registros
 
 def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
@@ -419,7 +491,7 @@ def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
     relatar_etapa(emit, 'Conferindo estrutura do banco')
     cols=conferir_estrutura(conn)
     write_cols=list(CORE)+['dados_originais','row_hash','imported_at','updated_at']+[k for k in ('importado_em','versao') if k in cols]
-    types={'nome_fantasia':'VARCHAR(255)','ativo':'TINYINT','uf':'VARCHAR(2)','municipio':'VARCHAR(255)','logradouro':'VARCHAR(500)',
+    types={'nome_fantasia':'VARCHAR(255)','ativo':'TINYINT','uf':'VARCHAR(2)','municipio':'VARCHAR(255)','tipo':'VARCHAR(255)','logradouro':'VARCHAR(500)',
         'telefone':'VARCHAR(50)','latitude':'DECIMAL(12,8)','longitude':'DECIMAL(12,8)','dados_originais':'LONGTEXT',
         'row_hash':'VARCHAR(64)','imported_at':'DATETIME','updated_at':'DATETIME','importado_em':'DATETIME','versao':'INT UNSIGNED'}
     stats={'inseridos':0,'atualizados':0,'ignorados':0}; lock=None; committing=False; committed=False
@@ -455,7 +527,7 @@ def importar(conn,registros,atualizar,stop,emit,tamanho_lote=None):
                             if len(values['dados_originais'].encode('utf-8')) > packet//2:
                                 raise ValueError(f'CNES {cnes}: JSON muito grande para max_allowed_packet do servidor.')
                             verification={k:normal(k,v) for k,v in values.items()}
-                            verification.update(cnes=cnes,correcoes=objeto(old['correcoes'],True) if old else {})
+                            verification.update(cnes=cnes,correcoes=normal('correcoes',old.get('correcoes')) if old else {})
                             expected.execute('INSERT OR REPLACE INTO esperado VALUES (?,?)',(cnes,json_txt(verification)))
                             if old: updates.append((old['id'],)+tuple(values[k] for k in write_cols))
                             else: inserts.append(tuple(values[k] for k in insert_cols))
@@ -517,7 +589,7 @@ def executar_interface():
         def __init__(self):
             super().__init__()
 
-            self.title('ToolboxWaze - Importador CNES 2.1')
+            self.title('ToolboxWaze - Importador CNES 2.2')
             self.geometry('1150x800')
             self.minsize(850, 620)
 
@@ -551,7 +623,7 @@ def executar_interface():
                 text=(
                     'Nome fantasia vazio permitido | '
                     'A senha nao e apagada apos validar o arquivo | '
-                    'Colunas de busca preenchidas | Lotes de 500 | Reparo do JSON existente'
+                    'Colunas de busca e tipo preenchidas | Lotes de 500 | Reparo do JSON existente'
                 )
             ).pack(anchor='w', pady=(5, 12))
 
@@ -950,7 +1022,7 @@ def executar_interface():
                     relatar_etapa(emit, 'Reabrindo conexão MySQL')
                     conn, info = conectar_mysql(configuracao)
                 if gravar == 'reparar':
-                    emit('log', 'Reparo: reconstruindo colunas com dados_originais + correcoes já existentes.')
+                    emit('log', 'Reparo: reconstruindo colunas (incluindo tipo) com dados_originais + correcoes já existentes.')
                     registros = ler_banco(conn, self.stop, emit)
                     atualizar = False
                 else:
@@ -1096,7 +1168,7 @@ def executar_interface():
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description='Importador CNES 2.1: GUI, validação ou reparo de colunas estruturadas.')
+    parser = argparse.ArgumentParser(description='Importador CNES 2.2: GUI, validação ou reparo de colunas estruturadas.')
     parser.add_argument('--arquivo')
     parser.add_argument('--importar', action='store_true')
     parser.add_argument('--reparar-banco', action='store_true')
@@ -1126,12 +1198,12 @@ def main():
     conn = None
     cfg = {}
     def emit(event, value):
-        if event == 'linha':
+        if event in ('linha', 'etapa'):
             return
         print(f'{event}: {value}', flush=True)
     try:
         if args.arquivo:
-            registros, encoding, sep, fields, sem_nome = ler_csv(args.arquivo,stop)
+            registros, encoding, sep, fields, sem_nome = ler_csv(args.arquivo,stop,emit)
             emit('validado',f'{len(registros)} CNES; {fields} campos; {encoding}; separador={sep!r}; sem fantasia={sem_nome}.')
         if not args.importar and not args.reparar_banco:
             return 0

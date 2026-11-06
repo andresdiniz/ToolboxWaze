@@ -503,9 +503,25 @@
         }
 
         if (resposta.status >= 400) {
+            const trecho = String(resposta.responseText || '')
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 160);
+
+            console.error(LOG, `HTTP ${resposta.status} em ${caminho}`, resposta.responseText);
+
+            const mensagemApi = dados
+                ? [dados.error || dados.message, dados.detail].filter(Boolean).join(' — ')
+                : '';
+
             throw new Error(
-                (dados && dados.error) ||
-                `Erro HTTP ${resposta.status}`
+                mensagemApi ||
+                `Erro HTTP ${resposta.status} em ${caminho}` +
+                (resposta.status >= 500
+                    ? ' (erro no servidor: veja var/log do Symfony)'
+                    : '') +
+                (trecho ? ` — ${trecho}` : '')
             );
         }
 

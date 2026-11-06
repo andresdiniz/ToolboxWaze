@@ -153,9 +153,25 @@ final class SaudeApiController extends AbstractController
         }
 
         $limite  = (int) ($data['limite'] ?? SaudeReservaService::LIMITE_MAXIMO);
-        $reserva = SaudeFiltro::vazio($filtros)
-            ? $this->reservas->reservar($uf, $username, $limite)
-            : $this->reservas->reservar($uf, $username, $limite, filtros: $filtros);
+
+        try {
+            $reserva = SaudeFiltro::vazio($filtros)
+                ? $this->reservas->reservar($uf, $username, $limite)
+                : $this->reservas->reservar($uf, $username, $limite, filtros: $filtros);
+        } catch (\Throwable $e) {
+            // Falha inesperada (ex.: listener/serviço de outra parte do sistema): registra e devolve JSON útil
+            // em vez de um 500 mudo. O detalhe técnico só aparece para administradores.
+            error_log(sprintf('[api_saude_reservar] %s: %s @ %s:%d', $e::class, $e->getMessage(), $e->getFile(), $e->getLine()));
+
+            $resposta = ['error' => 'Erro interno ao reservar. A reserva foi desfeita.'];
+
+            if ($this->isGranted('ROLE_ADMIN')) {
+                $resposta['detail'] = sprintf('%s: %s (%s:%d)', (new \ReflectionClass($e))->getShortName(), $e->getMessage(), basename($e->getFile()), $e->getLine());
+            }
+
+            return $this->json($resposta, Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
         $itens   = $reserva['itens'];
 
         if ($itens === []) {

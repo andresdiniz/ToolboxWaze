@@ -2128,16 +2128,40 @@
 
     async function criarPainel() {
         const container=document.createElement('div');container.id='wmt-container';container.className='wmt wmt-flutuante';
-        container.innerHTML='<div id="wmt-drag" style="display:flex;align-items:center;justify-content:space-between;cursor:move;padding:8px;border-bottom:1px solid #888"><strong>Tarefas — painel independente</strong><button type="button" id="wmt-collapse" class="wmt-neutro">Recolher</button></div><div id="wmt-body">'+htmlPainel()+'</div>';
-        Object.assign(container.style,{top:'75px',right:'15px',bottom:'auto',width:'370px',maxWidth:'95vw',maxHeight:'85vh',overflowY:'auto',zIndex:'10000'});
+        container.innerHTML='<div id="wmt-drag" style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:move;padding:8px;border-bottom:1px solid #888"><strong id="wmt-drag-titulo">Tarefas — painel independente</strong><button type="button" id="wmt-collapse" class="wmt-neutro wmt-btn-mini">Recolher</button></div><div id="wmt-body">'+htmlPainel()+'</div>';
+        Object.assign(container.style,{top:'75px',right:'15px',bottom:'auto',width:'370px',maxWidth:'95vw',maxHeight:'85vh',overflowY:'auto',zIndex:'10000',padding:'0'});
         document.body.appendChild(container);state.painel=container;
-        const body=container.querySelector('#wmt-body');container.querySelector('#wmt-collapse').onclick=e=>{body.hidden=!body.hidden;e.target.textContent=body.hidden?'Expandir':'Recolher';};
-        const bar=container.querySelector('#wmt-drag');let drag=null;bar.style.touchAction='none';
+        const body=container.querySelector('#wmt-body');
+        const bar=container.querySelector('#wmt-drag');
+        const titulo=container.querySelector('#wmt-drag-titulo');
+        const botaoRecolher=container.querySelector('#wmt-collapse');
+
+        // Recolhido: só a barrinha (sem largura fixa de 370px, sem borda nem padding extra).
+        function aplicarRecolhimento(recolher) {
+            body.hidden=recolher;
+            botaoRecolher.textContent=recolher?'Expandir':'Recolher';
+            titulo.textContent=recolher?'📍 Tarefas':'Tarefas — painel independente';
+            bar.style.borderBottom=recolher?'none':'1px solid #888';
+            container.style.width=recolher?'auto':'370px';
+            container.style.minWidth=recolher?'0':'';
+            container.style.overflowY=recolher?'visible':'auto';
+
+            // Ao expandir, garante que o painel não fique para fora da tela.
+            if(!recolher&&container.style.left){
+                const r=container.getBoundingClientRect();
+                const maxLeft=Math.max(0,innerWidth-r.width);
+                if(r.left>maxLeft)container.style.left=maxLeft+'px';
+            }
+        }
+
+        botaoRecolher.onclick=()=>aplicarRecolhimento(!body.hidden);
+
+        let drag=null;bar.style.touchAction='none';
         bar.addEventListener('pointerdown',e=>{if(e.target.closest('button')||e.button!==0)return;const r=container.getBoundingClientRect();drag={x:e.clientX-r.left,y:e.clientY-r.top};bar.setPointerCapture(e.pointerId);e.preventDefault();});
         bar.addEventListener('pointermove',e=>{if(!drag)return;container.style.left=Math.max(0,Math.min(innerWidth-container.offsetWidth,e.clientX-drag.x))+'px';container.style.top=Math.max(0,Math.min(innerHeight-45,e.clientY-drag.y))+'px';container.style.right='auto';});
         ['pointerup','pointercancel','lostpointercapture'].forEach(n=>bar.addEventListener(n,()=>{drag=null;}));
         container.addEventListener('click',wmtAcaoPainel);
-        const css=document.createElement('style');css.textContent='#wmt-container .wmt-cmp-linha small{opacity:1;color:var(--wmt-text,#e8eaed)}';document.head.appendChild(css);
+        const css=document.createElement('style');css.textContent='#wmt-container .wmt-cmp-linha small{opacity:1;color:var(--wmt-text,#e8eaed)}#wmt-container #wmt-body{padding:12px}#wmt-container #wmt-body[hidden]{display:none}';document.head.appendChild(css);
     }
 
 

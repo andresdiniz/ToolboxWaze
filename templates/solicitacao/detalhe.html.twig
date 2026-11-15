@@ -133,14 +133,16 @@
     </div>
   </div>
 
-  {% if solicitacao.dados %}
+  {# Metadados tecnicos do WME nao sao respostas do formulario. #}
+  {% set dadosExibicao = (solicitacao.dados ?? {})|filter((valor, chave) => chave != '_wme') %}
+  {% if dadosExibicao is not empty %}
   <div class="card mb-3">
     <div class="card-header fw-semibold">
       <i class="bi bi-card-list me-2 text-muted"></i>Detalhes da solicitação
     </div>
     <div class="card-body">
       <dl class="row mb-0">
-      {% for chave, valor in solicitacao.dados %}
+      {% for chave, valor in dadosExibicao %}
         <dt class="col-sm-4">
           {{ CAMPO_LABELS[chave] ?? chave|replace({'_': ' '})|capitalize }}
         </dt>

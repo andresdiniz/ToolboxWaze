@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ToolboxWaze — Central de solicitações WME
 // @namespace    https://github.com/andresdiniz/ToolboxWaze
-// @version      4.2.1
+// @version      4.2.1.1
 // @description  Solicitações ao ToolboxWaze direto do WME: conexão por e-mail, contexto SDK, formulários da API, anexos, rascunhos, histórico com links, verificação de duplicatas, acompanhamento e notificações de alterações.
 // @author       Andres Diniz
 // @homepageURL  https://github.com/andresdiniz/ToolboxWaze
@@ -1524,47 +1524,58 @@
     mineList.replaceChildren(el('p', 'Carregando detalhes…', null, 'muted'));
 
     try {
-      const data = await api('GET', '/solicitacoes/' + encodeURIComponent(id) + '/status');
-      mineList.replaceChildren();
+        const data = await api(
+            'GET',
+            '/api/wme/solicitacoes/' + encodeURIComponent(id) + '/status'
+        );
 
-      const box = el('div', null, mineList, 'card');
+        mineList.replaceChildren();
 
-      el('h3', 'Solicitação #' + data.id, box);
-      el('p', (data.statusLabel || data.status || '') + ' · ' + new Date(data.criadaEm).toLocaleString(), box, 'muted');
+        const box = el('div', null, mineList, 'card');
 
-      const url = requestUrl(data);
+        el('h3', 'Solicitação #' + data.id, box);
+        el(
+            'p',
+            (data.statusLabel || data.status || '') + ' · ' +
+            new Date(data.criadaEm).toLocaleString(),
+            box,
+            'muted'
+        );
 
-      if (url) {
-        const link = el('a', 'Abrir no ToolboxWaze ↗', box);
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-      }
+        const url = requestUrl(data);
 
-      el('h3', 'Comentários públicos', box);
-
-      if (!data.comentarios?.length) {
-        el('p', 'Sem comentários públicos ainda.', box, 'muted');
-      } else {
-        for (const comment of data.comentarios) {
-          const item = el('div', null, box);
-
-          el('strong', comment.autor || 'Autor', item);
-          el('small', ' · ' + new Date(comment.criadoEm).toLocaleString(), item);
-          el('p', comment.texto, item);
+        if (url) {
+            const link = el('a', 'Abrir no ToolboxWaze ↗', box);
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
         }
-      }
 
-      const back = el('button', 'Voltar', box);
-      back.onclick = () => {
-        mineCard.hidden = false;
-        renderMine();
-      };
+        el('h3', 'Comentários públicos', box);
+
+        if (!data.comentarios?.length) {
+            el('p', 'Sem comentários públicos ainda.', box, 'muted');
+        } else {
+            for (const comment of data.comentarios) {
+                const item = el('div', null, box);
+
+                el('strong', comment.autor || 'Autor', item);
+                el('small', ' · ' + new Date(comment.criadoEm).toLocaleString(), item);
+                el('p', comment.texto, item);
+            }
+        }
+
+        const back = el('button', 'Voltar', box);
+
+        back.onclick = () => {
+            mineCard.hidden = false;
+            renderMine();
+        };
     } catch (error) {
-      mineList.replaceChildren(el('p', error.message, null, 'error-text'));
-      authLost(error);
+        mineList.replaceChildren(el('p', error.message, null, 'error-text'));
+        authLost(error);
     }
-  }
+}
 
   async function renderMine() {
     mineList.replaceChildren(el('p', 'Carregando…', null, 'muted'));

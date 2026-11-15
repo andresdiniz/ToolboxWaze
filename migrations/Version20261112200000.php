@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DoctrineMigrations;
 
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
@@ -20,7 +21,10 @@ final class Version20261112200000 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->abortIf($this->connection->getDatabasePlatform()->getName() !== 'mysql', 'Esta migration requer MySQL/MariaDB.');
+        $this->abortIf(
+            !($this->connection->getDatabasePlatform() instanceof AbstractMySQLPlatform),
+            'Esta migration requer MySQL/MariaDB.'
+        );
 
         // 1. Tabela de histórico de edições manuais de radares (usada por RadarService::saveEdit e edit.html.twig)
         $this->addSql(<<<'SQL'

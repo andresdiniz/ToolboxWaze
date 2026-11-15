@@ -147,30 +147,48 @@
           {{ CAMPO_LABELS[chave] ?? chave|replace({'_': ' '})|capitalize }}
         </dt>
         <dd class="col-sm-8">
-          {% if chave in CAMPOS_TEXTO %}
-            {% if valor is not empty %}
-              {% if chave == 'permalink' %}
-                <a href="{{ valor }}" target="_blank" rel="noopener" class="text-break">
-                  <i class="bi bi-box-arrow-up-right me-1"></i>{{ valor|slice(0,60) }}{{ valor|length > 60 ? '…' : '' }}
-                </a>
-              {% else %}
-                {{ valor|nl2br }}
-              {% endif %}
-            {% else %}
-              <span class="text-muted fst-italic">Não informado</span>
-            {% endif %}
-          {% elseif valor is iterable %}
-            {{ valor|map(v => LABELS[v] ?? v)|join(', ') }}
-          {% elseif LABELS[valor] is defined %}
-            {{ LABELS[valor] }}
-          {% elseif valor == true %}
-            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Sim</span>
-          {% elseif valor == false %}
-            <span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Não</span>
-          {% elseif valor is not empty %}
-            {{ valor }}
-          {% else %}
+          {% if valor is same as(null) %}
             <span class="text-muted fst-italic">Não informado</span>
+          {% elseif valor is same as(true) %}
+            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Sim</span>
+          {% elseif valor is same as(false) %}
+            <span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Não</span>
+          {% elseif valor is iterable %}
+            {% if valor is empty %}
+              <span class="text-muted fst-italic">Não informado</span>
+            {% else %}
+              <ul class="list-unstyled mb-0">
+                {% for item in valor %}
+                  <li class="text-break">
+                    {% if item is iterable %}
+                      <pre class="small mb-1">{{ item|json_encode(448) }}</pre>
+                    {% elseif item is same as(true) %}
+                      Sim
+                    {% elseif item is same as(false) %}
+                      Não
+                    {% elseif item is same as(null) %}
+                      <span class="text-muted">Não informado</span>
+                    {% else %}
+                      {{ LABELS[item] ?? item }}
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          {% elseif valor is same as('') %}
+            <span class="text-muted fst-italic">Não informado</span>
+          {% elseif chave == 'permalink' %}
+            {% if valor starts with 'https://' or valor starts with 'http://' %}
+              <a href="{{ valor }}" target="_blank" rel="noopener noreferrer" class="text-break">
+                <i class="bi bi-box-arrow-up-right me-1"></i>{{ valor }}
+              </a>
+            {% else %}
+              <span class="text-break">{{ valor }}</span>
+            {% endif %}
+          {% elseif chave in CAMPOS_TEXTO %}
+            {{ valor|nl2br }}
+          {% else %}
+            <span class="text-break">{{ LABELS[valor] ?? valor }}</span>
           {% endif %}
         </dd>
       {% endfor %}

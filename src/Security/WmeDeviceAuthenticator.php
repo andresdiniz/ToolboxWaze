@@ -7,6 +7,7 @@ namespace App\Security;
 use App\Entity\User;
 use App\Entity\WmeDispositivo;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,26 +19,18 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 
-/**
- * Autentica /api/wme/* pelo header X-API-TOKEN.
- *
- * 1. Token de dispositivo: o userscript gera 64 hex aleatórios; aqui buscamos sha256(token).
- *    Estado "pendente" (e-mail ainda não confirmado) autentica, mas a API só libera
- *    bootstrap/reenvio/revogação; o restante exige estado "ativo".
- * 2. Legado: token pessoal gerado no site (User.apiToken) de conta aprovada continua valendo.
- *
- * Rotas públicas (cadastro e confirmação de e-mail) não passam por aqui.
- */
 final class WmeDeviceAuthenticator extends AbstractAuthenticator
 {
     public const ATTR_DISPOSITIVO = '_wme_dispositivo';
-    public const ATTR_ESTADO      = '_wme_estado';
+    public const ATTR_ESTADO = '_wme_estado';
 
     private const PUBLIC_PATHS = ['/api/wme/registrar'];
     private const PUBLIC_PREFIXES = ['/api/wme/confirmar/'];
+    private const EXPIRACAO_DIAS = 90;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -48,16 +41,17 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
         if (!str_starts_with($path, '/api/wme/')) {
             return false;
         }
+
         if (in_array($path, self::PUBLIC_PATHS, true)) {
             return false;
         }
+
         foreach (self::PUBLIC_PREFIXES as $prefix) {
             if (str_starts_with($path, $prefix)) {
                 return false;
             }
         }
 
-        // Sempre autentica (mesmo sem header) para devolver 401 JSON em vez de redirecionar ao login.
         return true;
     }
 
@@ -72,8 +66,19 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
             );
         }
 
-        $device = $this->em->getRepository(WmeDispositivo::class)
-            ->findOneBy(['tokenHash' => hash('sha256', $token)]);
+        try {
+            $device = $this->em->getRepository(WmeDispositivo::class)
+                ->findOneBy(['tokenHash' => hash('sha256', $token)]);
+        } catch (\Throwable $exception) {
+            $this->logger->error('WME: falha ao localizar dispositivo', [
+                'erro' => $exception->getMessage(),
+            ]);
+
+            throw new CustomUserMessageAuthenticationException(
+                'Não foi possível validar o dispositivo.',
+                ['codigo' => 'erro_interno']
+            );
+        }
 
         if ($device instanceof WmeDispositivo) {
             if ($device->isRevogado()) {
@@ -83,45 +88,71 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
                 );
             }
 
-            $user   = $device->getUser();
+            if ($device->isExpirado()) {
+                throw new CustomUserMessageAuthenticationException(
+                    'Este dispositivo expirou por inatividade. Conecte novamente.',
+                    ['codigo' => 'dispositivo_expirado']
+                );
+            }
+
+            $user = $device->getUser();
             $estado = $device->getEstado();
 
-            $last = $device->getUltimoUsoEm();
-            $now  = new \DateTimeImmutable();
-            if ($last === null || $last < $now->modify('-5 minutes')) {
-                $device->setUltimoUsoEm($now);
+            $ultimoUso = $device->getUltimoUsoEm();
+            $agora = new \DateTimeImmutable();
+
+            if ($ultimoUso === null || $ultimoUso < $agora->modify('-5 minutes')) {
+                $device->setUltimoUsoEm($agora);
                 $this->em->flush();
             }
         } else {
-            // Compatibilidade: token pessoal gerado no site.
-            $user = $this->em->getRepository(User::class)->findOneBy(['apiToken' => $token]);
+            $user = $this->em->getRepository(User::class)
+                ->findOneBy(['apiToken' => $token]);
+
             if (!$user instanceof User || !$user->isApproved()) {
                 throw new CustomUserMessageAuthenticationException(
                     'Token desconhecido.',
                     ['codigo' => 'token_desconhecido']
                 );
             }
+
             $device = null;
             $estado = WmeDispositivo::ESTADO_ATIVO;
+        }
+
+        if (!$user instanceof User) {
+            throw new CustomUserMessageAuthenticationException(
+                'Dispositivo não vinculado a uma conta.',
+                ['codigo' => 'token_desconhecido']
+            );
         }
 
         $request->attributes->set(self::ATTR_DISPOSITIVO, $device);
         $request->attributes->set(self::ATTR_ESTADO, $estado);
 
-        return new SelfValidatingPassport(new UserBadge($user->getUserIdentifier()));
+        return new SelfValidatingPassport(
+            new UserBadge($user->getUserIdentifier())
+        );
     }
 
-    public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
-    {
+    public function onAuthenticationSuccess(
+        Request $request,
+        TokenInterface $token,
+        string $firewallName
+    ): ?Response {
         return null;
     }
 
-    public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
-    {
+    public function onAuthenticationFailure(
+        Request $request,
+        AuthenticationException $exception
+    ): ?Response {
         $data = $exception->getMessageData();
 
         return new JsonResponse([
-            'codigo'  => is_string($data['codigo'] ?? null) ? $data['codigo'] : 'nao_autenticado',
+            'codigo' => is_string($data['codigo'] ?? null)
+                ? $data['codigo']
+                : 'nao_autenticado',
             'message' => $exception instanceof CustomUserMessageAuthenticationException
                 ? $exception->getMessage()
                 : 'Não autenticado.',

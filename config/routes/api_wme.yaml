@@ -1,0 +1,55 @@
+api_wme_bootstrap:
+    path: /api/wme/bootstrap
+    controller: App\Controller\Api\WmeApiController::bootstrap
+    methods: GET
+
+api_wme_registrar:
+    path: /api/wme/registrar
+    controller: App\Controller\Api\WmeApiController::registrar
+    methods: POST
+
+api_wme_verificacao_reenviar:
+    path: /api/wme/verificacao/reenviar
+    controller: App\Controller\Api\WmeApiController::reenviarVerificacao
+    methods: POST
+
+api_wme_dispositivo_revogar:
+    path: /api/wme/dispositivo/revogar
+    controller: App\Controller\Api\WmeApiController::revogarDispositivo
+    methods: POST
+
+api_wme_formulario:
+    path: /api/wme/formularios/{slug}
+    controller: App\Controller\Api\WmeApiController::formulario
+    methods: GET
+    requirements:
+        slug: '[a-z0-9_-]+'
+
+api_wme_solicitacoes:
+    path: /api/wme/solicitacoes
+    controller: App\Controller\Api\WmeApiController::minhasSolicitacoes
+    methods: GET
+
+api_wme_solicitacao_status:
+    path: /api/wme/solicitacoes/{id}/status
+    controller: App\Controller\Api\WmeApiController::statusSolicitacao
+    methods: GET
+    requirements:
+        id: '\d+'
+
+api_wme_solicitacoes_alteracoes:
+    path: /api/wme/solicitacoes/alteracoes
+    controller: App\Controller\Api\WmeApiController::alteracoesSolicitacoes
+    methods: GET
+
+api_wme_duplicatas:
+    path: /api/wme/duplicatas
+    controller: App\Controller\Api\WmeApiController::verificarDuplicata
+    methods: POST
+
+api_wme_envio:
+    path: /api/wme/envios/{clientRequestId}
+    controller: App\Controller\Api\WmeApiController::statusEnvio
+    methods: GET
+    requirements:
+        clientRequestId: '[a-f0-9-]{36}'

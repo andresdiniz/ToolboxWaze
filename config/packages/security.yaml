@@ -59,3 +59,18 @@ security:
         - { path: ^/api/wme/confirmar/,  roles: PUBLIC_ACCESS }
         - { path: ^/admin,           roles: ROLE_ADMIN }
         - { path: ^/,                roles: ROLE_USER }
+
+
+security:
+    firewalls:
+        api_wme:
+            pattern: ^/api/wme/
+            stateless: true
+            provider: app_user_provider
+            custom_authenticators:
+                - App\Security\WmeDeviceAuthenticator
+            entry_point: App\Security\WmeDeviceAuthenticator
+
+    access_control:
+        - { path: ^/api/wme/(bootstrap|verificacao/reenviar|dispositivo/revogar|formularios|solicitacoes|duplicatas|envios), roles: PUBLIC_ACCESS }
+        - { path: ^/api/wme/registrar, roles: PUBLIC_ACCESS }

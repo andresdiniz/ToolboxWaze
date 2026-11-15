@@ -279,3 +279,39 @@ class Solicitacao
         return $this;
     }
 }
+#[ORM\Column(name: 'atualizado_em', type: 'datetime_immutable')]
+private \DateTimeImmutable $atualizadoEm;
+
+#[ORM\Column(name: 'segmento_id', type: 'string', length: 32, nullable: true)]
+private ?string $segmentoId = null;
+
+#[ORM\PrePersist]
+#[ORM\PreUpdate]
+public function tocarAtualizadoEm(): void
+{
+    $this->atualizadoEm = new \DateTimeImmutable();
+}
+
+public function getAtualizadoEm(): \DateTimeImmutable
+{
+    return $this->atualizadoEm;
+}
+
+public function setAtualizadoEm(\DateTimeImmutable $atualizadoEm): static
+{
+    $this->atualizadoEm = $atualizadoEm;
+
+    return $this;
+}
+
+public function getSegmentoId(): ?string
+{
+    return $this->segmentoId;
+}
+
+public function setSegmentoId(?string $segmentoId): static
+{
+    $this->segmentoId = $segmentoId;
+
+    return $this;
+}

@@ -1,0 +1,39 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}Central de administração{% endblock %}
+
+{% block main %}
+    <div class="mb-4">
+        <h2 class="h4">Bem-vindo ao painel do ToolboxWaze</h2>
+        <p class="text-muted mb-0">Acesse usuários, dados, formulários, solicitações e monitoramento em um único ponto de entrada.</p>
+    </div>
+
+    <div class="alert alert-info" role="status">
+        O dashboard utiliza EasyAdmin. Nesta etapa, os atalhos abrem os módulos existentes, preservando suas operações e permissões; essas telas ainda não foram convertidas em CRUDs EasyAdmin.
+    </div>
+
+    {% if not formBuilderAvailable %}
+        <div class="alert alert-warning" role="status">
+            Seu acesso ao dashboard é de administrador. Os módulos antigos de formulários ainda exigem ROLE_ADMIN4 e podem retornar 403 até a padronização desses controllers para ROLE_ADMIN. Este dashboard não altera as permissões desses módulos.
+        </div>
+    {% endif %}
+
+    {% for section in sections %}
+        <section class="mb-4" aria-labelledby="admin-section-{{ loop.index }}">
+            <h3 class="h5 mb-3" id="admin-section-{{ loop.index }}">{{ section.label }}</h3>
+            <div class="row g-3">
+                {% for item in section.items %}
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <h4 class="h6 mb-2"><i class="{{ item.icon }} me-2" aria-hidden="true"></i>{{ item.label }}</h4>
+                                <p class="text-muted small flex-grow-1">{{ item.description }}</p>
+                                <a class="btn btn-outline-primary align-self-start" href="{{ path(item.route, item.parameters|default({})) }}" data-turbo="false" aria-label="{{ 'Abrir: ' ~ item.label }}">Abrir módulo</a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endfor %}
+{% endblock %}

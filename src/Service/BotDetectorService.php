@@ -76,25 +76,14 @@ class BotDetectorService
     }
 
     /**
-     * Conta requests suspeitos do IP no último minuto.
-     * Resultado cacheado 5 s via cache.app — elimina a query
-     * SELECT COUNT(*) FROM suspicious_requests a cada request.
+     * Conta registros suspeitos do IP no último minuto, não todo o tráfego.
+     * Mantém uma única leitura de cache, com TTL explícito de 5 segundos.
      */
     private function isRateLimitExceeded(string $ip): bool
     {
-        $cacheKey = 'bot_rate_' . md5($ip);
+        // A versão ignora zeros sem TTL deixados pela implementação anterior.
+        $cacheKey = 'bot_rate_v2_' . md5($ip);
 
-        $count = $this->cache->get($cacheKey, function (ItemInterface $item): int {
-            // O ItemInterface não tem acesso ao $ip neste escopo;
-            // retornamos 0 para forçar a query somente quando o cache expirar.
-            // O bloco abaixo nunca é chamado porque substituímos a lógica
-            // com o padrão detalhado no método wrapper abaixo.
-            return 0;
-        });
-
-        // Implementação correta: cache com $ip disponível via use.
-        // Sobrescreve o get() anterior com closure que captura $ip.
-        $cacheKey = 'bot_rate_' . md5($ip);
         $count = $this->cache->get($cacheKey, function (ItemInterface $item) use ($ip): int {
             $item->expiresAfter(self::RATE_CACHE_TTL);
             $since = new \DateTimeImmutable('-1 minute');
@@ -102,7 +91,7 @@ class BotDetectorService
             return $this->em
                 ->getRepository(SuspiciousRequest::class)
                 ->countRecentByIp($ip, $since);
-        });
+        }, 0.0);
 
         return $count > 30;
     }

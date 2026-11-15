@@ -336,7 +336,7 @@
   PAGE.twDiagnostico=()=>{const d={version:VERSION,sdk:!!sdk,conn,connected:!!identity,form:definition?.slug,selected:selection().length,pending:!!unresolved,modalOpen:!overlay.hidden};log(d);return d;};
   log('Interface carregada',VERSION);updateBusy();
   try{for(let i=0;i<200;i++){if(PAGE.SDK_INITIALIZED&&typeof PAGE.getWmeSdk==='function')break;if(i===199)throw new Error('SDK indisponível após 60 segundos.');await new Promise(r=>setTimeout(r,300));}
-    await PAGE.SDK_INITIALIZED;sdk=PAGE.getWmeSdk({scriptId:'toolboxwaze-solicitacoes',scriptName:'ToolboxWaze — Solicitações'});
+    await PAGE.SDK_INITIALIZED;sdk=PAGE.getWmeSdk({scriptId:'toolboxwaze-solicitacoes',scriptName:'Comunidade BR — Solicitações'});
     if(!sdk.State.isReady())await sdk.Events.once({eventName:'wme-ready'});context=collect();summary.textContent=summarize();prefillNick();
     sdk.Events.on({eventName:'wme-selection-changed',eventHandler:()=>{const n=selection().length;fab.textContent='Toolbox · Solicitações'+(n?' ('+n+')':'');if(!overlay.hidden)contextNotice.textContent='A seleção pode ter mudado. Use Atualizar para recapturar.';}});log('SDK pronto');
   }catch(e){summary.textContent='SDK indisponível. Preenchimento manual disponível.';warn(e.message);}

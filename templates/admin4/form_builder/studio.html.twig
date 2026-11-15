@@ -1,0 +1,21 @@
+{% extends 'base.html.twig' %}
+{% block title %}Estúdio de formulários · ToolboxWaze{% endblock %}
+{% block stylesheets %}{{ parent() }}<link rel="stylesheet" href="{{ asset('styles/form-builder-studio.css') }}">{% endblock %}
+{% block body %}
+<section class="fbs" data-form-studio>
+<header class="fbs-header"><div><span class="fbs-eyebrow">ToolboxWaze / FormBuilder</span><h1><i class="bi bi-ui-checks-grid" aria-hidden="true"></i> Estúdio de formulários</h1><p>Organize campos. Preserve regras. Construa novas experiências.</p></div><a class="btn btn-outline-secondary" href="{{ path('admin4_form_builder_index') }}">Voltar à lista</a></header>
+{% if studio_error %}<div class="alert alert-danger" role="alert">{{ studio_error }}</div>{% endif %}
+<div class="alert alert-info small">Este editor preserva as configurações atuais de publicação. Novos formulários começam desabilitados no WME. Remover ou renomear campos existentes exige migração explícita.</div>
+<form method="post" id="fbs-form" data-turbo="false">
+<input type="hidden" name="_token" value="{{ csrf_token('form_studio_' ~ (studio_id ?? 'new')) }}"><input type="hidden" name="definition" id="fbs-definition">
+<div id="fbs-message" class="alert alert-warning" role="status" hidden></div>
+<div class="fbs-grid">
+<aside class="card fbs-library"><div class="card-body"><h2>Biblioteca</h2><p class="text-muted small">Clique para adicionar</p><div id="fbs-types"></div><hr><p class="small text-muted">Condições, variantes e permissões avançadas são preservadas no JSON de opções. Sua execução depende do backend de cada canal.</p></div></aside>
+<main><div class="card fbs-intro mb-3"><div class="card-body"><label for="fbs-name" class="form-label">Nome do formulário</label><input id="fbs-name" class="form-control form-control-lg" maxlength="120" required value="{{ definition.nome }}"><label for="fbs-desc" class="form-label mt-3">Descrição</label><textarea id="fbs-desc" class="form-control" maxlength="255">{{ definition.descricao }}</textarea><div class="row g-3 mt-1"><div class="col-sm-8"><label for="fbs-slug" class="form-label">Identificador estável</label><input id="fbs-slug" class="form-control" pattern="[a-z0-9_-]+" maxlength="80" required value="{{ definition.slug }}" {{ studio_id ? 'readonly' }}></div><div class="col-sm-4 d-flex align-items-end"><label class="form-check mb-2"><input id="fbs-active" class="form-check-input" type="checkbox" {{ definition.ativo ? 'checked' }}> Ativo</label></div></div></div></div><div id="fbs-fields"></div><div class="fbs-empty" id="fbs-empty"><i class="bi bi-plus-circle" aria-hidden="true"></i><h2>Comece pelo primeiro campo</h2><p>Escolha um tipo na biblioteca.</p></div></main>
+<aside class="card fbs-properties"><div class="card-body"><h2>Propriedades</h2><div id="fbs-properties"><p class="text-muted small">Selecione um campo para editar.</p></div></div></aside>
+</div><footer class="fbs-footer"><span id="fbs-count" aria-live="polite"></span><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="fbs-export">Exportar JSON</button><button type="button" class="btn btn-outline-primary" id="fbs-preview">Prévia</button><button class="btn btn-primary" type="submit"><i class="bi bi-floppy me-1"></i>Salvar</button></div></footer>
+</form><dialog id="fbs-dialog"><header class="d-flex justify-content-between align-items-center mb-3"><h2>Prévia estrutural</h2><button type="button" class="btn btn-sm btn-outline-secondary" id="fbs-close">Fechar</button></header><p class="small text-muted">Exibe todos os campos; não executa permissões, variantes ou validações do servidor.</p><div id="fbs-preview-content"></div></dialog>
+<script type="application/json" id="fbs-initial">{{ definition|json_encode(15)|raw }}</script>
+</section>
+{% endblock %}
+{% block javascripts %}{{ parent() }}<script src="{{ asset('js/form-builder-studio.js') }}" defer></script>{% endblock %}

@@ -133,8 +133,10 @@
     </div>
   </div>
 
-  {# Metadados tecnicos do WME nao sao respostas do formulario. #}
-  {% set dadosExibicao = (solicitacao.dados ?? {})|filter((valor, chave) => chave != '_wme') %}
+  {# Combina respostas antigas e dinamicas; metadados tecnicos nao sao exibidos. #}
+  {% set dadosLegados = (solicitacao.dados ?? {})|filter((valor, chave) => chave != '_wme') %}
+  {% set dadosDinamicos = (solicitacao.dadosDinamicos ?? {})|filter((valor, chave) => chave != '_wme') %}
+  {% set dadosExibicao = dadosLegados|merge(dadosDinamicos) %}
   {% if dadosExibicao is not empty %}
   <div class="card mb-3">
     <div class="card-header fw-semibold">

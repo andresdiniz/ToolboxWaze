@@ -33,5 +33,9 @@ services:
         autowire: true
         autoconfigure: true
 
+    App\Security\WmeDeviceAuthenticator:
+        autowire: true
+        autoconfigure: true
+
     App\Email\Contract\EmailTransportInterface:
         alias: 'App\Email\Transport\NullEmailTransport'

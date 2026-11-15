@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ToolboxWaze — Central de solicitações WME
 // @namespace    https://github.com/andresdiniz/ToolboxWaze
-// @version      3.0.0
-// @description  Modal independente, contexto SDK, formulários API, anexos e rascunhos.
+// @version      4.0.0
+// @description  Solicitações ao ToolboxWaze direto do WME: conexão por e-mail (sem colar token), contexto SDK, formulários da API, anexos e rascunhos.
 // @match        https://www.waze.com/editor*
 // @match        https://www.waze.com/*/editor*
 // @match        https://beta.waze.com/editor*
@@ -20,12 +20,15 @@
 (async function () {
   'use strict';
   if (window.top !== window.self) return;
-  const VERSION='3.0.0', BASE='https://wazetoolbox.acheireviews.com.br';
+  const VERSION='4.0.0', BASE='https://wazetoolbox.acheireviews.com.br';
   const API=BASE+'/api/wme', PREFIX='[ToolboxWaze]', PAGE=typeof unsafeWindow==='undefined'?window:unsafeWindow;
   const log=(...a)=>console.info(PREFIX,...a), warn=(...a)=>console.warn(PREFIX,...a);
   const store={get:async(k,d=null)=>await GM_getValue(k,d),set:async(k,v)=>await GM_setValue(k,v),del:async k=>await GM_deleteValue(k)};
   const uid=()=>crypto.randomUUID();
-  let sdk=null, token=await store.get('toolbox_api_token',''), identity=null, forms=[], definition=null;
+  const TOKEN_KEY='tw_device_token', LEGACY_KEY='toolbox_api_token';
+  let sdk=null, token=(await store.get(TOKEN_KEY,''))||(await store.get(LEGACY_KEY,'')), identity=null, forms=[], definition=null;
+  let conn='carregando', pendingInfo=null, pollTimer=null;
+  const randomToken=()=>{const b=new Uint8Array(32);crypto.getRandomValues(b);return Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');};
   let answers={}, files={}, context=null, dirty=false, busy=false, unresolved=null, previousFocus=null, loadSerial=0;
   let restoring=false, saveTimer=null, restoredPending=await store.get('tw3_pending',null);
   unresolved=restoredPending;
@@ -61,15 +64,30 @@
   const dialog=el('section',null,overlay,'dialog');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','tw3-title');
   const header=el('header',null,dialog);const title=el('h2','Solicitações',header);title.id='tw3-title';
   el('span','ToolboxWaze · '+VERSION,header,'muted');el('span',null,header,'spacer');
-  const settingsButton=el('button','Conexão',header),closeButton=el('button','Fechar',header);
+  const mineButton=el('button','Minhas',header),settingsButton=el('button','Conexão',header),closeButton=el('button','Fechar',header);mineButton.hidden=true;
   const scroll=el('div',null,dialog,'scroll');
   const settings=el('section',null,scroll,'card');settings.hidden=true;
-  el('h3','Conectar ao ToolboxWaze',settings);el('p','Use um token pessoal. Nenhuma credencial ou cookie do Waze será enviado.',settings,'muted');
-  const tokenLabel=el('label','Token da API',settings),tokenInput=el('input',null,settings);tokenInput.type='password';tokenInput.autocomplete='off';tokenInput.id='tw3-token';tokenLabel.htmlFor=tokenInput.id;
-  const connectionRow=el('div',null,settings,'row');connectionRow.style.marginTop='10px';
-  const connectButton=el('button','Validar e conectar',connectionRow,'primary'),forgetButton=el('button','Remover token',connectionRow);
-  const tokenLink=el('a','Gerar token no site',connectionRow);tokenLink.href=BASE+'/profile/api-token';tokenLink.target='_blank';tokenLink.rel='noopener noreferrer';
+  el('h3','Conexão com o ToolboxWaze',settings);
+  const connText=el('p','Não conectado.',settings,'muted');
+  el('p','Este navegador usa um token aleatório gerado pelo script. Nenhuma credencial ou cookie do Waze é enviado.',settings,'muted');
+  const settingsRow=el('div',null,settings,'row');
+  const retryButton=el('button','Tentar novamente',settingsRow,'primary'),disconnectButton=el('button','Desconectar este navegador',settingsRow);retryButton.hidden=true;
   const status=el('div',null,scroll,'status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
+  const registerCard=el('section',null,scroll,'card');registerCard.hidden=true;
+  el('h3','Conectar ao ToolboxWaze',registerCard);
+  el('p','Informe seu e-mail para enviar solicitações. Se você ainda não tem conta, ela é criada automaticamente. Enviaremos um link para confirmar que o e-mail é seu.',registerCard,'muted');
+  const nickField=el('div',null,registerCard,'field'),nickLabel=el('label','Apelido no WME',nickField),nickInput=el('input',null,nickField);nickInput.id='tw4-nick';nickLabel.htmlFor='tw4-nick';nickInput.maxLength=60;nickInput.autocomplete='off';
+  const nickHint=el('small','',nickField),nickError=el('div','',nickField,'error-text');nickError.setAttribute('role','alert');
+  const mailField=el('div',null,registerCard,'field'),mailLabel=el('label','E-mail',mailField),mailInput=el('input',null,mailField);mailInput.id='tw4-email';mailLabel.htmlFor='tw4-email';mailInput.type='email';mailInput.autocomplete='email';mailInput.maxLength=180;
+  const mailError=el('div','',mailField,'error-text');mailError.setAttribute('role','alert');
+  const nameField=el('div',null,registerCard,'field'),nameLabel=el('label','Nome (opcional)',nameField),nameInput=el('input',null,nameField);nameInput.id='tw4-name';nameLabel.htmlFor='tw4-name';nameInput.maxLength=120;nameInput.autocomplete='name';
+  const consent=el('label',null,registerCard,'choice'),consentBox=el('input',null,consent);consentBox.type='checkbox';el('span','Concordo em enviar meu e-mail, meu apelido do WME e os dados das solicitações ao ToolboxWaze.',consent);
+  const registerRow=el('div',null,registerCard,'row');registerRow.style.marginTop='12px';const registerButton=el('button','Conectar',registerRow,'primary');
+  const waitCard=el('section',null,scroll,'card');waitCard.hidden=true;
+  el('h3','Confirme seu e-mail',waitCard);const waitText=el('p','',waitCard);
+  el('p','O link vale por 60 minutos. Depois de confirmar, o script detecta sozinho (ou use “Já confirmei”).',waitCard,'muted');
+  const waitRow=el('div',null,waitCard,'row');const verifyButton=el('button','Já confirmei',waitRow,'primary'),resendButton=el('button','Reenviar e-mail',waitRow),changeButton=el('button','Usar outro e-mail',waitRow);
+  const mineCard=el('section',null,scroll,'card');mineCard.hidden=true;el('h3','Minhas solicitações',mineCard);const mineList=el('div',null,mineCard);
   const pendingBox=el('div',null,scroll,'card');pendingBox.hidden=true;el('p','Há um envio sem resultado confirmado. Consulte antes de enviar novamente.',pendingBox);
   const checkButton=el('button','Consultar resultado do envio',pendingBox);
   const layout=el('div',null,scroll,'layout'),side=el('aside',null,layout,'side'),main=el('div',null,layout);
@@ -84,8 +102,9 @@
   const clearButton=el('button','Limpar rascunho',footer),sendButton=el('button','Enviar solicitação',footer,'primary');sendButton.disabled=true;
   const previews=new Set();
   function notice(text,type=''){status.textContent=text;status.className='status '+type;status.hidden=!text;}
-  function updateBusy(){sendButton.disabled=busy||!identity||!definition||Boolean(unresolved);connectButton.disabled=busy;clearButton.disabled=busy;refresh.disabled=busy;pendingBox.hidden=!unresolved;}
-  function api(method,path,body,credential=token){
+  function updateBusy(){sendButton.disabled=busy||conn!=='ativo'||!identity||!definition||Boolean(unresolved);registerButton.disabled=busy;verifyButton.disabled=busy;resendButton.disabled=busy;changeButton.disabled=busy;disconnectButton.disabled=busy;retryButton.disabled=busy;clearButton.disabled=busy;refresh.disabled=busy;pendingBox.hidden=!unresolved||conn!=='ativo';}
+  function api(method,path,body){
+    const credential=token;
     return new Promise((resolve,reject)=>{
       const start=performance.now();log('HTTP',method,path);
       const multipart=body instanceof FormData;
@@ -93,7 +112,7 @@
         headers:{Accept:'application/json','X-API-TOKEN':credential,...(body&&!multipart?{'Content-Type':'application/json'}:{})},
         data:body?(multipart?body:JSON.stringify(body)):undefined,
         onload:r=>{log('HTTP',r.status,path,Math.round(performance.now()-start)+'ms');let data=null;try{data=JSON.parse(r.responseText);}catch{}
-          if(r.status<200||r.status>=300){const e=new Error(data?.message||data?.error||'HTTP '+r.status);e.status=r.status;e.errors=data?.errors||{};reject(e);return;}
+          if(r.status<200||r.status>=300){const e=new Error(data?.message||data?.error||'HTTP '+r.status);e.status=r.status;e.codigo=data?.codigo||'';e.errors=data?.errors||{};e.data=data||{};reject(e);return;}
           if(!data||typeof data!=='object'){const e=new Error('A API não retornou JSON válido.');e.uncertain=true;reject(e);return;}resolve(data);},
         onerror:()=>reject(Object.assign(new Error('Falha de rede. O servidor pode ter recebido o envio.'),{uncertain:true})),
         ontimeout:()=>reject(Object.assign(new Error('Tempo esgotado. Consulte o resultado antes de reenviar.'),{uncertain:true}))
@@ -192,16 +211,89 @@
     definition=data;restoring=true;answers={};files={};const saved=await store.get(await draftKey());if(saved&&Date.now()-saved.updatedAt<7*86400000){answers=saved.answers||{};if(saved.context)context=saved.context;}
     prefill();formTitle.textContent=data.nome;formDescription.textContent=data.descricao||'';summary.textContent=summarize();renderFields();dirty=false;restoring=false;
     for(const b of typeList.children)b.classList.toggle('active',b.dataset.slug===slug);notice('');updateBusy();
-  }catch(e){restoring=false;definition=null;notice(e.message,'error');updateBusy();}}
-  async function connect(candidate=token){
-    if(!candidate){settings.hidden=false;notice('Informe seu token pessoal.','error');return;}
-    busy=true;updateBusy();try{const data=await api('GET','/bootstrap',null,candidate);if(!data.usuario?.id||!Array.isArray(data.formularios))throw new Error('Resposta de bootstrap inválida.');
-      clearTimeout(saveTimer);definition=null;answers={};files={};fieldArea.replaceChildren();token=candidate;await store.set('toolbox_api_token',token);identity=data.usuario;forms=data.formularios;tokenInput.value='';settings.hidden=true;
-      accountText.textContent=(identity.nome||identity.wazeNickname||'Usuário')+' · '+(identity.wazeNickname||'');typeList.replaceChildren();
-      for(const f of forms){const b=el('button',f.nome,typeList);b.dataset.slug=f.slug;b.onclick=()=>choose(f.slug);}
-      notice(forms.length?'Conectado. Escolha um formulário.':'Nenhum formulário disponível para sua conta.','success');
-    }catch(e){identity=null;definition=null;forms=[];typeList.replaceChildren();accountText.textContent='Não conectado';notice(e.message,'error');settings.hidden=false;}finally{busy=false;updateBusy();}
+  }catch(e){restoring=false;definition=null;notice(e.message,'error');updateBusy();authLost(e);}}
+  const AUTH_CODES=['email_nao_confirmado','token_desconhecido','token_invalido','dispositivo_revogado','nao_autenticado'];
+  function authLost(e){if(AUTH_CODES.includes(e?.codigo)){setTimeout(()=>boot(),0);return true;}return false;}
+  function setConn(s,info){
+    conn=s;if(info)pendingInfo=info;
+    registerCard.hidden=s!=='registro';waitCard.hidden=s!=='pendente';layout.hidden=s!=='ativo';mineButton.hidden=s!=='ativo';
+    if(s!=='ativo')mineCard.hidden=true;
+    if(s==='pendente')waitText.textContent='Enviamos um link de confirmação para '+(pendingInfo?.emailMascarado||'seu e-mail')+'. Abra o e-mail e confirme para liberar o envio de solicitações.';
+    connText.textContent=({ativo:'Conectado.',pendente:'Aguardando a confirmação do e-mail.',registro:'Não conectado.',carregando:'Conectando…',erro:'Sem conexão com o servidor.'})[s]||'';
+    retryButton.hidden=s!=='erro';disconnectButton.hidden=!token;if(s==='erro')settings.hidden=false;
+    if(s==='registro'&&!overlay.hidden)setTimeout(()=>(mailInput.value?consentBox:mailInput).focus(),0);
+    updateBusy();
   }
+  function prefillNick(){let nick='';try{nick=sdk?.State?.getUserInfo?.()?.userName||'';}catch{}
+    if(nick){nickInput.value=nick;nickInput.readOnly=true;nickHint.textContent='Detectado no WME.';}
+    else if(!nickInput.value){nickHint.textContent='Não foi possível detectar automaticamente. Informe seu apelido do WME.';}}
+  async function dropToken(){token='';await store.del(TOKEN_KEY);await store.del(LEGACY_KEY);identity=null;definition=null;forms=[];answers={};files={};revokePreviews();fieldArea.replaceChildren();typeList.replaceChildren();accountText.textContent='Desconectado';}
+  function startPoll(){stopPoll();const until=Date.now()+20*60000;pollTimer=setInterval(()=>{if(overlay.hidden||conn!=='pendente'||Date.now()>until){stopPoll();return;}boot(true);},6000);}
+  function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
+  async function applyBootstrap(data){
+    if(data.estado==='pendente'){identity=null;definition=null;forms=[];typeList.replaceChildren();accountText.textContent='Aguardando confirmação do e-mail';setConn('pendente',data.usuario);startPoll();return;}
+    if(data.estado!=='ativo'||!data.usuario?.id||!Array.isArray(data.formularios))throw new Error('Resposta de bootstrap inválida.');
+    stopPoll();clearTimeout(saveTimer);definition=null;answers={};files={};fieldArea.replaceChildren();identity=data.usuario;forms=data.formularios;
+    accountText.textContent=(identity.nome||identity.wazeNickname||'Usuário')+' · '+(identity.wazeNickname||'');typeList.replaceChildren();
+    for(const f of forms){const b=el('button',f.nome,typeList);b.dataset.slug=f.slug;b.onclick=()=>choose(f.slug);}
+    setConn('ativo');settings.hidden=true;
+    notice(forms.length?'Conectado. Escolha um formulário.':'Nenhum formulário disponível para sua conta.','success');
+  }
+  async function boot(silent=false){
+    if(busy)return;busy=true;updateBusy();if(!silent)setConn('carregando');
+    try{
+      if(!token){setConn('registro');return;}
+      await applyBootstrap(await api('GET','/bootstrap'));
+    }catch(e){
+      if(e.codigo==='token_desconhecido'||e.codigo==='token_invalido'){stopPoll();setConn('registro');}
+      else if(e.codigo==='dispositivo_revogado'){stopPoll();await dropToken();setConn('registro');notice('A conexão anterior foi encerrada. Conecte novamente.','error');}
+      else{if(!silent)setConn('erro');notice(e.message,'error');}
+    }finally{busy=false;updateBusy();}
+  }
+  async function register(){
+    if(busy)return;mailError.textContent='';nickError.textContent='';
+    const email=mailInput.value.trim(),nick=nickInput.value.trim(),nome=nameInput.value.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){mailError.textContent='Informe um e-mail válido.';mailInput.focus();return;}
+    if(!nick){nickError.textContent='Informe seu apelido no WME.';nickInput.focus();return;}
+    if(!consentBox.checked){notice('Marque a concordância para continuar.','error');consentBox.focus();return;}
+    busy=true;updateBusy();notice('');let again=false;
+    try{
+      if(!token){token=randomToken();await store.set(TOKEN_KEY,token);await store.del(LEGACY_KEY);}
+      const data=await api('POST','/registrar',{email,wazeNickname:nick,nome:nome||undefined,scriptVersion:VERSION});
+      setConn('pendente',data);startPoll();
+      notice(data.emailEnviado===false?'Conta registrada, mas o e-mail não pôde ser enviado agora. Use “Reenviar e-mail”.':'E-mail de confirmação enviado.',data.emailEnviado===false?'error':'success');
+    }catch(e){
+      if(e.errors?.email)mailError.textContent=[].concat(e.errors.email).join(' ');
+      if(e.errors?.wazeNickname)nickError.textContent=[].concat(e.errors.wazeNickname).join(' ');
+      if(e.codigo==='token_ja_registrado')again=true;else notice(e.message,'error');
+    }finally{busy=false;updateBusy();}
+    if(again)await boot();
+  }
+  async function resend(){
+    if(busy)return;busy=true;updateBusy();let again=false;
+    try{const d=await api('POST','/verificacao/reenviar');
+      if(d.estado==='ativo')again=true;
+      else{setConn('pendente',d);notice(d.emailEnviado===false?'Não foi possível enviar o e-mail agora. Tente novamente em instantes.':'Novo e-mail enviado.',d.emailEnviado===false?'error':'success');}
+    }catch(e){notice(e.codigo==='aguarde'?'Aguarde '+Math.max(1,Math.ceil((e.data?.aguardarSegundos||60)/60))+' min para reenviar o e-mail.':e.message,'error');authLost(e);}
+    finally{busy=false;updateBusy();}
+    if(again)await boot();
+  }
+  async function disconnect(confirmFirst=true){
+    if(busy)return;
+    if(confirmFirst&&!window.confirm('Desconectar este navegador do ToolboxWaze? Você precisará confirmar o e-mail novamente.'))return;
+    busy=true;updateBusy();stopPoll();clearTimeout(saveTimer);
+    try{if(token)await api('POST','/dispositivo/revogar');}catch(e){warn('Revogação no servidor falhou:',e.message);}
+    await dropToken();setConn('registro');settings.hidden=true;notice('Desconectado deste navegador.');busy=false;updateBusy();
+  }
+  async function loadMine(){
+    mineCard.hidden=!mineCard.hidden;if(mineCard.hidden)return;
+    mineList.replaceChildren(el('p','Carregando…',null,'muted'));
+    try{const d=await api('GET','/solicitacoes');mineList.replaceChildren();
+      if(!d.solicitacoes?.length){el('p','Você ainda não enviou solicitações.',mineList,'muted');return;}
+      for(const s of d.solicitacoes){const row=el('div',null,mineList,'row');row.style.marginBottom='6px';el('strong','#'+s.id,row);el('span',s.formulario,row);el('span',s.statusLabel,row,'muted');el('small',new Date(s.criadaEm).toLocaleDateString(),row);}
+    }catch(e){mineList.replaceChildren(el('p',e.message,null,'error-text'));authLost(e);}
+  }
+  function saveNow(){if(!identity||!definition)return Promise.resolve();clearTimeout(saveTimer);return store.set('tw3_draft_'+String(identity.id)+'_'+definition.slug,{answers:structuredClone(answers),context,updatedAt:Date.now()});}
   async function result(data){if(!data.solicitacao?.id)throw Object.assign(new Error('Resposta sem identificador de solicitação.'),{uncertain:true});
     unresolved=null;await store.del('tw3_pending');notice('Solicitação #'+data.solicitacao.id+' criada com sucesso.','success');
     if(data.solicitacao.url){try{const u=new URL(data.solicitacao.url,BASE);if(u.origin===BASE){const a=el('a',' Abrir no ToolboxWaze',status);a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';}}catch{}}
@@ -214,7 +306,13 @@
     const body=new FormData();body.append('payload',JSON.stringify(payload));for(const f of definition.campos){if(visible(f)&&f.tipo==='file')for(const file of files[f.chave]||[])body.append('anexos['+f.chave+'][]',file,file.name);}
     busy=true;unresolved={key,accountId:identity.id,createdAt:Date.now(),formulario:definition.slug};
     try{await store.set('tw3_pending',unresolved);updateBusy();notice('Enviando… Não feche o navegador.');const data=await api('POST','/solicitacoes',body);await result(data);}
-    catch(e){if(e.status&&e.status>=400&&e.status<500&&e.status!==409){unresolved=null;await store.del('tw3_pending');}notice(e.message+(unresolved?'\nNão repita o envio. Consulte o resultado.':''),'error');for(const [k,v]of Object.entries(e.errors||{}))fieldError(k,Array.isArray(v)?v.join(' '):String(v));}
+    catch(e){
+      if(e.status&&e.status>=400&&e.status<500&&e.status!==409){unresolved=null;await store.del('tw3_pending');}
+      notice(e.message+(unresolved?'\nNão repita o envio. Consulte o resultado.':''),'error');
+      for(const [k,v]of Object.entries(e.errors||{}))fieldError(k,Array.isArray(v)?v.join(' '):String(v));
+      if(e.codigo==='formulario_desatualizado'&&definition){const slug=definition.slug;busy=false;await saveNow();await choose(slug);notice('O formulário foi atualizado. Revise os campos e envie novamente.','error');}
+      else authLost(e);
+    }
     finally{busy=false;updateBusy();}
   }
   async function checkPending(){if(busy||!unresolved)return;if(!identity||String(identity.id)!==String(unresolved.accountId)){notice('Conecte a conta usada no envio pendente.','error');return;}busy=true;updateBusy();try{
@@ -222,24 +320,24 @@
     else if(data.estado==='nao_criado'){unresolved=null;await store.del('tw3_pending');notice('O servidor confirmou que a solicitação não foi criada. Você pode enviar novamente.');}
     else notice('Envio ainda em processamento. Consulte novamente em instantes.');
   }catch(e){notice('Não foi possível confirmar: '+e.message,'error');}finally{busy=false;updateBusy();}}
-  function open(){previousFocus=document.activeElement;overlay.hidden=false;if(!context&&sdk){context=collect();summary.textContent=summarize();}if(!identity){settings.hidden=false;tokenInput.focus();if(token)connect();}else closeButton.focus();updateBusy();}
-  function close(){if(busy){notice('Aguarde a operação terminar.');return;}if(dirty)scheduleSave();overlay.hidden=true;previousFocus?.focus();}
-  fab.onclick=open;closeButton.onclick=close;settingsButton.onclick=()=>{settings.hidden=!settings.hidden;if(!settings.hidden)tokenInput.focus();};
-  connectButton.onclick=()=>connect(tokenInput.value.trim()||token);
-  forgetButton.onclick=async()=>{if(busy)return;clearTimeout(saveTimer);await store.del('toolbox_api_token');token='';identity=null;definition=null;answers={};files={};revokePreviews();fieldArea.replaceChildren();typeList.replaceChildren();accountText.textContent='Desconectado';tokenInput.value='';updateBusy();notice('Token removido deste userscript.');};
+  function open(){previousFocus=document.activeElement;overlay.hidden=false;if(!context&&sdk){context=collect();summary.textContent=summarize();}prefillNick();if(!identity)boot();else closeButton.focus();updateBusy();}
+  function close(){if(busy){notice('Aguarde a operação terminar.');return;}if(dirty)scheduleSave();overlay.hidden=true;stopPoll();previousFocus?.focus();}
+  fab.onclick=open;closeButton.onclick=close;settingsButton.onclick=()=>{settings.hidden=!settings.hidden;};mineButton.onclick=loadMine;
+  registerButton.onclick=register;verifyButton.onclick=async()=>{await boot(true);if(conn==='pendente')notice('Ainda aguardando a confirmação do e-mail.');};
+  resendButton.onclick=resend;changeButton.onclick=()=>disconnect(false);disconnectButton.onclick=()=>disconnect(true);retryButton.onclick=()=>boot();
   refresh.onclick=()=>{if(dirty&&!window.confirm('Atualizar o contexto do WME? Campos já preenchidos serão preservados.'))return;capture();};
   copyButton.onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(context,null,2));notice('Contexto copiado.');}catch{notice('O navegador bloqueou a cópia.','error');}};
   sendButton.onclick=send;checkButton.onclick=checkPending;
   clearButton.onclick=async()=>{if(!definition||!window.confirm('Apagar o rascunho deste formulário?'))return;clearTimeout(saveTimer);await store.del(await draftKey());answers={};files={};dirty=false;prefill();renderFields();draftNote.textContent='Rascunho limpo.';};
   overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
-  root.addEventListener('keydown',e=>{if(overlay.hidden)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();if(e.composedPath().includes(settings))return;send();}
+  root.addEventListener('keydown',e=>{if(overlay.hidden)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();if(e.composedPath().includes(registerCard)){register();return;}if(e.composedPath().includes(settings))return;send();}
     if(e.key==='Tab'){const nodes=Array.from(dialog.querySelectorAll('button,a,input,select,textarea')).filter(n=>!n.disabled&&n.getClientRects().length);const first=nodes[0],last=nodes.at(-1),active=root.activeElement;if(e.shiftKey&&active===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&active===last){e.preventDefault();first?.focus();}}
   });
-  PAGE.twDiagnostico=()=>{const d={version:VERSION,sdk:!!sdk,connected:!!identity,form:definition?.slug,selected:selection().length,pending:!!unresolved,modalOpen:!overlay.hidden};log(d);return d;};
+  PAGE.twDiagnostico=()=>{const d={version:VERSION,sdk:!!sdk,conn,connected:!!identity,form:definition?.slug,selected:selection().length,pending:!!unresolved,modalOpen:!overlay.hidden};log(d);return d;};
   log('Interface carregada',VERSION);updateBusy();
   try{for(let i=0;i<200;i++){if(PAGE.SDK_INITIALIZED&&typeof PAGE.getWmeSdk==='function')break;if(i===199)throw new Error('SDK indisponível após 60 segundos.');await new Promise(r=>setTimeout(r,300));}
     await PAGE.SDK_INITIALIZED;sdk=PAGE.getWmeSdk({scriptId:'toolboxwaze-solicitacoes',scriptName:'ToolboxWaze — Solicitações'});
-    if(!sdk.State.isReady())await sdk.Events.once({eventName:'wme-ready'});context=collect();summary.textContent=summarize();
+    if(!sdk.State.isReady())await sdk.Events.once({eventName:'wme-ready'});context=collect();summary.textContent=summarize();prefillNick();
     sdk.Events.on({eventName:'wme-selection-changed',eventHandler:()=>{const n=selection().length;fab.textContent='Toolbox · Solicitações'+(n?' ('+n+')':'');if(!overlay.hidden)contextNotice.textContent='A seleção pode ter mudado. Use Atualizar para recapturar.';}});log('SDK pronto');
   }catch(e){summary.textContent='SDK indisponível. Preenchimento manual disponível.';warn(e.message);}
 })();

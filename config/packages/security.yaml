@@ -28,6 +28,7 @@ security:
                 - App\Security\AppAuthenticator
                 - App\Security\GoogleAuthenticator
                 - App\Security\ApiTokenAuthenticator
+                - App\Security\WmeDeviceAuthenticator
 
             login_throttling:
                 max_attempts: 5
@@ -49,5 +50,9 @@ security:
         - { path: ^/connect,         roles: PUBLIC_ACCESS }
         - { path: ^/auth/waze-check, roles: PUBLIC_ACCESS }
         - { path: ^/consultar,       roles: PUBLIC_ACCESS }
+        # API WME: cadastro do dispositivo e link de confirmação de e-mail são públicos;
+        # o restante de /api/wme exige X-API-TOKEN (WmeDeviceAuthenticator).
+        - { path: ^/api/wme/registrar,   roles: PUBLIC_ACCESS }
+        - { path: ^/api/wme/confirmar/,  roles: PUBLIC_ACCESS }
         - { path: ^/admin,           roles: ROLE_ADMIN }
         - { path: ^/,                roles: ROLE_USER }

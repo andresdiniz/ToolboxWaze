@@ -26,8 +26,15 @@ final class ApiTokenAuthenticator extends AbstractAuthenticator
 
     public function supports(Request $request): ?bool
     {
+        $path = $request->getPathInfo();
+
+        // /api/wme/* é autenticada pelo WmeDeviceAuthenticator (tokens de dispositivo + legado).
+        if (str_starts_with($path, '/api/wme/')) {
+            return false;
+        }
+
         return $request->headers->has('X-API-TOKEN')
-            && str_starts_with($request->getPathInfo(), '/api/');
+            && str_starts_with($path, '/api/');
     }
 
     public function authenticate(Request $request): Passport

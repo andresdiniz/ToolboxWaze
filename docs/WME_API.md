@@ -1,37 +1,66 @@
-# API WME
+# API WME (userscript de solicitações)
 
-Implementacao para a branch feature/userscript-wme, sem alteracao de main. Requer migrar banco MySQL/MariaDB InnoDB. Arquivos novos, sem substituir controllers existentes.
+Controller único: `src/Controller/Api/WmeApiController.php` (prefixo `/api/wme`). Autenticação: `src/Security/WmeDeviceAuthenticator.php`.
+Userscript: `public/userscripts/toolboxwaze-solicitacoes.user.js` (v4.0.0).
 
-## Instalar
+## Instalar / atualizar
 
-Execute `php bin/console doctrine:migrations:migrate` e `php bin/console cache:clear`. Confira rotas com `php bin/console debug:router | grep api_wme`. Garanta permissao de gravacao em var/wme_uploads; nao exponha essa pasta na web. Limites PHP/webserver devem aceitar multipart de 5 MB mais overhead; payload JSON limitado a 256 KB.
+1. `php bin/console doctrine:migrations:migrate` (cria `wme_dispositivo`; `wme_envio` já vem da migration anterior).
+2. `php bin/console cache:clear` e confira `php bin/console debug:router | grep api_wme`.
+3. `var/wme_uploads` com permissão de escrita e **fora** da web. Limites PHP/webserver: multipart de 5 MB + overhead; JSON do envio limitado a 256 KB.
+4. Se o site estiver atrás de proxy/CDN, configure `framework.trusted_proxies`; o limite de cadastros por IP (30/hora) usa `Request::getClientIp()`.
+5. Reinstale o userscript v4 no Tampermonkey.
 
-Autenticacao pelo ApiTokenAuthenticator existente: header X-API-TOKEN, token pessoal de 64 hex e conta aprovada. Nao altere o userscript v3 para Bearer: o firewall desta branch aceita X-API-TOKEN. A API confere token mesmo se houver sessao web. Nao usa cookies Waze.
+## Conexão sem conta prévia
 
-## Habilitar um formulario
+O script **não carrega token do site**. Ele gera 32 bytes aleatórios (64 hex) no primeiro cadastro e os guarda no storage do Tampermonkey. O servidor guarda só `sha256(token)` em `wme_dispositivo`.
 
-Em FormBuilder.configuracoes definir wme_api_enabled=true. Formularios nao habilitados nao aparecem. wme_roles e lista OR de papeis literais; por exemplo ["ROLE_CHAMP"] nao inclui admin automaticamente. Regras expira_em, mostrar_para=visitante e limite_envios sao respeitadas. Nao habilitar um formulario restrito sem configurar wme_roles e suas regras reais. Tipos legados hardcoded do SolicitacaoType NAO sao publicados automaticamente: esta entrega adapta FormBuilder, nao inventa schema legado.
+1. `POST /api/wme/registrar` (header `X-API-TOKEN`, JSON `{email, wazeNickname, nome?, scriptVersion}`) → `202 {estado:"pendente", emailMascarado, emailEnviado, expiraEm, reenvioEm}`.
+   - E-mail novo: cria `User` com `status=pending`, sem senha, sem papéis (aparece em /admin/users).
+   - E-mail existente: nada na conta é alterado; resposta idêntica (não revela se a conta existe).
+2. O dono do e-mail recebe um link (`/api/wme/confirmar/{id}/{verificador}`, 60 min, uso único). O GET mostra um botão (scanners de e-mail não consomem o link); o POST ativa o dispositivo.
+3. O script faz polling de `GET /bootstrap` a cada 6 s enquanto o modal está aberto (máx. 20 min) e libera os formulários quando `estado=ativo`.
 
-Tipos aceitos: text, textarea, number, email, url, date, select, radio, checkbox, file, image (convertido a file). Outros tipos e validacoes customizadas recusam a publicacao inteira do formulario, em vez de omitir campos obrigatorios.
+Dispositivo `pendente` só acessa `bootstrap`, `verificacao/reenviar` e `dispositivo/revogar`; o resto responde `403 email_nao_confirmado`. O apelido do WME é **declarado** pelo script (SDK `getUserInfo`), não verificado.
 
-FormBuilderCampo.opcoes e um objeto de configuracoes. Opcoes de select/radio em opcoes.opcoes, lista de strings ou objetos value/label. Condicional existente com operador = e convertido para mostrarSe; outros operadores exigem adaptador futuro. Tambem aceita mostrarSe diretamente, condicoes AND, valores arrays como OR. Configuracoes min, max, minLength, maxLength, inteiro, valorObrigatorio, preenchimento, zoomMinimo, maxArquivos, maxBytes, mimeTypes sao exportadas. Validacao somente permalink ou wkt (prefixo, nao geometria completa).
+Compatibilidade: token pessoal gerado no site (`User.apiToken`, conta aprovada) continua aceito em `/api/wme/*` como dispositivo ativo.
 
-Exemplo campo permalink: opcoes={"validacao":"permalink","zoomMinimo":15,"preenchimento":{"origem":"wme.permalink"}}. Checkbox obrigatorio exige true. Uploads somente JPEG/PNG/WebP verificados, ate 1 MB cada e 5 MB total.
+## Rotas
 
-## Contrato userscript v3
+| Método e rota | Auth | Resposta |
+|---|---|---|
+| `POST /registrar` | pública | 202 `pendente`; 409 `token_ja_registrado`; 422 `validacao`; 429 `muitas_tentativas` |
+| `GET/POST /confirmar/{id}/{verificador}` | pública (HTML) | página de confirmação |
+| `POST /verificacao/reenviar` | pendente | cooldown de 5 min (429 `aguarde` + `aguardarSegundos`) |
+| `POST /dispositivo/revogar` | qualquer | `estado=revogado`; o script gera token novo |
+| `GET /bootstrap` | pendente/ativo | `estado`, `usuario`, `formularios` |
+| `GET /formularios/{slug}` | ativo | `slug,versao,nome,descricao,campos` |
+| `POST /solicitacoes` | ativo | multipart: `payload` JSON + `anexos[CHAVE][]` → `concluido` + `{id,url}` |
+| `GET /solicitacoes` | ativo | últimas 20 do próprio usuário (`id, formulario, status, statusLabel, criadaEm`) |
+| `GET /envios/{clientRequestId}` | ativo | `concluido` ou `nao_criado` |
+| `GET /solicitacoes/{id}/anexos/{nome}` | ativo | download privado: dono, responsáveis ou admin |
 
-GET /api/wme/bootstrap -> usuario {id,nome,wazeNickname}, formularios [{slug,nome}].
-GET /api/wme/formularios/{slug} -> slug,versao,nome,descricao,campos.
-POST /api/wme/solicitacoes -> multipart com payload JSON e anexos[CHAVE][]. Payload: formulario,versaoFormulario,respostas,contexto,clientRequestId (UUID). Identidade/status/responsaveis nunca sao aceitos do cliente. Resposta: estado=concluido,solicitacao={id,url}.
-GET /api/wme/envios/{clientRequestId} -> concluido com solicitacao ou nao_criado.
-GET /api/wme/solicitacoes/{id}/anexos/{nome} -> download privado com token e voter SOLICITACAO_VER. Metadados dos anexos/contexto em Solicitacao.dados._wme; respostas em dadosDinamicos. Templates atuais nao ganham automaticamente botoes de anexos: usar esta rota ou integrar a visualizacao depois.
+Erros trazem `codigo` estável + `message`. Códigos de autenticação (401): `token_invalido`, `token_desconhecido`, `dispositivo_revogado`. Outros: `email_nao_confirmado`, `conta_bloqueada` (403), `formulario_desatualizado`, `limite_formulario` (422), `limite_minuto`, `chave_reutilizada` (409). **Erros de validação agora retornam HTTP 422 com `errors` por campo** (antes voltavam 200).
 
-## Idempotencia
+Usuário `rejected` é bloqueado em todas as rotas (inclusive a confirmação do e-mail): rejeitar a conta no admin corta o acesso do script.
 
-POST e consulta de resultado usam transacao e lock da linha de usuario, serializando envios da mesma conta. Se consulta chegar antes de POST tardio, cria tombstone nao_criado; POST posterior com a chave e recusado. Chave concluida retorna resultado, conteudo diferente retorna conflito. Hash inclui payload bruto decodificado e hashes dos arquivos: preservar mesmos valores/ordem para replay. Nao repetir POST automaticamente. Dados DB/ledger/notificacoes sao atomicos; imagens sao removidas no rollback. Falha abrupta de processo pode deixar arquivos orfaos privados: prever rotina de limpeza por referencia.
+## Habilitar um formulário
 
-Historico/responsaveis/notificacoes seguem entidades atuais. E-mails sao despachados so depois do commit; falha de despacho e logada sem desfazer solicitacao. Nao ha outbox duravel para e-mail nesta entrega; requer reconciliacao se o processo morrer depois do commit. Limite de dez criacoes por minuto/conta, alem do limite de formulario. Consulta cria tombstones: limitar tambem trafego e retencao de ledger no proxy/operacao, sem remover chaves recentes que ainda possam ser repetidas.
+Em `FormBuilder.configuracoes`: `wme_api_enabled=true`. `wme_roles` é lista OR de papéis literais (`["ROLE_CHAMP"]` não inclui admin); contas criadas pelo script não têm papéis, então só enxergam formulários **sem** `wme_roles`. Regras `expira_em`, `mostrar_para=visitante` e `limite_envios` (padrão 1 por e-mail; `0` = ilimitado) são respeitadas.
 
-## Validacao antes do deploy
+Tipos: text, textarea, number, email, url, date, select, radio, checkbox, file, image (vira file). Outros tipos ou validações customizadas recusam a publicação do formulário inteiro. Opções de select/radio em `opcoes.opcoes`. Propriedades exportadas: min, max, minLength, maxLength, inteiro, valorObrigatorio, preenchimento, zoomMinimo, maxArquivos, maxBytes, mimeTypes, mostrarSe. Validação `permalink` ou `wkt`. Exemplo permalink: `opcoes={"validacao":"permalink","zoomMinimo":15,"preenchimento":{"origem":"wme.permalink"}}`. Uploads: JPEG/PNG/WebP verificados, 1 MB cada, 5 MB total. Tipos legados hardcoded do `SolicitacaoType` não são publicados.
 
-Nao executar em producao sem testes de integracao. PHP nao estava disponivel no ambiente de preparacao: lint PHP e testes Symfony nao foram executados. Rodar php -l nos arquivos e migrations:status. Testar bootstrap 401/200, formularios habilitados/restritos, erro por campo, MIME/tamanho, rascunhos, duas requisicoes simultaneas com mesma chave, POST atrasado apos consulta, falha DB rollback e recuperacao apos timeout. A branch do userscript contem v1.3 antiga: instalar o v3 entregue separadamente; este commit nao atualiza o JavaScript.
+## Idempotência
+
+Envio e consulta usam transação e lock da linha do usuário. Consulta antes de um POST tardio cria tombstone `nao_criado`; POST posterior com a mesma chave é recusado (409). Mesma chave + mesmo conteúdo devolve o resultado; conteúdo diferente, 409. O hash inclui o payload e o SHA-256 dos arquivos. Não repetir POST automaticamente. Limite de 10 criações/minuto por conta. E-mails saem só depois do commit (sem outbox durável).
+
+## Abuso e limites do cadastro
+
+- 30 cadastros/hora por IP (HMAC do IP, nunca o IP) e 3 dispositivos pendentes/hora por e-mail.
+- Reenvio de confirmação: 1 a cada 5 min por dispositivo.
+- E-mail de confirmação sai por transporte síncrono; o verificador não passa pela fila do banco.
+- Contas novas ficam `pending` no admin; aprovar/rejeitar continua sendo o controle de acesso ao site.
+
+## Validação antes do deploy
+
+`php -l` nos arquivos novos e `doctrine:migrations:status`. Testar: registro novo e com e-mail existente (mesma resposta), link de e-mail (GET não ativa, POST ativa, reuso e expiração), `bootstrap` pendente/ativo/revogado, formulário restrito, erro de validação 422, MIME/tamanho, duas requisições simultâneas com a mesma chave, POST atrasado após consulta, rollback por falha de DB.

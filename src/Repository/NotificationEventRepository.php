@@ -1,17 +1,1 @@
-<?php
-
-declare(strict_types=1);
-
-namespace App\Repository;
-
-use App\Entity\NotificationEvent;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
-
-final class NotificationEventRepository extends ServiceEntityRepository
-{
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, NotificationEvent::class);
-    }
-}
+<?php\n\ndeclare(strict_types=1);\n\nnamespace App\\Repository;\n\nuse App\\Entity\\NotificationEvent;\nuse Doctrine\\Bundle\\DoctrineBundle\\Repository\\ServiceEntityRepository;\nuse Doctrine\\Persistence\\ManagerRegistry;\n\nfinal class NotificationEventRepository extends ServiceEntityRepository\n{\n    public function __construct(ManagerRegistry $registry)\n    {\n        parent::__construct($registry, NotificationEvent::class);\n    }\n\n    public function findRecent(string $type, ?string $entityType, ?int $entityId, int $minutes): ?NotificationEvent\n    {\n        $since = (new \\DateTimeImmutable())->modify('-' . max(1, $minutes) . ' minutes');\n\n        return $this->createQueryBuilder('e')\n            ->where('e.type = :type')\n            ->andWhere('e.entityType = :entityType')\n            ->andWhere('e.entityId = :entityId')\n            ->andWhere('e.createdAt >= :since')\n            ->setParameter('type', $type)\n            ->setParameter('entityType', $entityType)\n            ->setParameter('entityId', $entityId)\n            ->setParameter('since', $since)\n            ->orderBy('e.createdAt', 'DESC')\n            ->setMaxResults(1)\n            ->getQuery()\n            ->getOneOrNullResult();\n    }\n}\n

@@ -42,6 +42,11 @@ final class DashboardController extends AbstractDashboardController
             'Estados',
             'fa fa-map',
         )->setPermission('ROLE_ADMIN');
+        yield MenuItem::linkTo(
+            TipoSolicitacaoConfigCrudController::class,
+            'Responsáveis padrão por tipo',
+            'fa fa-user-check',
+        )->setPermission('ROLE_ADMIN');
 
         foreach ($this->navigation() as $section) {
             yield MenuItem::section($section['label']);

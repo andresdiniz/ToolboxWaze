@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
-use App\Entity\BrazilianState;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
@@ -38,9 +37,11 @@ final class DashboardController extends AbstractDashboardController
     {
         yield MenuItem::linkToDashboard('Visão geral', 'fa fa-home');
         yield MenuItem::section('Cadastros EasyAdmin');
-        yield MenuItem::linkToCrud('Estados', 'fa fa-map', BrazilianState::class)
-            ->setController(EstadoEasyAdminCrudController::class)
-            ->setPermission('ROLE_ADMIN');
+        yield MenuItem::linkTo(
+            EstadoEasyAdminCrudController::class,
+            'Estados',
+            'fa fa-map',
+        )->setPermission('ROLE_ADMIN');
 
         foreach ($this->navigation() as $section) {
             yield MenuItem::section($section['label']);

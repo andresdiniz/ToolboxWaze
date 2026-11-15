@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Entity\BrazilianState;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
@@ -36,6 +37,10 @@ final class DashboardController extends AbstractDashboardController
     public function configureMenuItems(): iterable
     {
         yield MenuItem::linkToDashboard('Visão geral', 'fa fa-home');
+        yield MenuItem::section('Cadastros EasyAdmin');
+        yield MenuItem::linkToCrud('Estados', 'fa fa-map', BrazilianState::class)
+            ->setController(EstadoEasyAdminCrudController::class)
+            ->setPermission('ROLE_ADMIN');
 
         foreach ($this->navigation() as $section) {
             yield MenuItem::section($section['label']);
@@ -60,7 +65,7 @@ final class DashboardController extends AbstractDashboardController
                 'label' => 'Gerenciamento',
                 'items' => [
                     ['label' => 'Usuários e permissões', 'icon' => 'fa fa-users', 'route' => 'admin_users_index', 'description' => 'Aprovação de contas, papéis e permissões de acesso.'],
-                    ['label' => 'Estados / Radares', 'icon' => 'fa fa-map', 'route' => 'admin_estados_index', 'description' => 'Configuração de estados, fontes e importações de radares.'],
+                    ['label' => 'Estados / Radares (legado)', 'icon' => 'fa fa-map', 'route' => 'admin_estados_index', 'description' => 'Fluxo anterior de estados e importações. O cadastro nativo está no menu Estados do EasyAdmin.'],
                     ['label' => 'Links Waze', 'icon' => 'fa fa-link', 'route' => 'admin_waze_link_index', 'description' => 'Gerencie os vínculos e referências do Waze.'],
                     ['label' => 'Novo vínculo Waze', 'icon' => 'fa fa-plus', 'route' => 'admin_waze_link_new', 'description' => 'Abra o cadastro existente de um novo vínculo Waze.'],
                 ],

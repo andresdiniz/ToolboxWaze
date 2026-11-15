@@ -1,0 +1,65 @@
+{% extends 'base.html.twig' %}
+{% block title %}Publicação de formulários · ToolboxWaze{% endblock %}
+{% block body %}
+<div class="py-4">
+  <header class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+      <span class="badge text-bg-success mb-2">FormBuilder · API WME</span>
+      <h1 class="h3 mb-2"><i class="bi bi-broadcast me-2" aria-hidden="true"></i>Publicação de formulários</h1>
+      <p class="text-muted mb-0">Controle quais formulários ficam disponíveis no userscript e quem pode utilizá-los.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary" href="{{ path('admin4_form_builder_index') }}">Lista de formulários</a>
+      <a class="btn btn-primary" href="{{ path('admin4_form_studio_novo') }}"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Criar formulário</a>
+    </div>
+  </header>
+  <div class="alert alert-info small">
+    <strong>Ativo e publicado são controles diferentes.</strong> Despublicar aqui não desativa o formulário no site. A API continua verificando autenticação, permissões, validade e campos em cada requisição.
+  </div>
+  {% for row in rows %}
+    {% set f = row.formulario %}
+    <section class="card shadow-sm mb-3" aria-labelledby="form-api-title-{{ f.id }}">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+          <div>
+            <h2 class="h5 mb-1" id="form-api-title-{{ f.id }}">{{ f.nome }}</h2>
+            <code>{{ f.slug }}</code><span class="text-muted small ms-2">#{{ f.id }} · {{ f.campos|length }} campo(s)</span>
+          </div>
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <span class="badge {{ f.ativo ? 'text-bg-success' : 'text-bg-secondary' }}">{{ f.ativo ? 'Ativo' : 'Inativo' }}</span>
+            <span class="badge {{ row.publicado ? 'text-bg-primary' : 'text-bg-secondary' }}">{{ row.publicado ? 'API habilitada' : 'API desabilitada' }}</span>
+            <a class="btn btn-sm btn-outline-primary" href="{{ path('admin4_form_studio_editar', {id: f.id}) }}">Editar campos</a>
+          </div>
+        </div>
+        {% if row.bloqueios is not empty %}
+          <div class="alert alert-warning small mt-3 mb-3">
+            <strong>Pendências para publicação</strong>
+            <ul class="mb-0 mt-2">{% for motivo in row.bloqueios %}<li>{{ motivo }}</li>{% endfor %}</ul>
+            {% if row.publicado %}<p class="mt-2 mb-0">A configuração está habilitada, mas há pendências. Desabilite a API até revisar. Este painel não altera publicações automaticamente.</p>{% endif %}
+          </div>
+        {% endif %}
+        <form method="post" action="{{ path('admin4_form_api_salvar', {id: f.id}) }}" data-turbo="false" class="mt-3">
+          <input type="hidden" name="_token" value="{{ csrf_token('form_api_' ~ f.id) }}">
+          <div class="row g-3 align-items-end">
+            <div class="col-lg-4">
+              <label class="form-label" for="api-enabled-{{ f.id }}">Disponibilidade no WME</label>
+              <select name="wme_api_enabled" id="api-enabled-{{ f.id }}" class="form-select">
+                <option value="0" {{ not row.publicado ? 'selected' }}>Não disponibilizar na API</option>
+                <option value="1" {{ row.publicado ? 'selected' }} {{ row.bloqueios is not empty ? 'disabled' }}>Disponibilizar na API</option>
+              </select>
+            </div>
+            <div class="col-lg-6">
+              <label class="form-label" for="api-roles-{{ f.id }}">Papéis autorizados</label>
+              <input class="form-control" id="api-roles-{{ f.id }}" name="wme_roles" maxlength="2000" value="{{ row.roles|join(', ') }}" placeholder="Ex.: ROLE_USER, ROLE_CHAMP" aria-describedby="api-help-{{ f.id }}">
+              <div class="form-text" id="api-help-{{ f.id }}">Separe por vírgula. Vazio permite qualquer conta autenticada e liberada para a API; basta possuir um dos papéis informados. Não concede papéis ao usuário.</div>
+            </div>
+            <div class="col-lg-2"><button class="btn btn-primary w-100" type="submit">Salvar</button></div>
+          </div>
+        </form>
+      </div>
+    </section>
+  {% else %}
+    <div class="card"><div class="card-body text-center py-5"><h2 class="h5">Nenhum formulário cadastrado</h2><p class="text-muted">Crie o primeiro formulário no estúdio e cadastre seus campos antes de publicar.</p><a class="btn btn-primary" href="{{ path('admin4_form_studio_novo') }}">Criar formulário</a></div></div>
+  {% endfor %}
+</div>
+{% endblock %}

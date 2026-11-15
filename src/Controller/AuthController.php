@@ -37,7 +37,8 @@ class AuthController extends AbstractController
         if ($this->getUser()) {
             return $this->redirectToRoute('app_dashboard');
         }
-        return $this->redirectToRoute('app_login');
+
+        return $this->redirectToRoute('public_radar_index');
     }
 
     // ──────────────────────── LOGIN ────────────────────────

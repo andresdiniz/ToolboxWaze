@@ -49,6 +49,8 @@ security:
         - { path: ^/reset-password,  roles: PUBLIC_ACCESS }
         - { path: ^/connect,         roles: PUBLIC_ACCESS }
         - { path: ^/auth/waze-check, roles: PUBLIC_ACCESS }
+        - { path: ^/consultar/radares, roles: PUBLIC_ACCESS }
+        - { path: ^/consultar/radar/,  roles: PUBLIC_ACCESS }
         - { path: ^/consultar,       roles: PUBLIC_ACCESS }
         # API WME: cadastro do dispositivo e link de confirmação de e-mail são públicos;
         # o restante de /api/wme exige X-API-TOKEN (WmeDeviceAuthenticator).

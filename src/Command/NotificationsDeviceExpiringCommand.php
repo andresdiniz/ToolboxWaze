@@ -1,1 +1,65 @@
-<?php\n\ndeclare(strict_types=1);\n\nnamespace App\\Command;\n\nuse App\\Entity\\WmeDispositivo;\nuse App\\Service\\Notification\\NotificationTriggerService;\nuse Doctrine\\ORM\\EntityManagerInterface;\nuse Symfony\\Component\\Console\\Attribute\\AsCommand;\nuse Symfony\\Component\\Console\\Command\\Command;\nuse Symfony\\Component\\Console\\Input\\InputInterface;\nuse Symfony\\Component\\Console\\Output\\OutputInterface;\n\n#[AsCommand(name: 'app:notificacoes:dispositivos-expirando', description: 'Cria alertas para dispositivos WME próximos da expiração de 90 dias.')]\nfinal class NotificationsDeviceExpiringCommand extends Command\n{\n    private const EXPIRATION_DAYS = 90;\n    private const WARNING_DAYS = 7;\n\n    public function __construct(\n        private readonly EntityManagerInterface $em,\n        private readonly NotificationTriggerService $triggers,\n    ) {\n        parent::__construct();\n    }\n\n    protected function execute(InputInterface $input, OutputInterface $output): int\n    {\n        $limit = (new \\DateTimeImmutable())->modify('-' . (self::EXPIRATION_DAYS - self::WARNING_DAYS) . ' days');\n\n        $devices = $this->em->createQueryBuilder()\n            ->select('d')\n            ->from(WmeDispositivo::class, 'd')\n            ->where('d.estado = :estado')\n            ->andWhere('COALESCE(d.ultimoUsoEm, d.ativadoEm, d.criadoEm) <= :limit')\n            ->setParameter('estado', WmeDispositivo::ESTADO_ATIVO)\n            ->setParameter('limit', $limit)\n            ->getQuery()\n            ->getResult();\n\n        $created = 0;\n\n        foreach ($devices as $device) {\n            if ($this->triggers->deviceExpiring($device) !== null) {\n                $created++;\n            }\n        }\n\n        $this->em->flush();\n        $output->writeln(sprintf('Alertas de expiração criados: %d de %d dispositivos.', $created, count($devices)));\n\n        return Command::SUCCESS;\n    }\n}\n
+<?php
+
+declare(strict_types=1);
+
+namespace App\Command;
+
+use App\Entity\WmeDispositivo;
+use App\Service\Notification\NotificationTriggerService;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+#[AsCommand(
+    name: 'app:notificacoes:dispositivos-expirando',
+    description: 'Cria alertas para dispositivos WME próximos da expiração de 90 dias.'
+)]
+final class NotificationsDeviceExpiringCommand extends Command
+{
+    private const EXPIRATION_DAYS = 90;
+    private const WARNING_DAYS = 7;
+
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly NotificationTriggerService $triggers,
+    ) {
+        parent::__construct();
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $limit = (new \DateTimeImmutable())->modify(
+            '-' . (self::EXPIRATION_DAYS - self::WARNING_DAYS) . ' days'
+        );
+
+        $devices = $this->em->createQueryBuilder()
+            ->select('d')
+            ->from(WmeDispositivo::class, 'd')
+            ->where('d.estado = :estado')
+            ->andWhere('COALESCE(d.ultimoUsoEm, d.ativadoEm, d.criadoEm) <= :limit')
+            ->setParameter('estado', WmeDispositivo::ESTADO_ATIVO)
+            ->setParameter('limit', $limit)
+            ->getQuery()
+            ->getResult();
+
+        $created = 0;
+
+        foreach ($devices as $device) {
+            if ($this->triggers->deviceExpiring($device) !== null) {
+                $created++;
+            }
+        }
+
+        $this->em->flush();
+
+        $output->writeln(sprintf(
+            'Alertas de expiração criados: %d de %d dispositivos.',
+            $created,
+            count($devices)
+        ));
+
+        return Command::SUCCESS;
+    }
+}

@@ -1,1 +1,96 @@
-<?php\n\ndeclare(strict_types=1);\n\nnamespace App\\EventSubscriber;\n\nuse App\\Entity\\RadarMedidor;\nuse App\\Entity\\Solicitacao;\nuse App\\Entity\\SolicitacaoComentario;\nuse App\\Entity\\User;\nuse App\\Service\\Notification\\NotificationTriggerService;\nuse Doctrine\\ORM\\Events;\nuse Symfony\\Component\\EventDispatcher\\Attribute\\AsDoctrineListener;\nuse Symfony\\Component\\Security\\Core\\Authentication\\Token\\Storage\\TokenStorageInterface;\n\n#[AsDoctrineListener(event: Events::postPersist)]\n#[AsDoctrineListener(event: Events::preUpdate)]\n#[AsDoctrineListener(event: Events::postUpdate)]\nfinal class NotificationTriggerSubscriber\n{\n    /** @var array<int, array<string, array{0:mixed,1:mixed}>> */\n    private array $changes = [];\n\n    public function __construct(\n        private readonly NotificationTriggerService $triggers,\n        private readonly TokenStorageInterface $tokenStorage,\n    ) {\n    }\n\n    public function postPersist(\\Doctrine\\ORM\\Event\\PostPersistEventArgs $event): void\n    {\n        $entity = $event->getObject();\n        $actor = $this->currentUser();\n\n        if ($entity instanceof RadarMedidor) {\n            $this->triggers->radarCreated($entity, $actor);\n\n            return;\n        }\n\n        if ($entity instanceof SolicitacaoComentario) {\n            $this->triggers->commentAdded($entity, $actor);\n        }\n    }\n\n    public function preUpdate(\\Doctrine\\ORM\\Event\\PreUpdateEventArgs $event): void\n    {\n        $entity = $event->getObject();\n\n        if (!$entity instanceof RadarMedidor && !$entity instanceof Solicitacao) {\n            return;\n        }\n\n        $changes = [];\n\n        foreach ($event->getEntityChangeSet() as $field => $values) {\n            $changes[$field] = [$values[0], $values[1]];\n        }\n\n        $this->changes[spl_object_id($entity)] = $changes;\n    }\n\n    public function postUpdate(\\Doctrine\\ORM\\Event\\PostUpdateEventArgs $event): void\n    {\n        $entity = $event->getObject();\n        $key = spl_object_id($entity);\n        $changes = $this->changes[$key] ?? [];\n        unset($this->changes[$key]);\n        $actor = $this->currentUser();\n\n        if ($entity instanceof RadarMedidor) {\n            $this->triggers->radarUpdated($entity, $changes, $actor);\n\n            return;\n        }\n\n        if ($entity instanceof Solicitacao && isset($changes['status'])) {\n            $this->triggers->requestStatusChanged($entity, (string) $changes['status'][0], $actor);\n        }\n    }\n\n    private function currentUser(): ?User\n    {\n        $user = $this->tokenStorage->getToken()?->getUser();\n\n        return $user instanceof User ? $user : null;\n    }\n}\n
+<?php
+
+declare(strict_types=1);
+
+namespace App\EventSubscriber;
+
+use App\Entity\RadarMedidor;
+use App\Entity\Solicitacao;
+use App\Entity\SolicitacaoComentario;
+use App\Entity\User;
+use App\Service\Notification\NotificationTriggerService;
+use Doctrine\ORM\Events;
+use Symfony\Component\EventDispatcher\Attribute\AsDoctrineListener;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+
+#[AsDoctrineListener(event: Events::postPersist)]
+#[AsDoctrineListener(event: Events::preUpdate)]
+#[AsDoctrineListener(event: Events::postUpdate)]
+final class NotificationTriggerSubscriber
+{
+    /**
+     * @var array<int, array<string, array{0:mixed,1:mixed}>>
+     */
+    private array $changes = [];
+
+    public function __construct(
+        private readonly NotificationTriggerService $triggers,
+        private readonly TokenStorageInterface $tokenStorage,
+    ) {
+    }
+
+    public function postPersist(\Doctrine\ORM\Event\PostPersistEventArgs $event): void
+    {
+        $entity = $event->getObject();
+        $actor = $this->currentUser();
+
+        if ($entity instanceof RadarMedidor) {
+            $this->triggers->radarCreated($entity, $actor);
+
+            return;
+        }
+
+        if ($entity instanceof SolicitacaoComentario) {
+            $this->triggers->commentAdded($entity, $actor);
+        }
+    }
+
+    public function preUpdate(\Doctrine\ORM\Event\PreUpdateEventArgs $event): void
+    {
+        $entity = $event->getObject();
+
+        if (!$entity instanceof RadarMedidor && !$entity instanceof Solicitacao) {
+            return;
+        }
+
+        $changes = [];
+
+        foreach ($event->getEntityChangeSet() as $field => $values) {
+            $changes[$field] = [$values[0], $values[1]];
+        }
+
+        $this->changes[spl_object_id($entity)] = $changes;
+    }
+
+    public function postUpdate(\Doctrine\ORM\Event\PostUpdateEventArgs $event): void
+    {
+        $entity = $event->getObject();
+        $key = spl_object_id($entity);
+        $changes = $this->changes[$key] ?? [];
+
+        unset($this->changes[$key]);
+
+        $actor = $this->currentUser();
+
+        if ($entity instanceof RadarMedidor) {
+            $this->triggers->radarUpdated($entity, $changes, $actor);
+
+            return;
+        }
+
+        if ($entity instanceof Solicitacao && isset($changes['status'])) {
+            $this->triggers->requestStatusChanged(
+                $entity,
+                (string) $changes['status'][0],
+                $actor
+            );
+        }
+    }
+
+    private function currentUser(): ?User
+    {
+        $user = $this->tokenStorage->getToken()?->getUser();
+
+        return $user instanceof User ? $user : null;
+    }
+}

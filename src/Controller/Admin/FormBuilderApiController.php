@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/admin4/form-api', name: 'admin4_form_api_')]
-#[IsGranted('ROLE_ADMIN4')]
+#[IsGranted('ROLE_ADMIN')]
 final class FormBuilderApiController extends AbstractController
 {
     public function __construct(private readonly WmeFormularioService $schemas) {}

@@ -17,7 +17,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\String\Slugger\SluggerInterface;
 
 #[Route('/admin4/form-builder', name: 'admin4_form_builder_')]
-#[IsGranted('ROLE_ADMIN4')]
+#[IsGranted('ROLE_ADMIN')]
 final class FormBuilderController extends AbstractController
 {
     public function __construct(

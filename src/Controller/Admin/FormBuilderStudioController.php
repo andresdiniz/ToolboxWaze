@@ -14,7 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/admin4/form-studio', name: 'admin4_form_studio_')]
-#[IsGranted('ROLE_ADMIN4')]
+#[IsGranted('ROLE_ADMIN')]
 final class FormBuilderStudioController extends AbstractController
 {
     #[Route('/novo', name: 'novo', methods: ['GET', 'POST'])]

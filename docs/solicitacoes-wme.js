@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         ToolboxWaze — Central de solicitações WME
 // @namespace    https://github.com/andresdiniz/ToolboxWaze
-// @version      4.0.0
-// @description  Solicitações ao ToolboxWaze direto do WME: conexão por e-mail, contexto SDK, formulários da API, anexos e rascunhos.
+// @version      4.0.4
+// @description  Solicitações ao ToolboxWaze direto do WME: conexão por e-mail, contexto SDK, formulários da API, anexos, rascunhos e histórico com links.
 // @author       Andres Diniz
 // @homepageURL  https://github.com/andresdiniz/ToolboxWaze
 // @supportURL   https://github.com/andresdiniz/ToolboxWaze/issues
-// @updateURL    https://github.com/andresdiniz/solicitacoeswme/blob/main/solicitacoes-wme.js
-// @downloadURL  https://github.com/andresdiniz/solicitacoeswme/blob/main/solicitacoes-wme.js
+// @updateURL    https://raw.githubusercontent.com/andresdiniz/ToolboxWaze/main/ToolboxWaze.user.js
+// @downloadURL  https://raw.githubusercontent.com/andresdiniz/ToolboxWaze/main/ToolboxWaze.user.js
 // @match        https://www.waze.com/editor*
 // @match        https://www.waze.com/*/editor*
 // @match        https://beta.waze.com/editor*
@@ -21,12 +21,11 @@
 // @connect      wazetoolbox.acheireviews.com.br
 // @run-at       document-idle
 // ==/UserScript==
-/* global unsafeWindow, GM_getValue, GM_setValue, GM_deleteValue, GM_xmlhttpRequest */
 
 (async function () {
   'use strict';
   if (window.top !== window.self) return;
-  const VERSION='4.0.0', BASE='https://wazetoolbox.acheireviews.com.br';
+  const VERSION='4.0.4', BASE='https://wazetoolbox.acheireviews.com.br';
   const API=BASE+'/api/wme', PREFIX='[ToolboxWaze]', PAGE=typeof unsafeWindow==='undefined'?window:unsafeWindow;
   const log=(...a)=>console.info(PREFIX,...a), warn=(...a)=>console.warn(PREFIX,...a);
   const store={get:async(k,d=null)=>await GM_getValue(k,d),set:async(k,v)=>await GM_setValue(k,v),del:async k=>await GM_deleteValue(k)};
@@ -49,7 +48,7 @@
   button,a{touch-action:manipulation}button{cursor:pointer;border:1px solid #cbded5;border-radius:9px;background:#fff;color:#163d2b;padding:9px 13px;font-weight:600}
   button:hover{background:#edf7f1}button:disabled{opacity:.5;cursor:not-allowed}a{color:#147348}
   button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid #71bca0;outline-offset:2px}
-  .fab{position:fixed;bottom:76px;right:22px;background:#176d4c;color:white;border:0;border-radius:28px;box-shadow:0 8px 28px #0004;padding:14px 20px}
+  .fab{position:fixed;bottom:76px;right:96px;background:#176d4c;color:white;border:0;border-radius:28px;box-shadow:0 8px 28px #0004;padding:14px 20px}
   .overlay{position:fixed;inset:0;background:#0b241dcc;display:grid;place-items:center;padding:20px;backdrop-filter:blur(3px)}
   .dialog{width:min(1050px,97vw);height:min(850px,94vh);display:flex;flex-direction:column;background:#f4f8f5;border-radius:18px;box-shadow:0 24px 90px #0006;overflow:hidden}
   header,footer{background:#fff;padding:16px 22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}header{border-bottom:1px solid #dce9e1}footer{border-top:1px solid #dce9e1}
@@ -63,8 +62,17 @@
   .status{white-space:pre-wrap;padding:10px 14px;border-radius:9px;margin-bottom:12px;background:#e8f2ed}.status.error{background:#fff0ef;color:#a32121}.status.success{background:#ddf4e7;color:#125d39}
   .error-text{color:#b3261e;font-size:12px;margin-top:5px}.bad{border-color:#b3261e!important}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 system-ui;margin:0;max-height:260px;overflow:auto}
   .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.preview{display:flex;gap:8px;flex-wrap:wrap}.preview figure{margin:8px 0;border:1px solid #dce9e1;border-radius:8px;padding:6px;width:130px}.preview img{width:116px;height:80px;object-fit:cover}.preview small{display:block;overflow-wrap:anywhere}.preview button{padding:3px 7px;font-size:11px}
-  @media(max-width:760px){.overlay{padding:5px}.dialog{height:98vh;width:99vw;border-radius:10px}.layout{grid-template-columns:1fr}.scroll{padding:12px}.types{grid-template-columns:1fr 1fr}header,footer{padding:12px}.side pre{max-height:110px}}
+  @media(max-width:760px){.overlay{padding:5px}.dialog{height:98vh;width:99vw;border-radius:10px}.layout{grid-template-columns:1fr}.scroll{padding:12px}.types{grid-template-columns:1fr 1fr}header,footer{padding:12px}.side pre{max-height:110px}.fab{right:80px}}
   `;
+  css.textContent += `.mine-request{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;margin-bottom:8px;border:1px solid #dce9e1;border-radius:10px;text-decoration:none;color:#163d2b;background:#fff}.mine-request:hover{background:#eef8f2;border-color:#198754}.mine-request:focus-visible{outline:3px solid #71bca0;outline-offset:2px}.mine-open{margin-left:auto;font-size:12px;font-weight:600}`;
+  css.textContent += `
+  .steps ol{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px}
+  .steps li{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start;padding:10px;border:1px solid #dce9e1;border-radius:10px;background:#f8fbf9}
+  .steps .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#dce9e1;color:#40594d;font-weight:700;font-size:13px}
+  .steps li.current{border-color:#198754;background:#eef8f2;box-shadow:0 0 0 2px #19875422}.steps li.current .num,.steps li.done .num{background:#198754;color:#fff}.steps li.done{opacity:.75}
+  .steps strong{display:block}.steps li span.muted{display:block}
+  .why{background:#fff8e6;border:1px solid #f0dca0;border-radius:10px;padding:10px 12px;font-size:13px;color:#5b4a14}.why strong{color:#4a3b0d}.why p{margin:4px 0 0}
+  .hint{font-size:12px;margin-top:5px;color:#5c7468}.hint.ok{color:#125d39}.hint.bad{color:#b3261e}`;
   const fab=el('button','Toolbox · Solicitações',root,'fab');fab.type='button';
   const overlay=el('div',null,root,'overlay');overlay.hidden=true;
   const dialog=el('section',null,overlay,'dialog');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','tw3-title');
@@ -75,13 +83,25 @@
   const settings=el('section',null,scroll,'card');settings.hidden=true;
   el('h3','Conexão com o ToolboxWaze',settings);
   const connText=el('p','Não conectado.',settings,'muted');
-  el('p','Este navegador usa um token aleatório gerado pelo script. Nenhuma credencial ou cookie do Waze é enviado.',settings,'muted');
+  el('p','Para enviar solicitações é preciso estar conectado: você confirma o seu e-mail uma única vez e este navegador passa a usar um token aleatório gerado pelo script. Nenhuma senha, credencial ou cookie do Waze é enviado.',settings,'muted');
   const settingsRow=el('div',null,settings,'row');
   const retryButton=el('button','Tentar novamente',settingsRow,'primary'),disconnectButton=el('button','Desconectar este navegador',settingsRow);retryButton.hidden=true;
   const status=el('div',null,scroll,'status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.hidden=true;
+  const stepsCard=el('section',null,scroll,'card steps');stepsCard.hidden=true;
+  el('h3','Como conectar (leva cerca de 1 minuto)',stepsCard);
+  const stepsList=el('ol',null,stepsCard);
+  const STEPS=[
+    ['Informe seu e-mail','Usamos o apelido detectado no WME e o seu e-mail para criar (ou localizar) sua conta no ToolboxWaze.'],
+    ['Confirme no e-mail','Abra a mensagem do ToolboxWaze e clique em “Confirmar e-mail”. O link vale 60 minutos e só funciona uma vez.'],
+    ['Volte ao WME','O script detecta a confirmação sozinho (ou use “Já confirmei”). Este navegador fica conectado.'],
+    ['Escolha o formulário e envie','Depois disso você não precisa repetir o processo neste navegador.']
+  ];
+  const stepItems=STEPS.map(([t,d],i)=>{const li=el('li',null,stepsList);el('span',String(i+1),li,'num');const box=el('div',null,li);el('strong',t,box);el('span',d,box,'muted');return li;});
+  const why=el('div',null,stepsCard,'why');el('strong','Por que isso é necessário?',why);
+  el('p','O ToolboxWaze precisa saber quem enviou cada solicitação para que os responsáveis possam responder e para evitar spam e abuso. O script não consegue provar quem você é no Waze, por isso confirmamos o seu e-mail uma única vez. Nenhuma senha nem cookie do Waze é enviado; o token fica guardado só neste navegador.',why);
   const registerCard=el('section',null,scroll,'card');registerCard.hidden=true;
-  el('h3','Conectar ao ToolboxWaze',registerCard);
-  el('p','Informe seu e-mail para enviar solicitações. Se você ainda não tem conta, ela é criada automaticamente. Enviaremos um link para confirmar que o e-mail é seu.',registerCard,'muted');
+  el('h3','Passo 1 de 4 · Informe seu e-mail',registerCard);
+  el('p','Se você ainda não tem conta no ToolboxWaze, ela é criada automaticamente. Em seguida enviaremos um link para confirmar que o e-mail é seu.',registerCard,'muted');
   const nickField=el('div',null,registerCard,'field'),nickLabel=el('label','Apelido no WME',nickField),nickInput=el('input',null,nickField);nickInput.id='tw4-nick';nickLabel.htmlFor='tw4-nick';nickInput.maxLength=60;nickInput.autocomplete='off';
   const nickHint=el('small','',nickField),nickError=el('div','',nickField,'error-text');nickError.setAttribute('role','alert');
   const mailField=el('div',null,registerCard,'field'),mailLabel=el('label','E-mail',mailField),mailInput=el('input',null,mailField);mailInput.id='tw4-email';mailLabel.htmlFor='tw4-email';mailInput.type='email';mailInput.autocomplete='email';mailInput.maxLength=180;
@@ -90,8 +110,8 @@
   const consent=el('label',null,registerCard,'choice'),consentBox=el('input',null,consent);consentBox.type='checkbox';el('span','Concordo em enviar meu e-mail, meu apelido do WME e os dados das solicitações ao ToolboxWaze.',consent);
   const registerRow=el('div',null,registerCard,'row');registerRow.style.marginTop='12px';const registerButton=el('button','Conectar',registerRow,'primary');
   const waitCard=el('section',null,scroll,'card');waitCard.hidden=true;
-  el('h3','Confirme seu e-mail',waitCard);const waitText=el('p','',waitCard);
-  el('p','O link vale por 60 minutos. Depois de confirmar, o script detecta sozinho (ou use “Já confirmei”).',waitCard,'muted');
+  el('h3','Passo 2 de 4 · Confirme seu e-mail',waitCard);const waitText=el('p','',waitCard);
+  el('p','O link vale por 60 minutos. Depois de confirmar, o script detecta sozinho (ou use “Já confirmei”). Não chegou? Olhe a caixa de spam ou use “Reenviar e-mail” (1 vez a cada 5 minutos).',waitCard,'muted');
   const waitRow=el('div',null,waitCard,'row');const verifyButton=el('button','Já confirmei',waitRow,'primary'),resendButton=el('button','Reenviar e-mail',waitRow),changeButton=el('button','Usar outro e-mail',waitRow);
   const mineCard=el('section',null,scroll,'card');mineCard.hidden=true;el('h3','Minhas solicitações',mineCard);const mineList=el('div',null,mineCard);
   const pendingBox=el('div',null,scroll,'card');pendingBox.hidden=true;el('p','Há um envio sem resultado confirmado. Consulte antes de enviar novamente.',pendingBox);
@@ -108,7 +128,15 @@
   const clearButton=el('button','Limpar rascunho',footer),sendButton=el('button','Enviar solicitação',footer,'primary');sendButton.disabled=true;
   const previews=new Set();
   function notice(text,type=''){status.textContent=text;status.className='status '+type;status.hidden=!text;}
-  function updateBusy(){sendButton.disabled=busy||conn!=='ativo'||!identity||!definition||Boolean(unresolved);registerButton.disabled=busy;verifyButton.disabled=busy;resendButton.disabled=busy;changeButton.disabled=busy;disconnectButton.disabled=busy;retryButton.disabled=busy;clearButton.disabled=busy;refresh.disabled=busy;pendingBox.hidden=!unresolved||conn!=='ativo';}
+  function updateBusy(){sendButton.disabled=busy||conn!=='ativo'||!identity||!definition||!definition.campos?.length||Boolean(unresolved);registerButton.disabled=busy;verifyButton.disabled=busy;resendButton.disabled=busy;changeButton.disabled=busy;disconnectButton.disabled=busy;retryButton.disabled=busy;clearButton.disabled=busy;refresh.disabled=busy;pendingBox.hidden=!unresolved||conn!=='ativo';}
+  function nonJsonMessage(r,type,path){
+    const final=String(r.finalUrl||''),body=String(r.responseText||'');
+    const snippet=body.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,160);
+    warn('Resposta não-JSON',{path,status:r.status,finalUrl:final,contentType:type,trecho:snippet});
+    if(/\/login(?:[/?#]|$)/.test(final))return 'O servidor redirecionou '+path+' para a tela de login. A rota /api/wme não está liberada no servidor: confira config/packages/security.yaml, o WmeDeviceAuthenticator em services.yaml e rode cache:clear.';
+    if(/html/i.test(type)||/^\s*</.test(body))return 'O servidor devolveu uma página HTML (HTTP '+r.status+') em vez de JSON em '+path+(snippet?'. Trecho: “'+snippet+'”':'')+'. Detalhes no console (F12).';
+    return 'Resposta inesperada (HTTP '+r.status+') em '+path+'. Detalhes no console (F12).';
+  }
   function api(method,path,body){
     const credential=token;
     return new Promise((resolve,reject)=>{
@@ -118,8 +146,9 @@
         headers:{Accept:'application/json','X-API-TOKEN':credential,...(body&&!multipart?{'Content-Type':'application/json'}:{})},
         data:body?(multipart?body:JSON.stringify(body)):undefined,
         onload:r=>{log('HTTP',r.status,path,Math.round(performance.now()-start)+'ms');let data=null;try{data=JSON.parse(r.responseText);}catch{}
-          if(r.status<200||r.status>=300){const e=new Error(data?.message||data?.error||'HTTP '+r.status);e.status=r.status;e.codigo=data?.codigo||'';e.errors=data?.errors||{};e.data=data||{};reject(e);return;}
-          if(!data||typeof data!=='object'){const e=new Error('A API não retornou JSON válido.');e.uncertain=true;reject(e);return;}resolve(data);},
+          const type=(/content-type:\s*([^\r\n;]+)/i.exec(r.responseHeaders||'')||[])[1]?.trim()||'';
+          if(r.status<200||r.status>=300){const e=new Error(data?.message||data?.error||(data&&typeof data==='object'?'HTTP '+r.status:nonJsonMessage(r,type,path)));e.status=r.status;e.codigo=data?.codigo||'';e.errors=data?.errors||{};e.data=data||{};reject(e);return;}
+          if(!data||typeof data!=='object'){const e=new Error(nonJsonMessage(r,type,path));e.uncertain=true;e.status=r.status;reject(e);return;}resolve(data);},
         onerror:()=>reject(Object.assign(new Error('Falha de rede. O servidor pode ter recebido o envio.'),{uncertain:true})),
         ontimeout:()=>reject(Object.assign(new Error('Tempo esgotado. Consulte o resultado antes de reenviar.'),{uncertain:true}))
       });
@@ -149,7 +178,22 @@
     if(path==='account.wazeNickname')return identity?.wazeNickname;
     return null;
   }
-  function prefill(){for(const f of definition.campos){if(f.preenchimento&&(answers[f.chave]==null||answers[f.chave]==='')){const value=source(f.preenchimento.origem);if(value!=null)answers[f.chave]=value;}}}
+  // Validação do permalink feita pelo script (antes de enviar ao servidor).
+  function permalinkCheck(text,field){
+    const min=field.zoomMinimo||15;let u;
+    try{u=new URL(text);}catch{return {ok:false,msg:'Cole um link completo do WME (começa com https://www.waze.com/…/editor).'};}
+    if(!['https:','http:'].includes(u.protocol)||!['www.waze.com','beta.waze.com','waze.com'].includes(u.hostname)||!/^\/(?:[a-zA-Z-]+\/)?editor\/?$/.test(u.pathname))return {ok:false,msg:'O link precisa ser um permalink do Waze Map Editor.'};
+    const lat=Number(u.searchParams.get('lat')),lon=Number(u.searchParams.get('lon'));
+    if(!u.searchParams.has('lat')||!u.searchParams.has('lon')||!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return {ok:false,msg:'O link não tem coordenadas (lat/lon). Use “Usar posição atual do mapa”.'};
+    const raw=u.searchParams.get('zoomLevel')??u.searchParams.get('zoom'),z=Number(raw);
+    if(raw==null||raw===''||!Number.isFinite(z))return {ok:false,msg:'O link não informa o zoom. Use “Usar posição atual do mapa”.'};
+    if(z<min)return {ok:false,msg:'Zoom '+z+' é menor que o mínimo ('+min+'). Aproxime o mapa para enxergar os pontos com detalhe e gere o link de novo.'};
+    return {ok:true,msg:'Link válido · zoom '+z+' · '+lat.toFixed(5)+', '+lon.toFixed(5)};
+  }
+  function prefill(){for(const f of definition.campos){if(f.preenchimento&&(answers[f.chave]==null||answers[f.chave]==='')){const value=source(f.preenchimento.origem);
+    if(value==null)continue;
+    if(f.validacao==='permalink'&&!permalinkCheck(String(value),f).ok)continue; // não preenche sozinho com zoom insuficiente
+    answers[f.chave]=value;}}}
   function visible(field,visited=new Set()){
     if(visited.has(field.chave))return false;visited.add(field.chave);
     return !field.mostrarSe||Object.entries(field.mostrarSe).every(([key,value])=>{const dep=definition.campos.find(f=>f.chave===key);return Boolean(dep)&&visible(dep,new Set(visited))&&(Array.isArray(value)?value.includes(answers[key]):answers[key]===value);});
@@ -186,7 +230,26 @@
       }else{el('p','Tipo não suportado: '+f.tipo+'. Atualize o userscript.',box,'error-text');}
       if(input){input.id=id;input.setAttribute('aria-describedby',id+'-error');}
       if(f.ajuda)el('p',f.ajuda,box,'muted');
-      if(f.preenchimento){const captureButton=el('button','Preencher do WME / conta',box);captureButton.type='button';captureButton.onclick=()=>{const v=source(f.preenchimento.origem);if(v!=null){changed(v);renderFields();}else notice('Dado indisponível para este campo. Preencha manualmente.','error');};}
+      if(f.validacao==='permalink'&&input&&f.tipo!=='file'){
+        const hint=el('div','',box,'hint');
+        const update=()=>{const t=String(answers[f.chave]??'').trim();if(!t){hint.textContent='Exigido: link do WME com zoom ≥ '+(f.zoomMinimo||15)+' (vê-se mais pontos e detalhes do mapa).';hint.className='hint';return;}const c=permalinkCheck(t,f);hint.textContent=(c.ok?'✓ ':'✗ ')+c.msg;hint.className='hint '+(c.ok?'ok':'bad');};
+        update();input.addEventListener('input',update);
+      }
+      if(f.preenchimento){
+        const isLink=f.preenchimento.origem==='wme.permalink';
+        const captureButton=el('button',isLink?'Usar posição atual do mapa':'Preencher do WME / conta',box);captureButton.type='button';
+        captureButton.onclick=()=>{
+          if(isLink){
+            if(!sdk){notice('SDK do WME indisponível. Cole o permalink manualmente.','error');return;}
+            context=collect();summary.textContent=summarize();
+            const min=f.zoomMinimo||15;
+            if(!(Number.isFinite(context.zoom)&&context.zoom>=min)){notice('Zoom atual: '+(context.zoom??'desconhecido')+'. Aproxime o mapa até o zoom '+min+' ou mais e clique de novo.','error');return;}
+            const c=permalinkCheck(context.permalink,f);if(!c.ok){notice(c.msg,'error');return;}
+            changed(context.permalink);renderFields();notice('Permalink atualizado com a posição atual (zoom '+context.zoom+').','success');return;
+          }
+          const v=source(f.preenchimento.origem);if(v!=null){changed(v);renderFields();}else notice('Dado indisponível para este campo. Preencha manualmente.','error');
+        };
+      }
       const error=el('div','',box,'error-text');error.id=id+'-error';error.setAttribute('role','alert');
     }
     updateBusy();
@@ -204,7 +267,7 @@
       else if(f.valorObrigatorio!==undefined&&v!==f.valorObrigatorio)e='Confirmação necessária.';
       else if(f.tipo==='email'&&text&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text))e='E-mail inválido.';
       else if(f.tipo==='url'&&text){try{const u=new URL(text);if(!['http:','https:'].includes(u.protocol))throw Error();}catch{e='URL inválida.';}}
-      if(!e&&text&&f.validacao==='permalink'){try{const u=new URL(text);const z=Number(u.searchParams.get('zoomLevel')??u.searchParams.get('zoom'));if(!['https:','http:'].includes(u.protocol)||!['www.waze.com','beta.waze.com','waze.com'].includes(u.hostname)||!/^\/(?:[a-zA-Z-]+\/)?editor\/?$/.test(u.pathname)||z<(f.zoomMinimo||15))e='Use um permalink WME com zoom mínimo '+(f.zoomMinimo||15)+'.';}catch{e='Permalink inválido.';}}
+      if(!e&&text&&f.validacao==='permalink'){const c=permalinkCheck(text,f);if(!c.ok)e=c.msg;}
       if(!e&&text&&f.validacao==='wkt'&&!/^(POLYGON|LINESTRING)\s*\(/i.test(text))e='Use POLYGON(( ou LINESTRING(.';
       if(e)errors[f.chave]=e;
     }return errors;
@@ -216,19 +279,24 @@
     if(data.slug!==slug||!Array.isArray(data.campos)||new Set(data.campos.map(f=>f.chave)).size!==data.campos.length||data.campos.some(f=>!/^[-a-zA-Z0-9_]+$/.test(f.chave)))throw new Error('Definição de formulário inválida.');
     definition=data;restoring=true;answers={};files={};const saved=await store.get(await draftKey());if(saved&&Date.now()-saved.updatedAt<7*86400000){answers=saved.answers||{};if(saved.context)context=saved.context;}
     prefill();formTitle.textContent=data.nome;formDescription.textContent=data.descricao||'';summary.textContent=summarize();renderFields();dirty=false;restoring=false;
-    for(const b of typeList.children)b.classList.toggle('active',b.dataset.slug===slug);notice('');updateBusy();
+    for(const b of typeList.children)b.classList.toggle('active',b.dataset.slug===slug);log('Campos recebidos', {slug, quantidade: data.campos.length});notice(data.campos.length ? '' : 'A API retornou este formulário sem campos. Confira a migration no banco do servidor.', data.campos.length ? '' : 'error');updateBusy();
   }catch(e){restoring=false;definition=null;notice(e.message,'error');updateBusy();authLost(e);}}
   const AUTH_CODES=['email_nao_confirmado','token_desconhecido','token_invalido','dispositivo_revogado','nao_autenticado'];
   function authLost(e){if(AUTH_CODES.includes(e?.codigo)){setTimeout(()=>boot(),0);return true;}return false;}
+  function syncSteps(){
+    const current=({registro:0,pendente:1,ativo:3})[conn];
+    stepsCard.hidden=!(conn==='registro'||conn==='pendente'||(conn==='ativo'&&!settings.hidden));
+    stepItems.forEach((li,i)=>{li.classList.toggle('done',current!==undefined&&i<current);li.classList.toggle('current',current!==undefined&&i===current);});
+  }
   function setConn(s,info){
     conn=s;if(info)pendingInfo=info;
     registerCard.hidden=s!=='registro';waitCard.hidden=s!=='pendente';layout.hidden=s!=='ativo';mineButton.hidden=s!=='ativo';
     if(s!=='ativo')mineCard.hidden=true;
-    if(s==='pendente')waitText.textContent='Enviamos um link de confirmação para '+(pendingInfo?.emailMascarado||'seu e-mail')+'. Abra o e-mail e confirme para liberar o envio de solicitações.';
+    if(s==='pendente')waitText.textContent='Enviamos um link de confirmação para '+(pendingInfo?.emailMascarado||'seu e-mail')+'. Abra o e-mail e clique em “Confirmar e-mail” para liberar o envio de solicitações.';
     connText.textContent=({ativo:'Conectado.',pendente:'Aguardando a confirmação do e-mail.',registro:'Não conectado.',carregando:'Conectando…',erro:'Sem conexão com o servidor.'})[s]||'';
     retryButton.hidden=s!=='erro';disconnectButton.hidden=!token;if(s==='erro')settings.hidden=false;
     if(s==='registro'&&!overlay.hidden)setTimeout(()=>(mailInput.value?consentBox:mailInput).focus(),0);
-    updateBusy();
+    syncSteps();updateBusy();
   }
   function prefillNick(){let nick='';try{nick=sdk?.State?.getUserInfo?.()?.userName||'';}catch{}
     if(nick){nickInput.value=nick;nickInput.readOnly=true;nickHint.textContent='Detectado no WME.';}
@@ -242,7 +310,7 @@
     stopPoll();clearTimeout(saveTimer);definition=null;answers={};files={};fieldArea.replaceChildren();identity=data.usuario;forms=data.formularios;
     accountText.textContent=(identity.nome||identity.wazeNickname||'Usuário')+' · '+(identity.wazeNickname||'');typeList.replaceChildren();
     for(const f of forms){const b=el('button',f.nome,typeList);b.dataset.slug=f.slug;b.onclick=()=>choose(f.slug);}
-    setConn('ativo');settings.hidden=true;
+    setConn('ativo');settings.hidden=true;syncSteps();
     notice(forms.length?'Conectado. Escolha um formulário.':'Nenhum formulário disponível para sua conta.','success');
   }
   async function boot(silent=false){
@@ -289,15 +357,44 @@
     if(confirmFirst&&!window.confirm('Desconectar este navegador do ToolboxWaze? Você precisará confirmar o e-mail novamente.'))return;
     busy=true;updateBusy();stopPoll();clearTimeout(saveTimer);
     try{if(token)await api('POST','/dispositivo/revogar');}catch(e){warn('Revogação no servidor falhou:',e.message);}
-    await dropToken();setConn('registro');settings.hidden=true;notice('Desconectado deste navegador.');busy=false;updateBusy();
+    await dropToken();setConn('registro');settings.hidden=true;syncSteps();notice('Desconectado deste navegador.');busy=false;updateBusy();
   }
-  async function loadMine(){
-    mineCard.hidden=!mineCard.hidden;if(mineCard.hidden)return;
-    mineList.replaceChildren(el('p','Carregando…',null,'muted'));
-    try{const d=await api('GET','/solicitacoes');mineList.replaceChildren();
-      if(!d.solicitacoes?.length){el('p','Você ainda não enviou solicitações.',mineList,'muted');return;}
-      for(const s of d.solicitacoes){const row=el('div',null,mineList,'row');row.style.marginBottom='6px';el('strong','#'+s.id,row);el('span',s.formulario,row);el('span',s.statusLabel,row,'muted');el('small',new Date(s.criadaEm).toLocaleDateString(),row);}
-    }catch(e){mineList.replaceChildren(el('p',e.message,null,'error-text'));authLost(e);}
+  function requestUrl(item) {
+    const candidate = item.url || item.link || (item.id != null ? '/solicitacoes/' + encodeURIComponent(String(item.id)) : null);
+    if (!candidate) return null;
+    try {
+      const url = new URL(candidate, BASE);
+      return url.origin === new URL(BASE).origin && url.protocol === 'https:' ? url.href : null;
+    } catch { return null; }
+  }
+  async function loadMine() {
+    mineCard.hidden = !mineCard.hidden;
+    if (mineCard.hidden) return;
+    mineList.replaceChildren(el('p', 'Carregando…', null, 'muted'));
+    try {
+      const data = await api('GET', '/solicitacoes');
+      mineList.replaceChildren();
+      if (!data.solicitacoes?.length) {
+        el('p', 'Você ainda não enviou solicitações.', mineList, 'muted');
+        return;
+      }
+      for (const item of data.solicitacoes) {
+        const url = requestUrl(item);
+        const row = el(url ? 'a' : 'div', null, mineList, 'mine-request');
+        if (url) {
+          row.href = url; row.target = '_blank'; row.rel = 'noopener noreferrer';
+          row.title = 'Abrir solicitação #' + item.id + ' no ToolboxWaze';
+        }
+        el('strong', '#' + item.id, row);
+        el('span', item.formulario || item.tipoLabel || 'Solicitação', row);
+        el('span', item.statusLabel || item.status || '', row, 'muted');
+        const date = new Date(item.criadaEm);
+        el('small', Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(), row);
+        if (url) el('span', 'Abrir ↗', row, 'mine-open');
+      }
+    } catch (error) {
+      mineList.replaceChildren(el('p', error.message, null, 'error-text')); authLost(error);
+    }
   }
   function saveNow(){if(!identity||!definition)return Promise.resolve();clearTimeout(saveTimer);return store.set('tw3_draft_'+String(identity.id)+'_'+definition.slug,{answers:structuredClone(answers),context,updatedAt:Date.now()});}
   async function result(data){if(!data.solicitacao?.id)throw Object.assign(new Error('Resposta sem identificador de solicitação.'),{uncertain:true});
@@ -305,7 +402,7 @@
     if(data.solicitacao.url){try{const u=new URL(data.solicitacao.url,BASE);if(u.origin===BASE){const a=el('a',' Abrir no ToolboxWaze',status);a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';}}catch{}}
     if(definition)await store.del(await draftKey());clearTimeout(saveTimer);answers={};files={};dirty=false;renderFields();draftNote.textContent='Enviado. Anexos e rascunho removidos.';
   }
-  async function send(){if(busy||!identity||!definition||unresolved)return;
+  async function send(){if(busy||!identity||!definition||!definition.campos?.length||unresolved)return;
     renderFields();const errors=validate();if(Object.keys(errors).length){for(const [k,v]of Object.entries(errors))fieldError(k,v);notice('Revise os campos destacados.','error');fieldArea.querySelector('.bad')?.focus();return;}
     const key=uid();const payload={formulario:definition.slug,versaoFormulario:definition.versao,respostas:{},contexto:context,origem:'wme-userscript',scriptVersion:VERSION,clientRequestId:key};
     for(const f of definition.campos){if(visible(f)&&f.tipo!=='file'&&answers[f.chave]!==undefined)payload.respostas[f.chave]=f.tipo==='number'&&answers[f.chave]!==''?Number(answers[f.chave]):answers[f.chave];}
@@ -326,9 +423,9 @@
     else if(data.estado==='nao_criado'){unresolved=null;await store.del('tw3_pending');notice('O servidor confirmou que a solicitação não foi criada. Você pode enviar novamente.');}
     else notice('Envio ainda em processamento. Consulte novamente em instantes.');
   }catch(e){notice('Não foi possível confirmar: '+e.message,'error');}finally{busy=false;updateBusy();}}
-  function open(){previousFocus=document.activeElement;overlay.hidden=false;if(!context&&sdk){context=collect();summary.textContent=summarize();}prefillNick();if(!identity)boot();else closeButton.focus();updateBusy();}
+  function open(){previousFocus=document.activeElement;overlay.hidden=false;if(!context&&sdk){context=collect();summary.textContent=summarize();}prefillNick();if(!identity)boot();closeButton.focus();updateBusy();}
   function close(){if(busy){notice('Aguarde a operação terminar.');return;}if(dirty)scheduleSave();overlay.hidden=true;stopPoll();previousFocus?.focus();}
-  fab.onclick=open;closeButton.onclick=close;settingsButton.onclick=()=>{settings.hidden=!settings.hidden;};mineButton.onclick=loadMine;
+  fab.onclick=open;closeButton.onclick=close;settingsButton.onclick=()=>{settings.hidden=!settings.hidden;syncSteps();};mineButton.onclick=loadMine;
   registerButton.onclick=register;verifyButton.onclick=async()=>{await boot(true);if(conn==='pendente')notice('Ainda aguardando a confirmação do e-mail.');};
   resendButton.onclick=resend;changeButton.onclick=()=>disconnect(false);disconnectButton.onclick=()=>disconnect(true);retryButton.onclick=()=>boot();
   refresh.onclick=()=>{if(dirty&&!window.confirm('Atualizar o contexto do WME? Campos já preenchidos serão preservados.'))return;capture();};
@@ -336,13 +433,48 @@
   sendButton.onclick=send;checkButton.onclick=checkPending;
   clearButton.onclick=async()=>{if(!definition||!window.confirm('Apagar o rascunho deste formulário?'))return;clearTimeout(saveTimer);await store.del(await draftKey());answers={};files={};dirty=false;prefill();renderFields();draftNote.textContent='Rascunho limpo.';};
   overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
-  root.addEventListener('keydown',e=>{if(overlay.hidden)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();if(e.composedPath().includes(registerCard)){register();return;}if(e.composedPath().includes(settings))return;send();}
-    if(e.key==='Tab'){const nodes=Array.from(dialog.querySelectorAll('button,a,input,select,textarea')).filter(n=>!n.disabled&&n.getClientRects().length);const first=nodes[0],last=nodes.at(-1),active=root.activeElement;if(e.shiftKey&&active===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&active===last){e.preventDefault();first?.focus();}}
-  });
+  function modalKeydown(event) {
+    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      if (event.isComposing || event.repeat) return;
+      const path = event.composedPath();
+      if (path.includes(registerCard)) { register(); return; }
+      if (path.includes(settings)) return;
+      if (!sendButton.disabled) send();
+      return;
+    }
+    if (event.key === 'Tab') {
+      const nodes = Array.from(dialog.querySelectorAll('button,a,input,select,textarea'))
+        .filter(n => !n.disabled && n.getClientRects().length);
+      const first = nodes[0], last = nodes.at(-1), active = root.activeElement;
+      if (!nodes.length) { event.preventDefault(); return; }
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault(); first.focus();
+      }
+    }
+  }
+  function shieldKeyboard(event) {
+    if (overlay.hidden) return;
+    // A digitacao normal mantem sua acao padrao; apenas a propagacao e bloqueada.
+    if (!dialog.contains(root.activeElement) && event.type === 'keydown' && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      closeButton.focus();
+    }
+    if (event.type === 'keydown') modalKeydown(event);
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+  }
+  for (const type of ['keydown', 'keypress', 'keyup']) {
+    window.addEventListener(type, shieldKeyboard, {capture: true});
+  }
   PAGE.twDiagnostico=()=>{const d={version:VERSION,sdk:!!sdk,conn,connected:!!identity,form:definition?.slug,selected:selection().length,pending:!!unresolved,modalOpen:!overlay.hidden};log(d);return d;};
+  // Teste rápido da API pelo console (F12): twTestarApi()
+  PAGE.twTestarApi=async()=>{try{const d=await api('GET','/bootstrap');log('API respondeu JSON:',d);return d;}catch(e){warn('API falhou:',e.status||'',e.codigo||'',e.message);return e.message;}};
   log('Interface carregada',VERSION);updateBusy();
   try{for(let i=0;i<200;i++){if(PAGE.SDK_INITIALIZED&&typeof PAGE.getWmeSdk==='function')break;if(i===199)throw new Error('SDK indisponível após 60 segundos.');await new Promise(r=>setTimeout(r,300));}
-    await PAGE.SDK_INITIALIZED;sdk=PAGE.getWmeSdk({scriptId:'toolboxwaze-solicitacoes',scriptName:'Comunidade BR — Solicitações'});
+    await PAGE.SDK_INITIALIZED;sdk=PAGE.getWmeSdk({scriptId:'toolboxwaze-solicitacoes',scriptName:'ToolboxWaze — Solicitações'});
     if(!sdk.State.isReady())await sdk.Events.once({eventName:'wme-ready'});context=collect();summary.textContent=summarize();prefillNick();
     sdk.Events.on({eventName:'wme-selection-changed',eventHandler:()=>{const n=selection().length;fab.textContent='Toolbox · Solicitações'+(n?' ('+n+')':'');if(!overlay.hidden)contextNotice.textContent='A seleção pode ter mudado. Use Atualizar para recapturar.';}});log('SDK pronto');
   }catch(e){summary.textContent='SDK indisponível. Preenchimento manual disponível.';warn(e.message);}

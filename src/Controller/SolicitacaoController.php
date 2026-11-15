@@ -2,10 +2,12 @@
 
 namespace App\Controller;
 
+use App\Entity\FormBuilder;
 use App\Entity\Solicitacao;
 use App\Form\SolicitacaoType;
 use App\Repository\SolicitacaoRepository;
 use App\Service\SolicitacaoService;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,84 +18,76 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class SolicitacaoController extends AbstractController
 {
     public function __construct(
-        private readonly SolicitacaoService    $solicitacaoService,
+        private readonly SolicitacaoService $solicitacaoService,
         private readonly SolicitacaoRepository $solicitacaoRepo,
-    ) {}
+        private readonly EntityManagerInterface $em,
+    ) {
+    }
 
-    /**
-     * Rota AJAX dedicada — retorna APENAS o fragmento de campos dinâmicos.
-     *
-     * Parâmetros GET:
-     *   tipo                    – tipo da solicitação (ex: "nivel")
-     *   tipoNivel               – "upgrade" | "downgrade" | (ausente)
-     *   souChamp                – "1" se o checkbox de confirmação Champ estiver marcado (nivel/downgrade)
-     *   acaoGerenteArea         – "incluir" | "excluir" | (ausente)
-     *   acaoGerenteEstadoPais   – "incluir" | "excluir" | (ausente)
-     *   souChampEp              – "1" se o checkbox de confirmação Champ EP estiver marcado (gerente_ep/excluir)
-     *   cargo                   – "gerente_estado" | "gerente_pais" | (ausente)
-     */
     #[Route('/campos', name: 'solicitacao_campos_ajax', methods: ['GET'])]
     public function camposAjax(Request $request): Response
     {
-        $isChamp   = $this->isGranted('ROLE_CHAMP');
-        $tipo      = $request->query->get('tipo', '');
+        $isChamp = $this->isGranted('ROLE_CHAMP');
+        $tipo = $request->query->get('tipo', '');
         $tipoNivel = $request->query->get('tipoNivel');
-        $souChamp  = (bool) $request->query->get('souChamp');
+        $souChamp = (bool) $request->query->get('souChamp');
 
-        $acaoGerenteArea       = $request->query->get('acaoGerenteArea');
+        $acaoGerenteArea = $request->query->get('acaoGerenteArea');
         $acaoGerenteEstadoPais = $request->query->get('acaoGerenteEstadoPais');
-        $souChampEp            = (bool) $request->query->get('souChampEp');
-        $cargo                 = $request->query->get('cargo');
+        $souChampEp = (bool) $request->query->get('souChampEp');
+        $cargo = $request->query->get('cargo');
 
-        $valoresAcao  = ['incluir', 'excluir', null];
+        $valoresAcao = ['incluir', 'excluir', null];
         $valoresCargo = ['gerente_estado', 'gerente_pais', null];
 
         if (!in_array($tipoNivel, ['upgrade', 'downgrade', null], true)) {
             $tipoNivel = null;
         }
+
         if (!in_array($acaoGerenteArea, $valoresAcao, true)) {
             $acaoGerenteArea = null;
         }
+
         if (!in_array($acaoGerenteEstadoPais, $valoresAcao, true)) {
             $acaoGerenteEstadoPais = null;
         }
+
         if (!in_array($cargo, $valoresCargo, true)) {
             $cargo = null;
         }
 
-        // Champ fazendo downgrade: infere souChamp automaticamente
         if ($isChamp && $tipoNivel === 'downgrade') {
             $souChamp = true;
         }
-        // Champ excluindo gerente EP: infere souChampEp automaticamente se já marcou
-        if ($isChamp && $acaoGerenteEstadoPais === 'excluir') {
-            // souChampEp já vem do query param — não força true aqui,
-            // só passa o valor para o form renderizar o checkbox ou os campos
-        }
 
         $solicitacao = new Solicitacao();
-        try { $solicitacao->setTipo($tipo); } catch (\Throwable) { $tipo = ''; }
+
+        try {
+            $solicitacao->setTipo($tipo);
+        } catch (\Throwable) {
+            $tipo = '';
+        }
 
         $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-            'is_champ'               => $isChamp,
-            'ajax_tipo_nivel'        => $tipoNivel,
-            'ajax_sou_champ'         => $souChamp,
-            'ajax_cargo'             => $cargo,
-            'ajax_acao_gerente_ep'   => $acaoGerenteEstadoPais,
-            'ajax_sou_champ_ep'      => $souChampEp,
+            'is_champ' => $isChamp,
+            'ajax_tipo_nivel' => $tipoNivel,
+            'ajax_sou_champ' => $souChamp,
+            'ajax_cargo' => $cargo,
+            'ajax_acao_gerente_ep' => $acaoGerenteEstadoPais,
+            'ajax_sou_champ_ep' => $souChampEp,
         ]);
 
         return new Response(
             $this->renderView('solicitacao/_campos.html.twig', [
-                'form'                 => $form->createView(),
-                'tipoAtual'            => $tipo,
-                'isChamp'              => $isChamp,
-                'tipoNivelAtual'       => $tipoNivel,
-                'souChampAuto'         => $isChamp && $tipoNivel === 'downgrade',
-                'acaoGerenteAtual'     => $acaoGerenteArea,
-                'acaoGerenteEpAtual'   => $acaoGerenteEstadoPais,
-                'souChampEpAuto'       => $souChampEp,
-                'cargoAtual'           => $cargo,
+                'form' => $form->createView(),
+                'tipoAtual' => $tipo,
+                'isChamp' => $isChamp,
+                'tipoNivelAtual' => $tipoNivel,
+                'souChampAuto' => $isChamp && $tipoNivel === 'downgrade',
+                'acaoGerenteAtual' => $acaoGerenteArea,
+                'acaoGerenteEpAtual' => $acaoGerenteEstadoPais,
+                'souChampEpAuto' => $souChampEp,
+                'cargoAtual' => $cargo,
             ])
         );
     }
@@ -103,11 +97,12 @@ class SolicitacaoController extends AbstractController
     {
         $isAdmin = $this->isGranted('ROLE_ADMIN');
         $isChamp = $this->isGranted('ROLE_CHAMP');
-        $user     = $this->getUser();
+        $user = $this->getUser();
         $abaAtual = $request->query->get('aba', 'nova');
 
         if ($abaAtual === 'historico' && !$user) {
             $this->addFlash('warning', 'Faça login para ver seu histórico.');
+
             return $this->redirectToRoute('app_login');
         }
 
@@ -117,25 +112,30 @@ class SolicitacaoController extends AbstractController
             if ($user->getName()) {
                 $solicitacao->setSolicitanteNome($user->getName());
             }
+
             if ($user->getWazeNickname()) {
                 $solicitacao->setSolicitanteUsuario($user->getWazeNickname());
             }
+
             if ($user->getEmail()) {
                 $solicitacao->setSolicitanteEmail($user->getEmail());
             }
         }
 
         $tipoAtual = null;
-
-        $postData                  = $request->request->all('solicitacao') ?? [];
-        $tipoDoPost                = $postData['tipo']                        ?? null;
-        $tipoNivelPost             = $postData['dados_tipoNivel']              ?? null;
-        $souChampPost              = !empty($postData['dados_souChamp']);
-        $acaoGerenteEstadoPaisPost = $postData['dados_acaoGerenteEstadoPais']  ?? null;
-        $souChampEpPost            = !empty($postData['dados_souChampEp']);
+        $postData = $request->request->all('solicitacao') ?? [];
+        $tipoDoPost = $postData['tipo'] ?? null;
+        $tipoNivelPost = $postData['dados_tipoNivel'] ?? null;
+        $souChampPost = !empty($postData['dados_souChamp']);
+        $acaoGerenteEstadoPaisPost = $postData['dados_acaoGerenteEstadoPais'] ?? null;
+        $souChampEpPost = !empty($postData['dados_souChampEp']);
 
         if ($tipoDoPost) {
-            try { $solicitacao->setTipo($tipoDoPost); $tipoAtual = $tipoDoPost; } catch (\Throwable) {}
+            try {
+                $solicitacao->setTipo($tipoDoPost);
+                $tipoAtual = $tipoDoPost;
+            } catch (\Throwable) {
+            }
         }
 
         if (!in_array($tipoNivelPost, ['upgrade', 'downgrade', null], true)) {
@@ -145,16 +145,17 @@ class SolicitacaoController extends AbstractController
         if ($isChamp && $tipoNivelPost === 'downgrade') {
             $souChampPost = true;
         }
+
         if ($isChamp && $acaoGerenteEstadoPaisPost === 'excluir') {
             $souChampEpPost = true;
         }
 
         $form = $this->createForm(SolicitacaoType::class, $solicitacao, [
-            'is_champ'               => $isChamp,
-            'ajax_tipo_nivel'        => $tipoNivelPost,
-            'ajax_sou_champ'         => $souChampPost,
-            'ajax_acao_gerente_ep'   => $acaoGerenteEstadoPaisPost,
-            'ajax_sou_champ_ep'      => $souChampEpPost,
+            'is_champ' => $isChamp,
+            'ajax_tipo_nivel' => $tipoNivelPost,
+            'ajax_sou_champ' => $souChampPost,
+            'ajax_acao_gerente_ep' => $acaoGerenteEstadoPaisPost,
+            'ajax_sou_champ_ep' => $souChampEpPost,
         ]);
         $form->handleRequest($request);
 
@@ -165,6 +166,7 @@ class SolicitacaoController extends AbstractController
 
             if ($tipoNivelSubmetido === 'downgrade' && !$isChamp) {
                 $this->addFlash('danger', 'Apenas Champs podem solicitar downgrade de nível.');
+
                 return $this->redirectToRoute('solicitacao_hub');
             }
 
@@ -174,34 +176,43 @@ class SolicitacaoController extends AbstractController
 
             if ($acaoEpSubmetida === 'excluir' && !$isChamp) {
                 $this->addFlash('danger', 'Apenas Champs podem solicitar exclusão de Gerente.');
+
                 return $this->redirectToRoute('solicitacao_hub');
             }
 
             $dados = [];
+
             foreach ($form->all() as $fieldName => $field) {
                 if (str_starts_with($fieldName, 'dados_')) {
                     $dados[substr($fieldName, 6)] = $field->getData();
                 }
             }
+
             $solicitacao->setDados($dados);
 
             if ($tipoAtual === Solicitacao::TIPO_OOPS) {
                 $arquivos = $request->files->get('arquivos_oops', []);
-                $nomes    = [];
-                $dir      = $this->getParameter('kernel.project_dir') . '/public/uploads/oops';
-                if (!is_dir($dir)) mkdir($dir, 0775, true);
+                $nomes = [];
+                $dir = $this->getParameter('kernel.project_dir').'/public/uploads/oops';
+
+                if (!is_dir($dir)) {
+                    mkdir($dir, 0775, true);
+                }
+
                 foreach ((array) $arquivos as $file) {
                     if ($file && $file->isValid()) {
-                        $nome = uniqid('oops_') . '.' . $file->guessExtension();
+                        $nome = uniqid('oops_').'.'.$file->guessExtension();
                         $file->move($dir, $nome);
                         $nomes[] = $nome;
                     }
                 }
+
                 $solicitacao->setArquivos($nomes ?: null);
             }
 
             $this->solicitacaoService->criar($solicitacao);
             $this->addFlash('success', 'Solicitação enviada com sucesso!');
+
             return $this->redirectToRoute('solicitacao_confirmacao', ['id' => $solicitacao->getId()]);
         }
 
@@ -210,26 +221,29 @@ class SolicitacaoController extends AbstractController
         }
 
         $historico = [];
+
         if ($user && $abaAtual === 'historico') {
             $historico = $this->solicitacaoRepo->findByEmail($user->getEmail());
         }
 
-        $gestaoLista  = [];
-        $contadores   = [];
+        $gestaoLista = [];
+        $contadores = [];
         $filtroStatus = null;
-        $filtroTipo   = null;
+        $filtroTipo = null;
 
         if ($abaAtual === 'gestao') {
             if ($isAdmin) {
                 $filtroStatus = $request->query->get('status') ?: null;
-                $filtroTipo   = $request->query->get('tipo')   ?: null;
-                $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
-                    $filtroStatus, $filtroTipo, excluirDowngrade: true
+                $filtroTipo = $request->query->get('tipo') ?: null;
+                $gestaoLista = $this->solicitacaoRepo->findParaGestao(
+                    $filtroStatus,
+                    $filtroTipo,
+                    excluirDowngrade: true
                 );
                 $contadores = $this->solicitacaoRepo->countByStatus(excluirDowngrade: true);
             } elseif ($isChamp) {
                 $filtroStatus = $request->query->get('status') ?: null;
-                $gestaoLista  = $this->solicitacaoRepo->findParaGestao(
+                $gestaoLista = $this->solicitacaoRepo->findParaGestao(
                     $filtroStatus,
                     tipo: Solicitacao::TIPO_NIVEL,
                     apenasDowngrade: true
@@ -241,18 +255,24 @@ class SolicitacaoController extends AbstractController
             }
         }
 
+        $formularios = $this->em->getRepository(FormBuilder::class)->findBy(
+            ['ativo' => true],
+            ['nome' => 'ASC']
+        );
+
         return $this->render('solicitacao/hub.html.twig', [
-            'form'         => $form,
-            'tipoAtual'    => $tipoAtual,
-            'abaAtual'     => $abaAtual,
-            'isAdmin'      => $isAdmin,
-            'isChamp'      => $isChamp,
-            'historico'    => $historico,
-            'gestaoLista'  => $gestaoLista,
-            'contadores'   => $contadores,
+            'form' => $form,
+            'tipoAtual' => $tipoAtual,
+            'abaAtual' => $abaAtual,
+            'isAdmin' => $isAdmin,
+            'isChamp' => $isChamp,
+            'historico' => $historico,
+            'gestaoLista' => $gestaoLista,
+            'contadores' => $contadores,
             'filtroStatus' => $filtroStatus,
-            'filtroTipo'   => $filtroTipo,
-            'postData'     => $postData,
+            'filtroTipo' => $filtroTipo,
+            'postData' => $postData,
+            'formularios' => $formularios,
         ]);
     }
 
@@ -274,6 +294,7 @@ class SolicitacaoController extends AbstractController
     public function detalhe(Solicitacao $solicitacao): Response
     {
         $this->denyAccessUnlessGranted('SOLICITACAO_VER', $solicitacao);
+
         return $this->render('solicitacao/detalhe.html.twig', [
             'solicitacao' => $solicitacao,
             'comentarios' => $solicitacao->getComentarios(),
@@ -286,7 +307,7 @@ class SolicitacaoController extends AbstractController
     {
         $this->denyAccessUnlessGranted('SOLICITACAO_RESOLVER', $solicitacao);
 
-        if (!$this->isCsrfTokenValid('resolver_' . $solicitacao->getId(), $request->request->get('_token'))) {
+        if (!$this->isCsrfTokenValid('resolver_'.$solicitacao->getId(), $request->request->get('_token'))) {
             throw $this->createAccessDeniedException('Token CSRF inválido.');
         }
 
@@ -294,6 +315,7 @@ class SolicitacaoController extends AbstractController
 
         if (!$novoStatus || !array_key_exists($novoStatus, Solicitacao::STATUS_LABELS)) {
             $this->addFlash('danger', 'Status inválido.');
+
             return $this->redirectToRoute('solicitacao_detalhe', ['id' => $solicitacao->getId()]);
         }
 
@@ -302,6 +324,7 @@ class SolicitacaoController extends AbstractController
 
         if ($isDowngrade && !$this->isGranted('ROLE_CHAMP')) {
             $this->addFlash('danger', 'Apenas Champs podem processar downgrade.');
+
             return $this->redirectToRoute('solicitacao_hub', ['aba' => 'gestao']);
         }
 

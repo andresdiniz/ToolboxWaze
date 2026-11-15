@@ -501,41 +501,76 @@ final class WmeApiController extends AbstractController
     }
 
     #[Route('/solicitacoes/{id}/status', name: 'status', methods: ['GET'])]
-    public function status(int $id, Request $request): JsonResponse
-    {
-        return $this->run(function () use ($id, $request) {
-            [$user] = $this->auth($request);
+public function status(int $id, Request $request): JsonResponse
+{
+    return $this->run(function () use ($id, $request) {
+        [$user] = $this->auth($request);
 
-            $solicitacao = $this->em->find(Solicitacao::class, $id);
+        $solicitacao = $this->em->find(Solicitacao::class, $id);
 
-            if (
-                $solicitacao === null ||
-                strcasecmp((string) $solicitacao->getSolicitanteEmail(), $user->getEmail()) !== 0
-            ) {
-                throw new WmeApiException(404, 'solicitacao_nao_encontrada', 'Solicitação não encontrada.');
-            }
+        $this->logger->info('WME status: consulta iniciada', [
+            'solicitacaoId' => $id,
+            'usuarioId' => $user->getId(),
+            'usuarioEmail' => $user->getEmail(),
+            'solicitacaoEncontrada' => $solicitacao !== null,
+            'solicitacaoEmail' => $solicitacao?->getSolicitanteEmail(),
+        ]);
 
-            $comentarios = $solicitacao->getComentarios()
-                ->filter(fn (SolicitacaoComentario $comentario): bool => !$comentario->isInterno())
-                ->toArray();
+        if ($solicitacao === null) {
+            $this->logger->warning('WME status: solicitação não encontrada', [
+                'solicitacaoId' => $id,
+                'usuarioId' => $user->getId(),
+                'usuarioEmail' => $user->getEmail(),
+            ]);
 
-            return [
-                'id' => $solicitacao->getId(),
-                'status' => $solicitacao->getStatus(),
-                'statusLabel' => $solicitacao->getStatusLabel(),
-                'criadaEm' => $solicitacao->getCriadaEm()->format(DATE_ATOM),
-                'url' => '/solicitacoes/' . $solicitacao->getId(),
-                'comentarios' => array_map(
-                    fn (SolicitacaoComentario $comentario): array => [
-                        'autor' => $comentario->getAutorNome(),
-                        'texto' => $comentario->getTexto(),
-                        'criadoEm' => $comentario->getCriadoEm()->format(DATE_ATOM),
-                    ],
-                    $comentarios
-                ),
-            ];
-        });
-    }
+            throw new WmeApiException(
+                404,
+                'solicitacao_nao_encontrada',
+                'Solicitação não encontrada.'
+            );
+        }
+
+        $emailSolicitacao = (string) $solicitacao->getSolicitanteEmail();
+        $emailUsuario = (string) $user->getEmail();
+
+        if (strcasecmp($emailSolicitacao, $emailUsuario) !== 0) {
+            $this->logger->warning('WME status: e-mail não corresponde', [
+                'solicitacaoId' => $id,
+                'usuarioId' => $user->getId(),
+                'usuarioEmail' => $emailUsuario,
+                'solicitacaoEmail' => $emailSolicitacao,
+            ]);
+
+            throw new WmeApiException(
+                404,
+                'solicitacao_nao_encontrada',
+                'Solicitação não encontrada.'
+            );
+        }
+
+        $comentarios = $solicitacao->getComentarios()
+            ->filter(
+                fn (SolicitacaoComentario $comentario): bool => !$comentario->isInterno()
+            )
+            ->toArray();
+
+        return [
+            'id' => $solicitacao->getId(),
+            'status' => $solicitacao->getStatus(),
+            'statusLabel' => $solicitacao->getStatusLabel(),
+            'criadaEm' => $solicitacao->getCriadaEm()->format(DATE_ATOM),
+            'url' => '/solicitacoes/' . $solicitacao->getId(),
+            'comentarios' => array_map(
+                fn (SolicitacaoComentario $comentario): array => [
+                    'autor' => $comentario->getAutorNome(),
+                    'texto' => $comentario->getTexto(),
+                    'criadoEm' => $comentario->getCriadoEm()->format(DATE_ATOM),
+                ],
+                $comentarios
+            ),
+        ];
+    });
+}
 
     #[Route('/solicitacoes/alteracoes', name: 'alteracoes', methods: ['GET'])]
     public function alteracoes(Request $request): JsonResponse

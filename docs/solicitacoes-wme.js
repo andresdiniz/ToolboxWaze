@@ -448,6 +448,37 @@
         },
         data: body ? (multipart ? body : JSON.stringify(body)) : undefined,
         onload: (response) => {
+          if (response.status >= 400) {
+            const hideToken = value => {
+                let text = String(value ?? '');
+        
+                if (credential) {
+                    text = text.split(credential).join('[TOKEN REMOVIDO]');
+                }
+        
+                return text;
+            };
+        
+            const contentType = (
+                /content-type:\s*([^\r\n]+)/i.exec(
+                    response.responseHeaders || ''
+                ) || []
+            )[1] || '(não informado)';
+        
+            console.group('[ToolboxWaze DIAGNOSTICO-V1] HTTP ' + response.status);
+        
+            console.error('Método:', method);
+            console.error('URL enviada:', hideToken(API + path));
+            console.error('URL final:', hideToken(response.finalUrl || API + path));
+            console.error('Content-Type:', contentType);
+        
+            console.error(
+                'Resposta do servidor:',
+                hideToken(response.responseText).slice(0, 8000)
+            );
+        
+            console.groupEnd();
+        }
           log('HTTP', response.status, path, Math.round(performance.now() - start) + 'ms');
 
           let data = null;

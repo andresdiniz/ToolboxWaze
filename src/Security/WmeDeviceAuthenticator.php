@@ -18,15 +18,20 @@ use Symfony\Component\Security\Http\Authenticator\AbstractAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
+use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface;
 
-final class WmeDeviceAuthenticator extends AbstractAuthenticator
+final class WmeDeviceAuthenticator extends AbstractAuthenticator implements AuthenticationEntryPointInterface
 {
     public const ATTR_DISPOSITIVO = '_wme_dispositivo';
     public const ATTR_ESTADO = '_wme_estado';
 
-    private const PUBLIC_PATHS = ['/api/wme/registrar'];
-    private const PUBLIC_PREFIXES = ['/api/wme/confirmar/'];
-    private const EXPIRACAO_DIAS = 90;
+    private const PUBLIC_PATHS = [
+        '/api/wme/registrar',
+    ];
+
+    private const PUBLIC_PREFIXES = [
+        '/api/wme/confirmar/',
+    ];
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -57,7 +62,9 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
 
     public function authenticate(Request $request): Passport
     {
-        $token = trim((string) $request->headers->get('X-API-TOKEN'));
+        $token = trim(
+            (string) $request->headers->get('X-API-TOKEN')
+        );
 
         if (!preg_match('/^[a-f0-9]{64}$/D', $token)) {
             throw new CustomUserMessageAuthenticationException(
@@ -67,12 +74,18 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
         }
 
         try {
-            $device = $this->em->getRepository(WmeDispositivo::class)
-                ->findOneBy(['tokenHash' => hash('sha256', $token)]);
+            $device = $this->em
+                ->getRepository(WmeDispositivo::class)
+                ->findOneBy([
+                    'tokenHash' => hash('sha256', $token),
+                ]);
         } catch (\Throwable $exception) {
-            $this->logger->error('WME: falha ao localizar dispositivo', [
-                'erro' => $exception->getMessage(),
-            ]);
+            $this->logger->error(
+                'WME: falha ao localizar dispositivo',
+                [
+                    'erro' => $exception->getMessage(),
+                ]
+            );
 
             throw new CustomUserMessageAuthenticationException(
                 'Não foi possível validar o dispositivo.',
@@ -101,15 +114,24 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
             $ultimoUso = $device->getUltimoUsoEm();
             $agora = new \DateTimeImmutable();
 
-            if ($ultimoUso === null || $ultimoUso < $agora->modify('-5 minutes')) {
+            if (
+                $ultimoUso === null
+                || $ultimoUso < $agora->modify('-5 minutes')
+            ) {
                 $device->setUltimoUsoEm($agora);
                 $this->em->flush();
             }
         } else {
-            $user = $this->em->getRepository(User::class)
-                ->findOneBy(['apiToken' => $token]);
+            $user = $this->em
+                ->getRepository(User::class)
+                ->findOneBy([
+                    'apiToken' => $token,
+                ]);
 
-            if (!$user instanceof User || !$user->isApproved()) {
+            if (
+                !$user instanceof User
+                || !$user->isApproved()
+            ) {
                 throw new CustomUserMessageAuthenticationException(
                     'Token desconhecido.',
                     ['codigo' => 'token_desconhecido']
@@ -127,8 +149,15 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
             );
         }
 
-        $request->attributes->set(self::ATTR_DISPOSITIVO, $device);
-        $request->attributes->set(self::ATTR_ESTADO, $estado);
+        $request->attributes->set(
+            self::ATTR_DISPOSITIVO,
+            $device
+        );
+
+        $request->attributes->set(
+            self::ATTR_ESTADO,
+            $estado
+        );
 
         return new SelfValidatingPassport(
             new UserBadge($user->getUserIdentifier())
@@ -149,13 +178,45 @@ final class WmeDeviceAuthenticator extends AbstractAuthenticator
     ): ?Response {
         $data = $exception->getMessageData();
 
-        return new JsonResponse([
-            'codigo' => is_string($data['codigo'] ?? null)
+        return $this->unauthorizedResponse(
+            is_string($data['codigo'] ?? null)
                 ? $data['codigo']
                 : 'nao_autenticado',
-            'message' => $exception instanceof CustomUserMessageAuthenticationException
+            $exception instanceof CustomUserMessageAuthenticationException
                 ? $exception->getMessage()
-                : 'Não autenticado.',
+                : 'Não autenticado.'
+        );
+    }
+
+    public function start(
+        Request $request,
+        ?AuthenticationException $authException = null
+    ): Response {
+        return $this->unauthorizedResponse(
+            'nao_autenticado',
+            'Token pessoal obrigatório.'
+        );
+    }
+
+    private function unauthorizedResponse(
+        string $codigo,
+        string $message
+    ): JsonResponse {
+        $response = new JsonResponse([
+            'codigo' => $codigo,
+            'message' => $message,
         ], Response::HTTP_UNAUTHORIZED);
+
+        $response->headers->set(
+            'Cache-Control',
+            'private, no-store'
+        );
+
+        $response->headers->set(
+            'X-Content-Type-Options',
+            'nosniff'
+        );
+
+        return $response;
     }
 }

@@ -1,10 +1,18 @@
 security:
-    # Mantenha aqui o seu provider atual, se já existir.
+    password_hashers:
+        App\Entity\User:
+            algorithm: auto
+
     providers:
         app_user_provider:
             entity:
                 class: App\Entity\User
                 property: email
+
+    role_hierarchy:
+        # Admin e Champ permanecem hierarquias separadas.
+        ROLE_CHAMP: ROLE_USER
+        ROLE_ADMIN: ROLE_USER
 
     firewalls:
         dev:
@@ -17,18 +25,42 @@ security:
             provider: app_user_provider
             custom_authenticators:
                 - App\Security\WmeDeviceAuthenticator
-            entry_point: App\Security\WmeDeviceAuthenticator
+            entry_point: App\Security\WmeAuthenticationEntryPoint
 
         main:
             lazy: true
             provider: app_user_provider
-            # Mantenha aqui o restante do seu firewall "main" atual:
-            # form_login, logout, remember_me, etc.
+            entry_point: App\Security\AppAuthenticator
+            custom_authenticators:
+                - App\Security\AppAuthenticator
+                - App\Security\GoogleAuthenticator
+                - App\Security\ApiTokenAuthenticator
+
+            login_throttling:
+                max_attempts: 5
+                interval: '15 minutes'
+
+            logout:
+                path: app_logout
+                target: app_login
+
+            remember_me:
+                lifetime: 604800
+                path: /
 
     access_control:
-        # Rotas públicas da API WME
         - { path: ^/api/wme/registrar$, roles: PUBLIC_ACCESS }
         - { path: ^/api/wme/confirmar/, roles: PUBLIC_ACCESS }
-
-        # As demais rotas exigem token; o authenticator devolve 401 JSON.
-        - { path: ^/api/wme/, roles: PUBLIC_ACCESS }
+        - { path: ^/api/wme/, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/$, roles: PUBLIC_ACCESS }
+        - { path: ^/login, roles: PUBLIC_ACCESS }
+        - { path: ^/register, roles: PUBLIC_ACCESS }
+        - { path: ^/forgot-password, roles: PUBLIC_ACCESS }
+        - { path: ^/reset-password, roles: PUBLIC_ACCESS }
+        - { path: ^/connect, roles: PUBLIC_ACCESS }
+        - { path: ^/auth/waze-check, roles: PUBLIC_ACCESS }
+        - { path: ^/consultar/radares, roles: PUBLIC_ACCESS }
+        - { path: ^/consultar/radar/, roles: PUBLIC_ACCESS }
+        - { path: ^/consultar, roles: PUBLIC_ACCESS }
+        - { path: ^/admin, roles: ROLE_ADMIN }
+        - { path: ^/, roles: ROLE_USER }

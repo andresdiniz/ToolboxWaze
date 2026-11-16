@@ -1525,8 +1525,8 @@
 
     try {
         const data = await api(
-            'GET',
-            '/api/wme/solicitacoes/' + encodeURIComponent(id) + '/status'
+          'GET',
+          '/solicitacoes/' + encodeURIComponent(id) + '/status'
         );
 
         mineList.replaceChildren();

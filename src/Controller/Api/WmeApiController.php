@@ -16,6 +16,7 @@ use App\Message\EnviarEmailWmeVerificacao;
 use App\Repository\TipoSolicitacaoConfigRepository;
 use App\Security\WmeDeviceAuthenticator;
 use App\Service\WmeFormularioService;
+use App\Service\SolicitacaoIntervaloService;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -41,6 +42,7 @@ final class WmeApiController extends AbstractController
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly WmeFormularioService $forms,
+        private readonly SolicitacaoIntervaloService $intervalo,
         private readonly TipoSolicitacaoConfigRepository $configs,
         private readonly MessageBusInterface $bus,
         private readonly LoggerInterface $logger,
@@ -125,6 +127,13 @@ final class WmeApiController extends AbstractController
                 'codigo' => 'erro_interno',
                 'message' => 'Falha interna. Consulte o envio antes de repetir.',
             ], 500);
+        }
+
+        if ($response->getStatusCode() === 429) {
+            $body = json_decode((string) $response->getContent(), true);
+            if (is_array($body) && ($body['codigo'] ?? null) === 'intervalo_envio') {
+                $response->headers->set('Retry-After', (string) max(1, (int) ($body['aguardarSegundos'] ?? 1)));
+            }
         }
 
         $response->headers->set('Cache-Control', 'private, no-store');
@@ -850,7 +859,15 @@ final class WmeApiController extends AbstractController
             return ['estado' => $row['estado']];
         }
 
+        $solicitacao = $this->em->find(Solicitacao::class, (int) $row['solicitacao_id']);
+        $user = $this->getUser();
+        $intervalo = ($solicitacao?->getFormulario() !== null && $user instanceof User)
+            ? $this->intervalo->status($user, $solicitacao->getFormulario())
+            : ['aguardarSegundos' => 0, 'proximoEnvioEm' => null];
+
         return [
+            'aguardarSegundos' => $intervalo['aguardarSegundos'],
+            'proximoEnvioEm' => $intervalo['proximoEnvioEm'],
             'estado' => 'concluido',
             'solicitacao' => [
                 'id' => (int) $row['solicitacao_id'],
@@ -1040,21 +1057,15 @@ final class WmeApiController extends AbstractController
 
                 $this->forms->get($payload['formulario'], $user);
 
-                $limite = (int) (
-                    ($form->getConfiguracoes() ?? [])['limite_envios'] ?? 1
-                );
-
-                if (
-                    $limite > 0
-                    && $this->em->getRepository(Solicitacao::class)->count([
-                        'formulario' => $form,
-                        'solicitanteEmail' => $user->getEmail(),
-                    ]) >= $limite
-                ) {
+                // The user row is locked above, after checking idempotency.
+                $intervalo = $this->intervalo->status($user, $form);
+                if ($intervalo['aguardarSegundos'] > 0) {
                     throw new WmeApiException(
-                        422,
-                        'limite_formulario',
-                        'Limite de envios deste formulário atingido.'
+                        429,
+                        'intervalo_envio',
+                        'Aguarde ' . $intervalo['aguardarSegundos']
+                            . ' segundos para enviar este formulário novamente.',
+                        $intervalo
                     );
                 }
 

@@ -65,17 +65,3 @@ api_wme_anexo:
     requirements:
         id: '\d+'
         nome: '[a-f0-9]{40}\.(jpg|png|webp)'
-
-api_wme_diagnostico_rota:
-    path: /api/wme/diagnostico-rota-2142
-    controller: App\Controller\Api\WmeApiController::bootstrap
-    methods: [GET]        
-
-# Endpoint pendente:
-# O controller enviado não contém o método verificarDuplicata().
-# Não habilite este mapeamento sem implementar o método.
-#
-# api_wme_duplicatas:
-#     path: /api/wme/duplicatas
-#     controller: App\Controller\Api\WmeApiController::verificarDuplicata
-#     methods: [POST]

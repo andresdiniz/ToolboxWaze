@@ -36,6 +36,9 @@ services:
     App\Security\WmeDeviceAuthenticator:
         autowire: true
         autoconfigure: true
+        arguments:
+            $em: '@doctrine.orm.entity_manager'
+            $logger: '@logger'
 
     App\Email\Contract\EmailTransportInterface:
         alias: 'App\Email\Transport\NullEmailTransport'

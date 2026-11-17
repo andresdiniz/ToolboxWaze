@@ -725,7 +725,7 @@ final class WmeApiController extends AbstractController
                 'comentarios' => array_values(array_map(
                     fn (SolicitacaoComentario $comentario): array => [
                         'autor' => $comentario->getAutorNome(),
-                        'texto' => $comentario->getTexto(),
+                        'texto' => $comentario->getMensagem(),
                         'criadoEm' => $comentario->getCriadoEm()->format(DATE_ATOM),
                     ],
                     $comentarios

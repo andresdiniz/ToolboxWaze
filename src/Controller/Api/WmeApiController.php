@@ -17,6 +17,7 @@ use App\Repository\TipoSolicitacaoConfigRepository;
 use App\Security\WmeDeviceAuthenticator;
 use App\Service\WmeFormularioService;
 use App\Service\SolicitacaoIntervaloService;
+use App\Service\TratativaAcessoService;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -46,6 +47,7 @@ final class WmeApiController extends AbstractController
         private readonly TipoSolicitacaoConfigRepository $configs,
         private readonly MessageBusInterface $bus,
         private readonly LoggerInterface $logger,
+        private readonly TratativaAcessoService $acesso,
     ) {
     }
 
@@ -610,6 +612,8 @@ final class WmeApiController extends AbstractController
                     'aprovado' => $user->isApproved(),
                 ],
                 'formularios' => $this->forms->available($user),
+                // Só orienta a interface; cada endpoint de tratativa revalida no servidor.
+                'capacidades' => $this->capacidades($user),
             ];
         });
     }
@@ -824,6 +828,18 @@ final class WmeApiController extends AbstractController
             'criadaEm' => $solicitacao->getCriadaEm()->format(DATE_ATOM),
             'url' => '/solicitacoes/' . $solicitacao->getId(),
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function capacidades(User $user): array
+    {
+        try {
+            return $this->acesso->capacidades($user);
+        } catch (\Throwable $exception) {
+            $this->logger->error('WME capacidades: {erro}', ['erro' => $exception->getMessage()]);
+
+            return ['tratar' => false, 'admin' => false, 'champ' => false, 'tipos' => []];
+        }
     }
 
     private function key(User $user, string $uuid): string

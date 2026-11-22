@@ -120,7 +120,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                 {% if is_granted('ROLE_ADMIN') %}
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button"
+                    <a class="nav-link dropdown-toggle {% if app.request.pathInfo starts with '/admin4/form' %}active{% endif %}" href="#" role="button"
                        data-bs-toggle="dropdown" data-turbo="false" aria-expanded="false">
                         <i class="bi bi-shield-lock me-1"></i> Admin
                     </a>
@@ -129,7 +129,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <li><a class="dropdown-item" href="{{ path('admin_users_index') }}"><i class="bi bi-people me-2"></i>Usuários</a></li>
                         <li><a class="dropdown-item" href="{{ path('admin_estados_index') }}"><i class="bi bi-geo-alt me-2"></i>Estados / Radares</a></li>
                         <li><a class="dropdown-item" href="{{ path('admin_waze_link_index') }}"><i class="bi bi-link-45deg me-2"></i>Links Waze</a></li>
-                        <li><a class="dropdown-item" href="{{ path('admin_waze_link_new') }}"><i class="bi bi-plus-circle me-2"></i>Novo Formulário</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin_waze_link_new') }}"><i class="bi bi-plus-circle me-2"></i>Novo Link Waze</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Formulários</h6></li>
+                        <li><a class="dropdown-item" href="{{ path('admin4_form_builder_index') }}"><i class="bi bi-ui-checks me-2"></i>Gerenciar formulários</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin4_form_studio_novo') }}"><i class="bi bi-plus-lg me-2"></i>Novo formulário (Estúdio)</a></li>
+                        <li><a class="dropdown-item" href="{{ path('admin4_form_api_index') }}"><i class="bi bi-broadcast me-2"></i>Publicação no script WME</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><h6 class="dropdown-header text-uppercase" style="font-size:.68rem;letter-spacing:.06em">Monitoramento</h6></li>
                         <li><a class="dropdown-item" href="{{ path('auditoria_index') }}"><i class="bi bi-clipboard-data me-2"></i>Auditoria</a></li>

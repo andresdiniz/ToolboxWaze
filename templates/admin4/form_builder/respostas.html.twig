@@ -8,7 +8,7 @@
       <a href="{{ path('admin4_form_builder_exportar_csv', {id: form.id}) }}" class="btn btn-outline-success btn-sm">
         <i class="bi bi-download me-1"></i> Exportar CSV
       </a>
-      <a href="{{ path('admin4_form_builder_editar', {id: form.id}) }}" class="btn btn-outline-secondary btn-sm">
+      <a href="{{ path('admin4_form_studio_editar', {id: form.id}) }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i> Voltar
       </a>
     </div>
@@ -101,7 +101,9 @@ async function salvarNota() {
   const body = new FormData();
   body.append('status', document.getElementById('nota-status').value);
   body.append('nota', document.getElementById('nota-texto').value);
-  await fetch(`/admin4/form-builder/resposta/${_notaId}/status`, {method:'POST', body});
+  body.append('_token', '{{ csrf_token('form_resposta_status') }}');
+  const res = await fetch(`/admin4/form-builder/resposta/${_notaId}/status`, {method:'POST', body});
+  if (!res.ok) { alert('Não foi possível salvar (sessão expirada?). Recarregue a página e tente de novo.'); return; }
   location.reload();
 }
 </script>

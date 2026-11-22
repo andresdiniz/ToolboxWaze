@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\FormBuilder;
 use App\Entity\FormBuilderCampo;
 use App\Entity\FormBuilderResposta;
+use App\Entity\Solicitacao;
 use App\Repository\FormBuilderRepository;
 use App\Repository\FormBuilderRespostaRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -14,17 +15,24 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\String\Slugger\SluggerInterface;
 
+/**
+ * Gestão de formulários (lista, ativar/desativar, duplicar, excluir, respostas).
+ *
+ * A edição de campos e configurações é feita no Estúdio (FormBuilderStudioController):
+ * ele preserva as regras de publicação no WME e valida a definição. As rotas antigas
+ * de "novo" e "editar" continuam existindo, mas só redirecionam para o Estúdio.
+ *
+ * Toda ação que altera dados (POST) exige token CSRF.
+ */
 #[Route('/admin4/form-builder', name: 'admin4_form_builder_')]
 #[IsGranted('ROLE_ADMIN')]
 final class FormBuilderController extends AbstractController
 {
     public function __construct(
-        private readonly EntityManagerInterface      $em,
-        private readonly FormBuilderRepository       $formRepo,
+        private readonly EntityManagerInterface        $em,
+        private readonly FormBuilderRepository         $formRepo,
         private readonly FormBuilderRespostaRepository $respostaRepo,
-        private readonly SluggerInterface            $slugger,
     ) {}
 
     // ── Lista de formulários ───────────────────────────────────────────────────
@@ -32,140 +40,146 @@ final class FormBuilderController extends AbstractController
     #[Route('', name: 'index', methods: ['GET'])]
     public function index(): Response
     {
-        return $this->render('admin4/form_builder/index.html.twig', [
-            'forms' => $this->formRepo->findBy([], ['criadoEm' => 'DESC']),
-        ]);
-    }
+        $solicitacoes = $this->contagemPorFormulario(Solicitacao::class, 's');
+        $respostas    = $this->contagemPorFormulario(FormBuilderResposta::class, 'r');
 
-    // ── Novo formulário ────────────────────────────────────────────────────────
+        $rows = [];
 
-    #[Route('/novo', name: 'novo', methods: ['GET', 'POST'])]
-    public function novo(Request $request): Response
-    {
-        if ($request->isMethod('POST')) {
-            return $this->salvar($request, new FormBuilder());
+        foreach ($this->formRepo->findBy([], ['criadoEm' => 'DESC']) as $form) {
+            $id     = (int) $form->getId();
+            $nSol   = $solicitacoes[$id] ?? 0;
+            $nResp  = $respostas[$id] ?? 0;
+            $config = $form->getConfiguracoes() ?? [];
+
+            $rows[] = [
+                'form'             => $form,
+                'solicitacoes'     => $nSol,
+                'respostas'        => $nResp,
+                'publicado'        => ($config['wme_api_enabled'] ?? false) === true,
+                'motivoSemExcluir' => $this->motivoSemExcluir($form, $nSol, $nResp),
+            ];
         }
 
-        return $this->render('admin4/form_builder/editor.html.twig', [
-            'form'   => null,
-            'campos' => [],
-            'titulo' => 'Novo Formulário',
-        ]);
+        return $this->render('admin4/form_builder/index.html.twig', ['rows' => $rows]);
     }
 
-    // ── Editar formulário ──────────────────────────────────────────────────────
+    // ── Novo / Editar: o Estúdio é o único editor ──────────────────────────────
 
-    #[Route('/{id}/editar', name: 'editar', methods: ['GET', 'POST'])]
-    public function editar(int $id, Request $request): Response
+    #[Route('/novo', name: 'novo', methods: ['GET'])]
+    public function novo(): Response
+    {
+        return $this->redirectToRoute('admin4_form_studio_novo');
+    }
+
+    #[Route('/{id}/editar', name: 'editar', requirements: ['id' => '\d+'], methods: ['GET'])]
+    public function editar(int $id): Response
+    {
+        return $this->redirectToRoute('admin4_form_studio_editar', ['id' => $id]);
+    }
+
+    // ── Ativar / desativar (arquivar) ──────────────────────────────────────────
+
+    #[Route('/{id}/alternar-ativo', name: 'alternar_ativo', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function alternarAtivo(int $id, Request $request): Response
     {
         $form = $this->formRepo->find($id) ?? throw $this->createNotFoundException();
+        $this->exigirCsrf($request, 'form_toggle_' . $id);
 
-        if ($request->isMethod('POST')) {
-            return $this->salvar($request, $form);
-        }
-
-        return $this->render('admin4/form_builder/editor.html.twig', [
-            'form'   => $form,
-            'campos' => $form->getCampos()->toArray(),
-            'titulo' => 'Editar: ' . $form->getNome(),
-        ]);
-    }
-
-    // ── Lógica de persistência (novo + editar) ─────────────────────────────────
-
-    private function salvar(Request $request, FormBuilder $form): Response
-    {
-        $data = $request->request->all();
-
-        $nome = trim($data['nome'] ?? '');
-        if (!$nome) {
-            $this->addFlash('error', 'Nome do formulário é obrigatório.');
-            return $this->redirectToRoute('admin4_form_builder_index');
-        }
-
-        $form->setNome($nome);
-        $form->setDescricao(trim($data['descricao'] ?? '') ?: null);
-        $form->setAtivo(isset($data['ativo']));
+        $form->setAtivo(!$form->isAtivo());
         $form->setAtualizadoEm(new \DateTimeImmutable());
-
-        // Configurações globais
-        $form->setConfiguracoes([
-            'redirect_url'      => trim($data['redirect_url'] ?? '') ?: null,
-            'success_message'   => trim($data['success_message'] ?? '') ?: 'Obrigado pelo envio!',
-            'email_notificacao' => trim($data['email_notificacao'] ?? '') ?: null,
-            'mostrar_para'      => $data['mostrar_para'] ?? 'todos',   // todos | logado | visitante
-            'limite_envios'     => (int)($data['limite_envios'] ?? 0), // 0 = ilimitado
-            'expira_em'         => trim($data['expira_em'] ?? '') ?: null,
-        ]);
-
-        // Slug
-        if (!$form->getSlug()) {
-            $base = strtolower((string)$this->slugger->slug($nome));
-            $slug = $base;
-            $i    = 1;
-            while ($this->formRepo->findOneBy(['slug' => $slug])) {
-                $slug = $base . '-' . $i++;
-            }
-            $form->setSlug($slug);
-        }
-
-        if (!$form->getCriadoPor()) {
-            $form->setCriadoPor($this->getUser());
-        }
-
-        // ── Campos ────────────────────────────────────────────────────────────
-        // Remove campos antigos
-        foreach ($form->getCampos() as $c) {
-            $form->removeCampo($c);
-            $this->em->remove($c);
-        }
-
-        $camposJson = json_decode($data['campos_json'] ?? '[]', true) ?? [];
-        foreach ($camposJson as $i => $cd) {
-            $campo = new FormBuilderCampo();
-            $campo->setChave($cd['chave'] ?? 'campo_' . $i);
-            $campo->setLabel($cd['label'] ?? '');
-            $campo->setTipo($cd['tipo'] ?? 'text');
-            $campo->setOrdem($i);
-            $campo->setObrigatorio((bool)($cd['obrigatorio'] ?? false));
-            $campo->setPlaceholder($cd['placeholder'] ?? null);
-            $campo->setAjuda($cd['ajuda'] ?? null);
-            $campo->setValorPadrao($cd['valor_padrao'] ?? null);
-
-            // Extras: opcoes, mask, validacao, condicional, col, content, etc.
-            $extras = [];
-            foreach (['opcoes','min','max','step','accept','multiple','mask','validacao','condicional','css_class','col','content','nivel'] as $key) {
-                if (isset($cd[$key]) && $cd[$key] !== '' && $cd[$key] !== null) {
-                    $extras[$key] = $cd[$key];
-                }
-            }
-            $campo->setOpcoes($extras ?: null);
-
-            $form->addCampo($campo);
-        }
-
-        $this->em->persist($form);
         $this->em->flush();
 
-        $this->addFlash('success', 'Formulário salvo com sucesso.');
-        return $this->redirectToRoute('admin4_form_builder_editar', ['id' => $form->getId()]);
+        if ($form->isAtivo()) {
+            $this->addFlash('success', sprintf('“%s” foi reativado.', $form->getNome()));
+        } else {
+            $config = $form->getConfiguracoes() ?? [];
+            $extra  = ($config['wme_api_enabled'] ?? false) === true
+                ? ' Ele também deixou de aparecer no script WME enquanto estiver inativo.'
+                : '';
+
+            $this->addFlash('success', sprintf('“%s” foi desativado (arquivado).%s', $form->getNome(), $extra));
+        }
+
+        return $this->redirectToRoute('admin4_form_builder_index');
     }
 
-    // ── Excluir formulário ─────────────────────────────────────────────────────
+    // ── Duplicar ───────────────────────────────────────────────────────────────
 
-    #[Route('/{id}/excluir', name: 'excluir', methods: ['POST'])]
+    #[Route('/{id}/duplicar', name: 'duplicar', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function duplicar(int $id, Request $request): Response
+    {
+        $origem = $this->formRepo->find($id) ?? throw $this->createNotFoundException();
+        $this->exigirCsrf($request, 'form_dup_' . $id);
+
+        $copia = new FormBuilder();
+        $copia->setNome(mb_substr($origem->getNome(), 0, 110) . ' (cópia)');
+        $copia->setDescricao($origem->getDescricao());
+        $copia->setSlug($this->slugDisponivel($origem->getSlug()));
+        $copia->setAtivo(false); // a cópia nasce desativada
+        $copia->setAtualizadoEm(new \DateTimeImmutable());
+        $copia->setCriadoPor($this->getUser());
+
+        // Mantém regras e permissões, mas a cópia nunca nasce publicada no WME.
+        $config = $origem->getConfiguracoes() ?? [];
+        $config['wme_api_enabled'] = false;
+        $copia->setConfiguracoes($config);
+
+        foreach ($origem->getCampos() as $campo) {
+            $novo = new FormBuilderCampo();
+            $novo->setChave($campo->getChave())
+                ->setLabel($campo->getLabel())
+                ->setTipo($campo->getTipo())
+                ->setOrdem($campo->getOrdem())
+                ->setObrigatorio($campo->isObrigatorio())
+                ->setPlaceholder($campo->getPlaceholder())
+                ->setAjuda($campo->getAjuda())
+                ->setValorPadrao($campo->getValorPadrao())
+                ->setOpcoes($campo->getOpcoes());
+
+            $copia->addCampo($novo);
+        }
+
+        $this->em->persist($copia);
+        $this->em->flush();
+
+        $this->addFlash('success', 'Cópia criada e desativada. Revise e ative quando estiver pronta.');
+
+        return $this->redirectToRoute('admin4_form_studio_editar', ['id' => $copia->getId()]);
+    }
+
+    // ── Excluir (só formulário desativado e sem uso) ───────────────────────────
+
+    #[Route('/{id}/excluir', name: 'excluir', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function excluir(int $id, Request $request): Response
     {
         $form = $this->formRepo->find($id) ?? throw $this->createNotFoundException();
+        $this->exigirCsrf($request, 'form_delete_' . $id);
+
+        // A regra é reavaliada aqui: esconder o botão na tela não basta.
+        $motivo = $this->motivoSemExcluir(
+            $form,
+            $this->em->getRepository(Solicitacao::class)->count(['formulario' => $form]),
+            $this->respostaRepo->count(['formulario' => $form])
+        );
+
+        if ($motivo !== null) {
+            $this->addFlash('danger', 'Não foi possível excluir: ' . $motivo);
+
+            return $this->redirectToRoute('admin4_form_builder_index');
+        }
+
+        $nome = $form->getNome();
         $this->em->remove($form);
         $this->em->flush();
-        $this->addFlash('success', 'Formulário excluído.');
+
+        $this->addFlash('success', sprintf('“%s” foi excluído.', $nome));
+
         return $this->redirectToRoute('admin4_form_builder_index');
     }
 
     // ── Respostas de um formulário ─────────────────────────────────────────────
 
-    #[Route('/{id}/respostas', name: 'respostas', methods: ['GET'])]
+    #[Route('/{id}/respostas', name: 'respostas', requirements: ['id' => '\d+'], methods: ['GET'])]
     public function respostas(int $id): Response
     {
         $form      = $this->formRepo->find($id) ?? throw $this->createNotFoundException();
@@ -179,19 +193,28 @@ final class FormBuilderController extends AbstractController
 
     // ── Alterar status de uma resposta (AJAX) ──────────────────────────────────
 
-    #[Route('/resposta/{id}/status', name: 'resposta_status', methods: ['POST'])]
+    #[Route('/resposta/{id}/status', name: 'resposta_status', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function respostaStatus(int $id, Request $request): JsonResponse
     {
+        $token = $request->request->get('_token');
+
+        if (!is_string($token) || !$this->isCsrfTokenValid('form_resposta_status', $token)) {
+            return new JsonResponse(['ok' => false, 'msg' => 'Token CSRF inválido'], 403);
+        }
+
         $resposta = $this->em->find(FormBuilderResposta::class, $id)
             ?? throw $this->createNotFoundException();
 
         $status = $request->request->get('status', 'pendente');
-        if (!\in_array($status, ['pendente', 'aprovado', 'rejeitado', 'arquivado'])) {
+
+        if (!\in_array($status, ['pendente', 'aprovado', 'rejeitado', 'arquivado'], true)) {
             return new JsonResponse(['ok' => false, 'msg' => 'Status inválido'], 400);
         }
 
+        $nota = $request->request->get('nota');
+
         $resposta->setStatus($status);
-        $resposta->setNotaAdmin($request->request->get('nota'));
+        $resposta->setNotaAdmin(is_string($nota) ? mb_substr($nota, 0, 2000) : null);
         $this->em->flush();
 
         return new JsonResponse(['ok' => true]);
@@ -199,7 +222,7 @@ final class FormBuilderController extends AbstractController
 
     // ── Preview de um formulário ───────────────────────────────────────────────
 
-    #[Route('/{id}/preview', name: 'preview', methods: ['GET'])]
+    #[Route('/{id}/preview', name: 'preview', requirements: ['id' => '\d+'], methods: ['GET'])]
     public function preview(int $id): Response
     {
         $form = $this->formRepo->find($id) ?? throw $this->createNotFoundException();
@@ -213,14 +236,14 @@ final class FormBuilderController extends AbstractController
 
     // ── Exportar respostas como CSV ────────────────────────────────────────────
 
-    #[Route('/{id}/exportar-csv', name: 'exportar_csv', methods: ['GET'])]
+    #[Route('/{id}/exportar-csv', name: 'exportar_csv', requirements: ['id' => '\d+'], methods: ['GET'])]
     public function exportarCsv(int $id): Response
     {
         $form      = $this->formRepo->find($id) ?? throw $this->createNotFoundException();
         $respostas = $this->respostaRepo->findByFormulario($id);
 
-        $headers = array_map(fn($c) => $c->getLabel(), $form->getCampos()->toArray());
-        $chaves  = array_map(fn($c) => $c->getChave(), $form->getCampos()->toArray());
+        $headers = array_map(fn ($c) => $this->csvSeguro((string) $c->getLabel()), $form->getCampos()->toArray());
+        $chaves  = array_map(fn ($c) => $c->getChave(), $form->getCampos()->toArray());
 
         $csv = implode(';', array_merge(['UUID', 'Data', 'Status', 'IP'], $headers)) . "\n";
 
@@ -231,11 +254,17 @@ final class FormBuilderController extends AbstractController
                 $r->getStatus(),
                 $r->getIp() ?? '',
             ];
+
             foreach ($chaves as $ch) {
                 $val = $r->getDados()[$ch] ?? '';
-                if (is_array($val)) $val = implode('|', $val);
-                $row[] = '"' . str_replace('"', '""', (string)$val) . '"';
+
+                if (is_array($val)) {
+                    $val = implode('|', array_map(static fn ($v) => is_scalar($v) ? (string) $v : '', $val));
+                }
+
+                $row[] = $this->csvSeguro((string) $val);
             }
+
             $csv .= implode(';', $row) . "\n";
         }
 
@@ -243,5 +272,75 @@ final class FormBuilderController extends AbstractController
             'Content-Type'        => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="respostas-' . $form->getSlug() . '.csv"',
         ]);
+    }
+
+    // ── Auxiliares ─────────────────────────────────────────────────────────────
+
+    private function exigirCsrf(Request $request, string $id): void
+    {
+        $token = $request->request->get('_token');
+
+        if (!is_string($token) || !$this->isCsrfTokenValid($id, $token)) {
+            throw $this->createAccessDeniedException('Token CSRF inválido. Recarregue a página e tente de novo.');
+        }
+    }
+
+    /** Regra única de exclusão: só inativo e sem solicitações/respostas vinculadas. */
+    private function motivoSemExcluir(FormBuilder $form, int $solicitacoes, int $respostas): ?string
+    {
+        if ($form->isAtivo()) {
+            return 'desative o formulário antes de excluir.';
+        }
+
+        if ($solicitacoes > 0 || $respostas > 0) {
+            return sprintf(
+                'ele tem %d solicitação(ões) e %d resposta(s) vinculadas. Mantenha-o desativado (arquivado).',
+                $solicitacoes,
+                $respostas
+            );
+        }
+
+        return null;
+    }
+
+    /** @param class-string $entidade @return array<int,int> formulário => total */
+    private function contagemPorFormulario(string $entidade, string $alias): array
+    {
+        $linhas = $this->em->createQuery(sprintf(
+            'SELECT IDENTITY(%1$s.formulario) AS fid, COUNT(%1$s.id) AS total FROM %2$s %1$s '
+            . 'WHERE %1$s.formulario IS NOT NULL GROUP BY %1$s.formulario',
+            $alias,
+            $entidade
+        ))->getArrayResult();
+
+        $mapa = [];
+
+        foreach ($linhas as $linha) {
+            $mapa[(int) $linha['fid']] = (int) $linha['total'];
+        }
+
+        return $mapa;
+    }
+
+    private function slugDisponivel(string $slugOrigem): string
+    {
+        $base = mb_substr($slugOrigem, 0, 68) . '-copia';
+        $slug = $base;
+
+        for ($i = 2; $this->formRepo->findOneBy(['slug' => $slug]) !== null; $i++) {
+            $slug = $base . '-' . $i;
+        }
+
+        return $slug;
+    }
+
+    /** Evita injeção de fórmulas ao abrir o CSV no Excel/Planilhas. */
+    private function csvSeguro(string $valor): string
+    {
+        if ($valor !== '' && preg_match('/^[=+\-@\t\r]/', $valor) === 1) {
+            $valor = "'" . $valor;
+        }
+
+        return '"' . str_replace('"', '""', $valor) . '"';
     }
 }

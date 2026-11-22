@@ -1,27 +1,29 @@
-{% extends 'admin4/base.html.twig' %}
+{% extends 'base.html.twig' %}
 
-{% block title %}Form Builder{% endblock %}
+{% block title %}Formulários{% endblock %}
 
-{% block content %}
-<div class="container-fluid py-4">
+{% block body %}
+<div class="py-4">
 
-  <div class="d-flex align-items-center justify-content-between mb-4">
-    <h2 class="mb-0"><i class="bi bi-ui-checks me-2"></i>Form Builder</h2>
-    <a href="{{ path('admin4_form_builder_novo') }}" class="btn btn-primary">
-      <i class="bi bi-plus-lg me-1"></i> Novo Formulário
-    </a>
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <h2 class="mb-0"><i class="bi bi-ui-checks me-2"></i>Formulários</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ path('admin4_form_api_index') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-broadcast me-1"></i> Publicação no script WME
+      </a>
+      <a href="{{ path('admin4_form_studio_novo') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i> Novo Formulário
+      </a>
+    </div>
   </div>
 
-  {% for type, msgs in app.flashes %}
-    {% for msg in msgs %}
-      <div class="alert alert-{{ type == 'error' ? 'danger' : type }} alert-dismissible fade show" role="alert">
-        {{ msg }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
-    {% endfor %}
-  {% endfor %}
+  <div class="alert alert-info small">
+    <strong>Desativar (arquivar)</strong> tira o formulário do site e do script WME sem apagar nada.
+    <strong>Excluir</strong> só é permitido para formulário desativado e sem solicitações nem respostas.
+    <strong>Publicado no WME</strong> é um controle à parte, em <a href="{{ path('admin4_form_api_index') }}">Publicação no script WME</a>.
+  </div>
 
-  {% if forms is empty %}
+  {% if rows is empty %}
     <div class="text-center py-5 text-muted">
       <i class="bi bi-ui-checks display-3 d-block mb-3"></i>
       Nenhum formulário criado ainda.
@@ -34,40 +36,47 @@
           <th>#</th>
           <th>Nome</th>
           <th>Slug / URL pública</th>
-          <th>Campos</th>
+          <th class="text-center">Campos</th>
+          <th class="text-center" title="Solicitações / respostas vinculadas">Uso</th>
           <th>Status</th>
           <th>Criado em</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        {% for f in forms %}
-        <tr>
+        {% for row in rows %}
+        {% set f = row.form %}
+        <tr class="{{ f.ativo ? '' : 'table-secondary' }}">
           <td class="text-muted small">{{ f.id }}</td>
           <td>
             <strong>{{ f.nome }}</strong>
             {% if f.descricao %}<br><small class="text-muted">{{ f.descricao }}</small>{% endif %}
           </td>
           <td>
-            <a href="{{ path('form_publico', {slug: f.slug}) }}" target="_blank" class="text-decoration-none">
+            <a href="{{ path('form_publico', {slug: f.slug}) }}" target="_blank" rel="noopener" class="text-decoration-none">
               /forms/{{ f.slug }} <i class="bi bi-box-arrow-up-right small"></i>
             </a>
           </td>
-          <td><span class="badge bg-secondary">{{ f.campos|length }}</span></td>
+          <td class="text-center"><span class="badge bg-secondary">{{ f.campos|length }}</span></td>
+          <td class="text-center small">
+            <span title="Solicitações">{{ row.solicitacoes }} <i class="bi bi-inbox"></i></span>
+            <span class="text-muted">/</span>
+            <span title="Respostas">{{ row.respostas }} <i class="bi bi-chat-left-text"></i></span>
+          </td>
           <td>
-            {% if f.ativo %}
-              <span class="badge bg-success">Ativo</span>
-            {% else %}
-              <span class="badge bg-danger">Inativo</span>
-            {% endif %}
+            <span class="badge {{ f.ativo ? 'bg-success' : 'bg-danger' }}">{{ f.ativo ? 'Ativo' : 'Inativo' }}</span>
+            <span class="badge {{ row.publicado ? 'text-bg-primary' : 'text-bg-light border' }}"
+                  title="{{ row.publicado ? 'Habilitado na API do script WME' : 'Não habilitado na API do script WME' }}">
+              <i class="bi bi-broadcast"></i> {{ row.publicado ? 'WME' : 'sem WME' }}
+            </span>
           </td>
           <td class="small">{{ f.criadoEm|date('d/m/Y H:i') }}</td>
-          <td class="text-end">
+          <td class="text-end text-nowrap">
             <div class="btn-group btn-group-sm">
-              <a href="{{ path('admin4_form_builder_preview', {id: f.id}) }}" class="btn btn-outline-secondary" title="Preview" target="_blank">
+              <a href="{{ path('admin4_form_builder_preview', {id: f.id}) }}" class="btn btn-outline-secondary" title="Preview" target="_blank" rel="noopener">
                 <i class="bi bi-eye"></i>
               </a>
-              <a href="{{ path('admin4_form_builder_editar', {id: f.id}) }}" class="btn btn-outline-primary" title="Editar">
+              <a href="{{ path('admin4_form_studio_editar', {id: f.id}) }}" class="btn btn-outline-primary" title="Editar no Estúdio">
                 <i class="bi bi-pencil"></i>
               </a>
               <a href="{{ path('admin4_form_builder_respostas', {id: f.id}) }}" class="btn btn-outline-info" title="Respostas">
@@ -76,10 +85,32 @@
               <a href="{{ path('admin4_form_builder_exportar_csv', {id: f.id}) }}" class="btn btn-outline-success" title="Exportar CSV">
                 <i class="bi bi-download"></i>
               </a>
-              <form method="post" action="{{ path('admin4_form_builder_excluir', {id: f.id}) }}" onsubmit="return confirm('Excluir formulário e todas as respostas?')" style="display:inline">
-                <button class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
-              </form>
             </div>
+
+            <form method="post" action="{{ path('admin4_form_builder_duplicar', {id: f.id}) }}" class="d-inline" data-turbo="false">
+              <input type="hidden" name="_token" value="{{ csrf_token('form_dup_' ~ f.id) }}">
+              <button class="btn btn-sm btn-outline-secondary" title="Duplicar (a cópia nasce desativada)"><i class="bi bi-files"></i></button>
+            </form>
+
+            <form method="post" action="{{ path('admin4_form_builder_alternar_ativo', {id: f.id}) }}" class="d-inline" data-turbo="false"
+                  {% if f.ativo %}onsubmit="return confirm('Desativar este formulário? Ele sai do site e do script WME (nada é apagado).')"{% endif %}>
+              <input type="hidden" name="_token" value="{{ csrf_token('form_toggle_' ~ f.id) }}">
+              <button class="btn btn-sm {{ f.ativo ? 'btn-outline-warning' : 'btn-outline-success' }}" title="{{ f.ativo ? 'Desativar (arquivar)' : 'Reativar' }}">
+                <i class="bi {{ f.ativo ? 'bi-archive' : 'bi-arrow-counterclockwise' }}"></i>
+              </button>
+            </form>
+
+            {% if row.motivoSemExcluir is null %}
+              <form method="post" action="{{ path('admin4_form_builder_excluir', {id: f.id}) }}" class="d-inline" data-turbo="false"
+                    onsubmit="return confirm('Excluir definitivamente este formulário? Esta ação não pode ser desfeita.')">
+                <input type="hidden" name="_token" value="{{ csrf_token('form_delete_' ~ f.id) }}">
+                <button class="btn btn-sm btn-outline-danger" title="Excluir definitivamente"><i class="bi bi-trash"></i></button>
+              </form>
+            {% else %}
+              <span class="d-inline-block" tabindex="0" title="Não é possível excluir: {{ row.motivoSemExcluir }}">
+                <button class="btn btn-sm btn-outline-danger" type="button" disabled aria-disabled="true"><i class="bi bi-trash"></i></button>
+              </span>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}

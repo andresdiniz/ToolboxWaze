@@ -64,3 +64,23 @@ Envio e consulta usam transação e lock da linha do usuário. Consulta antes de
 ## Validação antes do deploy
 
 `php -l` nos arquivos novos e `doctrine:migrations:status`. Testar: registro novo e com e-mail existente (mesma resposta), link de e-mail (GET não ativa, POST ativa, reuso e expiração), `bootstrap` pendente/ativo/revogado, formulário restrito, erro de validação 422, MIME/tamanho, duas requisições simultâneas com a mesma chave, POST atrasado após consulta, rollback por falha de DB.
+
+## Tratativa pelo userscript (somente quem tem permissão)
+
+A aba "Tratativa" do userscript só aparece quando `GET /bootstrap` (estado `ativo`) traz `capacidades.tratar = true`. Isso é apenas interface: **cada endpoint abaixo revalida a permissão no servidor** (`TratativaAcessoService`), então alterar o script não concede acesso.
+
+`capacidades`: `{ tratar, admin, champ, tipos }` (`tipos = null` para admin = todos). Quem decide `tratar`: conta **aprovada** e (admin **ou** responsável do tipo em `SolicitacaoTipoResponsavel` **ou** responsável da própria solicitação). Os três critérios existentes são combinados por união.
+
+Exige dispositivo WME ativo: o token legado de leitura do site **não** acessa estas rotas (401). Sem permissão: 403 `sem_permissao`. Solicitação inexistente ou fora do seu escopo: 404 `solicitacao_nao_encontrada` (mesma resposta, não revela registros).
+
+| Rota | Descrição |
+|---|---|
+| `GET /api/wme/tratativa/resumo` | Contagem por status e `abertas`/`pendentes` (usada no contador da aba). |
+| `GET /api/wme/tratativa/fila?status=abertas\|todas\|<status>&tipo=&q=&pagina=&limite=&ordem=antigas\|recentes` | Fila restrita ao escopo do usuário. `q` busca por número ou solicitante. Máx. 50 por página. |
+| `GET /api/wme/tratativa/{id}` | Detalhe: respostas rotuladas, contexto do WME, anexos, comentários (incluindo internos), histórico e `acoes` (status permitidos e bloqueios). |
+| `POST /api/wme/tratativa/{id}/status` | `{status, nota?}`. Usa `SolicitacaoService::mudarStatus` (histórico, notificações e e-mail ao solicitante). Downgrade de nível exige `ROLE_CHAMP` (403 `somente_champ`). |
+| `POST /api/wme/tratativa/{id}/comentarios` | `{mensagem, interno?}` (até 2000 caracteres). Comentário público envia e-mail ao solicitante; interno não. |
+
+Anexos continuam em `GET /api/wme/solicitacoes/{id}/anexos/{nome}` (já autorizado por `SOLICITACAO_VER` para não donos).
+
+Pendências conhecidas: não há limite de taxa próprio nas ações de escrita; o site usa dois `SolicitacaoVoter` com critérios diferentes (convém delegá-los ao `TratativaAcessoService`).

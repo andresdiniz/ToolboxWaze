@@ -624,7 +624,7 @@ final class WmeApiController extends AbstractController
         return $this->run(function () use ($slug, $request) {
             [$user] = $this->auth($request);
 
-            return $this->forms->schema($this->forms->get($slug, $user));
+            return $this->forms->schema($this->forms->get($slug, $user), $user);
         });
     }
 
@@ -981,7 +981,7 @@ final class WmeApiController extends AbstractController
 
             $key = $this->key($user, $payload['clientRequestId']);
             $form = $this->forms->get($payload['formulario'], $user);
-            $schema = $this->forms->schema($form);
+            $schema = $this->forms->schema($form, $user);
 
             if (($payload['versaoFormulario'] ?? '') !== $schema['versao']) {
                 throw new WmeApiException(

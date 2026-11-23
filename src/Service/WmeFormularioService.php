@@ -12,7 +12,7 @@ final class WmeFormularioService
     {
         $result = [];
         foreach ($this->em->getRepository(FormBuilder::class)->findBy(['ativo'=>true], ['nome'=>'ASC']) as $form) {
-            try { $this->allowed($form, $user); $this->schema($form); $result[] = ['slug'=>$form->getSlug(), 'nome'=>$form->getNome()]; } catch (HttpException) {}
+            try { $this->allowed($form, $user); $this->schema($form, $user); $result[] = ['slug'=>$form->getSlug(), 'nome'=>$form->getNome()]; } catch (HttpException) {}
         }
         return $result;
     }
@@ -33,7 +33,16 @@ final class WmeFormularioService
         if (!is_array($required)) throw new HttpException(503, 'Configuracao de permissoes invalida.');
         if ($required && !array_intersect($required, $user->getRoles())) throw new HttpException(403, 'Conta sem permissao para este formulario.');
     }
-    public function schema(FormBuilder $form): array
+    /**
+     * Definicao do formulario para o WME. Com $user, aplica as regras de seguranca do formulario:
+     *  - roles: campo so existe para quem tem um dos papeis;
+     *  - permissoesOpcoes: opcao so existe para quem tem um dos papeis;
+     *  - variantes: troca rotulo/ajuda/limites conforme outra resposta (o validate() tambem aplica).
+     * Como o validate() trabalha sobre este schema, o que o usuario nao pode usar vira
+     * "Campo desconhecido" / "Opcao invalida" no envio, e nao so some da tela.
+     * Sem $user devolve a definicao completa (uso administrativo: conferir a publicacao).
+     */
+    public function schema(FormBuilder $form, ?User $user = null): array
     {
         $fields = []; $keys = [];
         foreach ($form->getCampos() as $f) {
@@ -59,13 +68,113 @@ final class WmeFormularioService
                     elseif (is_scalar($label)) $field['opcoes'][] = ['value'=>is_int($value) ? (string)$label : (string)$value, 'label'=>(string)$label];
                 }
             }
+            $field['_roles'] = $this->roleList($c['roles'] ?? null, $key.': regra roles invalida.');
+            if (isset($c['permissoesOpcoes'])) {
+                if (!in_array($type, ['select','radio'], true) || !is_array($c['permissoesOpcoes']) || $c['permissoesOpcoes'] === []) throw new HttpException(503, $key.': permissoesOpcoes exige select/radio com mapa opcao => papeis.');
+                $values = array_column($field['opcoes'], 'value'); $perm = [];
+                foreach ($c['permissoesOpcoes'] as $value=>$roles) {
+                    if (!in_array((string)$value, $values, true)) throw new HttpException(503, $key.': permissoesOpcoes cita opcao inexistente: '.$value);
+                    $perm[(string)$value] = $this->roleList($roles, $key.': papeis invalidos em permissoesOpcoes.');
+                    if ($perm[(string)$value] === []) throw new HttpException(503, $key.': permissoesOpcoes sem papeis para a opcao '.$value.'.');
+                }
+                $field['_permissoes'] = $perm;
+            }
+            if (isset($c['variantes'])) $field['variantes'] = $this->variants($c['variantes'], $key);
             $fields[] = $field;
         }
+        foreach ($fields as $f) foreach (($f['variantes'] ?? []) as $variant) foreach (array_keys($variant['quando']) as $dep) {
+            if (!isset($keys[$dep])) throw new HttpException(503, $f['chave'].': variantes referencia campo inexistente: '.$dep);
+        }
+        if ($user !== null) $fields = $this->filterForUser($fields, $user);
+        $fields = array_map(static function (array $f): array { unset($f['_roles'], $f['_permissoes']); return $f; }, $fields);
         $map = array_column($fields, null, 'chave');
         foreach ($fields as $f) $this->visible($f['chave'], $map, []);
         $schema = ['slug'=>$form->getSlug(), 'nome'=>$form->getNome(), 'descricao'=>$form->getDescricao(), 'campos'=>$fields];
         $schema['versao'] = hash('sha256', json_encode([$schema, $form->getConfiguracoes()], JSON_THROW_ON_ERROR));
         return $schema;
+    }
+    /** @return list<string> */
+    private function roleList(mixed $value, string $message): array
+    {
+        if ($value === null) return [];
+        if (!is_array($value) || !array_is_list($value)) throw new HttpException(503, $message);
+        foreach ($value as $role) if (!is_string($role) || !preg_match('/^ROLE_[A-Z0-9_]{1,80}$/D', $role)) throw new HttpException(503, $message);
+        return array_values(array_unique($value));
+    }
+    /** @return list<array<string,mixed>> */
+    private function variants(mixed $raw, string $key): array
+    {
+        if (!is_array($raw) || !array_is_list($raw) || $raw === [] || count($raw) > 10) throw new HttpException(503, $key.': variantes invalidas.');
+        $out = [];
+        foreach ($raw as $variant) {
+            if (!is_array($variant) || !is_array($variant['quando'] ?? null) || $variant['quando'] === []) throw new HttpException(503, $key.': variante sem "quando".');
+            $when = [];
+            foreach ($variant['quando'] as $dep=>$expected) {
+                $valid = is_string($expected) || (is_array($expected) && array_is_list($expected) && $expected !== [] && array_filter($expected, static fn (mixed $x): bool => !is_string($x)) === []);
+                if (!is_string($dep) || $dep === '' || !$valid) throw new HttpException(503, $key.': "quando" invalido (use texto ou lista de textos).');
+                $when[$dep] = $expected;
+            }
+            $item = ['quando'=>$when];
+            foreach ($variant as $prop=>$value) {
+                if ($prop === 'quando') continue;
+                if (in_array($prop, ['label','placeholder','ajuda'], true) && is_string($value) && mb_strlen($value) <= 500) $item[$prop] = $value;
+                elseif (in_array($prop, ['min','max'], true) && (is_int($value) || is_float($value))) $item[$prop] = $value;
+                elseif (in_array($prop, ['minLength','maxLength'], true) && is_int($value) && $value >= 0) $item[$prop] = $value;
+                else throw new HttpException(503, $key.': propriedade de variante nao suportada ou invalida: '.$prop);
+            }
+            $out[] = $item;
+        }
+        return $out;
+    }
+    /**
+     * Aplica roles/permissoesOpcoes. Campo que depende (mostrarSe) de campo removido sai junto;
+     * variante que depende de campo removido deixa de existir.
+     * @param list<array<string,mixed>> $fields
+     * @return list<array<string,mixed>>
+     */
+    private function filterForUser(array $fields, User $user): array
+    {
+        $roles = $user->getRoles(); $kept = []; $removed = [];
+        foreach ($fields as $f) {
+            if ($f['_roles'] !== [] && !array_intersect($f['_roles'], $roles)) { $removed[$f['chave']] = true; continue; }
+            foreach (($f['_permissoes'] ?? []) as $value=>$required) {
+                if (array_intersect($required, $roles)) continue;
+                $f['opcoes'] = array_values(array_filter($f['opcoes'], static fn (array $o): bool => $o['value'] !== (string)$value));
+            }
+            if (isset($f['_permissoes']) && $f['opcoes'] === []) {
+                if ($f['obrigatorio']) throw new HttpException(403, 'Conta sem opcoes disponiveis em: '.$f['chave']);
+                $removed[$f['chave']] = true; continue;
+            }
+            $kept[] = $f;
+        }
+        do {
+            $changed = false;
+            foreach ($kept as $i=>$f) {
+                foreach (array_keys($f['mostrarSe'] ?? []) as $dep) {
+                    if (isset($removed[$dep])) { $removed[$f['chave']] = true; unset($kept[$i]); $changed = true; continue 2; }
+                }
+            }
+        } while ($changed);
+        $kept = array_values($kept);
+        foreach ($kept as $i=>$f) {
+            if (!isset($f['variantes'])) continue;
+            $kept[$i]['variantes'] = array_values(array_filter($f['variantes'], static fn (array $v): bool => array_intersect_key($v['quando'], $removed) === []));
+            if ($kept[$i]['variantes'] === []) unset($kept[$i]['variantes']);
+        }
+        return $kept;
+    }
+    private function answerMatches(mixed $actual, mixed $expected): bool
+    {
+        return is_array($expected) ? in_array($actual, $expected, true) : $actual === $expected;
+    }
+    /** Sobrepoe os limites da variante cujo "quando" casa com as respostas (o resto e so apresentacao). */
+    private function withVariants(array $f, array $answers): array
+    {
+        foreach (($f['variantes'] ?? []) as $variant) {
+            foreach ($variant['quando'] as $dep=>$expected) if (!$this->answerMatches($answers[$dep] ?? null, $expected)) continue 2;
+            foreach (['min','max','minLength','maxLength'] as $prop) if (array_key_exists($prop, $variant)) $f[$prop] = $variant[$prop];
+        }
+        return $f;
     }
     private function visible(string $key, array $map, array $answers, array $stack = []): bool
     {
@@ -85,6 +194,7 @@ final class WmeFormularioService
         foreach ($uploads as $key=>$value) if (!isset($map[$key]) || $map[$key]['tipo'] !== 'file') $errors[$key][] = 'Anexo desconhecido.';
         foreach ($map as $key=>$f) {
             if (!$this->visible($key, $map, $answers)) continue;
+            $f = $this->withVariants($f, $answers);
             $v = $answers[$key] ?? null; $type = $f['tipo'];
             if ($type === 'file') {
                 $list = $uploads[$key] ?? [];

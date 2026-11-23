@@ -68,6 +68,7 @@ final class FormBuilderApiController extends AbstractController
         $config = $form->getConfiguracoes() ?? [];
         $config['wme_api_enabled'] = $enabled;
         $config['wme_roles'] = $roles;
+        if ($enabled) unset($config['unificacao_campos_pendente']); // so chega aqui sem bloqueios
         $form->setConfiguracoes($config)->setAtualizadoEm(new \DateTimeImmutable());
         $em->flush();
         $this->addFlash('success', $form->getNome().($enabled ? ': publicado na API WME.' : ': removido da API WME.'));
@@ -90,10 +91,11 @@ final class FormBuilderApiController extends AbstractController
                 $errors[] = 'Data de expiração inválida.';
             }
         }
-        if (!empty($config['unificacao_campos_pendente'])) $errors[] = 'Unificação de regras de segurança ainda pendente.';
+        // roles, permissoesOpcoes e variantes agora sao aplicados pela API (WmeFormularioService::schema/validate);
+        // o marcador 'unificacao_campos_pendente' deixa de bloquear. Regras desconhecidas continuam bloqueando abaixo.
         foreach ($form->getCampos() as $field) {
             $options = $field->getOpcoes() ?? [];
-            foreach (['roles', 'permissoesOpcoes', 'variantes', 'requerVisitaLink'] as $key) {
+            foreach (['requerVisitaLink'] as $key) {
                 if (!empty($options[$key])) $errors[] = $field->getChave().': regra '.$key.' ainda não suportada pela API.';
             }
             if (in_array($field->getTipo(), ['select', 'radio'], true)) {

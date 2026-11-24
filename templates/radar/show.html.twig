@@ -361,7 +361,7 @@
                     <div class="row g-2">
                         <div class="col-12">
                             <div class="detail-label">Hazard ID atual</div>
-                            <div class="fw-bold fs-5" style="color:var(--tw)">&#35;{{ wazeLink.permanent_hazard_id }}</div>
+                            <div class="fw-bold fs-5" style="color:var(--tw)">{% if wazeLink.permanent_hazard_id %}&#35;{{ wazeLink.permanent_hazard_id }}{% else %}<span class="text-muted" title="O link não tem permanentHazards=NÚMERO">—</span>{% endif %}</div>
                         </div>
                         <div class="col-sm-6">
                             <div class="detail-label">Cadastrado por</div>

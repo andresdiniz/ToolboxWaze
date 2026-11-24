@@ -193,6 +193,11 @@ final class RadarService
             [$id]
         ) ?: null;
 
+        // Linhas gravadas antes da correção podem ter permanent_hazard_id = 0: o ID real está no próprio link.
+        if ($wazeLink && (int) ($wazeLink['permanent_hazard_id'] ?? 0) < 1) {
+            $wazeLink['permanent_hazard_id'] = WazeLinkParser::extractHazardId((string) ($wazeLink['waze_link'] ?? ''));
+        }
+
         $wazeLog = $this->db->fetchAllAssociative(
             'SELECT wll.*, u.email AS changed_by_email
              FROM radar_waze_link_log wll
@@ -505,22 +510,26 @@ final class RadarService
 
     public function saveWazeLink(int $id, string $wazeLink, ?string $motivo, User $user): void
     {
-        $errors = [];
+        $errors   = [];
+        $hazardId = null;
 
         if ($wazeLink === '') {
             $errors['waze_link'] = 'O link é obrigatório.';
         } elseif (!filter_var($wazeLink, FILTER_VALIDATE_URL)) {
             $errors['waze_link'] = 'URL inválida.';
-        } elseif (!str_contains($wazeLink, 'permanentHazards=')) {
-            $errors['waze_link'] = 'O link deve conter permanentHazards=NÚMERO.';
+        } else {
+            // Mesmo parser do resto do sistema: exige permanentHazards=NÚMERO como parâmetro da URL.
+            // Nunca grava 0: sem ID válido o cadastro é recusado.
+            $hazardId = WazeLinkParser::extractHazardId($wazeLink);
+
+            if ($hazardId === null || $hazardId < 1 || $hazardId > 4294967295) {
+                $errors['waze_link'] = 'O link deve conter permanentHazards=NÚMERO.';
+            }
         }
 
         if (!empty($errors)) {
             throw new \InvalidArgumentException(json_encode($errors));
         }
-
-        preg_match('/permanentHazards=(\d+)/', $wazeLink, $m);
-        $hazardId = (int) ($m[1] ?? 0);
         $agora    = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
         $existing = $this->db->fetchAssociative(
@@ -544,16 +553,17 @@ final class RadarService
                 $this->hasTableColumn('radar_waze_link_log', 'hazard_id_anterior')
                 && $this->hasTableColumn('radar_waze_link_log', 'hazard_id_novo')
             ) {
-                $logData['hazard_id_anterior'] = $existing['hazard_id'] ?? null;
+                $logData['hazard_id_anterior'] = $existing['permanent_hazard_id'] ?? $existing['hazard_id'] ?? null;
                 $logData['hazard_id_novo'] = $hazardId;
             }
 
             $this->db->insert('radar_waze_link_log', $logData);
 
             $updateData = [
-                'waze_link'  => $wazeLink,
-                'updated_by' => $user->getId(),
-                'updated_at' => $agora,
+                'waze_link'           => $wazeLink,
+                'permanent_hazard_id' => $hazardId, // antes não era atualizado: o ID ficava velho ao trocar o link
+                'updated_by'          => $user->getId(),
+                'updated_at'          => $agora,
             ];
             if ($hasHazardId) {
                 $updateData['hazard_id'] = $hazardId;
@@ -562,10 +572,11 @@ final class RadarService
             $this->db->update('radar_waze_link', $updateData, ['id' => $existing['id']]);
         } else {
             $insertData = [
-                'radar_medidor_id' => $id,
-                'waze_link'        => $wazeLink,
-                'inserted_by'      => $user->getId(),
-                'inserted_at'      => $agora,
+                'radar_medidor_id'    => $id,
+                'waze_link'           => $wazeLink,
+                'permanent_hazard_id' => $hazardId, // coluna NOT NULL sem default: antes saía 0 (#0 na tela)
+                'inserted_by'         => $user->getId(),
+                'inserted_at'         => $agora,
             ];
             if ($hasHazardId) {
                 $insertData['hazard_id'] = $hazardId;
